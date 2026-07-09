@@ -1,0 +1,34 @@
+{
+  "name": "@hoodpad/shared",
+  "private": true,
+  "license": "MIT",
+  "description": "hoodpad shared cross-service contract: canonical event ABIs, wire schemas (zod), confirmation-state enum, WS channels/messages, REST DTO types, canonical metadata JSON + keccak256 hashing (spec §8, §8.3, §12.15-12.20).",
+  "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./abi": "./src/abi/events.ts",
+    "./metadata": "./src/metadata.ts",
+    "./channels": "./src/channels.ts",
+    "./ws-messages": "./src/ws-messages.ts",
+    "./api-types": "./src/api-types.ts",
+    "./confirmation": "./src/confirmation.ts",
+    "./events": "./src/events.ts",
+    "./db-rows": "./src/db-rows.ts",
+    "./constants": "./src/constants.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "viem": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.6.0"
+  }
+}

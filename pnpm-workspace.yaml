@@ -1,0 +1,10 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Single-version policy for shared libraries (CLAUDE.md anti-drift rule).
+# Services reference these via `catalog:` so they can never diverge on versions.
+# Versions match what packages/shared resolved to under the previous bun.lock.
+catalog:
+  zod: 4.4.3
+  viem: 2.55.0

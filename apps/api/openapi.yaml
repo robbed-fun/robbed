@@ -1,0 +1,1143 @@
+openapi: 3.1.0
+info:
+  title: hoodpad API
+  version: 1.0.0
+  description: |
+    Frozen HTTP contract for `apps/api` (Hono on Bun) — transcribed from
+    `docs/services/api.md` (Design v1.0) and `launchpad-spec.md` §2/§2.1/§5/§8/§12.
+    M2 implements this document; M3 (frontend) consumes it. Response DTO shapes
+    are the zod schemas in `packages/shared/src/api-types.ts` — the schemas
+    below mirror them and MUST NOT drift (shared package is authoritative).
+
+    Conventions (api.md §2):
+    - Envelope: `{ data, error: null }` on success, `{ data: null, error: { code, message } }` on failure.
+    - All uint256 values are decimal strings.
+    - Every event-derived object carries `confirmationState` (spec §2.1): `soft_confirmed | posted_to_l1 | finalized`.
+    - Every USD-derived field is `{ usd, ethUsd, asOf }` computed at request time from `eth_usd_snapshots`
+      (never a constant, spec §2); `stale: true` added when the snapshot is older than 5 minutes.
+    - List endpoints use cursor pagination (`?cursor=&limit=`, limit ≤ 100, default 50).
+    - Listing-gated endpoints (`/tokens` list, `/search`) exclude `visibility = 'hidden'`;
+      direct `/tokens/{address}` returns hidden tokens with the moderation flag, never 404 (spec §12.21).
+    - Rate limiting (api.md §6.3): 429 with `Retry-After`. Defaults: uploads 10/h + 3/min per IP,
+      metadata 20/h per IP, search 60/min per IP, reads 300/min per IP, admin 60/min per session.
+    - No API path may ever mutate or depend on mutating chain state (spec §8.4).
+  license:
+    name: MIT
+servers:
+  - url: /
+# Default: public, no auth (api.md §6.1 — reads + upload/metadata are anonymous by design).
+# Admin operations override with the adminSession scheme (api.md §6.2).
+security: []
+tags:
+  - name: launch
+    description: Launch flow — image upload + canonical metadata (spec §5.3, §8.3, §12.19)
+  - name: tokens
+    description: Read API over indexer tables (spec §5.1, §5.2)
+  - name: search
+    description: pg_trgm search over name / ticker / contract / creator (spec §5.1)
+  - name: meta
+    description: Confirmations, ETH/USD, health (spec §2, §2.1)
+  - name: admin
+    description: Moderation admin — SIWE session auth, listing visibility only (spec §8.4)
+
+paths:
+  /v1/uploads/image:
+    post:
+      tags: [launch]
+      operationId: uploadImage
+      summary: Upload a token image (API-mediated — spec §12.19; MIME sniff, ≤4MB, re-encode before R2)
+      description: |
+        Multipart upload. Pipeline (api.md §3.1): magic-byte MIME sniff (png|jpeg|webp|gif) →
+        decode + re-encode (strips EXIF/polyglots; canonical image is the RE-ENCODED object) →
+        keccak256 of re-encoded bytes = `imageHash` → content-addressed PUT to R2
+        `images/{keccak256}.webp` → async auto-moderation enqueued. Never a browser-direct presign.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Image file, ≤ 4MB (spec §5.3)
+      responses:
+        "200":
+          description: Re-encoded and stored
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data: { $ref: "#/components/schemas/UploadImageResponse" }
+                  error: { type: "null" }
+        "400":
+          description: "`oversized` | `unsupported_type` | `decode_failed` (api.md §3.1)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/metadata:
+    post:
+      tags: [launch]
+      operationId: createMetadata
+      summary: Canonicalize + hash + publish metadata JSON (spec §8.3, §12.19)
+      description: |
+        Server builds the fixed field set + version tag, canonicalizes with the shared
+        `canonicalizeMetadata` (packages/shared — the single implementation), keccak256-hashes,
+        and PUTs to R2 at `metadata/{hash}.json` (content-addressed). Text moderation +
+        impersonation checks run but NEVER block the response (moderation gates listing,
+        not creation — spec §8.4). The client MUST re-verify `metadataHash` with the shared
+        canonicalizer before signing the tx (normative for M3 — spec §12.19).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MetadataRequest" }
+      responses:
+        "200":
+          description: Canonical metadata published
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data: { $ref: "#/components/schemas/MetadataResponse" }
+                  error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/search:
+    get:
+      tags: [search]
+      operationId: search
+      summary: Search over name, ticker, contract address, creator address (spec §5.1)
+      description: |
+        Single endpoint, pg_trgm (api.md §3.3). `^0x[0-9a-fA-F]{6,40}$` queries switch to
+        address mode (prefix/exact on token + creator address, exact pins first); otherwise
+        trigram similarity over name/ticker with ticker boost ×1.2, volume tiebreak,
+        similarity floor 0.25 (ratified defaults, spec §12.22). Hidden listings excluded.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 80 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Matching tokens (same card projection as /v1/tokens)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [results]
+                    properties:
+                      results:
+                        type: array
+                        items: { $ref: "#/components/schemas/TokenCard" }
+                  error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/tokens:
+    get:
+      tags: [tokens]
+      operationId: listTokens
+      summary: Token grid — sorts + filters (spec §5.1)
+      description: |
+        `trending = vol24h × e^(−age/24h)` (ratified default, spec §12.22, tunable config);
+        `progress = real_eth_reserves / graduation_eth` (pre-grad only). Hidden listings excluded;
+        `pending_review` remains listed (spec §12.21).
+      parameters:
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [trending, newest, mcap, volume24h, progress]
+            default: trending
+        - name: filter
+          in: query
+          schema:
+            type: string
+            enum: [pregrad, graduated, all]
+            default: all
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Token cards
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [tokens, nextCursor]
+                    properties:
+                      tokens:
+                        type: array
+                        items: { $ref: "#/components/schemas/TokenCard" }
+                      nextCursor: { $ref: "#/components/schemas/NextCursor" }
+                  error: { type: "null" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/tokens/king-of-the-hill:
+    get:
+      tags: [tokens]
+      operationId: kingOfTheHill
+      summary: Discover hero — closest to graduation, volume-weighted (spec §5.1)
+      description: |
+        `ORDER BY (real_eth_reserves/graduation_eth) × ln(1+volume_eth_24h) DESC` among
+        pre-grad tokens (ratified default, spec §12.22; tunable config).
+      responses:
+        "200":
+          description: The current King of the Hill (`token` null when no pre-grad tokens exist)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [token]
+                    properties:
+                      token:
+                        oneOf:
+                          - $ref: "#/components/schemas/TokenCard"
+                          - type: "null"
+                  error: { type: "null" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/tokens/{address}:
+    get:
+      tags: [tokens]
+      operationId: getToken
+      summary: Token detail + Trust panel payload (spec §5.2)
+      description: |
+        Hidden tokens are returned WITH `moderation.visibility = 'hidden'`, never 404 —
+        hiding is a listing concern only (ratified, spec §12.21).
+      parameters:
+        - $ref: "#/components/parameters/TokenAddress"
+      responses:
+        "200":
+          description: Full detail incl. reserves, graduation progress, Trust panel
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data: { $ref: "#/components/schemas/TokenDetail" }
+                  error: { type: "null" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/tokens/{address}/trades:
+    get:
+      tags: [tokens]
+      operationId: listTokenTrades
+      summary: Trade feed + WS reconnect backfill (spec §5.2; indexer.md §8.4)
+      parameters:
+        - $ref: "#/components/parameters/TokenAddress"
+        - name: since
+          in: query
+          description: Unix timestamp or block number floor for backfill-heal
+          schema: { type: integer, minimum: 0 }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Trades (curve + v3 unified; each row carries venue + confirmationState)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [trades, nextCursor]
+                    properties:
+                      trades:
+                        type: array
+                        items: { $ref: "#/components/schemas/TradeRow" }
+                      nextCursor: { $ref: "#/components/schemas/NextCursor" }
+                  error: { type: "null" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/trades/{txHash}:
+    get:
+      tags: [tokens]
+      operationId: getTradesByTx
+      summary: Optimistic-UI reconciliation lookup (api.md §3.4; web.md §4.1)
+      parameters:
+        - name: txHash
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/Hex32" }
+      responses:
+        "200":
+          description: All Trade rows in that tx (create-with-initial-buy has one)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [trades]
+                    properties:
+                      trades:
+                        type: array
+                        items: { $ref: "#/components/schemas/TradeRow" }
+                  error: { type: "null" }
+        "404":
+          description: Not indexed yet — client keeps "awaiting index" state and re-polls
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/tokens/{address}/candles:
+    get:
+      tags: [tokens]
+      operationId: listTokenCandles
+      summary: Venue-continuous candles for lightweight-charts (spec §5.2; §12.17 intervals)
+      description: |
+        Bucket-aligned range, max 5000 buckets per request. One unbroken series across
+        graduation (curve trades + V3 swaps — indexer.md §4.3). Empty buckets are absent;
+        the chart forward-fills (frontend concern).
+      parameters:
+        - $ref: "#/components/parameters/TokenAddress"
+        - name: interval
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/CandleInterval" }
+        - name: from
+          in: query
+          required: true
+          schema: { type: integer, minimum: 0, description: unix seconds }
+        - name: to
+          in: query
+          required: true
+          schema: { type: integer, minimum: 0, description: unix seconds }
+      responses:
+        "200":
+          description: Candles
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [candles]
+                    properties:
+                      candles:
+                        type: array
+                        items: { $ref: "#/components/schemas/Candle" }
+                  error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/tokens/{address}/holders:
+    get:
+      tags: [tokens]
+      operationId: listTokenHolders
+      summary: Top holders with creator/curve/lp_pool/vault flags (spec §5.2 top-20)
+      parameters:
+        - $ref: "#/components/parameters/TokenAddress"
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Top holders (flags computed at query time, not stored)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [holders, holderCount]
+                    properties:
+                      holders:
+                        type: array
+                        items: { $ref: "#/components/schemas/HolderRow" }
+                      holderCount: { type: integer, minimum: 0 }
+                  error: { type: "null" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/tokens/{address}/fees:
+    get:
+      tags: [tokens]
+      operationId: getTokenFees
+      summary: Treasury fee dashboard (spec §6.4 post-graduation revenue; indexer.md §3.5)
+      description: |
+        `collected` from indexed `Collect` events; `uncollected` is a live NPM `tokensOwed`
+        RPC read, cached 60s (point-in-time, not indexed state).
+      parameters:
+        - $ref: "#/components/parameters/TokenAddress"
+      responses:
+        "200":
+          description: Collected + accrued-uncollected fees
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data: { $ref: "#/components/schemas/FeesResponse" }
+                  error: { type: "null" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/stats:
+    get:
+      tags: [tokens]
+      operationId: getStats
+      summary: Global stats (api.md §3.4)
+      responses:
+        "200":
+          description: Tokens launched, graduations, 24h volume, treasury fees — all computed, USD per §2
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data: { $ref: "#/components/schemas/StatsResponse" }
+                  error: { type: "null" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/confirmations:
+    get:
+      tags: [meta]
+      operationId: getConfirmations
+      summary: Confirmation watermarks (spec §2.1; SSR initial state)
+      responses:
+        "200":
+          description: Current safe/finalized/latest L2 blocks
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data: { $ref: "#/components/schemas/ConfirmationsResponse" }
+                  error: { type: "null" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/eth-usd:
+    get:
+      tags: [meta]
+      operationId: getEthUsd
+      summary: ETH/USD snapshot with source + asOf (spec §2 — never a constant)
+      responses:
+        "200":
+          description: Latest snapshot from eth_usd_snapshots (indexer poller writes, API reads)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data: { $ref: "#/components/schemas/EthUsdResponse" }
+                  error: { type: "null" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/healthz:
+    get:
+      tags: [meta]
+      operationId: healthz
+      summary: Liveness probe (gate-7)
+      responses:
+        "200":
+          description: Alive
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [ok]
+                    properties:
+                      ok: { type: boolean, const: true }
+                  error: { type: "null" }
+
+  /v1/readyz:
+    get:
+      tags: [meta]
+      operationId: readyz
+      summary: Readiness probe — DB + Redis + R2 checks (gate-7)
+      responses:
+        "200":
+          description: All dependencies reachable
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [ok, checks]
+                    properties:
+                      ok: { type: boolean }
+                      checks:
+                        type: object
+                        required: [db, redis, r2]
+                        properties:
+                          db: { type: boolean }
+                          redis: { type: boolean }
+                          r2: { type: boolean }
+                  error: { type: "null" }
+        "503":
+          description: One or more dependencies failing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /v1/admin/moderation/queue:
+    get:
+      tags: [admin]
+      operationId: adminModerationQueue
+      summary: Moderation review queue (spec §8.4)
+      security:
+        - adminSession: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending_review, flagged]
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Queue items (token, image, metadata, vendor scores, impersonation, visibility)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [items, nextCursor]
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/ModerationQueueItem" }
+                      nextCursor: { $ref: "#/components/schemas/NextCursor" }
+                  error: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/admin/moderation/{tokenAddress}/visibility:
+    post:
+      tags: [admin]
+      operationId: adminSetVisibility
+      summary: Set listing visibility ONLY (spec §8.4 — "admin can hide listings only")
+      description: |
+        There is deliberately no endpoint that can pause, block, or otherwise touch chain
+        state; sells/buys are untouchable from here. Every action audit-logged.
+      security:
+        - adminSession: []
+      parameters:
+        - $ref: "#/components/parameters/AdminTokenAddress"
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminVisibilityRequest" }
+      responses:
+        "200":
+          description: Visibility updated (audit-logged)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data: { $ref: "#/components/schemas/ModerationQueueItem" }
+                  error: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/admin/moderation/{tokenAddress}/impersonation:
+    post:
+      tags: [admin]
+      operationId: adminSetImpersonation
+      summary: Set/clear impersonation flag (spec §8.4)
+      security:
+        - adminSession: []
+      parameters:
+        - $ref: "#/components/parameters/AdminTokenAddress"
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminImpersonationRequest" }
+      responses:
+        "200":
+          description: Flag updated (audit-logged)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data: { $ref: "#/components/schemas/ModerationQueueItem" }
+                  error: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/admin/metadata/{tokenAddress}/reverify:
+    post:
+      tags: [admin]
+      operationId: adminReverifyMetadata
+      summary: Nudge the indexer metadata verifier (indexer.md §6.2)
+      description: Sets the verification row pending; the indexer poller picks it up.
+      security:
+        - adminSession: []
+      parameters:
+        - $ref: "#/components/parameters/AdminTokenAddress"
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "202":
+          description: Re-verification queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [queued]
+                    properties:
+                      queued: { type: boolean, const: true }
+                  error: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/admin/audit-log:
+    get:
+      tags: [admin]
+      operationId: adminAuditLog
+      summary: Admin action audit log (api.md §6.2 — actor, action, target, reason, ts)
+      security:
+        - adminSession: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Audit entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [entries, nextCursor]
+                    properties:
+                      entries:
+                        type: array
+                        items: { $ref: "#/components/schemas/AuditLogEntry" }
+                      nextCursor: { $ref: "#/components/schemas/NextCursor" }
+                  error: { type: "null" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+components:
+  securitySchemes:
+    adminSession:
+      type: apiKey
+      in: cookie
+      name: hoodpad_admin_session
+      description: |
+        SIWE (EIP-4361) against a config address allowlist → short-lived signed session
+        cookie (HttpOnly, SameSite=strict, 12h). Mutations additionally require the
+        `X-CSRF-Token` header (api.md §6.2). Cookie name is implementation-defined.
+
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+      description: Opaque cursor from a previous response (api.md §2)
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    TokenAddress:
+      name: address
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Address" }
+    AdminTokenAddress:
+      name: tokenAddress
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/Address" }
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema: { type: string }
+      description: CSRF token bound to the admin session (api.md §6.2)
+
+  responses:
+    BadRequest:
+      description: Validation failure
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    NotFound:
+      description: Unknown resource
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Unauthorized:
+      description: Missing/invalid admin session (SIWE, api.md §6.2)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    RateLimited:
+      description: Rate limit exceeded (api.md §6.3)
+      headers:
+        Retry-After:
+          description: Seconds until the sliding window admits the client again
+          schema: { type: integer, minimum: 0 }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  schemas:
+    # ── Scalars ──────────────────────────────────────────────────────────────
+    Address:
+      type: string
+      pattern: "^0x[0-9a-fA-F]{40}$"
+      description: EVM address (responses use lowercase)
+    Hex32:
+      type: string
+      pattern: "^0x[0-9a-f]{64}$"
+      description: 0x-prefixed 32-byte hex (tx hash / keccak256)
+    DecimalString:
+      type: string
+      pattern: "^[0-9]+$"
+      description: uint256 as decimal string (api.md §2 — exceeds JS safe integer)
+    NextCursor:
+      oneOf:
+        - type: string
+        - type: "null"
+      description: Opaque cursor; null when exhausted
+    ConfirmationState:
+      type: string
+      enum: [soft_confirmed, posted_to_l1, finalized]
+      description: Spec §2.1 — soft-confirmed → posted-to-L1 → finalized (monotonic)
+    CandleInterval:
+      type: string
+      enum: ["1s", "15s", "1m", "5m", "15m", "1h"]
+      description: Ratified interval set (spec §12.17)
+    Venue:
+      type: string
+      enum: [curve, v3]
+    ModerationVisibility:
+      type: string
+      enum: [visible, pending_review, hidden]
+    TokenStatus:
+      type: string
+      enum: [curve, graduating, graduated]
+      description: Derived (indexer.md §3.2) — drives the venue pill / trade-widget engine
+    MetadataVerificationStatus:
+      type: string
+      enum: [match, mismatch, unfetched]
+
+    # ── Envelope ─────────────────────────────────────────────────────────────
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: "Documented codes include: oversized, unsupported_type, decode_failed, rate_limited, not_found, invalid_request, unauthorized"
+        message: { type: string }
+    ErrorEnvelope:
+      type: object
+      required: [data, error]
+      properties:
+        data: { type: "null" }
+        error: { $ref: "#/components/schemas/Error" }
+
+    # ── Value objects ────────────────────────────────────────────────────────
+    UsdValue:
+      type: object
+      required: [usd, ethUsd, asOf]
+      properties:
+        usd: { type: string }
+        ethUsd: { type: string }
+        asOf: { type: string, format: date-time }
+        stale:
+          type: boolean
+          const: true
+          description: Present iff the ETH/USD snapshot is older than 5 minutes (api.md §2)
+      description: Computed at request time from eth_usd_snapshots — never a constant (spec §2)
+
+    ModerationInfo:
+      type: object
+      required: [visibility, impersonationFlag]
+      properties:
+        visibility: { $ref: "#/components/schemas/ModerationVisibility" }
+        impersonationFlag: { type: boolean }
+        impersonationTicker:
+          type: string
+          description: Present on TokenDetail when impersonation-flagged (api.md §3.4)
+
+    # ── Core DTOs (mirror packages/shared/src/api-types.ts) ─────────────────
+    TokenCard:
+      type: object
+      required:
+        [address, name, ticker, imageUrl, creator, createdAt, priceEth, mcap,
+         progressPct, change24hPct, volume24h, graduated, status,
+         confirmationState, moderation]
+      properties:
+        address: { $ref: "#/components/schemas/Address" }
+        name: { type: string }
+        ticker: { type: string }
+        imageUrl:
+          oneOf: [{ type: string }, { type: "null" }]
+          description: Null until metadata JSON fetched (indexer.md §3.1)
+        creator: { $ref: "#/components/schemas/Address" }
+        createdAt: { type: integer, description: "block timestamp, unix seconds" }
+        priceEth:
+          oneOf: [{ type: number }, { type: "null" }]
+          description: Display-only float; null before first trade
+        mcap: { $ref: "#/components/schemas/UsdValue" }
+        progressPct: { type: number, description: real_eth_reserves / graduation_eth }
+        change24hPct:
+          oneOf: [{ type: number }, { type: "null" }]
+        volume24h: { $ref: "#/components/schemas/DecimalString" }
+        graduated: { type: boolean }
+        status: { $ref: "#/components/schemas/TokenStatus" }
+        confirmationState: { $ref: "#/components/schemas/ConfirmationState" }
+        moderation: { $ref: "#/components/schemas/ModerationInfo" }
+
+    TrustPanel:
+      type: object
+      required: [metadataVerification, lpCopy, feePolicy]
+      description: Trust panel payload (spec §5.2) — all derived, none hardcoded
+      properties:
+        metadataVerification:
+          type: object
+          required: [status, onchainHash]
+          properties:
+            status: { $ref: "#/components/schemas/MetadataVerificationStatus" }
+            onchainHash: { $ref: "#/components/schemas/Hex32" }
+            computedHash: { $ref: "#/components/schemas/Hex32" }
+            verifiedAt: { type: string, format: date-time }
+        lpCopy:
+          type: string
+          const: "LP principal permanently locked; trading fees claimable by treasury."
+          description: The exact canonical sentence (spec §12.14; CLAUDE.md hard rule) — from packages/shared constants
+        feePolicy:
+          type: object
+          required: [tradeFeeBps, creatorFeeBps]
+          properties:
+            tradeFeeBps: { type: integer, minimum: 0, maximum: 200 }
+            creatorFeeBps:
+              type: integer
+              minimum: 0
+              description: Present from day 1, value 0 in v1 (spec §7)
+
+    TokenDetail:
+      allOf:
+        - $ref: "#/components/schemas/TokenCard"
+        - type: object
+          required:
+            [description, links, curveAddress, supply, reserves, graduation,
+             trust, creator, moderation]
+          properties:
+            description:
+              oneOf: [{ type: string }, { type: "null" }]
+            links:
+              oneOf:
+                - type: object
+                  properties:
+                    website: { type: string }
+                    x: { type: string }
+                    telegram: { type: string }
+                - type: "null"
+            curveAddress: { $ref: "#/components/schemas/Address" }
+            v3PoolAddress: { $ref: "#/components/schemas/Address" }
+            graduatedAt: { type: integer }
+            supply:
+              type: object
+              required: [total, curveHeld, lpTranche]
+              properties:
+                total: { $ref: "#/components/schemas/DecimalString" }
+                curveHeld: { $ref: "#/components/schemas/DecimalString" }
+                lpTranche: { $ref: "#/components/schemas/DecimalString" }
+            reserves:
+              type: object
+              required: [virtualEth, virtualToken, realEth, realToken]
+              description: Live curve state (Trust panel, spec §5.2)
+              properties:
+                virtualEth: { $ref: "#/components/schemas/DecimalString" }
+                virtualToken: { $ref: "#/components/schemas/DecimalString" }
+                realEth: { $ref: "#/components/schemas/DecimalString" }
+                realToken: { $ref: "#/components/schemas/DecimalString" }
+            graduation:
+              type: object
+              required: [thresholdEth, progressPct]
+              properties:
+                thresholdEth: { $ref: "#/components/schemas/DecimalString" }
+                progressPct: { type: number }
+            trust: { $ref: "#/components/schemas/TrustPanel" }
+            creator:
+              type: object
+              required: [address, tokensCreated]
+              description: Creator profile — supersedes the card's plain creator address (flagged transcription note)
+              properties:
+                address: { $ref: "#/components/schemas/Address" }
+                tokensCreated: { type: integer, minimum: 0 }
+
+    TradeRow:
+      type: object
+      required:
+        [id, token, trader, venue, isBuy, ethAmount, tokenAmount, feeEth,
+         priceEth, blockNumber, blockTimestamp, txHash, logIndex, confirmationState]
+      description: Unified curve Trade + V3 Swap projection (indexer.md §3.2)
+      properties:
+        id: { type: string, description: "`{txHash}-{logIndex}`" }
+        token: { $ref: "#/components/schemas/Address" }
+        trader:
+          allOf: [{ $ref: "#/components/schemas/Address" }]
+          description: For venue=v3 this is the swap recipient, not necessarily the EOA (spec §12.16)
+        venue: { $ref: "#/components/schemas/Venue" }
+        isBuy: { type: boolean }
+        ethAmount:
+          allOf: [{ $ref: "#/components/schemas/DecimalString" }]
+          description: GROSS ETH leg for curve trades (fee included; net = ethAmount − feeEth, spec §12.15)
+        tokenAmount: { $ref: "#/components/schemas/DecimalString" }
+        feeEth:
+          allOf: [{ $ref: "#/components/schemas/DecimalString" }]
+          description: "\"0\" for v3 rows — fee lives in the pool; Collect tracks it"
+        priceEth: { type: number, description: "ETH per token, display-only float" }
+        blockNumber: { type: integer, minimum: 0 }
+        blockTimestamp: { type: integer, minimum: 0 }
+        txHash: { $ref: "#/components/schemas/Hex32" }
+        logIndex: { type: integer, minimum: 0 }
+        confirmationState: { $ref: "#/components/schemas/ConfirmationState" }
+
+    Candle:
+      type: object
+      required: [bucketStart, open, high, low, close, volumeEth, volumeToken, tradeCount]
+      properties:
+        bucketStart: { type: integer, minimum: 0, description: "unix seconds, floored to interval" }
+        open: { type: number }
+        high: { type: number }
+        low: { type: number }
+        close: { type: number }
+        volumeEth: { $ref: "#/components/schemas/DecimalString" }
+        volumeToken: { $ref: "#/components/schemas/DecimalString" }
+        tradeCount: { type: integer, minimum: 0 }
+
+    HolderRow:
+      type: object
+      required: [address, balance, pct, flags]
+      properties:
+        address: { $ref: "#/components/schemas/Address" }
+        balance: { $ref: "#/components/schemas/DecimalString" }
+        pct: { type: number }
+        flags:
+          type: array
+          items:
+            type: string
+            enum: [creator, curve, lp_pool, vault]
+
+    FeesResponse:
+      type: object
+      required: [collected, uncollected]
+      properties:
+        collected:
+          type: object
+          required: [token, weth, byCollection]
+          properties:
+            token: { $ref: "#/components/schemas/DecimalString" }
+            weth: { $ref: "#/components/schemas/DecimalString" }
+            byCollection:
+              type: array
+              items:
+                type: object
+                required: [id, amountToken, amountWeth, recipient, blockTimestamp, txHash, confirmationState]
+                properties:
+                  id: { type: string }
+                  amountToken: { $ref: "#/components/schemas/DecimalString" }
+                  amountWeth: { $ref: "#/components/schemas/DecimalString" }
+                  recipient: { $ref: "#/components/schemas/Address" }
+                  blockTimestamp: { type: integer, minimum: 0 }
+                  txHash: { $ref: "#/components/schemas/Hex32" }
+                  confirmationState: { $ref: "#/components/schemas/ConfirmationState" }
+        uncollected:
+          type: object
+          required: [token, weth, asOf]
+          properties:
+            token: { $ref: "#/components/schemas/DecimalString" }
+            weth: { $ref: "#/components/schemas/DecimalString" }
+            asOf: { type: string, format: date-time, description: "live NPM tokensOwed read, cached 60s" }
+
+    StatsResponse:
+      type: object
+      required:
+        [tokensLaunched, graduations, volume24hEth, volume24h,
+         treasuryFeesCollectedWeth, treasuryFeesCollected]
+      properties:
+        tokensLaunched: { type: integer, minimum: 0 }
+        graduations: { type: integer, minimum: 0 }
+        volume24hEth: { $ref: "#/components/schemas/DecimalString" }
+        volume24h: { $ref: "#/components/schemas/UsdValue" }
+        treasuryFeesCollectedWeth: { $ref: "#/components/schemas/DecimalString" }
+        treasuryFeesCollected: { $ref: "#/components/schemas/UsdValue" }
+
+    ConfirmationsResponse:
+      type: object
+      required: [safeBlock, finalizedBlock, latestBlock, updatedAt]
+      properties:
+        safeBlock: { type: integer, minimum: 0 }
+        finalizedBlock: { type: integer, minimum: 0 }
+        latestBlock: { type: integer, minimum: 0 }
+        updatedAt: { type: string, format: date-time }
+
+    EthUsdResponse:
+      type: object
+      required: [price, source, asOf]
+      properties:
+        price: { type: number }
+        source: { type: string, description: "e.g. 'chainlink:4663', 'defillama' — config-driven (spec §13)" }
+        asOf: { type: string, format: date-time }
+
+    # ── Launch flow ──────────────────────────────────────────────────────────
+    UploadImageResponse:
+      type: object
+      required: [imageUrl, imageHash, width, height, bytes]
+      properties:
+        imageUrl: { type: string }
+        imageHash:
+          allOf: [{ $ref: "#/components/schemas/Hex32" }]
+          description: keccak256 of the RE-ENCODED bytes — goes into metadata JSON (spec §8.3)
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        bytes: { type: integer, minimum: 1 }
+
+    MetadataRequest:
+      type: object
+      required: [name, ticker, imageUrl, imageHash]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 64 }
+        ticker: { type: string, minLength: 1, maxLength: 10 }
+        description: { type: string, maxLength: 500 }
+        links:
+          type: object
+          properties:
+            website: { type: string, format: uri }
+            x: { type: string, format: uri }
+            telegram: { type: string, format: uri }
+        imageUrl: { type: string, format: uri, description: must be our CDN origin }
+        imageHash:
+          allOf: [{ $ref: "#/components/schemas/Hex32" }]
+          description: must match an object the upload endpoint produced (R2 existence check)
+
+    MetadataResponse:
+      type: object
+      required: [metadataHash, metadataUri, canonicalJson]
+      properties:
+        metadataHash:
+          allOf: [{ $ref: "#/components/schemas/Hex32" }]
+          description: keccak256 of the canonical bytes — the client MUST re-verify with the shared canonicalizer before signing (spec §12.19)
+        metadataUri: { type: string, description: "R2 URL metadata/{hash}.json (content-addressed)" }
+        canonicalJson: { type: string, description: the exact canonical JSON text that was hashed and stored }
+
+    # ── Admin ────────────────────────────────────────────────────────────────
+    AdminVisibilityRequest:
+      type: object
+      required: [visibility, reason]
+      properties:
+        visibility:
+          type: string
+          enum: [visible, hidden]
+          description: Listing visibility ONLY — no chain-state capability exists (spec §8.4)
+        reason: { type: string, minLength: 1 }
+
+    AdminImpersonationRequest:
+      type: object
+      required: [flagged, reason]
+      properties:
+        flagged: { type: boolean }
+        ticker: { type: string }
+        reason: { type: string, minLength: 1 }
+
+    ModerationQueueItem:
+      type: object
+      required:
+        [tokenAddress, name, ticker, imageUrl, metadataUri, nsfwScore, csamFlag,
+         impersonationFlag, impersonationTicker, visibility, updatedAt]
+      properties:
+        tokenAddress: { $ref: "#/components/schemas/Address" }
+        name: { type: string }
+        ticker: { type: string }
+        imageUrl:
+          oneOf: [{ type: string }, { type: "null" }]
+        metadataUri:
+          oneOf: [{ type: string }, { type: "null" }]
+        nsfwScore:
+          oneOf: [{ type: number }, { type: "null" }]
+        csamFlag: { type: boolean }
+        impersonationFlag: { type: boolean }
+        impersonationTicker:
+          oneOf: [{ type: string }, { type: "null" }]
+        visibility: { $ref: "#/components/schemas/ModerationVisibility" }
+        updatedAt: { type: string, format: date-time }
+
+    AuditLogEntry:
+      type: object
+      required: [actor, action, target, reason, ts]
+      properties:
+        actor: { type: string, description: admin identity (SIWE address) }
+        action: { type: string }
+        target: { type: string }
+        reason:
+          oneOf: [{ type: string }, { type: "null" }]
+        ts: { type: string, format: date-time }

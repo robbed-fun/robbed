@@ -1,0 +1,6 @@
+{
+  "name": "@hoodpad/api",
+  "private": true,
+  "license": "MIT",
+  "description": "hoodpad API — Hono on Bun: R2 presigned uploads, moderation, search (spec §8). Scaffolded in M2."
+}

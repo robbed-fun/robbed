@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# hoodpad pre-commit: the entire CI validation suite runs before every commit
+# (project policy). Mirrors .github/workflows/ci.yml via scripts/validate.sh.
+# Emergency bypass: SKIP_VALIDATION=1 git commit …  (CI still enforces everything)
+
+if [ "${SKIP_VALIDATION:-0}" = "1" ]; then
+  echo "⚠ pre-commit validation SKIPPED (SKIP_VALIDATION=1) — CI will still enforce it"
+  exit 0
+fi
+
+exec "$(git rev-parse --show-toplevel)/scripts/validate.sh" --staged

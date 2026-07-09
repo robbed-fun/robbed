@@ -1,0 +1,117 @@
+# hoodpad CI — spec §10 gate 1 (static analysis + fmt) and gate 2 entry (tests).
+# Jobs are conditional on their service directory existing so CI stays green
+# while milestones land incrementally.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      has_contracts: ${{ steps.check.outputs.has_contracts }}
+      has_apps: ${{ steps.check.outputs.has_apps }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          echo "has_contracts=$([ -f contracts/foundry.toml ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "has_apps=$([ -f package.json ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  contracts:
+    needs: changes
+    if: needs.changes.outputs.has_contracts == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+      # §10 gate 1: fmt enforced
+      - name: forge fmt
+        run: forge fmt --check
+      # §6.7: whole workspace on the single pinned solc (foundry.toml)
+      - name: build
+        run: forge build --sizes
+      # §10 gate 2: unit + fuzz + invariants
+      - name: test
+        run: forge test -vvv
+        env:
+          FOUNDRY_PROFILE: ci
+
+  slither:
+    needs: changes
+    if: needs.changes.outputs.has_contracts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      # §10 gate 1: zero unexplained findings — triage lives in contracts/slither.config.json
+      # + inline dispositions; anything undispositioned fails the job.
+      - uses: crytic/slither-action@v0.4.0
+        with:
+          target: contracts
+          fail-on: low
+          slither-args: --config-file contracts/slither.config.json
+
+  apps:
+    needs: changes
+    if: needs.changes.outputs.has_apps == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run --filter '*' typecheck || bun run typecheck
+      - run: bun test
+
+  docs:
+    # Mechanical doc lint (scripts/doc-check.ts): relative links + anchors,
+    # § references vs launchpad-spec.md, canonical LP copy, mermaid/code
+    # fences, m0 constants markers, openapi.yaml parse. The LLM triage layer
+    # is the local /doc-check command; this job only enforces the mechanical
+    # findings.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun scripts/doc-check.ts
+
+  spec-check:
+    # Headless spec compliance review of the PR diff (docs/development-flow.md).
+    # Requires the ANTHROPIC_API_KEY repo secret; skips gracefully when absent
+    # (e.g. forks) — the local /spec-check command remains mandatory either way.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check API key
+        id: key
+        run: echo "present=${{ secrets.ANTHROPIC_API_KEY != '' }}" >> "$GITHUB_OUTPUT"
+      - name: Claude spec-check
+        if: steps.key.outputs.present == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Run the spec compliance review defined in .claude/commands/spec-check.md
+            against the diff of this pull request (diff vs the merge base with main).
+            Report findings as a markdown table (rule, file:line, severity, spec section).
+            If any Critical or High finding exists, exit with a non-zero status.
+          claude_args: "--allowedTools 'Bash(git diff:*),Bash(git log:*),Read,Grep,Glob'"

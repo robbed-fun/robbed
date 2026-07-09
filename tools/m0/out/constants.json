@@ -1,0 +1,145 @@
+{
+  "chainId": 4663,
+  "generatedAt": "2026-07-09T19:28:02.063Z",
+  "ethUsdSnapshot": {
+    "source": "coingecko (https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd&precision=8)",
+    "timestamp": "2026-07-09T19:28:01.974Z",
+    "value": "1747.11848108"
+  },
+  "curve": {
+    "virtualEthWei": "3015028592077863715",
+    "virtualTokenWei": "1078959232981708744167095762",
+    "curveSupplyWei": "793100000000000000000000000",
+    "lpTrancheWei": "206900000000000000000000000",
+    "graduationEthWei": "8365023411820182472"
+  },
+  "fees": {
+    "tradeFeeBps": 100,
+    "creatorFeeBps": 0,
+    "creationFeeWei": "859000000000000",
+    "maxCreationFeeWei": "17180000000000000",
+    "graduationFeeWei": "125475351177302737",
+    "maxGraduationFeeWei": "1254753511773027370",
+    "callerRewardWei": "2862000000000000",
+    "maxCallerRewardWei": "14310000000000000"
+  },
+  "antiSniper": {
+    "windowSeconds": 8,
+    "maxEarlyBuyWei": "209126000000000000"
+  },
+  "v3": {
+    "feeTier": 10000,
+    "tickSpacing": 200,
+    "sqrtPriceX96Token0": "15807951508943811147537788",
+    "sqrtPriceX96Token1": "397085082898642924915726137867031",
+    "targetTickToken0": -170400,
+    "targetTickToken1": 170400,
+    "fullRangeTickLower": -887200,
+    "fullRangeTickUpper": 887200,
+    "toleranceTicks": 100,
+    "maxArbIterations": 8,
+    "migrationSlippageBps": 100
+  },
+  "beta": {
+    "perTokenEthCapWei": "12547535117730273708",
+    "globalEthCapWei": "418251170591009123600"
+  },
+  "external": {
+    "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "v3Factory": "0x0000000000000000000000000000000000000000",
+    "positionManager": "0x0000000000000000000000000000000000000000",
+    "treasurySafe": "0x0000000000000000000000000000000000000000"
+  },
+  "provenance": {
+    "generator": "tools/m0/derive.ts (@hoodpad/m0)",
+    "gitSha": "no-commit-yet",
+    "ethUsdSource": "coingecko (https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd&precision=8)",
+    "ethUsdPrice": "1747.11848108",
+    "fetchedAt": "2026-07-09T19:28:01.974Z",
+    "specRefs": [
+      "§6.2",
+      "§6.3",
+      "§6.4",
+      "§6.5",
+      "§11.0",
+      "§12.11",
+      "§12.18",
+      "§13"
+    ],
+    "status": "OPEN ITEM §13 — constants not final until reviewed by hoodpad-architect",
+    "simulation": {
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25
+      ],
+      "runs": 25,
+      "maxTerminalPriceErrPpb": "0",
+      "maxCurveRoundingDustTokenWei": "449628210"
+    }
+  },
+  "derivation": {
+    "note": "vT0 = S²/(2S−T−f), vE0 = p·(L+f)²/(2S−T−f), G = p·(L+f) with f=(gradFee+callerReward)/p; p = exact price of targetTickToken0. Full algebra in tools/m0/lib/curve.ts.",
+    "gradMcapTargetUsd": "69000",
+    "gradFeeBpsOfRaise": 150,
+    "rawTickToken0BeforeAlignment": -170480,
+    "k": "3253092937126253050893713317900861760790075830",
+    "ethToLpWei": "8236686060642879735",
+    "lpDust": {
+      "token0IsToken": {
+        "tokenWei": "2262",
+        "wethWei": "2243",
+        "liquidity": "41281598151561572237532"
+      },
+      "token0IsWeth": {
+        "tokenWei": "2255",
+        "wethWei": "2243",
+        "liquidity": "41281598151561572237532"
+      }
+    }
+  },
+  "humanReadable": {
+    "virtualEth0": "3.015028 ETH",
+    "virtualToken0": "1078.9592e6 tokens",
+    "graduationEth": "8.365023 ETH (net-of-fee, §12.11) ≈ $14614.69 @snapshot",
+    "graduationMcap": "39.8099 ETH ≈ $69552.76 @snapshot (target $69000)",
+    "initialMcap": "2.7943 ETH ≈ $4882.12 @snapshot",
+    "graduationFee": "0.125475 ETH ≈ $219.22 @snapshot (flat)",
+    "creationFee": "0.000859 ETH ≈ $1.50 @snapshot",
+    "callerReward": "0.002862 ETH ≈ $5.00 @snapshot",
+    "maxEarlyBuy": "0.209126 ETH ≈ $365.37 @snapshot",
+    "ethToLp": "8.236686 ETH"
+  },
+  "reviewRequired": [
+    "§13 GATE: ALL constants below are open item §13 until hoodpad-architect reviews this output; gate approval closes the item.",
+    "fees.graduationFeeWei: PROPOSAL — sized at 150 bps of net raise; comparable = classic pump.fun 6 SOL on ~85 SOL raise (~7.06%), removed 2025-03 at PumpSwap launch (theblock.co/post/347360). Low end chosen because perpetual V3 LP fees (§6.4) are our durable revenue.",
+    "fees.callerRewardWei: PROPOSAL (O-9) — sized ≈$5 equivalent at snapshot; re-validate ≥10× graduate() gas on testnet at M1.",
+    "antiSniper.*: PROPOSAL (O-7) — 8s timestamp window (§12.18) with per-tx cap = 2.5% of GRADUATION_ETH; multi-wallet bypass documented.",
+    "v3.toleranceTicks / maxArbIterations / migrationSlippageBps: PROPOSAL (O-8) — needed before gate-2 fuzz bounds are final.",
+    "beta.*: PLACEHOLDER (O-10) — mainnet values set with hoodpad-security before beta deploy.",
+    "external.v3Factory / positionManager / treasurySafe: UNSET (O-4/O-6) — zero address on purpose; deploy script must fail until filled from official registries. Never invented.",
+    "Graduation threshold counts NET-of-1%-fee real reserves — resolved §12.11; restated so the deploy reviewer re-confirms."
+  ]
+}

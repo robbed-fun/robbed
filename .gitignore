@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Foundry build artifacts (contracts/lib/ is vendored and MUST be committed — do not ignore it)
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# Environment — secrets never committed
+.env*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store

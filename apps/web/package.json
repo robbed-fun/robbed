@@ -1,0 +1,6 @@
+{
+  "name": "@hoodpad/web",
+  "private": true,
+  "license": "MIT",
+  "description": "hoodpad frontend — Next.js 15 App Router on Bun (spec §9: Discover, Token Detail, Launch + Trust panel). Scaffolded in M3."
+}

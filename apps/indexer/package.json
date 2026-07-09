@@ -1,0 +1,6 @@
+{
+  "name": "@hoodpad/indexer",
+  "private": true,
+  "license": "MIT",
+  "description": "hoodpad indexer — Ponder → Postgres (+pg_trgm) + Redis pub/sub → Bun WS (spec §8). Scaffolded in M2."
+}
