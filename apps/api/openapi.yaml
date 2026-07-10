@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: hoodpad API
+  title: ROBBED_ API
   version: 1.0.0
   description: |
     Frozen HTTP contract for `apps/api` (Hono on Bun) — transcribed from
@@ -493,9 +493,100 @@ paths:
       tags: [meta]
       operationId: readyz
       summary: Readiness probe — DB + Redis + R2 checks (gate-7)
+      description: >-
+        Data-carrying probe (k8s-style): BOTH the 200 and the 503 return the same
+        `{ data: { ok, checks }, error: null }` envelope so the per-dependency
+        `checks` breakdown always survives — the 503 is NOT an ErrorEnvelope
+        (RATIFIED 2026-07-10; matches apps/api/src/routes/health.ts). `ok` is
+        false and the HTTP status is 503 when any dependency is unreachable.
       responses:
         "200":
-          description: All dependencies reachable
+          description: "All dependencies reachable (`ok: true`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadyzResponse" }
+        "503":
+          description: "One or more dependencies failing (`ok: false`); same data shape as 200"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadyzResponse" }
+
+  /v1/admin/nonce:
+    get:
+      tags: [admin]
+      operationId: adminNonce
+      summary: Issue a single-use SIWE nonce (spec §8.4; api.md §6.2)
+      description: >-
+        Mints the session that the `adminSession` scheme references. Public (no
+        session exists yet). Returns a single-use nonce stored in Redis (10-min
+        TTL); the client embeds it in the EIP-4361 message it signs for
+        POST /v1/admin/login. RATIFIED 2026-07-10 (was implemented but absent
+        from the frozen contract; transcribed from apps/api/src/admin/routes.ts).
+      security: []
+      responses:
+        "200":
+          description: A fresh single-use nonce
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data: { $ref: "#/components/schemas/AdminNonceResponse" }
+                  error: { type: "null" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/admin/login:
+    post:
+      tags: [admin]
+      operationId: adminLogin
+      summary: SIWE (EIP-4361) login → session cookie (spec §8.4; api.md §6.2)
+      description: >-
+        Verifies the signed SIWE message against the config admin allowlist and
+        burns the single-use nonce (replay-proof). On success sets the HttpOnly,
+        SameSite=strict `adminSession` cookie (12h) via Set-Cookie and returns the
+        `csrfToken` the client must send as `X-CSRF-Token` on every admin
+        mutation. EOA (ECDSA) signatures only in v1 — EIP-1271 smart-account login
+        is flagged to hoodpad-architect. Public (mints the session).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminLoginRequest" }
+      responses:
+        "200":
+          description: Authenticated; session cookie set, CSRF token returned
+          headers:
+            Set-Cookie:
+              description: HttpOnly, SameSite=strict admin session cookie (12h)
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data: { $ref: "#/components/schemas/AdminLoginResponse" }
+                  error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/admin/logout:
+    post:
+      tags: [admin]
+      operationId: adminLogout
+      summary: Clear the admin session cookie (api.md §6.2)
+      description: Clears the `adminSession` cookie via Set-Cookie. Idempotent; no session required.
+      security: []
+      responses:
+        "200":
+          description: Session cookie cleared
+          headers:
+            Set-Cookie:
+              description: Expired/empty admin session cookie
+              schema: { type: string }
           content:
             application/json:
               schema:
@@ -504,22 +595,10 @@ paths:
                 properties:
                   data:
                     type: object
-                    required: [ok, checks]
+                    required: [ok]
                     properties:
-                      ok: { type: boolean }
-                      checks:
-                        type: object
-                        required: [db, redis, r2]
-                        properties:
-                          db: { type: boolean }
-                          redis: { type: boolean }
-                          r2: { type: boolean }
+                      ok: { type: boolean, const: true }
                   error: { type: "null" }
-        "503":
-          description: One or more dependencies failing
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
   /v1/admin/moderation/queue:
     get:
@@ -686,7 +765,7 @@ components:
     adminSession:
       type: apiKey
       in: cookie
-      name: hoodpad_admin_session
+      name: robbed_admin_session
       description: |
         SIWE (EIP-4361) against a config address allowlist → short-lived signed session
         cookie (HttpOnly, SameSite=strict, 12h). Mutations additionally require the
@@ -793,7 +872,12 @@ components:
       properties:
         code:
           type: string
-          description: "Documented codes include: oversized, unsupported_type, decode_failed, rate_limited, not_found, invalid_request, unauthorized"
+          enum: [oversized, unsupported_type, decode_failed, rate_limited, not_found, invalid_request, unauthorized, upstream_unavailable, conflict]
+          description: >-
+            Closed set — single source is packages/shared errorCodeSchema
+            (api-types.ts). A new code is added there and here in lockstep.
+            `upstream_unavailable` = unexpected 500 / readyz-503 dependency-down;
+            `conflict` = request conflicts with stored state (e.g. unknown imageHash).
         message: { type: string }
     ErrorEnvelope:
       type: object
@@ -846,6 +930,12 @@ components:
           oneOf: [{ type: number }, { type: "null" }]
           description: Display-only float; null before first trade
         mcap: { $ref: "#/components/schemas/UsdValue" }
+        mcapEth:
+          allOf: [{ $ref: "#/components/schemas/DecimalString" }]
+          description: >-
+            Native ETH market cap, wei decimal string (decisions.md §7.2 item 3).
+            ETH-first display source (§2) — USD mcap derives from it. Optional /
+            additive: absent until the indexer materializes it; not in `required`.
         progressPct: { type: number, description: real_eth_reserves / graduation_eth }
         change24hPct:
           oneOf: [{ type: number }, { type: "null" }]
@@ -857,7 +947,7 @@ components:
 
     TrustPanel:
       type: object
-      required: [metadataVerification, lpCopy, feePolicy]
+      required: [metadataVerification, lpCopy, feePolicy, organic]
       description: Trust panel payload (spec §5.2) — all derived, none hardcoded
       properties:
         metadataVerification:
@@ -881,6 +971,30 @@ components:
               type: integer
               minimum: 0
               description: Present from day 1, value 0 in v1 (spec §7)
+        organic:
+          description: >-
+            v1.2 organic-flow metrics (spec §5.2/§8.5) from indexer
+            token_flow_stats — advisory/heuristic, never gates chain state.
+            Organic-holder estimate is a RANGE, never a point value. null until
+            the stats job first computes.
+          oneOf:
+            - type: object
+              required: [holderPctLow, holderPctHigh, volumePct, flaggedClusterVolPct24h, methodology, updatedAt]
+              properties:
+                holderPctLow: { type: number }
+                holderPctHigh: { type: number }
+                volumePct:
+                  type: number
+                  description: "organic-volume % (wash-flagged volume excluded, §8.5)"
+                flaggedClusterVolPct24h:
+                  type: number
+                  description: "flagged-cluster share of 24h curve volume"
+                methodology:
+                  type: string
+                  description: "tooltip source, e.g. heuristic — see §8.5"
+                updatedAt:
+                  oneOf: [{ type: string, format: date-time }, { type: "null" }]
+            - type: "null"
 
     TokenDetail:
       allOf:
@@ -929,7 +1043,7 @@ components:
             creator:
               type: object
               required: [address, tokensCreated]
-              description: Creator profile — supersedes the card's plain creator address (flagged transcription note)
+              description: Creator profile — supersedes the card's plain creator address (RATIFIED, findings X-13; address is inside the object)
               properties:
                 address: { $ref: "#/components/schemas/Address" }
                 tokensCreated: { type: integer, minimum: 0 }
@@ -987,6 +1101,15 @@ components:
           items:
             type: string
             enum: [creator, curve, lp_pool, vault]
+        botFlags:
+          type: array
+          description: v1.2 advisory §8.5 labels (indexer address_flags); absent when no bot flag
+          items:
+            type: string
+            enum: [farm, sniper, programmatic, wash, arb_exit]
+        clusterId:
+          type: string
+          description: Shared gas-funder cluster id → grouped on the holder list (spec §5.2)
 
     FeesResponse:
       type: object
@@ -1049,6 +1172,27 @@ components:
         source: { type: string, description: "e.g. 'chainlink:4663', 'defillama' — config-driven (spec §13)" }
         asOf: { type: string, format: date-time }
 
+    ReadyzResponse:
+      type: object
+      required: [data, error]
+      description: >-
+        Readiness envelope shared by the 200 and 503 responses of /v1/readyz.
+        `ok` mirrors `db && redis && r2`; a false `ok` is served with HTTP 503.
+      properties:
+        data:
+          type: object
+          required: [ok, checks]
+          properties:
+            ok: { type: boolean }
+            checks:
+              type: object
+              required: [db, redis, r2]
+              properties:
+                db: { type: boolean }
+                redis: { type: boolean }
+                r2: { type: boolean }
+        error: { type: "null" }
+
     # ── Launch flow ──────────────────────────────────────────────────────────
     UploadImageResponse:
       type: object
@@ -1065,9 +1209,24 @@ components:
     MetadataRequest:
       type: object
       required: [name, ticker, imageUrl, imageHash]
+      description: >-
+        name/ticker limits are UTF-8 BYTE limits (spec §12.30) matching the
+        on-chain gate bytes(x).length — name ≤ 32 bytes, ticker ≤ 10 bytes —
+        server-enforced by packages/shared byteBoundedString. JSON-Schema
+        maxLength counts Unicode code points, so it CANNOT express a byte bound
+        exactly; the maxLength values below are safe upper bounds (documentary),
+        and the authoritative gate is the server-side byte-length refinement.
       properties:
-        name: { type: string, minLength: 1, maxLength: 64 }
-        ticker: { type: string, minLength: 1, maxLength: 10 }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 32
+          description: ≤ 32 UTF-8 BYTES (authoritative), server-enforced (§12.30)
+        ticker:
+          type: string
+          minLength: 1
+          maxLength: 10
+          description: ≤ 10 UTF-8 BYTES (authoritative), server-enforced (§12.30)
         description: { type: string, maxLength: 500 }
         links:
           type: object
@@ -1141,3 +1300,34 @@ components:
         reason:
           oneOf: [{ type: string }, { type: "null" }]
         ts: { type: string, format: date-time }
+
+    # ── SIWE session lifecycle (mints the adminSession scheme) ─────────────────
+    AdminNonceResponse:
+      type: object
+      required: [nonce]
+      properties:
+        nonce:
+          type: string
+          description: Single-use alphanumeric nonce for the EIP-4361 message (Redis, 10-min TTL)
+    AdminLoginRequest:
+      type: object
+      required: [message, signature]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          description: The EIP-4361 (SIWE) message text, including the issued nonce
+        signature:
+          type: string
+          pattern: "^0x[0-9a-fA-F]+$"
+          description: EOA (ECDSA) signature over `message` — EIP-1271 not supported in v1
+    AdminLoginResponse:
+      type: object
+      required: [address, csrfToken]
+      properties:
+        address:
+          allOf: [{ $ref: "#/components/schemas/Address" }]
+          description: The authenticated admin address (recovered + allowlist-checked)
+        csrfToken:
+          type: string
+          description: Send as `X-CSRF-Token` on every admin mutation (bound to the session)

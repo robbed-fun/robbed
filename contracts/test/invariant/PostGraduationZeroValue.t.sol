@@ -13,39 +13,52 @@ import {CurveHandler} from "test/invariant/handlers/CurveHandler.sol";
 ///         post-grad pokes (buy/sell/graduate/donations); nothing may become extractable — any
 ///         value that appears post-grad must be exactly the recorded post-grad donations, and
 ///         all state-mutating functions revert (phase is terminal — contracts.md §2.3).
+/// forge-config: default.invariant.fail-on-revert = true
 contract PostGraduationZeroValueInvariant is Test {
     CurveHandler internal handler;
 
     function setUp() public {
         handler = new CurveHandler();
         targetContract(address(handler));
-        // M1: set `fail_on_revert = true` for this suite.
     }
 
-    /// @notice EXACT ASSERTIONS (contracts.md §6 row 5), evaluated whenever phase == Graduated:
-    ///         (1) address(curve).balance == ghost_postGradEthDonated (0 unless receive() still
-    ///             accepts donations post-grad — and then not extractable by anyone);
-    ///         (2) token.balanceOf(curve) == 0;
-    ///         (3) post-grad buy/sell/graduate all revert (probed under snapshot).
+    /// @notice EXACT ASSERTIONS (contracts.md §6 row 5, §12.25-updated), evaluated whenever
+    ///         phase == Graduated:
+    ///         (1) address(curve).balance == accruedFees + ghost_postGradEthDonated — the ONLY ETH a
+    ///             graduated curve holds is the withheld, treasury-only-sweepable trade fees plus any
+    ///             inert post-grad donation; neither is extractable by an actor;
+    ///         (2) sweepFees() drains the accrued fees, leaving only the inert donations;
+    ///         (3) token.balanceOf(curve) == 0;
+    ///         (4) post-grad buy/sell/graduate all revert (probed under snapshot).
     function invariant_postGraduationZeroValue() public {
-        vm.skip(true); // PENDING IMPLEMENTATION (M1) — remove once CurveHandler wires the stack.
         IBondingCurve curve = handler.curve();
         if (curve.phase() != IBondingCurve.Phase.Graduated) return;
 
         assertEq(
             address(curve).balance,
-            handler.ghost_postGradEthDonated(),
-            "gate-2 row 5: curve holds ETH beyond recorded post-grad donations"
+            curve.accruedFees() + handler.ghost_postGradEthDonated(),
+            "gate-2 row 5 (12.25): curve holds ETH beyond accruedFees + post-grad donations"
         );
         assertEq(handler.token().balanceOf(address(curve)), 0, "gate-2 row 5: curve holds tokens post-graduation");
 
-        // Terminal-phase probe: every state-mutating entry reverts (contracts.md §2.3).
+        // §12.25: sweepFees works in the terminal phase and drains reserve/LP value to exactly the
+        // inert donations. Checked under snapshot so it does not perturb the ongoing fuzz run.
         uint256 snap = vm.snapshotState();
+        curve.sweepFees();
+        assertEq(
+            address(curve).balance,
+            handler.ghost_postGradEthDonated(),
+            "gate-2 row 5 (12.25): sweepFees did not drain accrued fees post-graduation"
+        );
+
+        // Terminal-phase probe: every trade/graduate entry reverts (contracts.md §2.3). Calls come
+        // from this test (not the router) so they revert on NotRouter/NotReady regardless — the
+        // point is that NO state-mutating value path succeeds post-graduation.
         vm.deal(address(this), 1 ether);
         vm.expectRevert();
-        curve.buy{value: 1 ether}(address(this), address(this), 0);
+        curve.buy{value: 1 ether}(address(this), address(this), address(this), 0);
         vm.expectRevert();
-        curve.sell(address(this), 1, 0);
+        curve.sell(address(this), address(this), 1, 0);
         vm.expectRevert();
         curve.graduate();
         vm.revertToState(snap);

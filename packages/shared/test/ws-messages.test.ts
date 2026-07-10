@@ -3,7 +3,9 @@ import { describe, expect, it } from "bun:test";
 import {
   wsClientOpSchema,
   wsMessageSchema,
+  type WsMessage,
 } from "../src/ws-messages";
+import { feeCollectionEntrySchema } from "../src/api-types";
 
 const ADDR = "0x" + "ab".repeat(20);
 const TX = "0x" + "12".repeat(32);
@@ -126,6 +128,38 @@ describe("per-type payloads (indexer.md §8.2)", () => {
     expect(
       wsMessageSchema.safeParse({ ...ok, data: { ...ok.data, status: "verified" } }).success,
     ).toBe(false);
+  });
+
+  it("fee_collected parses (X-6) and its data reconciles with the REST fee entry", () => {
+    const msg = {
+      ...base, type: "fee_collected", channel: `token:${ADDR}:events`,
+      data: {
+        token: ADDR, recipient: ADDR,
+        amountToken: "123000000000000000000", amountWeth: "4500000000000000",
+        blockNumber: 12345, blockTimestamp: 1767950000,
+        txHash: TX, logIndex: 3, confirmationState: "soft_confirmed",
+      },
+    };
+    const parsed = wsMessageSchema.safeParse(msg);
+    expect(parsed.success).toBe(true);
+    // one fee shape: the WS data projects onto the REST feeCollectionEntry (D2 parity)
+    const d = msg.data;
+    expect(
+      feeCollectionEntrySchema.safeParse({
+        id: `${d.txHash}-${d.logIndex}`,
+        amountToken: d.amountToken, amountWeth: d.amountWeth, recipient: d.recipient,
+        blockTimestamp: d.blockTimestamp, txHash: d.txHash, confirmationState: d.confirmationState,
+      }).success,
+    ).toBe(true);
+    // amounts are decimal strings — numbers rejected
+    expect(
+      wsMessageSchema.safeParse({ ...msg, data: { ...d, amountWeth: 4500 } }).success,
+    ).toBe(false);
+  });
+
+  it("union stays exhaustive — 'fee_collected' is a member of WsMessageType", () => {
+    const t: WsMessage["type"] = "fee_collected";
+    expect(t).toBe("fee_collected");
   });
 });
 

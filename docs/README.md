@@ -1,4 +1,4 @@
-# hoodpad — Documentation Index
+# ROBBED_ — Documentation Index
 
 Reading order for anyone (human or agent) new to the project:
 

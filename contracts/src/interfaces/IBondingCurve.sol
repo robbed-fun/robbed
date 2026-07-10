@@ -4,9 +4,11 @@ pragma solidity 0.8.35;
 /// @title IBondingCurve — virtual-reserve constant-product curve (spec §6.2, §6.4, §6.5;
 ///        contracts.md §2.3)
 /// @notice One instance per token. Holds the full 1B supply at birth and all raised ETH. Fees are
-///         computed HERE, in-contract — never caller-supplied (spec §4.1): 1% ETH-leg fee to
-///         treasury before curve math on buys, after curve math on sells. Only the Router may call
-///         trade functions; `graduate()` is permissionless.
+///         computed HERE, in-contract — never caller-supplied (spec §4.1): a 1% ETH-leg fee accrues
+///         to the `accruedFees` escrow on BOTH directions (before curve math on buys, after curve
+///         math on sells) and is later pulled to the treasury via the permissionless `sweepFees()`
+///         — NO trade path ever calls the treasury (pull-payment, spec §12.25). Only the Router may
+///         call trade functions; `graduate()` is permissionless.
 /// @dev FROZEN interface (tests-as-spec phase). The implementation additionally exposes
 ///      `receive() external payable` (donations are never credited to reserves; swept into
 ///      graduation — contracts.md §2.3). The sell path never reads any pause flag — sells cannot
@@ -47,22 +49,30 @@ interface IBondingCurve {
     ///         clamp, contracts.md §2.3).
     event GraduationReady(uint256 realEthReserves);
 
+    /// @notice Pull-payment sweep of accrued ETH-leg trade fees to the live treasury (spec §12.25).
+    ///         `treasury` is read live from the factory at sweep time.
+    event FeesSwept(address indexed treasury, uint256 amount);
+
     // ─────────────────────────────── Trading (Router-only) ─────────────────────
 
     /// @notice Buy tokens with ETH (net of in-contract fee). Router-only.
     /// @dev msg.value is the gross ETH. Order (contracts.md §3.2): phase check → anti-sniper
     ///      cap (timestamp window, spec §12.18 — never the L1-estimating NUMBER opcode) → fee calc → graduation
     ///      clamp → factory.recordEthDelta(+acceptedNet) (global cap) → per-token cap → curve
-    ///      math → state update → CEI interactions (fee→treasury, refund→refundTo,
-    ///      tokens→recipient) → Trade event → GraduationReady if crossed.
+    ///      math → state update (fee accrues to `accruedFees`, NO treasury call — pull-payment,
+    ///      spec §12.25) → CEI interactions (refund→refundTo, tokens→recipient) → Trade event →
+    ///      GraduationReady if crossed. The treasury pulls its fees separately via `sweepFees()`.
+    /// @param trader       The originating EOA (Router forwards msg.sender) — emitted as
+    ///                     `Trade.trader` (§12.15, finding X-3). Event-only; carries no authority.
     /// @param recipient    Receives tokens.
     /// @param refundTo     Receives any graduation-clamp refund (Router passes the original payer).
     /// @param minTokensOut Slippage floor; revert SlippageExceeded if actual < min — a clamped
     ///                     fill that undershoots the min reverts, never silently partial-fills.
     /// @return tokensOut        Tokens sent to `recipient`.
     /// @return acceptedEthGross Gross ETH accepted after the graduation clamp.
-    /// @return fee              In-contract fee sent to treasury.
-    function buy(address recipient, address refundTo, uint256 minTokensOut)
+    /// @return fee              In-contract fee accrued to `accruedFees` (NOT pushed to treasury,
+    ///                          §12.25).
+    function buy(address trader, address recipient, address refundTo, uint256 minTokensOut)
         external
         payable
         returns (uint256 tokensOut, uint256 acceptedEthGross, uint256 fee);
@@ -70,18 +80,33 @@ interface IBondingCurve {
     /// @notice Sell tokens for ETH. Router-only. The Router MUST transfer `tokenAmount` from the
     ///         seller to this curve in the same call, before invoking sell (internal trust,
     ///         onlyRouter).
-    /// @dev Never reads pauseBuys/pauseCreates or any factory pause state — sells cannot be
-    ///      paused by construction (spec §6.5). Reverts only on: phase != Trading, zero amount,
-    ///      or SlippageExceeded. factory.recordEthDelta(-ethOutGross) uses non-reverting
+    /// @dev Never reads pauseBuys/pauseCreates or any factory pause state, and NEVER calls the
+    ///      treasury — the fee accrues to `accruedFees` (§12.25). Sells cannot be paused or frozen
+    ///      by construction (spec §6.5). Reverts only on: phase != Trading, zero amount, or
+    ///      SlippageExceeded. factory.recordEthDelta(-ethOutGross) uses non-reverting
     ///      floor-at-zero semantics.
+    /// @param trader      The seller EOA (Router forwards msg.sender) — emitted as `Trade.trader`.
     /// @param recipient   Receives the ETH proceeds.
     /// @param tokenAmount Tokens already transferred to the curve by the Router.
     /// @param minEthOut   Slippage floor on net ETH out.
     /// @return ethOut Net ETH paid to `recipient` (gross − fee).
-    /// @return fee    In-contract fee sent to treasury.
-    function sell(address recipient, uint256 tokenAmount, uint256 minEthOut)
+    /// @return fee    In-contract fee accrued to `accruedFees` (NOT pushed to treasury, §12.25).
+    function sell(address trader, address recipient, uint256 tokenAmount, uint256 minEthOut)
         external
         returns (uint256 ethOut, uint256 fee);
+
+    // ─────────────────────────── Fee escrow (§12.25) ───────────────────────────
+
+    /// @notice Permissionless, non-phase-gated pull-payment of accrued ETH-leg trade fees to the
+    ///         treasury (spec §12.25, resolves threat-model UM-1).
+    /// @dev Reads `treasury` live from the factory, zeroes `accruedFees` first (CEI), then sends
+    ///      the amount via a low-level call (reverts EthTransferFailed on failure). `nonReentrant`.
+    ///      Works in EVERY phase including Graduated, so fees withheld at graduation stay
+    ///      claimable. Touches NO curve reserve. A reverting treasury reverts ONLY this call
+    ///      (retriable) — it can never block a buy or a sell, which is the whole point: no trade
+    ///      path calls the treasury.
+    /// @return swept The amount sent to the treasury.
+    function sweepFees() external returns (uint256 swept);
 
     // ─────────────────────────────── Graduation ────────────────────────────────
 
@@ -114,6 +139,10 @@ interface IBondingCurve {
 
     /// @notice Current lifecycle phase.
     function phase() external view returns (Phase);
+
+    /// @notice Unswept ETH-leg trade fees held in escrow (spec §12.25). Solvency holds
+    ///         `address(this).balance >= realEthReserves + accruedFees` at all times.
+    function accruedFees() external view returns (uint256);
 
     /// @notice Deployment timestamp (anti-sniper window anchor).
     function createdAt() external view returns (uint64);

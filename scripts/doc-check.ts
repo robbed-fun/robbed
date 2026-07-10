@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * hoodpad doc-lint — mechanical documentation checks (no LLM, no npm deps).
+ * ROBBED_ doc-lint — mechanical documentation checks (no LLM, no npm deps).
  *
  * Run: `bun scripts/doc-check.ts`. Exit 0 when clean; exit 1 with a findings
  * list (file:line  [check]  message) otherwise. The LLM layer on top of this

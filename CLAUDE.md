@@ -1,4 +1,4 @@
-# hoodpad — Pump.fun-style launchpad on Robinhood Chain
+# ROBBED_ — Pump.fun-style launchpad on Robinhood Chain
 
 Source of truth: `launchpad-spec.md` (v1.1). When code and spec disagree, the spec wins; when the spec is silent, ask or record the decision in §12/§13.
 
@@ -31,7 +31,7 @@ Source of truth: `launchpad-spec.md` (v1.1). When code and spec disagree, the sp
 - Contracts: Solidity + Foundry + OpenZeppelin v5, `contracts/` (LaunchToken, CurveFactory, BondingCurve, Router, V3Migrator, LPFeeVault)
 - Indexer: Ponder → Postgres (+pg_trgm) + Redis pub/sub → Bun WS
 - API: Hono on Bun (API-mediated R2 uploads — §12.19; moderation, search)
-- Frontend: Next.js 15 App Router on Bun, wagmi v2 + viem + RainbowKit, TanStack Query, lightweight-charts, Tailwind dark-first, satori OG
+- Frontend: Next.js 16 + React 19 (exact majors, no ranges — §12.37) App Router on Bun, wagmi v2 + viem + RainbowKit, TanStack Query, lightweight-charts, Tailwind dark-first, satori OG
 - Tests: Foundry unit/fuzz/invariant + fork tests vs live chain; Vitest units; Playwright e2e on fork
 
 ## Security gates (all 10 required before caps lift — §10)

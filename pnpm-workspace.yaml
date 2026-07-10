@@ -8,3 +8,5 @@ packages:
 catalog:
   zod: 4.4.3
   viem: 2.55.0
+  # hono is used by ≥2 services (api server + indexer's required Ponder api file) — single version.
+  hono: 4.12.28

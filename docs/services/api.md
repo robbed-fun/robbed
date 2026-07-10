@@ -63,6 +63,10 @@ POST /v1/metadata
       a name that passes here must never revert at createToken), description ≤ 500 (§5.3), links: {website?,x?,telegram?} URL-validated,
       version = 1 (frozen inside the canonicalized hash preimage, §12.31),
     imageUrl must be our CDN origin, imageHash must match an object we produced (existence check on R2 key)
+      → on mismatch/not-found: HTTP 400, error.code = 'invalid_request' (§12.40b — NOT 409/conflict;
+        v1 has no genuine resource-conflict path because image + metadata are content-addressed/idempotent,
+        so identical bytes always yield an identical hash. `conflict`/409 is dropped from the shared
+        error-code union — the frontend never needs a 409 branch.)
   Pipeline:
     1. Build metadata object (fixed field set + version tag)
     2. canonicalBytes = canonicalizeMetadata(obj)   -- THE shared function from packages/shared (§5)
@@ -123,7 +127,10 @@ GET /v1/tokens/:address                                         (§5.2 detail + 
     trust: {                                                    -- Trust panel §5.2, all derived, none hardcoded
       metadataVerification: { status: match|mismatch|unfetched, onchainHash, computedHash?, verifiedAt? },
       lpCopy: "LP principal permanently locked; trading fees claimable by treasury",   -- exact string, CLAUDE.md hard rule
-      feePolicy: { tradeFeeBps, creatorFeeBps },                -- creatorFeeBps present (0), §7
+      feePolicy: { tradeFeeBps, creatorFeeBps },                -- tradeFeeBps = per-token snapshot from tokens.trade_fee_bps
+                                                                --   (indexer read the curve's TRADE_FEE_BPS immutable at TokenCreated),
+                                                                --   NOT the live factory config (§12.40d — config governs future curves only);
+                                                                --   creatorFeeBps present (0), §7
       organic: {                                                -- (v1.2) spec §5.2/§8.5; from indexer token_flow_stats; advisory
         holderPctLow, holderPctHigh,                            -- organic-holder estimate as a RANGE (never a point value)
         volumePct,                                              -- organic-volume % (wash excluded)
@@ -200,7 +207,7 @@ MIME sniff on magic bytes → allowlist → re-encode (strips metadata, kills po
 
 ### 4.3 Auto-moderation (async, vendor-pluggable — §13 open item)
 
-Vendor undecided (§13), so the pipeline is built against interfaces in `packages/shared`, with implementations in `apps/api/src/moderation/vendors/`:
+Vendor undecided (§13), so the pipeline is built against interfaces **defined in `apps/api/src/moderation/vendors/`** (NOT `packages/shared` — §12.40c: these interfaces are consumed by exactly one service, the API moderation worker, so they fail the anti-drift ≥2-consumers test and stay API-local), with implementations in the same directory:
 
 ```ts
 interface CsamHashMatcher   { check(imageBytes: Uint8Array): Promise<{ match: boolean; vendorRef?: string }> }   // e.g. PhotoDNA/IWF-class vendor
@@ -235,7 +242,7 @@ Single source consumed by web + indexer + api; nothing below may be redeclared e
 | `confirmation.ts` | `ConfirmationState = 'soft_confirmed' \| 'posted_to_l1' \| 'finalized'`, ordering helper, `stateForBlock(blockNumber, watermarks)` | all three |
 | `channels.ts` | channel-name builders (`tokenTrades(addr)`, `GLOBAL_LAUNCHES`, …) — taxonomy in indexer.md §8.1 | indexer (publish), api/ws (fanout), web (subscribe) |
 | `ws-messages.ts` | envelope + per-type message schemas (indexer.md §8.2), zod-validated | indexer, ws, web |
-| `api-types.ts` | `TokenCard`, `TokenDetail`, `TradeRow`, `Candle`, `HolderRow`, `SearchResult`, `UsdValue`, error codes, pagination envelope | api (response shaping), web (consumption) |
+| `api-types.ts` | `TokenCard`, `TokenDetail`, `TradeRow`, `Candle`, `HolderRow`, `SearchResult`, `UsdValue`, `ConfirmationsResponse`, `EthUsdResponse`, `ModerationQueueItem` (§12.40a), error codes, pagination envelope | api (response shaping), web (consumption) |
 | `events.ts` | decoded on-chain event types (TokenCreated/Trade/Graduated/Swap/Collect field structs) mirroring ABIs from M1 artifacts | indexer, tests |
 | `db-rows.ts` | row types matching indexer.md §3 tables | indexer, api |
 | `constants.ts` | chain id 4663, WETH address, interval list, size caps, the exact LP copy string | all three |
@@ -243,6 +250,8 @@ Single source consumed by web + indexer + api; nothing below may be redeclared e
 Canonicalization is defined once, here, RFC-8785-style (UTF-8, sorted keys at every depth, no whitespace, canonical number/string forms); the indexer doc's byte-identical requirement (indexer.md §6.1) is satisfied by construction because there is exactly one implementation.
 
 **Frozen-schema notes for hoodpad-shared (this ratification pass):**
+- **`api-types.ts` additions (§12.40a):** `export type` aliases `ConfirmationsResponse` (`GET /v1/confirmations` → `{ safeBlock, finalizedBlock, latestBlock, updatedAt }`), `EthUsdResponse` (`GET /v1/eth-usd` → `{ price, source, asOf }`), `ModerationQueueItem` (admin queue row, §3.6) — for naming consistency with the other DTOs.
+- **`api-types.ts` error-code union (§12.40b):** the union lists **only codes the API actually returns**; `conflict`/409 is **dropped** (no genuine resource-conflict path exists in v1 — content-addressed image + metadata are idempotent). The metadata imageHash-reference mismatch is `invalid_request` (HTTP 400, §3.2).
 - `metadata.ts` `TokenMetadata`: `name` max = **32 bytes**, `ticker` max = **10 bytes** (UTF-8 byte length via a custom zod refinement, not `.max()` char count — must equal the on-chain byte limits, §12.30). `version` is a literal `1` (frozen inside the hash preimage, §12.31). The prior `name ≤ 64 chars` is superseded — hoodpad-shared updates the frozen schema and the OpenAPI (`apps/api/openapi.yaml`) to match.
 - `api-types.ts` **`TokenCard.creator` is an address string; `TokenDetail.creator` is `{ address, tokensCreated }`** (an enriched object) — by design (card vs detail), documented here so consumers don't expect one shape (X-13). `ws-messages.ts` gains the `fee_collected` message (indexer.md §8.2, X-6).
 
@@ -254,7 +263,20 @@ No auth (reads + upload/metadata). Anonymous uploads are inherent to the product
 
 ### 6.2 Admin auth
 
-**SIWE (EIP-4361) against an address allowlist** (the ops/Safe signer set is a §13 open item; allowlist is config) → short-lived signed session cookie (HttpOnly, SameSite=strict, 12h) + CSRF token on mutations. No passwords, no third-party IdP dependency, key custody matches the rest of the project's trust model. All admin mutations audit-logged (actor, action, target, reason, ts).
+**SIWE (EIP-4361) against an address allowlist** (the ops/Safe signer set is a §13 open item; allowlist is config) → short-lived signed session cookie (HttpOnly, SameSite=strict, 12h) + CSRF token on mutations. No passwords, no third-party IdP dependency, key custody matches the rest of the project's trust model. All admin mutations audit-logged.
+
+**`moderation_audit_log` (§12.40f — API-local table, NOT shared).** Written and read **only** by the API admin path, so it fails the anti-drift ≥2-consumers test: its row type lives in `apps/api`, not `packages/shared` `db-rows.ts`, and it is not an indexer table. DDL (API-owned migration, alongside `moderation_status` / `impersonation_watchlist`):
+
+```
+moderation_audit_log(
+  id          bigserial primary key,
+  actor       text not null,          -- SIWE address
+  action      text not null,          -- e.g. set_visibility | set_impersonation | reverify
+  target      text not null,          -- token address
+  reason      text,
+  created_at  timestamptz not null default now()
+)
+```
 
 ### 6.3 Rate limiting (Redis, sliding window, per-IP + per-route)
 

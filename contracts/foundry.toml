@@ -1,4 +1,4 @@
-# hoodpad contracts — spec §6.7: ONE exact compiler pin, no ranges, anywhere.
+# ROBBED_ contracts — spec §6.7: ONE exact compiler pin, no ranges, anywhere.
 # Pin 0.8.35 CONFIRMED against robinhoodchain.blockscout.com verifier config
 # (v0.8.35+commit.47b9dedd present in /api/v2/smart-contracts/verification/config,
 # checked 2026-07-09).
@@ -13,7 +13,64 @@ script = "script"
 solc = "0.8.35"          # exact pin — never a range (spec §6.7)
 optimizer = true
 optimizer_runs = 200
-# evm_version: left at forge default; revisit only if Blockscout verification dictates otherwise.
+# evm_version PINNED "cancun" (F-2, 2026-07-10) — do NOT leave unset. Foundry 1.7.1 defaults to
+# "osaka" (verified: `forge config` showed evm_version = "osaka"), which permits solc to emit
+# Osaka/Prague-era opcodes untested on the ArbOS target. We pin an explicit, ArbOS-supported,
+# Blockscout-verifiable target instead.
+#
+# Why "cancun" and NOT a pre-Cancun target (shanghai/paris), despite contracts.md §7.1's original
+# "do not assume Cancun" guidance: OpenZeppelin v5.5.0's `utils/Bytes.sol` uses the `mcopy` opcode
+# (EIP-5656, Cancun-only). It is pulled into EVERY deployed contract via the mandatory
+# ERC20Permit → ECDSA/EIP712 → Strings → Bytes import chain (LaunchToken, §6.1). Compiling that
+# stack on "shanghai" HARD-FAILS: solc "Error (7755): the mcopy instruction is only available for
+# Cancun-compatible VMs". So Cancun opcodes are already unavoidable in our deployed bytecode short of
+# downgrading OZ — making "cancun" the correct, honest target. (§7.1 amendment flagged to
+# hoodpad-architect for a §12 decision, 2026-07-10.)
+#
+# ArbOS Cancun support (docs-first, checked 2026-07-10):
+#   - CONFIRMED: ArbOS 20 "Atlas" added the Cancun EVM opcodes — "Addition of the MCOPY EVM opcode
+#     introduced in EIP-5656" and "Addition of the TSTORE and TLOAD EVM opcodes introduced in
+#     EIP-1153" (docs.arbitrum.io/run-arbitrum-node/arbos-releases/arbos20). MCOPY (the only Cancun
+#     opcode our bytecode uses) is therefore natively supported.
+#   - Robinhood Chain (chain 4663) is a mid-2026 Arbitrum Orbit L2 running ArbOS >= 32 "Bianca"
+#     (releases page lists live releases up to Dia/ArbOS 51) — far beyond the ArbOS 20 Cancun floor.
+#   - Blockscout-verifiable: robinhoodchain.blockscout.com verification config lists "cancun" in
+#     solidity_evm_versions (["...","london","paris","shanghai","cancun","prague","osaka","default"],
+#     checked 2026-07-10) — the same source that confirmed the 0.8.35 pin.
+# Note: only `mcopy` (memory copy, deterministic) is used — NOT transient storage. The storage-based
+# ReentrancyGuard choice STANDS (EIP-1153 remains optional/unused, per §7.1 intent).
+# Final Blockscout round-trip + on-chain ArbOS-version confirmation tie to M1-2 (throwaway
+# verification, O-5 / §13).
+evm_version = "cancun"
+# via_ir: deliberately NOT enabled. It compiles the deep V3Migrator graduation flow, but it changed
+# the revert behaviour of the already-green Router deadline path (M1-9) — an unacceptable blast
+# radius for an M1-10 change. The migrator instead keeps its stack within the legacy pipeline by
+# decomposing the flow into small helpers (one-swap `_arbStep`, isolated `_mint`/`_emitGraduated`)
+# and threading a single memory `Ctx` pointer. (Flagged to hoodpad-architect / M1-9: the Router
+# deadline path is via_ir-sensitive and should be investigated before any future via_ir adoption.)
+# (evm_version is pinned "cancun" above — see the F-2 note next to solc.)
+
+# Read-only access to the vendored, PRECOMPILED Uniswap V3 core/periphery artifacts (0.7.6
+# bytecode, deployed via vm.getCode in the gate-2 invariant-6 harness AND in Deploy.s.sol's local
+# anvil smoke). This is the ONLY way to exercise the REAL V3 pool math locally under the single
+# 0.8.35 pin — v3-core is 0.7.6 and cannot be compiled in-project. Test/smoke-only; production
+# reads §12.28 addresses from constants.json.
+#
+# `../tools/m0/out` (read): the M0 economics/constants notebook output that `script/Deploy.s.sol`
+#   (M1-14) loads via `vm.readFile` — the single source of every market-dependent parameter
+#   (spec §2/§6.4: NEVER inlined in src/). Read-only: the deploy script must not mutate M0 output.
+# `./deployments` (read-write): where Deploy.s.sol writes the per-chain deploy artifact
+#   (`deployments/<chainId>.json`) that the addresses codegen (`script/codegen-addresses.ts`)
+#   consumes to emit the generated `@robbed/shared` + web addresses modules (architecture.md §4).
+# `../tools/localstack` (read): the I-2 dev-fork constants fixture (constants.fork.json — canonical
+#   M0 constants with a LOCAL treasury stand-in) that Deploy.s.sol loads via ROBBED_CONSTANTS when
+#   deploying against the local anvil fork of chain 4663. Read-only, dev-only; never a real deploy input.
+fs_permissions = [
+    {access = "read", path = "./test/vendor"},
+    {access = "read", path = "../tools/m0/out"},
+    {access = "read", path = "../tools/localstack"},
+    {access = "read-write", path = "./deployments"},
+]
 
 remappings = [
     "@openzeppelin/=lib/openzeppelin-contracts/",

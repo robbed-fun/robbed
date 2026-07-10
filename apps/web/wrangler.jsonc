@@ -1,0 +1,27 @@
+{
+  // Cloudflare Workers config for the ROBBED_ frontend, deployed via OpenNext
+  // (@opennextjs/cloudflare). Basis: opennext.js.org/cloudflare/get-started +
+  // deploy-komodo-cloudflare.md Part B, verified 2026-07-10.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "robbed",
+  "main": ".open-next/worker.js",
+  // OpenNext floor is 2024-09-23; a recent date keeps workerd Node APIs current.
+  "compatibility_date": "2025-05-05",
+  // nodejs_compat: OpenNext's server shim needs Node APIs (Buffer, etc.).
+  // global_fetch_strictly_public: OpenNext-required so server fetch() always
+  // resolves over the public internet (never worker-internal loopback).
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // Static assets emitted by `opennextjs-cloudflare build`.
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "r2_buckets": [
+    // Frontend read access to the shared assets bucket (images + canonical
+    // metadata). The WRITE path (uploads) stays on the Komodo API (§12.19); the
+    // Worker never accepts raw uploads.
+    { "binding": "ASSETS_BUCKET", "bucket_name": "robbed-assets" },
+    // ISR / `use cache` incremental-cache store (open-next.config.ts →
+    // r2IncrementalCache). This override reads the fixed binding name
+    // NEXT_INC_CACHE_R2_BUCKET (opennext.js.org/cloudflare/caching); it points at
+    // the same bucket, isolated under the default `incremental-cache/` prefix.
+    { "binding": "NEXT_INC_CACHE_R2_BUCKET", "bucket_name": "robbed-assets" }
+  ]
+}

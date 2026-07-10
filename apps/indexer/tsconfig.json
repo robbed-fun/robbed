@@ -1,3 +1,7 @@
 {
-  "extends": "../../tsconfig.base.json"
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node", "@types/bun"]
+  },
+  "include": ["ponder-env.d.ts", "ponder.config.ts", "ponder.schema.ts", "src", "scripts", "test"]
 }

@@ -42,8 +42,13 @@ export interface CurveTargets {
   totalSupplyWei: bigint;
   curveSupplyWei: bigint;
   lpTrancheWei: bigint;
-  /** flat graduation fee sized as bps of the net raise G (M0 sizing rule; deployed value is flat wei) */
-  gradFeeBpsOfRaise: bigint;
+  /**
+   * Flat graduation fee, wei — COST-BASED (spec §12.26): sized to ≈ V3-migration
+   * gas × gasPrice × thin margin in derive.ts. NOT a %-of-raise and never a
+   * hardcoded USD figure. Because it is a flat constant (independent of the
+   * realized raise G), constraint (c) reduces to G = p·L + F + R.
+   */
+  graduationFeeWei: bigint;
   /** flat graduation caller reward, wei */
   callerRewardWei: bigint;
 }
@@ -64,14 +69,14 @@ export interface CurveConstants {
 export function solveCurveConstants(t: CurveTargets): CurveConstants {
   const { priceNum: num, priceDen: den, totalSupplyWei: T, curveSupplyWei: S, lpTrancheWei: L } = t;
   if (S + L !== T) throw new Error("curve supply + LP tranche must equal total supply");
-  const BPS = 10_000n;
-  if (t.gradFeeBpsOfRaise >= BPS) throw new Error("grad fee bps of raise must be < 10000");
+  if (t.graduationFeeWei < 0n) throw new Error("graduation fee must be non-negative");
 
   // p·L (value of LP tranche at graduation price)
   const pL = (num * L) / den;
-  // G = (p·L + R) · 10000 / (10000 − b)   [from (c) with F = G·b/10000]
-  const G = ((pL + t.callerRewardWei) * BPS) / (BPS - t.gradFeeBpsOfRaise);
-  const F = (G * t.gradFeeBpsOfRaise) / BPS;
+  // Cost-based flat graduation fee (§12.26): F is a fixed wei constant, so
+  // constraint (c) G − F − R = p·L solves directly, G = p·L + F + R.
+  const F = t.graduationFeeWei;
+  const G = pL + F + t.callerRewardWei;
 
   // f = (F + R)/p, in token-wei
   const f = ((F + t.callerRewardWei) * den) / num;
@@ -89,8 +94,10 @@ export function solveCurveConstants(t: CurveTargets): CurveConstants {
   // the clamped final buy can never oversell the curve). Wei-level shift only.
   const gExact = k / (vT0 - S) - vE0;
   if (gExact <= 0n) throw new Error("infeasible: non-positive graduation threshold");
-  const fExact = (gExact * t.gradFeeBpsOfRaise) / BPS;
+  // Flat cost-based fee is a constant, not re-derived from the realized raise (§12.26).
+  const fExact = F;
   const ethToLpExact = gExact - fExact - t.callerRewardWei;
+  if (ethToLpExact <= 0n) throw new Error("infeasible: graduation fee + caller reward exceed net raise");
 
   return {
     virtualEthWei: vE0,

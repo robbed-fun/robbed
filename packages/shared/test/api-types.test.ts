@@ -4,6 +4,9 @@ import {
   apiEnvelopeSchema,
   candleSchema,
   confirmationsResponseSchema,
+  ERROR_CODE_VALUES,
+  ERROR_CODES,
+  errorCodeSchema,
   ethUsdResponseSchema,
   holderRowSchema,
   metadataRequestSchema,
@@ -79,19 +82,38 @@ describe("TokenCard / TokenDetail (§5.1/§5.2)", () => {
       metadataVerification: { status: "match", onchainHash: HASH, computedHash: HASH, verifiedAt: "2026-07-09T12:00:00Z" },
       lpCopy: LP_COPY,
       feePolicy: { tradeFeeBps: 100, creatorFeeBps: 0 },
+      organic: null, // stats not yet computed
     },
     creator: { address: ADDR, tokensCreated: 3 },
     moderation: { visibility: "visible", impersonationFlag: false },
   };
 
-  it("parses a full detail incl. Trust panel", () => {
+  it("parses a full detail incl. Trust panel (organic null)", () => {
     expect(tokenDetailSchema.safeParse(detail).success).toBe(true);
+  });
+
+  it("accepts a populated organic block; requires the key present (§5.2/§8.5)", () => {
+    const withOrganic = {
+      ...detail,
+      trust: {
+        ...detail.trust,
+        organic: {
+          holderPctLow: 41.2, holderPctHigh: 58.7, volumePct: 63.0,
+          flaggedClusterVolPct24h: 22.5, methodology: "heuristic — see §8.5",
+          updatedAt: "2026-07-10T00:00:00Z",
+        },
+      },
+    };
+    expect(tokenDetailSchema.safeParse(withOrganic).success).toBe(true);
+    // organic key is required (may be null, but must be present)
+    const { organic: _o, ...trustNoOrganic } = detail.trust;
+    expect(tokenDetailSchema.safeParse({ ...detail, trust: trustNoOrganic }).success).toBe(false);
   });
 
   it("lpCopy must be the EXACT canonical sentence (spec §12.14 / CLAUDE.md)", () => {
     const wrong = {
       ...detail,
-      trust: { ...detail.trust, lpCopy: "LP burned forever" },
+      trust: { ...detail.trust, lpCopy: "LP principal locked; fees to treasury" },
     };
     expect(tokenDetailSchema.safeParse(wrong).success).toBe(false);
     // even dropping the trailing period must fail — single string constant
@@ -140,6 +162,47 @@ describe("TradeRow / Candle / HolderRow", () => {
       holderRowSchema.safeParse({ address: ADDR, balance: "1", pct: 0.1, flags: ["whale"] }).success,
     ).toBe(false);
   });
+
+  it("holder botFlags/clusterId optional; botFlags restricted to §8.5 vocabulary", () => {
+    expect(
+      holderRowSchema.safeParse({
+        address: ADDR, balance: "1", pct: 0.1, flags: [],
+        botFlags: ["farm", "sniper", "arb_exit"], clusterId: "cluster-7",
+      }).success,
+    ).toBe(true);
+    // absent botFlags/clusterId is valid (unflagged holder)
+    expect(
+      holderRowSchema.safeParse({ address: ADDR, balance: "1", pct: 0.1, flags: [] }).success,
+    ).toBe(true);
+    expect(
+      holderRowSchema.safeParse({ address: ADDR, balance: "1", pct: 0.1, flags: [], botFlags: ["bot"] }).success,
+    ).toBe(false);
+  });
+});
+
+describe("error codes (closed enum, single source — X-9/api §5)", () => {
+  it("apiError.code accepts only the enumerated codes", () => {
+    const env = apiEnvelopeSchema(tokenCardSchema);
+    expect(env.safeParse({ data: null, error: { code: "rate_limited", message: "slow down" } }).success).toBe(true);
+    expect(env.safeParse({ data: null, error: { code: "teapot", message: "x" } }).success).toBe(false);
+  });
+
+  it("ERROR_CODES map and errorCodeSchema derive from the same tuple", () => {
+    for (const c of ERROR_CODE_VALUES) {
+      expect(errorCodeSchema.safeParse(c).success).toBe(true);
+      expect(ERROR_CODES[c]).toBe(c);
+    }
+  });
+
+  it("includes the ratified upstream_unavailable + conflict members (api.md §5)", () => {
+    // These must stay in lockstep with openapi.yaml Error.code (removing either
+    // breaks this assertion): upstream_unavailable = 500 / readyz-503 path,
+    // conflict = stored-state conflict (e.g. unknown imageHash).
+    expect(ERROR_CODE_VALUES).toContain("upstream_unavailable");
+    expect(ERROR_CODE_VALUES).toContain("conflict");
+    expect(errorCodeSchema.safeParse("upstream_unavailable").success).toBe(true);
+    expect(errorCodeSchema.safeParse("conflict").success).toBe(true);
+  });
 });
 
 describe("misc endpoints", () => {
@@ -168,10 +231,17 @@ describe("misc endpoints", () => {
     expect(tokenSortSchema.safeParse("holders").success).toBe(false);
   });
 
-  it("metadata request body (api.md §3.2 limits)", () => {
+  it("metadata request body — name ≤32 BYTES / ticker ≤10 BYTES (§12.30)", () => {
     const body = { name: "Cash Cat", ticker: "CASHCAT", imageUrl: "https://cdn.x/i.webp", imageHash: HASH };
     expect(metadataRequestSchema.safeParse(body).success).toBe(true);
+    // ASCII boundary
+    expect(metadataRequestSchema.safeParse({ ...body, name: "x".repeat(32) }).success).toBe(true);
+    expect(metadataRequestSchema.safeParse({ ...body, name: "x".repeat(33) }).success).toBe(false);
+    expect(metadataRequestSchema.safeParse({ ...body, ticker: "y".repeat(10) }).success).toBe(true);
     expect(metadataRequestSchema.safeParse({ ...body, ticker: "ELEVENCHARS" }).success).toBe(false);
+    // multibyte: under char-limit, over byte-limit → reject (same gate as the doc schema)
+    expect(metadataRequestSchema.safeParse({ ...body, ticker: "Ü".repeat(6) }).success).toBe(false);
+    expect(metadataRequestSchema.safeParse({ ...body, name: "🚀".repeat(9) }).success).toBe(false);
     expect(metadataRequestSchema.safeParse({ ...body, links: { telegram: "not-a-url" } }).success).toBe(false);
   });
 });

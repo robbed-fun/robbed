@@ -1,6 +1,25 @@
 {
-  "name": "@hoodpad/api",
+  "name": "@robbed/api",
   "private": true,
   "license": "MIT",
-  "description": "hoodpad API — Hono on Bun: R2 presigned uploads, moderation, search (spec §8). Scaffolded in M2."
+  "type": "module",
+  "description": "ROBBED_ API — Hono on Bun: R2 presigned uploads, moderation, search, read API (spec §8). M2-9/M2-10/M2-11.",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "start": "bun run src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@robbed/shared": "workspace:*",
+    "hono": "catalog:",
+    "sharp": "^0.33.5",
+    "viem": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.6.0"
+  }
 }

@@ -11,6 +11,11 @@ import {ICurveFactory} from "src/interfaces/ICurveFactory.sol";
 import {ILaunchToken} from "src/interfaces/ILaunchToken.sol";
 import {IRouter} from "src/interfaces/IRouter.sol";
 
+import {CurveFactory} from "src/CurveFactory.sol";
+import {TestRouter, MockMigrator} from "test/harness/Harness.sol";
+import {TestConstants} from "test/harness/TestConstants.sol";
+import {MockArbSys} from "test/mocks/MockArbSys.sol";
+
 /// @title CurveHandler — fuzz-actor handler for the gate-2 curve invariants
 ///        (spec §10 gate 2; contracts.md §6 test matrix rows 1–5 and 7)
 /// @notice TESTS-AS-SPEC SKELETON. Every action is written out against the frozen interfaces and
@@ -70,17 +75,45 @@ contract CurveHandler is CommonBase, StdAssertions, StdCheats, StdUtils {
         for (uint256 i = 0; i < 5; ++i) {
             _actors.push(makeAddr(string(abi.encodePacked("actor", vm.toString(i)))));
         }
-        treasury = makeAddr("treasury");
+        treasury = makeAddr("treasury"); // EOA-like, no other inflows (row 3 wei-exactness)
         safeOwner = makeAddr("safeOwner");
-        // ── M1 WIRING (PENDING IMPLEMENTATION) ─────────────────────────────────
-        // _deployStack():
-        //   - etch MockArbSys at address(100); deploy MockWETH9 + real Uniswap V3 bytecode
-        //     locally so pool math is real even off-fork (contracts.md §6 preamble);
-        //   - deploy LPFeeVault → CurveFactory → V3Migrator → Router, one-time setters,
-        //     per deploy order contracts.md §7.2, constants from a test constants fixture;
-        //   - router.createToken{value: creationFee}(…) the subject token;
-        //     ghost_feeSum += creationFee;
-        //   - wired = true;
+        _deployStack();
+    }
+
+    /// @notice M1-8 wiring: MockArbSys at address(100) + CurveFactory + MockMigrator + TestRouter,
+    ///         then create the subject token. Real V3/vault are M1-10 (invariant 6); the migrator is
+    ///         a sink here (M1-8 owns invariants 1–5, 7). Constants from the M0 {TestConstants}
+    ///         fixture (contracts.md §7.2 deploy order, adapted to the M1-8 surface).
+    function _deployStack() internal {
+        // ArbSys stand-in (anti-sniper is timestamp-based, so this is parity-only for M1-8).
+        vm.etch(address(0x64), address(new MockArbSys()).code);
+
+        CurveFactory f = new CurveFactory(TestConstants.factoryInit(treasury, safeOwner));
+        factory = ICurveFactory(address(f));
+        MockMigrator migrator = new MockMigrator(factory);
+        TestRouter r = new TestRouter(factory);
+        router = IRouter(address(r));
+
+        vm.startPrank(safeOwner);
+        f.setMigrator(address(migrator));
+        f.setRouter(address(r));
+        vm.stopPrank();
+
+        // Create the subject token with NO initial buy (fuzz actors do all trading).
+        uint256 creationFee = f.creationFee();
+        vm.deal(address(this), address(this).balance + creationFee);
+        (address tk, address cv,) =
+            r.createToken{value: creationFee}("Subject", "SUBJ", keccak256("meta"), "ipfs://m", 0, block.timestamp);
+        token = ILaunchToken(tk);
+        curve = IBondingCurve(cv);
+
+        // Ghost seeding: creation fee is actor ETH into the system AND an in-contract fee, so it
+        // appears on both sides of the row-7 identity (cancels) and in the row-3 fee sum.
+        ghost_feeSum += creationFee;
+        ghost_totalEthIn += creationFee;
+        ghost_lastK = curve.VIRTUAL_ETH_0() * curve.VIRTUAL_TOKEN_0();
+
+        wired = true;
     }
 
     // ────────────────────────────── Modifiers ─────────────────────────────────
@@ -152,14 +185,24 @@ contract CurveHandler is CommonBase, StdAssertions, StdCheats, StdUtils {
         vm.deal(_currentActor, _currentActor.balance + gross);
         (uint256 expectTokens, uint256 fee, uint256 acceptedGross, uint256 refund) = curve.quoteBuy(gross);
         if (expectTokens == 0) return;
+        refund; // silence unused; refunds are handled by the net-in convention below, not counted out
         try router.buy{value: gross}(address(token), _currentActor, 0, block.timestamp) returns (uint256) {
+            // §12.25 row-7 convention (uniform with buy()): count only the ACCEPTED (net) gross as
+            // ETH-in. A clamp refund is ETH that never entered the system, so it is neither in nor
+            // out — adding it to totalEthOut would double-count and (correctly) trip the identity.
             ghost_totalEthIn += acceptedGross;
-            ghost_totalEthOut += refund; // clamp refund flows back to the actor
             ghost_feeSum += fee;
             _recordK();
         } catch {
             // anti-sniper / caps / pauseBuys may legally block the edge fill
         }
+    }
+
+    /// @notice Permissionless pull-payment sweep (§12.25). Moves accruedFees → treasury; the row-3
+    ///         (treasury + accruedFees == Σ fees) and row-7 identities are invariant under it because
+    ///         both `curve.balance` and `accruedFees` drop by the same swept amount.
+    function sweepFees() external onlyWired {
+        curve.sweepFees();
     }
 
     /// @notice Permissionless graduation (spec §6.2; contracts.md §3.4). Ghosts: rows 3, 4.
@@ -193,6 +236,10 @@ contract CurveHandler is CommonBase, StdAssertions, StdCheats, StdUtils {
     /// @notice Token donation straight to the curve — ignored by curve math, burned as dust at
     ///         graduation (contracts.md §5.7).
     function donateTokensToCurve(uint256 actorSeed, uint256 amount) external onlyWired useActor(actorSeed) {
+        // Guard post-graduation: after graduate() the curve holds 0 tokens (row 5). A token donation
+        // to a terminal curve is inert griefing-of-self and would confound the strict zero-token
+        // assertion without adding coverage — pre-graduation donations already exercise the sweep.
+        if (curve.phase() == IBondingCurve.Phase.Graduated) return;
         uint256 bal = token.balanceOf(_currentActor);
         if (bal == 0) return;
         amount = bound(amount, 1, bal);

@@ -1,0 +1,311 @@
+"use client";
+
+import { curveFactoryAbi } from "@robbed/shared/abi";
+import type { MetadataRequest } from "@robbed/shared";
+import { useCallback, useMemo, useState } from "react";
+import { type Address, parseEventLogs } from "viem";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+
+import { type TrackedTrade, useOptimisticTrades } from "@/entities/trade";
+import { computeDeadline } from "@/entities/curve";
+import {
+  ApiError,
+  getToken,
+  postMetadata as postMetadataApi,
+  uploadImage as uploadImageApi,
+} from "@/shared/api";
+import { ROBBED, requireAddress } from "@/shared/config/addresses";
+
+import {
+  type BuildMetadataInput,
+  buildMetadataDocument,
+  buildMetadataRequest,
+} from "./build-metadata";
+import { buildCreateTokenRequest } from "./create-token";
+import { validateImageFile } from "./schema";
+import { type LaunchStep } from "./steps";
+import { waitForIndexed } from "./index-grace";
+import { verifyFailureMessage, verifyMetadataHash } from "./verify-hash";
+
+/**
+ * Launch orchestration (§5.3) — the single flow that turns a filled form into a
+ * live token:
+ *   image upload (eager, API-mediated §12.19) → metadata pin → CLIENT HASH
+ *   RE-VERIFY (§12.19 normative) → one `createToken` tx (deployFee + initialBuy)
+ *   → optimistic soft-confirmed → index grace → redirect to /t/[address].
+ *
+ * All network + navigation dependencies are injectable so the flow is
+ * deterministic under test.
+ *
+ * The stepper badge is driven by the `entities/trade` optimistic reducer: the
+ * create tx is tracked (submit → attach-hash → receipt) so the SAME confirmation
+ * lifecycle the trade feed uses renders here (pending → soft-confirmed), never a
+ * bespoke "confirmed" claim. The per-screen store does not cross the redirect; the
+ * initial-buy trade is re-derived from WS by the M3-5 feed on the token page.
+ */
+
+export interface LaunchSubmitInput {
+  name: string;
+  ticker: string;
+  description?: string;
+  links?: MetadataRequest["links"];
+  /** Optional atomic initial creator buy, wei (0 = none). */
+  initialBuyWei: bigint;
+  /**
+   * Non-zero slippage floor for the atomic initial buy (§5.3, M3-6): tokensOut ×
+   * (1 − slippage), derived by the form from the shared `previewBuy` seeded by the
+   * factory's virtual reserves. 0 only when there is no initial buy or the seed
+   * reserves aren't readable yet (safe — atomic in `createToken`, no front-run).
+   */
+  minTokensOut: bigint;
+  /** Live-read deploy fee, wei (from `useLaunchEconomics`). */
+  deployFeeWei: bigint;
+}
+
+export interface ImageState {
+  url: string | null;
+  hash: string | null;
+  fileName: string | null;
+  uploading: boolean;
+  error: string | null;
+}
+
+export interface UseLaunchOptions {
+  uploadImageFn?: typeof uploadImageApi;
+  postMetadataFn?: typeof postMetadataApi;
+  fetchTokenFn?: (address: string) => Promise<unknown>;
+  navigate?: (href: string) => void;
+}
+
+export interface UseLaunchApi {
+  step: LaunchStep;
+  error: string | null;
+  tokenAddress: Address | null;
+  /** The tracked create tx — the stepper badge reads its display state. */
+  optimisticTrade: TrackedTrade | null;
+  image: ImageState;
+  uploadImage: (file: File) => Promise<void>;
+  clearImage: () => void;
+  launch: (input: LaunchSubmitInput) => Promise<void>;
+  reset: () => void;
+}
+
+const IMAGE_INIT: ImageState = {
+  url: null,
+  hash: null,
+  fileName: null,
+  uploading: false,
+  error: null,
+};
+
+export function useLaunch(opts: UseLaunchOptions = {}): UseLaunchApi {
+  const uploadImageFn = opts.uploadImageFn ?? uploadImageApi;
+  const postMetadataFn = opts.postMetadataFn ?? postMetadataApi;
+  const fetchTokenFn = opts.fetchTokenFn ?? getToken;
+
+  const { address: account } = useAccount();
+  const publicClient = usePublicClient();
+  const { writeContractAsync } = useWriteContract();
+  const optimistic = useOptimisticTrades();
+
+  const [step, setStep] = useState<LaunchStep>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [tokenAddress, setTokenAddress] = useState<Address | null>(null);
+  const [image, setImage] = useState<ImageState>(IMAGE_INIT);
+
+  const uploadImage = useCallback(
+    async (file: File) => {
+      const validationError = validateImageFile(file);
+      if (validationError) {
+        setImage({ ...IMAGE_INIT, fileName: file.name, error: validationError });
+        return;
+      }
+      setImage({ ...IMAGE_INIT, fileName: file.name, uploading: true });
+      setStep((s) => (s === "idle" ? "uploading" : s));
+      try {
+        const res = await uploadImageFn(file);
+        setImage({
+          url: res.imageUrl,
+          hash: res.imageHash,
+          fileName: file.name,
+          uploading: false,
+          error: null,
+        });
+        setStep((s) => (s === "uploading" ? "idle" : s));
+      } catch (e) {
+        setImage({
+          ...IMAGE_INIT,
+          fileName: file.name,
+          error: e instanceof ApiError ? e.message : "Image upload failed — try again.",
+        });
+        setStep((s) => (s === "uploading" ? "idle" : s));
+      }
+    },
+    [uploadImageFn],
+  );
+
+  const clearImage = useCallback(() => setImage(IMAGE_INIT), []);
+
+  const reset = useCallback(() => {
+    setStep("idle");
+    setError(null);
+    setTokenAddress(null);
+  }, []);
+
+  const launch = useCallback(
+    async (input: LaunchSubmitInput) => {
+      setError(null);
+      setTokenAddress(null);
+
+      if (!account) {
+        setError("Connect your wallet to launch.");
+        return;
+      }
+      if (!image.url || !image.hash) {
+        setError("Upload an image before launching.");
+        return;
+      }
+      let router: Address;
+      try {
+        router = requireAddress(ROBBED.router, "router");
+      } catch (e) {
+        setError((e as Error).message);
+        return;
+      }
+
+      const buildInput: BuildMetadataInput = {
+        name: input.name,
+        ticker: input.ticker,
+        description: input.description,
+        links: input.links,
+        imageUrl: image.url,
+        imageHash: image.hash,
+      };
+
+      let optimisticId: string | null = null;
+      try {
+        // 1. Pin canonical metadata (server canonicalizes + hashes + stores to R2).
+        setStep("pinning");
+        const request = buildMetadataRequest(buildInput);
+        const server = await postMetadataFn(request);
+
+        // 2. §12.19 NORMATIVE — re-verify the server's hash locally BEFORE signing.
+        setStep("verifying");
+        const document = buildMetadataDocument(buildInput);
+        const verified = verifyMetadataHash(document, server);
+        if (!verified.ok) {
+          setStep("verify-failed");
+          setError(verifyFailureMessage(verified.reason!));
+          return; // refuse to sign — nothing the user didn't author is committed
+        }
+
+        // 3. Single createToken tx (deployFee + optional atomic initial buy).
+        setStep("signing");
+        const deadline = computeDeadline();
+        const req = buildCreateTokenRequest({
+          router,
+          name: input.name,
+          symbol: input.ticker,
+          metadataHash: verified.localHash, // our OWN verified hash, not the server's
+          metadataUri: server.metadataUri,
+          minTokensOut: input.minTokensOut,
+          deadline,
+          deployFeeWei: input.deployFeeWei,
+          initialBuyWei: input.initialBuyWei,
+        });
+
+        // Feed the optimistic reducer so the stepper renders the shared
+        // ConfirmationBadge lifecycle (pending → soft-confirmed).
+        optimisticId =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `launch-${Date.now()}`;
+        optimistic.submit({
+          id: optimisticId,
+          sender: account,
+          token: image.hash, // placeholder identity; real token addr known post-receipt
+          isBuy: true,
+          ethAmount: input.initialBuyWei.toString(),
+          tokenAmount: "0",
+        });
+
+        const hash = await writeContractAsync(req);
+        optimistic.attachHash(optimisticId, hash);
+        setStep("pending");
+
+        const receipt = await publicClient?.waitForTransactionReceipt({ hash });
+        optimistic.applyReceipt(
+          optimisticId,
+          receipt?.status === "success" ? "success" : "reverted",
+          receipt?.blockNumber,
+        );
+        if (receipt?.status !== "success") {
+          setStep("error");
+          setError("Launch transaction reverted. Your image and metadata are reusable — retry.");
+          return;
+        }
+
+        // 4. Resolve the new token address from the TokenCreated event.
+        const created = parseEventLogs({
+          abi: curveFactoryAbi,
+          eventName: "TokenCreated",
+          logs: receipt.logs,
+        });
+        const addr = created[0]?.args?.token as Address | undefined;
+        if (!addr) {
+          setStep("error");
+          setError("Could not read the new token address from the receipt.");
+          return;
+        }
+        setTokenAddress(addr);
+        setStep("soft-confirmed");
+
+        // 5. Not-yet-indexed grace, then redirect (never to a 404 — see index-grace).
+        setStep("indexing");
+        const indexed = await waitForIndexed({ address: addr, fetchToken: fetchTokenFn });
+        if (indexed) {
+          setStep("live");
+          (opts.navigate ?? defaultNavigate)(`/t/${addr}`);
+        } else {
+          setStep("live-unindexed");
+        }
+      } catch (e) {
+        if (optimisticId) optimistic.reject(optimisticId);
+        setError(humanizeError(e));
+        setStep((s) => (s === "verify-failed" ? s : "error"));
+      }
+    },
+    [account, image, postMetadataFn, fetchTokenFn, publicClient, writeContractAsync, optimistic, opts],
+  );
+
+  const optimisticTrade = useMemo(
+    () => optimistic.trades[optimistic.trades.length - 1] ?? null,
+    [optimistic.trades],
+  );
+
+  return {
+    step,
+    error,
+    tokenAddress,
+    optimisticTrade,
+    image,
+    uploadImage,
+    clearImage,
+    launch,
+    reset,
+  };
+}
+
+function defaultNavigate(href: string): void {
+  if (typeof window !== "undefined") window.location.assign(href);
+}
+
+function humanizeError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/user rejected|denied|rejected the request/i.test(msg)) {
+    return "Transaction rejected in wallet. Your image and metadata are reusable — retry.";
+  }
+  if (/deadline/i.test(msg)) return "Deadline expired — retry.";
+  if (/CreatesPaused/i.test(msg)) return "New launches are temporarily paused.";
+  return msg.length > 180 ? `${msg.slice(0, 177)}…` : msg;
+}

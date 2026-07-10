@@ -1,0 +1,15 @@
+# ROBBED_ gate-1 Aderyn config (spec §10 gate 1, contracts.md §6). Run from contracts/ as `aderyn`.
+# Scopes the scan to first-party src/ only (Foundry auto-detects src="src"); lib/ (OZ + vendored
+# V3) and test/ + script/ are excluded so third-party + harness code never pollutes the register.
+# Every remaining finding is dispositioned in slither.triage.json (shared register) — Aderyn's
+# "High" labels are its detector taxonomy, all triaged false-positive / acknowledged-by-design;
+# none is an exploitable High. Aderyn exits 0 on findings (report-only), so CI treats it as an
+# artifact-producing informational step, not a hard fail — the hard gate is Slither + the greps.
+version = 1
+root = "."
+src = "src/"
+exclude = ["/lib/", "/test/", "/script/"]
+
+[detectors]
+# All detectors run (default). No detector suppressed at config level — dispositions are per-finding
+# in the shared register, so future code re-triggers every detector.

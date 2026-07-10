@@ -15,21 +15,24 @@ import {CurveHandler} from "test/invariant/handlers/CurveHandler.sol";
 ///         quote-derived remaining capacity plus graduate() succeeds — no fill sequence strands
 ///         the curve below/at threshold permanently. Checked under snapshot/revert. The
 ///         double-graduate unit test (revert NotReady) lands in test/unit/ at M1.
+/// forge-config: default.invariant.fail-on-revert = true
 contract GraduationSingleFireInvariant is Test {
     CurveHandler internal handler;
 
     function setUp() public {
         handler = new CurveHandler();
         targetContract(address(handler));
-        // M1: set `fail_on_revert = true` for this suite.
     }
+
+    /// @dev The reachability check below calls `curve.graduate()` from this contract, which pays the
+    ///      permissionless CALLER_REWARD to `msg.sender` — so this contract must accept ETH.
+    receive() external payable {}
 
     /// @notice EXACT ASSERTIONS (contracts.md §6 row 4):
     ///         (1) ghost_graduatedCount ≤ 1;
     ///         (2) if phase == Trading: fill-to-threshold + graduate() succeeds (under snapshot);
     ///         (3) if phase == ReadyToGraduate: graduate() alone succeeds (under snapshot).
     function invariant_graduationSingleFireAndReachable() public {
-        vm.skip(true); // PENDING IMPLEMENTATION (M1) — remove once CurveHandler wires the stack.
         assertLe(handler.ghost_graduatedCount(), 1, "gate-2 row 4: Graduated fired more than once");
 
         IBondingCurve curve = handler.curve();

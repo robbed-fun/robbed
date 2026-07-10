@@ -1,0 +1,297 @@
+/**
+ * Test fakes + fixtures. In-memory Db/Storage/Redis/Reencoder so route + logic
+ * tests run without Postgres/Redis/R2/sharp. Awaiting the shared-package
+ * reconcile to execute (`bun test` — deps not installed yet).
+ */
+import { loadRankingConfig } from "../src/config/ranking";
+import type { Config } from "../src/config";
+import type {
+  Change24hAnchor,
+  Db,
+  HolderJoinedRow,
+  ListTokensInput,
+  RawQuery,
+  TokenDetailRow,
+  TokenListRow,
+} from "../src/lib/db";
+import type { AppDeps } from "../src/deps";
+import type { Redis } from "../src/lib/redis";
+import { createFakeRedis } from "../src/lib/redis";
+import type { Reencoder } from "../src/media/reencode";
+import type { Storage } from "../src/media/storage";
+import { InMemoryRateLimitStore } from "../src/mw/ratelimit";
+import { stubVendors } from "../src/moderation/vendors";
+import type {
+  ConfirmationWatermarksRow,
+  EthUsdSnapshotRow,
+  ModerationStatusRow,
+} from "@robbed/shared";
+
+/**
+ * Bun's `Response.json()` is typed `Promise<unknown>`; tests read the loose
+ * `{ data, error }` envelope, so unwrap through one typed helper rather than
+ * casting at every call site.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: test-only envelope reader
+export const readJson = (res: Response): Promise<any> => res.json();
+
+export const TEST_ADDR = "0x1111111111111111111111111111111111111111";
+export const TEST_CREATOR = "0x2222222222222222222222222222222222222222";
+export const TEST_CURVE = "0x3333333333333333333333333333333333333333";
+
+export function fixtureToken(overrides: Partial<TokenDetailRow> = {}): TokenDetailRow {
+  return {
+    address: TEST_ADDR,
+    curve_address: TEST_CURVE,
+    creator: TEST_CREATOR,
+    creator_fee_bps: 0,
+    trade_fee_bps: 100, // §12.40d per-curve snapshot (Trust/card fee source)
+    name: "Test Token",
+    ticker: "TEST",
+    metadata_hash: "0x" + "ab".repeat(32),
+    metadata_uri: "https://cdn.test/metadata/abc.json",
+    image_url: "https://cdn.test/images/" + "cd".repeat(32) + ".webp",
+    description: "a token",
+    links: { website: "https://test.xyz" },
+    total_supply: (1_000_000_000n * 10n ** 18n).toString(),
+    virtual_eth: (30n * 10n ** 18n).toString(),
+    virtual_token: (1_073_000_000n * 10n ** 18n).toString(),
+    real_eth_reserves: (5n * 10n ** 18n).toString(),
+    real_token_reserves: (800_000_000n * 10n ** 18n).toString(),
+    graduation_eth: (85n * 10n ** 18n).toString(),
+    graduated: false,
+    v3_pool_address: null,
+    graduated_at: null,
+    last_price_eth: 0.00000003,
+    volume_eth_24h: (12n * 10n ** 18n).toString(),
+    trade_count: 42,
+    holder_count: 17,
+    created_at: 1_700_000_000,
+    block_number: 120,
+    tx_hash: "0x" + "ef".repeat(32),
+    log_index: 0,
+    confirmation_state: "soft_confirmed",
+    m_visibility: null,
+    m_impersonation_flag: null,
+    m_impersonation_ticker: null,
+    creator_tokens_created: 3,
+    curve_balance: (800_000_000n * 10n ** 18n).toString(),
+    pool_balance: null,
+    verification: {
+      onchain_hash: "0x" + "ab".repeat(32),
+      computed_hash: "0x" + "ab".repeat(32),
+      status: "match",
+      verified_at: new Date(1_700_000_100_000).toISOString(),
+    },
+    flow: null,
+    ...overrides,
+  };
+}
+
+export class FakeDb implements Db {
+  wm: ConfirmationWatermarksRow = {
+    id: 1,
+    latest_block: 150,
+    safe_block: 100,
+    finalized_block: 50,
+    updated_at: new Date(1_700_000_200_000).toISOString(),
+  };
+  ethUsd: EthUsdSnapshotRow | null = {
+    fetched_at: new Date(1_700_000_200_000).toISOString(),
+    price_usd: 2000,
+    source: "test",
+  };
+  tokens = new Map<string, TokenDetailRow>();
+  moderation = new Map<string, ModerationStatusRow>();
+  audit: Array<{ id: string; actor: string; action: string; target: string; reason: string | null; ts: string }> = [];
+
+  constructor(tokens: TokenDetailRow[] = [fixtureToken()]) {
+    for (const t of tokens) this.tokens.set(t.address, t);
+  }
+
+  async getWatermarks() {
+    return this.wm;
+  }
+  async getLatestEthUsd() {
+    return this.ethUsd;
+  }
+  async getTokenListRow(a: string): Promise<TokenListRow | null> {
+    return this.tokens.get(a) ?? null;
+  }
+  async getTokenDetailRow(a: string) {
+    return this.tokens.get(a) ?? null;
+  }
+  async tokenExists(a: string) {
+    return this.tokens.has(a);
+  }
+  async listTokens(input: ListTokensInput) {
+    return [...this.tokens.values()].slice(0, input.limit);
+  }
+  async kingOfTheHill() {
+    return [...this.tokens.values()][0] ?? null;
+  }
+  async searchTokens(_q: RawQuery) {
+    return [...this.tokens.values()];
+  }
+  /**
+   * Anchors overridable per-address for tests. Default: for each known token,
+   * derive a first-trade price from `last_price_eth` so the card's Δ% is a real
+   * computed value (0 when the token has no price / no anchor override).
+   */
+  anchors = new Map<string, Change24hAnchor>();
+  async getChange24hAnchors(tokens: string[], _nowSec: number) {
+    const out = new Map<string, Change24hAnchor>();
+    for (const a of tokens) {
+      const override = this.anchors.get(a);
+      if (override) out.set(a, override);
+    }
+    return out;
+  }
+  async listTrades() {
+    return [];
+  }
+  async getTradesByTx() {
+    return [];
+  }
+  async getCandles() {
+    return [];
+  }
+  async getHolders(): Promise<HolderJoinedRow[]> {
+    return [];
+  }
+  async getFeeCollections() {
+    return [];
+  }
+  async getStats() {
+    return {
+      tokensLaunched: this.tokens.size,
+      graduations: 0,
+      volume24hEthWei: "0",
+      treasuryFeesCollectedWeth: "0",
+    };
+  }
+  async getModerationStatus(t: string) {
+    return this.moderation.get(t) ?? null;
+  }
+  async upsertModerationStatus(t: string, patch: Partial<Omit<ModerationStatusRow, "token_address">>) {
+    const prev =
+      this.moderation.get(t) ??
+      ({
+        token_address: t,
+        visibility: "visible",
+        nsfw_score: null,
+        csam_flag: false,
+        impersonation_flag: false,
+        impersonation_ticker: null,
+        reason: null,
+        reviewed_by: null,
+        updated_at: new Date(0).toISOString(),
+      } satisfies ModerationStatusRow);
+    const next = { ...prev, ...patch, token_address: t } as ModerationStatusRow;
+    this.moderation.set(t, next);
+    return next;
+  }
+  async getModerationQueue() {
+    return [...this.moderation.entries()].map(([addr, m]) => {
+      const token = this.tokens.get(addr);
+      return { ...(token as TokenListRow), m };
+    });
+  }
+  async insertAudit(entry: { actor: string; action: string; target: string; reason: string | null }) {
+    this.audit.push({ id: String(this.audit.length + 1), ...entry, ts: new Date().toISOString() });
+  }
+  async listAudit() {
+    return [...this.audit].reverse();
+  }
+  async ping() {
+    return true;
+  }
+}
+
+/** Fake storage: in-memory content-addressed put + exists. */
+export function makeFakeStorage(base = "https://cdn.test"): Storage & { objects: Map<string, Uint8Array | string> } {
+  const objects = new Map<string, Uint8Array | string>();
+  const strip = (h: string) => (h.startsWith("0x") ? h.slice(2) : h);
+  const imageKey = (h: string) => `images/${strip(h)}.webp`;
+  const metadataKey = (h: string) => `metadata/${strip(h)}.json`;
+  return {
+    objects,
+    imageKey,
+    metadataKey,
+    imageUrl: (h) => `${base}/${imageKey(h)}`,
+    metadataUrl: (h) => `${base}/${metadataKey(h)}`,
+    async putImage(h, bytes) {
+      objects.set(imageKey(h), bytes);
+    },
+    async putMetadata(h, json) {
+      objects.set(metadataKey(h), json);
+    },
+    async imageExists(h) {
+      return objects.has(imageKey(h));
+    },
+    async ping() {
+      return true;
+    },
+  };
+}
+
+/** Fake reencoder: identity re-encode (returns bytes as-is with fixed dims). */
+export function makeFakeReencoder(dims = { width: 64, height: 64 }): Reencoder {
+  return {
+    async reencode(input) {
+      return { data: input, width: dims.width, height: dims.height };
+    },
+  };
+}
+
+export function testConfig(overrides: Partial<Config> = {}): Config {
+  return {
+    API_PORT: 3001,
+    API_ENV: "test",
+    REDIS_URL: "redis://localhost:6379",
+    R2_REGION: "auto",
+    R2_BUCKET: "robbed",
+    R2_PUBLIC_BASE_URL: "https://cdn.test",
+    SESSION_SECRET: "test-secret",
+    ADMIN_ALLOWLIST: "",
+    TRUSTED_PROXY_HEADER: "",
+    MODERATION_ALLOW_STUBS: true,
+    MODERATION_NSFW_HIDE_THRESHOLD: 0.95,
+    MODERATION_NSFW_REVIEW_THRESHOLD: 0.8,
+    databaseUrlRo: "",
+    databaseUrlRw: "",
+    adminAllowlist: new Set<string>(),
+    ...overrides,
+  } as Config;
+}
+
+export function makeTestDeps(overrides: Partial<AppDeps> = {}): AppDeps {
+  const config = overrides.config ?? testConfig();
+  const redis: Redis = overrides.redis ?? createFakeRedis();
+  return {
+    config,
+    ranking: loadRankingConfig(),
+    db: overrides.db ?? new FakeDb(),
+    redis,
+    storage: overrides.storage ?? makeFakeStorage(config.R2_PUBLIC_BASE_URL),
+    reencoder: overrides.reencoder ?? makeFakeReencoder(),
+    vendors: overrides.vendors ?? stubVendors(),
+    rateLimit: overrides.rateLimit ?? new InMemoryRateLimitStore(),
+    watchlist:
+      overrides.watchlist ??
+      {
+        source: "test",
+        capturedAt: "2026-07-10",
+        updatedAt: "2026-07-10",
+        entries: [
+          { ticker: "BTC", category: "top_asset", names: ["Bitcoin"] },
+          { ticker: "HOOD", category: "stock_token", names: ["Robinhood"] },
+        ],
+      },
+    uncollectedFees: overrides.uncollectedFees ?? { async read() {
+      return { token: "0", weth: "0" };
+    } },
+    now: overrides.now ?? (() => 1_700_000_300_000),
+    secureCookies: overrides.secureCookies ?? false,
+  };
+}

@@ -5,7 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 
-/// @title ILaunchToken — hoodpad launch token (spec §6.1, §8.3; contracts.md §2.1)
+/// @title ILaunchToken — ROBBED_ launch token (spec §6.1, §8.3; contracts.md §2.1)
 /// @notice Plain OZ v5 ERC20 + ERC20Permit. 18 decimals. No owner, no mint/burn functions, no
 ///         hooks, no taxes, no blacklist. Supply minted exactly once, in the constructor, to the
 ///         curve. External surface beyond OZ: `metadataHash()` and the `TOTAL_SUPPLY` getter.

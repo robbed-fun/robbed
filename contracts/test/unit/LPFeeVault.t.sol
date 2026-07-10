@@ -1,0 +1,157 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.35;
+
+import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
+
+import {V3Fixture} from "test/harness/V3Fixture.sol";
+import {PoolGriefer} from "test/harness/PoolGriefer.sol";
+import {LaunchToken} from "src/LaunchToken.sol";
+import {BondingCurve} from "src/BondingCurve.sol";
+import {LPFeeVault} from "src/LPFeeVault.sol";
+import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
+import {IUniswapV3Pool} from "src/interfaces/external/IUniswapV3Pool.sol";
+import {INonfungiblePositionManager} from "src/interfaces/external/INonfungiblePositionManager.sol";
+import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import {ZeroAddress, NotPositionManager} from "src/errors/Errors.sol";
+
+/// @title LPFeeVault unit tests (M1-10; spec §6.3.4, §6.6)
+/// @notice Proves: LP NFT custody; `collect` routes accrued V3 fees to the FIXED treasury (never the
+///         caller); principal liquidity is untouched by a collect; `onERC721Received` accepts NFTs
+///         only from the NPM; constructor zero-checks. The absence of an owner/withdraw/upgrade path
+///         is proven by construction (the ~55-line source has no other external function).
+contract LPFeeVaultTest is Test, V3Fixture {
+    bytes32 internal constant GRADUATED_SIG =
+        keccak256("Graduated(address,address,uint256,uint128,uint256,uint256,uint256,address,uint256,uint256,uint256)");
+
+    address internal treasury = makeAddr("treasury");
+    address internal owner = makeAddr("safeOwner");
+    address internal buyer = makeAddr("buyer");
+
+    function setUp() public {
+        _deployV3FullStack(treasury, owner);
+    }
+
+    // ── constructor + guards ────────────────────────────────────────────────────
+
+    function test_constructor_setsImmutables() public view {
+        assertEq(address(vault.positionManager()), address(npm), "npm");
+        assertEq(vault.treasury(), treasury, "treasury");
+    }
+
+    function test_constructor_zeroReverts() public {
+        vm.expectRevert(ZeroAddress.selector);
+        new LPFeeVault(address(0), treasury);
+        vm.expectRevert(ZeroAddress.selector);
+        new LPFeeVault(address(npm), address(0));
+    }
+
+    function test_onERC721Received_onlyFromNPM() public {
+        vm.prank(makeAddr("randomSender"));
+        vm.expectRevert(NotPositionManager.selector);
+        vault.onERC721Received(address(0), address(0), 1, "");
+
+        vm.prank(address(npm));
+        assertEq(
+            vault.onERC721Received(address(0), address(0), 1, ""),
+            IERC721Receiver.onERC721Received.selector,
+            "must accept from NPM"
+        );
+    }
+
+    // ── full lifecycle: fees → treasury, principal locked ────────────────────────
+
+    function test_collect_feesToTreasury_principalUntouched() public {
+        (LaunchToken token,, address pool, uint256 tokenId) = _graduate("v1");
+
+        // The vault owns the position; capture its principal liquidity.
+        assertEq(npm.ownerOf(tokenId), address(vault), "vault must own the LP NFT");
+        (,,,,,,, uint128 liqBefore,,,,) = npm.positions(tokenId);
+        assertGt(liqBefore, 0, "no principal");
+
+        // Generate V3 trading fees: a trader round-trips through the pool.
+        PoolGriefer trader = new PoolGriefer(pool, address(token), address(weth), address(npm));
+        vm.deal(address(trader), 100 ether);
+        vm.prank(address(trader));
+        weth.deposit{value: 50 ether}();
+        _tradeBothWays(trader, token, pool);
+
+        uint256 tTokenBefore = token.balanceOf(treasury);
+        uint256 tWethBefore = weth.balanceOf(treasury);
+
+        // Anyone may collect; funds go to the FIXED treasury, not the caller.
+        vm.prank(makeAddr("altruistCollector"));
+        (uint256 a0, uint256 a1) = vault.collect(tokenId);
+
+        assertTrue(a0 > 0 || a1 > 0, "no fees collected");
+        assertEq(
+            (token.balanceOf(treasury) - tTokenBefore) + (weth.balanceOf(treasury) - tWethBefore),
+            a0 + a1,
+            "collected fees did not all land in the treasury"
+        );
+
+        // Principal is untouched — the vault can only collect, never decrease liquidity.
+        (,,,,,,, uint128 liqAfter,,,,) = npm.positions(tokenId);
+        assertEq(liqAfter, liqBefore, "principal liquidity changed (must be permanently locked)");
+    }
+
+    function test_collect_recipientIsTreasury_notCaller() public {
+        (LaunchToken token,, address pool, uint256 tokenId) = _graduate("v2");
+        PoolGriefer trader = new PoolGriefer(pool, address(token), address(weth), address(npm));
+        vm.deal(address(trader), 100 ether);
+        vm.prank(address(trader));
+        weth.deposit{value: 50 ether}();
+        _tradeBothWays(trader, token, pool);
+
+        address collector = makeAddr("greedyCollector");
+        uint256 collectorTokenBefore = token.balanceOf(collector);
+        uint256 collectorWethBefore = weth.balanceOf(collector);
+        vm.prank(collector);
+        vault.collect(tokenId);
+        assertEq(token.balanceOf(collector), collectorTokenBefore, "caller siphoned token fees");
+        assertEq(weth.balanceOf(collector), collectorWethBefore, "caller siphoned WETH fees");
+    }
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+
+    function _graduate(string memory seed)
+        internal
+        returns (LaunchToken token, BondingCurve curve, address pool, uint256 tokenId)
+    {
+        (token, curve, pool) = _createSubject(makeAddr(seed));
+        vm.warp(uint256(curve.EARLY_WINDOW_END()) + 1);
+        (,, uint256 realEth,) = curve.reserves();
+        uint256 gross = ((curve.GRADUATION_ETH() - realEth) * 10_000) / (10_000 - curve.TRADE_FEE_BPS()) + 1e15;
+        vm.deal(buyer, gross);
+        vm.prank(buyer);
+        router.buy{value: gross}(address(token), buyer, 0, block.timestamp);
+
+        vm.recordLogs();
+        vm.prank(makeAddr("graduator")); // EOA caller can receive the native CALLER_REWARD
+        curve.graduate();
+        tokenId = _tokenIdFromLogs();
+    }
+
+    function _tokenIdFromLogs() internal returns (uint256) {
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 i = 0; i < logs.length; ++i) {
+            if (
+                logs[i].emitter == address(migrator) && logs[i].topics.length == 4 && logs[i].topics[0] == GRADUATED_SIG
+            ) {
+                return uint256(logs[i].topics[3]);
+            }
+        }
+        revert("no Graduated log");
+    }
+
+    /// @dev Round-trip a small trade through the graduated pool to accrue fees on both tokens.
+    function _tradeBothWays(PoolGriefer trader, LaunchToken token, address pool) internal {
+        uint160 minSqrt = 4_295_128_739 + 1;
+        uint160 maxSqrt = 1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_342 - 1;
+        // WETH → token, then token → WETH (fee taken on both legs).
+        bool wethIsToken0 = address(weth) < address(token);
+        trader.grief_swap(wethIsToken0, 1 ether, wethIsToken0 ? minSqrt : maxSqrt);
+        uint256 tokBal = token.balanceOf(address(trader));
+        if (tokBal > 0) trader.grief_swap(!wethIsToken0, int256(tokBal / 2), !wethIsToken0 ? minSqrt : maxSqrt);
+    }
+}

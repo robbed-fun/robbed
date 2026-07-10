@@ -15,11 +15,29 @@
  * Token addresses in channel names are lowercased (addresses are stored
  * lowercase throughout — indexer.md §3 conventions).
  */
+import { z } from "zod";
 import type { CandleInterval } from "./constants";
+import { addressSchema } from "./ws-messages";
 
 export const GLOBAL_LAUNCHES = "global:launches" as const;
 export const GLOBAL_TRADES = "global:trades" as const;
 export const GLOBAL_CONFIRMATIONS = "global:confirmations" as const;
+
+/**
+ * Admin re-verify control channel (findings X-9). `metadata_verifications` is
+ * indexer-owned and the API is read-only on it, so `POST /v1/admin/metadata/
+ * :token/reverify` (api.md §3.6) does NOT write the table — it publishes
+ * `{ token }` here; the indexer's verifier subscribes, re-queues the row, and
+ * remains the SOLE writer (indexer.md §6.1 admin re-verify seam). Not a WS
+ * client channel — this is service↔service on Redis, so the payload is a Zod
+ * schema (anti-drift rule 2) shared by publisher (api) and subscriber (indexer).
+ */
+export const CONTROL_REVERIFY = "control:reverify" as const;
+
+export const controlReverifySchema = z.object({
+  token: addressSchema,
+});
+export type ControlReverify = z.infer<typeof controlReverifySchema>;
 
 /** All global channels (WS server does explicit SUBSCRIBE on these). */
 export const GLOBAL_CHANNELS = [

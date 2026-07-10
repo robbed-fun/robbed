@@ -11,6 +11,7 @@
  * - `numeric` display-only floats (prices): `number`;
  * - `timestamptz`: ISO-8601 `string`.
  */
+import type { BotFlag } from "./api-types";
 import type { ConfirmationState } from "./confirmation";
 import type { CandleInterval } from "./constants";
 import type { Venue } from "./ws-messages";
@@ -23,6 +24,14 @@ export interface TokenRow {
   creator: string;
   /** §7: 0 in v1; column exists so Phase 2 needs no migration. */
   creator_fee_bps: number;
+  /**
+   * Per-curve snapshot of the trade fee, basis points (§12.40d; decisions.md
+   * §7.2 item 1). The indexer writes this from the curve's immutable
+   * `TRADE_FEE_BPS` at TokenCreated; API card/detail projections read THIS
+   * column, never `apps/api/src/config.ts` (factory-current, which misreports
+   * older curves deployed under a different fee). `≤ MAX_TRADE_FEE_BPS` (200).
+   */
+  trade_fee_bps: number;
   name: string;
   ticker: string;
   /** bytes32 hex, verbatim from chain (§8.3). */
@@ -64,6 +73,28 @@ export interface TradeRowDb {
   /** "0" for v3 rows (fee lives in the pool; Collect tracks it). */
   fee_eth: string;
   price_eth: number;
+  block_number: number;
+  block_timestamp: number;
+  tx_hash: string;
+  log_index: number;
+  confirmation_state: ConfirmationState;
+}
+
+/**
+ * indexer.md §3.6 `transfers` — the sixth event family (X-5). Persisted per
+ * ERC-20 `Transfer`, keyed `(tx_hash, log_index)`, the SOLE source of balance
+ * truth (§12.16): the balance deltas are applied in the same handler guarded by
+ * this row's insert, so a re-delivered log is a no-op and increments run exactly
+ * once (the §7.1 idempotency anchor). `rebuild` replays these in
+ * `(block_number, log_index)` order to reconstruct `balances` exactly.
+ */
+export interface TransferRow {
+  /** `${tx_hash}-${log_index}` (dedup anchor). */
+  id: string;
+  token_address: string;
+  from_address: string;
+  to_address: string;
+  value: string;
   block_number: number;
   block_timestamp: number;
   tx_hash: string;
@@ -177,4 +208,50 @@ export interface ModerationStatusRow {
   reason: string | null;
   reviewed_by: string | null;
   updated_at: string;
+}
+
+// ── Bot/farm heuristics [offchain, indexer-owned] (spec §8.5, v1.2) ─────────
+// Derived side tables, rebuildable from `trades` + `transfers` (indexer.md
+// §8.5.2). Advisory / labeling only — never gate chain state or listing.
+
+/**
+ * indexer.md §8.5.2 `address_flags` — per-address bot/farm label set + funding
+ * cluster. `flags` uses the SAME `BotFlag` vocabulary the wire uses
+ * (api-types.ts `botFlagSchema`) — one source, imported here.
+ */
+export interface AddressFlagsRow {
+  address: string;
+  flags: BotFlag[];
+  cluster_id: string | null;
+  updated_at: string;
+}
+
+/**
+ * indexer.md §8.5.2 `token_flow_stats` — per-token organic estimates feeding the
+ * Trust panel (`api-types.ts` `organicFlowSchema`) and the gate-7 cluster-alert
+ * metric. Ranges (`_low`/`_high`) because the heuristics are estimates (§5.2
+ * forbids false precision).
+ */
+export interface TokenFlowStatsRow {
+  token_address: string;
+  organic_holder_pct_low: number;
+  organic_holder_pct_high: number;
+  organic_volume_pct: number;
+  flagged_cluster_vol_pct_24h: number;
+  updated_at: string;
+}
+
+/**
+ * indexer.md §8.5.3 `competitor_snapshots` — weekly source+timestamped snapshot
+ * of hood.fun traction (own indexer or Dune), feeding Gate G-A.2 (spec §14).
+ * NEVER a hardcoded metric (§2 hard rule): every row carries its `source` and
+ * `captured_at`. `visible_volume_eth` is an ETH-denominated decimal string
+ * (avoid float precision loss on aggregated volume).
+ */
+export interface CompetitorSnapshotRow {
+  source: string;
+  captured_at: string;
+  tokens_per_day: number;
+  graduations: number;
+  visible_volume_eth: string;
 }

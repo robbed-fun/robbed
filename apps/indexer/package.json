@@ -1,6 +1,30 @@
 {
-  "name": "@hoodpad/indexer",
+  "name": "@robbed/indexer",
   "private": true,
   "license": "MIT",
-  "description": "hoodpad indexer — Ponder → Postgres (+pg_trgm) + Redis pub/sub → Bun WS (spec §8). Scaffolded in M2."
+  "type": "module",
+  "description": "ROBBED_ indexer — Ponder → Postgres (+pg_trgm) + Redis pub/sub → Bun WS (spec §8). M2-4 (config+schema) / M2-5 (handlers + unified trades + candles + rebuild).",
+  "scripts": {
+    "dev": "ponder dev",
+    "start": "ponder start",
+    "codegen": "ponder codegen",
+    "serve": "ponder serve",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "migrate": "bun run scripts/migrate.ts",
+    "rebuild": "bun run scripts/rebuild.ts"
+  },
+  "dependencies": {
+    "@robbed/shared": "workspace:*",
+    "ponder": "^0.16.6",
+    "hono": "catalog:",
+    "viem": "catalog:",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.6.0"
+  }
 }

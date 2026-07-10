@@ -1,0 +1,396 @@
+# ROBBED_ — full local dev stack: infra (spec §8: Postgres (+pg_trgm), Redis, minio) PLUS every
+# workspace app in dev/hot-reload mode (api, ws fanout, indexer, web). Master plan item M2-0+.
+#
+# Bring up:   docker compose up -d          (first run: builds dev image + pnpm install, be patient)
+# Status:     docker compose ps --format json
+# Re-install: docker compose run --rm deps  (after changing any package.json / pnpm-lock.yaml)
+# Static val: docker compose config
+#
+# Host-port convention: EVERYTHING is exposed on a 4XXX port —
+#   4000 web (Next.js)   4001 api (Hono)      4002 ws fanout      4269 ponder dev UI/GraphQL
+#   4379 redis           4432 postgres        4545 anvil (chain)  4900 minio S3
+#   4901 minio console   4964 indexer metrics
+# Container-internal ports keep each tool's default; only host mappings follow 4XXX.
+#
+# Dev-mode shape: source bind-mounted at /workspace; node_modules + .next live in named volumes
+# (linux-native binaries must not collide with the macOS host install); a one-shot `deps` service
+# runs `pnpm install` once, app services start after it completes.
+#
+# No top-level `version:` — obsolete/ignored under Compose v2+ (docs.docker.com/reference/compose-file).
+# All credentials are dev defaults, overridable via .env; keep real secrets out of this file.
+name: robbed
+
+# Shared shape for every dev-mode app service (built from docker/dev.Dockerfile).
+x-dev-base: &dev-base
+  build:
+    context: .
+    dockerfile: docker/dev.Dockerfile
+  image: robbed-dev
+  init: true
+  working_dir: /workspace
+  environment: &dev-env
+    # pnpm content-addressable store on a volume — re-installs are cheap.
+    npm_config_store_dir: /pnpm-store
+  volumes:
+    - .:/workspace
+    - robbed_pnpm_store:/pnpm-store
+    # Named volumes shadow every node_modules dir in the bind mount (see header).
+    - robbed_root_nm:/workspace/node_modules
+    - robbed_api_nm:/workspace/apps/api/node_modules
+    - robbed_indexer_nm:/workspace/apps/indexer/node_modules
+    - robbed_web_nm:/workspace/apps/web/node_modules
+    - robbed_shared_nm:/workspace/packages/shared/node_modules
+
+services:
+  # ── Postgres 17 (+ pg_trgm) — indexer.md §2/§3 (search GIN indexes, offchain tables) ──
+  # Tag: postgres:17. Docs-first (hub.docker.com/_/postgres, 2026-07-10): 18 is current `latest`,
+  # 17 is a fully-supported major (17.x). 17 chosen deliberately as the widely-adopted, Ponder-proven
+  # major; pg_trgm ships as a bundled contrib extension in every supported major, so either satisfies
+  # the requirement. Pinned to the major so patch updates flow; a precise minor can pin harder later.
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-robbed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-robbed_dev_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-robbed}
+    ports:
+      - "${POSTGRES_PORT:-4432}:5432"
+    volumes:
+      - robbed_pgdata:/var/lib/postgresql/data
+      # pg_trgm enabled at first init (empty data dir only — postgres runs *.sql in
+      # /docker-entrypoint-initdb.d against POSTGRES_DB, in sorted order).
+      # API-owned tables are NOT here — a file mount inside this ro dir mount fails
+      # (read-only mountpoint); the `apimigrations` one-shot applies them instead.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # CMD-SHELL so the container shell expands POSTGRES_USER/DB at runtime ($$ escapes compose interp).
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Redis 7 — pub/sub fanout + rate-limit windows (indexer.md §8, api.md §6.3) ──
+  # Tag: redis:7-alpine. Docs-first (hub.docker.com/_/redis, 2026-07-10): 8.x is current `latest`,
+  # 7.x maintained (7.4). 7 chosen: battle-tested pub/sub across every client, the boring safe pick.
+  # appendonly keeps rate-limit/seq keys across restarts (pub/sub itself needs no persistence).
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-4379}:6379"
+    volumes:
+      - robbed_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── minio — R2/S3-compatible object store for images + canonical metadata JSON (api.md §8) ──
+  # Image + healthcheck are docs-verified against the official minio docker-compose
+  # (github.com/minio/minio docs/orchestration/docker-compose, 2026-07-10):
+  #   - image quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z (verified via quay.io tag API 2026-07-10;
+  #     the previously pinned 2025-09-06T17-38-46Z tag does not exist on quay.io)
+  #   - healthcheck ["CMD","mc","ready","local"] — the minio server image bundles `mc` (with a
+  #     preconfigured `local` alias) but NOT curl/wget, so a curl probe to /minio/health/live would
+  #     fail on the current image. `mc ready local` is the official dependency-free readiness probe
+  #     (it queries the same liveness surface). Decision recorded here per docs-first (docs beat the
+  #     task's suggested /minio/health/live wording; the endpoint itself still lives on :9000).
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-robbed}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-robbed_dev_secret}
+    ports:
+      - "${MINIO_PORT:-4900}:9000"        # S3 API
+      - "${MINIO_CONSOLE_PORT:-4901}:9001" # web console
+    volumes:
+      - robbed_miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── one-shot: create the default bucket + allow public downloads (public CDN read pattern) ──
+  # mc image docs-first (hub.docker.com/r/minio/mc/tags, 2026-07-10): RELEASE.2025-08-13T08-35-41Z.
+  # Runs only after minio is healthy, then exits; re-running compose re-runs it idempotently
+  # (mb --ignore-existing). Alternative documented in docs/runbooks/docker.md is a manual mc/console step.
+  createbuckets:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-robbed}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-robbed_dev_secret}
+      R2_BUCKET: ${R2_BUCKET:-robbed-assets}
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}; do echo 'waiting for minio'; sleep 1; done;
+      mc mb --ignore-existing local/$${R2_BUCKET};
+      mc anonymous set download local/$${R2_BUCKET};
+      echo 'bucket ready: '$${R2_BUCKET};
+      exit 0;
+      "
+    restart: "no"
+
+  # ── anvil — local chain (implementation-plan I-2): FORK of Robinhood Chain (4663) ──
+  # Fork mode (not a bare 31337 chain) is required: the indexer fail-closed asserts
+  # chainId 4663 + canonical WETH/V3 (apps/indexer/src/assertions.ts), which only a fork
+  # satisfies. Fork URL from the official Blockscout instance config
+  # (robinhoodchain.blockscout.com NEXT_PUBLIC_NETWORK_RPC_URL, verified eth_chainId=0x1237
+  # on 2026-07-10) — overridable via ROBINHOOD_RPC_URL. Image pinned v1.7.1 = the repo's
+  # known-good forge (contracts/foundry.toml F-2 note). --block-time 2: steady blocks so
+  # Ponder realtime + the confirmation tracker advance without traffic.
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:v1.7.1
+    # foundry image entrypoint is `sh -c` — command is ONE string.
+    command:
+      - anvil --host 0.0.0.0 --fork-url ${ROBINHOOD_RPC_URL:-https://rpc.mainnet.chain.robinhood.com} --block-time 2
+    ports:
+      - "${ANVIL_PORT:-4545}:8545"
+    healthcheck:
+      test: ["CMD-SHELL", "cast chain-id --rpc-url http://localhost:8545 | grep -qx 4663"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
+
+  # ── one-shot: deploy the six contracts to the fork (Deploy.s.sol, M1-14/I-2) ──
+  # Live mode auto-selected by chainid 4663; constants come from the DEV-FORK fixture
+  # (tools/localstack/constants.fork.json — canonical M0 constants + a LOCAL treasury
+  # stand-in for the O-6 guard; never a real deploy input). Deployer = anvil dev account 0
+  # (well-known public dev key, fork-funded). Emits tools/localstack/out/local.env
+  # (addresses + START_BLOCK) which indexer/api source at start. Re-runs on every `up`;
+  # anvil state is ephemeral (no volume), so each `up` is a fresh fork + fresh deploy.
+  deploychain:
+    image: ghcr.io/foundry-rs/foundry:v1.7.1
+    working_dir: /workspace/contracts
+    volumes:
+      - .:/workspace
+    environment:
+      ROBBED_CONSTANTS: ../tools/localstack/constants.fork.json
+      DEPLOYER_PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" # anvil account 0 — public dev key
+      FOUNDRY_DISABLE_NIGHTLY_WARNING: "1"
+    depends_on:
+      anvil:
+        condition: service_healthy
+    command:
+      - |
+        set -e
+        RPC=http://anvil:8545
+        START_BLOCK=$$(cast block-number --rpc-url $$RPC)
+        forge script script/Deploy.s.sol --rpc-url $$RPC --broadcast
+        ART=deployments/4663.json
+        addr() { sed -n "s/.*\"$$1\": *\"\\([^\"]*\\)\".*/\\1/p" $$ART; }
+        mkdir -p ../tools/localstack/out
+        {
+          echo "# generated by the deploychain one-shot from $$ART — do not edit";
+          echo "CURVE_FACTORY_ADDRESS=$$(addr curveFactory)";
+          echo "ROUTER_ADDRESS=$$(addr router)";
+          echo "MIGRATOR_ADDRESS=$$(addr v3Migrator)";
+          echo "TREASURY_ADDRESS=$$(addr treasury)";
+          echo "LP_FEE_VAULT_ADDRESS=$$(addr lpFeeVault)";
+          echo "START_BLOCK=$$START_BLOCK";
+        } > ../tools/localstack/out/local.env
+        echo "── local.env ──"; cat ../tools/localstack/out/local.env
+    restart: "no"
+
+  # ── one-shot: apply API-owned tables (apps/api/migrations, idempotent SQL) ──
+  # Runs on every `up` after postgres is healthy — unlike initdb this also covers
+  # already-initialized volumes. psql ships in the postgres image; no extra image.
+  apimigrations:
+    image: postgres:17
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-robbed_dev_pw}
+    volumes:
+      - ./apps/api/migrations:/migrations:ro
+    entrypoint: >
+      /bin/sh -c "
+      for f in /migrations/*.sql; do
+        echo \"applying $$f\";
+        psql -h postgres -U ${POSTGRES_USER:-robbed} -d ${POSTGRES_DB:-robbed} -v ON_ERROR_STOP=1 -f $$f || exit 1;
+      done;
+      echo 'api migrations applied';
+      "
+    restart: "no"
+
+  # ── one-shot: pnpm install for the whole workspace (dev-mode dependency install) ──
+  # Runs once per `up`; idempotent (pnpm no-ops when the lockfile-derived state is current).
+  # App services wait for it via service_completed_successfully. Re-run after dependency
+  # changes: docker compose run --rm deps
+  deps:
+    <<: *dev-base
+    # safe.directory: the bind-mounted repo is owned by the host user — without this,
+    # container git rejects it and the root `prepare` script (hooksPath config) fails.
+    command:
+      - /bin/sh
+      - -c
+      - |
+        git config --global --add safe.directory /workspace
+        exec pnpm install --frozen-lockfile
+    restart: "no"
+
+  # ── api — Hono on Bun, hot reload (`bun run --hot`, apps/api). Host :4001 ──
+  api:
+    <<: *dev-base
+    # Sources the deploychain-emitted addresses (treasury/vault flags, api.md §3.4) when
+    # present — best-effort: the API boots fine without them.
+    command:
+      - /bin/sh
+      - -c
+      - |
+        if [ -f tools/localstack/out/local.env ]; then set -a; . ./tools/localstack/out/local.env; set +a; fi
+        exec pnpm --filter @robbed/api dev
+    environment:
+      <<: *dev-env
+      API_PORT: "3001"
+      API_ENV: development
+      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
+      REDIS_URL: redis://redis:6379
+      R2_ENDPOINT: http://minio:9000
+      R2_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-robbed}
+      R2_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-robbed_dev_secret}
+      R2_BUCKET: ${R2_BUCKET:-robbed-assets}
+      # Browser-visible object URL base — host-mapped minio port (4900), not the service DNS name.
+      R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4900}/${R2_BUCKET:-robbed-assets}
+      # Dev runs on stub moderation vendors (§4.3 boot guard allows this outside production).
+      MODERATION_ALLOW_STUBS: "true"
+      # Cold `tokensOwed` read (api.md §3.4) against the local fork.
+      ROBINHOOD_RPC_URL: http://anvil:8545
+    ports:
+      - "${API_PORT:-4001}:3001"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3001/v1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── ws — Bun WS fanout (apps/api/src/ws.ts, indexer M2-8; Redis-only, zero DB). Host :4002 ──
+  ws:
+    <<: *dev-base
+    working_dir: /workspace/apps/api
+    command: ["bun", "run", "--hot", "src/ws.ts"]
+    environment:
+      <<: *dev-env
+      WS_PORT: "3002"
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "${WS_PORT:-4002}:3002"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Plain GET answers 426 Upgrade Required — connectivity is the probe, not the status (no -f).
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://localhost:3002"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── indexer — Ponder dev (apps/indexer). Host :4269 (UI/GraphQL), :4964 (gate-7 metrics) ──
+  # Contract addresses + START_BLOCK come from the deploychain-emitted local.env (required —
+  # fails loud if the deploy did not run). RPC is the anvil fork, which satisfies the
+  # fail-closed startup assertions (chainId 4663, canonical WETH/V3).
+  indexer:
+    <<: *dev-base
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -a; . ./tools/localstack/out/local.env; set +a
+        # Offchain sidecar tables (watermarks, eth_usd, metadata_verifications — indexer.md §3)
+        # live outside Ponder's schema management; the migrate script is idempotent.
+        pnpm --filter @robbed/indexer migrate
+        exec pnpm --filter @robbed/indexer exec ponder dev --hostname 0.0.0.0
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *dev-env
+      INDEXER_RPC_HTTP: http://anvil:8545
+      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
+      REDIS_URL: redis://redis:6379
+      METRICS_PORT: "9464"
+    ports:
+      - "${PONDER_PORT:-4269}:42069"
+      - "${METRICS_HOST_PORT:-4964}:9464"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      deploychain:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: "no"
+
+  # ── web — Next.js 16 dev server (apps/web). Host :4000 ──
+  web:
+    <<: *dev-base
+    command: ["pnpm", "--filter", "@robbed/web", "exec", "next", "dev", "-H", "0.0.0.0"]
+    environment:
+      <<: *dev-env
+      # Browser-visible (NEXT_PUBLIC_) — must use HOST-mapped 4XXX ports, not service DNS names.
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-4001}
+      NEXT_PUBLIC_WS_URL: ws://localhost:${WS_PORT:-4002}
+      NEXT_PUBLIC_R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4900}/${R2_BUCKET:-robbed-assets}
+      # Browser → host-mapped anvil fork (chain 4663). anvil serves ws on the same port.
+      NEXT_PUBLIC_RPC_HTTP: ${NEXT_PUBLIC_RPC_HTTP:-http://localhost:4545}
+      NEXT_PUBLIC_RPC_WS: ${NEXT_PUBLIC_RPC_WS:-ws://localhost:4545}
+      NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:-}
+      NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD: ${NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD:-}
+    volumes:
+      - .:/workspace
+      - robbed_pnpm_store:/pnpm-store
+      - robbed_root_nm:/workspace/node_modules
+      - robbed_api_nm:/workspace/apps/api/node_modules
+      - robbed_indexer_nm:/workspace/apps/indexer/node_modules
+      - robbed_web_nm:/workspace/apps/web/node_modules
+      - robbed_shared_nm:/workspace/packages/shared/node_modules
+      # .next build cache on a volume — keeps churn off the macOS bind mount.
+      - robbed_web_next:/workspace/apps/web/.next
+    ports:
+      - "${WEB_PORT:-4000}:3000"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+volumes:
+  robbed_pgdata:
+  robbed_redisdata:
+  robbed_miniodata:
+  robbed_pnpm_store:
+  robbed_root_nm:
+  robbed_api_nm:
+  robbed_indexer_nm:
+  robbed_web_nm:
+  robbed_shared_nm:
+  robbed_web_next:

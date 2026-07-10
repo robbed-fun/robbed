@@ -1,0 +1,26 @@
+{
+  "source": "Curated seed list — top-asset tickers (major-cap crypto) + Robinhood Stock Tokens. Refresh >= monthly per spec §12.23/OI-A9. NOT market metrics (§2): these are trademark/ticker strings, not prices or volumes.",
+  "capturedAt": "2026-07-10",
+  "updatedAt": "2026-07-10",
+  "entries": [
+    { "ticker": "BTC", "category": "top_asset", "names": ["Bitcoin"] },
+    { "ticker": "ETH", "category": "top_asset", "names": ["Ethereum", "Ether"] },
+    { "ticker": "USDT", "category": "top_asset", "names": ["Tether"] },
+    { "ticker": "USDC", "category": "top_asset", "names": ["USD Coin"] },
+    { "ticker": "BNB", "category": "top_asset", "names": ["Binance Coin"] },
+    { "ticker": "SOL", "category": "top_asset", "names": ["Solana"] },
+    { "ticker": "XRP", "category": "top_asset", "names": ["Ripple"] },
+    { "ticker": "DOGE", "category": "top_asset", "names": ["Dogecoin"] },
+    { "ticker": "ADA", "category": "top_asset", "names": ["Cardano"] },
+    { "ticker": "TRX", "category": "top_asset", "names": ["Tron"] },
+    { "ticker": "HOOD", "category": "stock_token", "names": ["Robinhood"] },
+    { "ticker": "AAPL", "category": "stock_token", "names": ["Apple"] },
+    { "ticker": "TSLA", "category": "stock_token", "names": ["Tesla"] },
+    { "ticker": "NVDA", "category": "stock_token", "names": ["Nvidia"] },
+    { "ticker": "MSFT", "category": "stock_token", "names": ["Microsoft"] },
+    { "ticker": "AMZN", "category": "stock_token", "names": ["Amazon"] },
+    { "ticker": "GOOGL", "category": "stock_token", "names": ["Google", "Alphabet"] },
+    { "ticker": "META", "category": "stock_token", "names": ["Meta", "Facebook"] },
+    { "ticker": "SPY", "category": "stock_token", "names": ["S&P 500"] }
+  ]
+}

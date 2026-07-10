@@ -1,6 +1,6 @@
-# hoodpad — Development Flow (spec-driven)
+# ROBBED_ — Development Flow (spec-driven)
 
-**Status:** v1.0, 2026-07-09. This is the process contract for every agent and human working on hoodpad. It is not advisory; violating it is a process bug, reviewable like any other bug.
+**Status:** v1.0, 2026-07-09. This is the process contract for every agent and human working on ROBBED_. It is not advisory; violating it is a process bug, reviewable like any other bug.
 
 ---
 

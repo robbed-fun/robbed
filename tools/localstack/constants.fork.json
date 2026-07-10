@@ -1,0 +1,189 @@
+{
+  "chainId": 4663,
+  "generatedAt": "2026-07-10T07:03:46.384Z",
+  "ethUsdSnapshot": {
+    "source": "coingecko (https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd&precision=8)",
+    "timestamp": "2026-07-10T06:43:28.947Z",
+    "value": "1771.50888854"
+  },
+  "curve": {
+    "virtualEthWei": "2852303954560041089",
+    "virtualTokenWei": "1073179114341976436170422978",
+    "curveSupplyWei": "793100000000000000000000000",
+    "lpTrancheWei": "206900000000000000000000000",
+    "graduationEthWei": "8076868822140981824"
+  },
+  "fees": {
+    "tradeFeeBps": 100,
+    "creatorFeeBps": 0,
+    "creationFeeWei": "847000000000000",
+    "maxCreationFeeWei": "16940000000000000",
+    "graduationFeeWei": "450000000000000",
+    "maxGraduationFeeWei": "4500000000000000",
+    "callerRewardWei": "2822000000000000",
+    "maxCallerRewardWei": "14110000000000000"
+  },
+  "antiSniper": {
+    "windowSeconds": 8,
+    "maxEarlyBuyWei": "201922000000000000"
+  },
+  "v3": {
+    "feeTier": 10000,
+    "tickSpacing": 200,
+    "sqrtPriceX96Token0": "15650667588154918705036412",
+    "sqrtPriceX96Token1": "401075653803896166612957246818246",
+    "targetTickToken0": -170600,
+    "targetTickToken1": 170600,
+    "fullRangeTickLower": -887200,
+    "fullRangeTickUpper": 887200,
+    "toleranceTicks": 100,
+    "maxArbIterations": 8,
+    "migrationSlippageBps": 100
+  },
+  "beta": {
+    "perTokenEthCapWei": "12115303233211472736",
+    "globalEthCapWei": "403843441107049091200"
+  },
+  "governance": {
+    "organicVolumeFloor": {
+      "basis": "Gate G-A.1 (\u00a714) mainnet market floor: evaluated at Phase-A exit against the OWN INDEXER organic-volume estimate (\u00a78.5), NEVER a headline/chain-wide/Dune metric (\u00a72/\u00a72.2).",
+      "metric": "rolling platform-wide ORGANIC curve volume (buy+sell ETH notional) after excluding \u00a78.5 wash-flagged volume; when only headline data is available, apply the \u226450% organic-flow discount (\u00a72.2) to estimate the organic component.",
+      "unit": "multiple of GRADUATION_ETH (self-referential to the curve's own economics \u2014 no external ETH/USD or chain-volume figure is baked in)",
+      "windowDays": 7,
+      "floorGraduationsEquiv": 5,
+      "floorWei": "40384344110704909120",
+      "organicFlowDiscountMaxPct": 50,
+      "status": "M0 DEFAULT (tunable) \u2014 recalibrate at M2 once the indexer emits real organic-volume series (\u00a78.5); the magnitude of N ('what counts as not-collapsed') is a product/policy call \u2192 hoodpad-architect ratifies before Gate G-A (\u00a713/\u00a714)."
+    },
+    "clusterAlertThresholds": {
+      "basis": "Gate 7 capped-beta cluster monitoring (\u00a710 gate 7 amend, \u00a78.5): ALERT (never a chain-state gate \u2014 \u00a78.4/\u00a78.5 advisory-only) when one \u00a78.5 funder cluster dominates volume. Early-warning for metric distortion + coordinated dumps.",
+      "perTokenPct": 25,
+      "platformPct": 10,
+      "windowHours": 24,
+      "measuredAgainst": "trailing-window curve volume, grouped by \u00a78.5 funder cluster (indexer feed); per-token X% of one token's curve volume, platform Y% of platform-wide curve volume.",
+      "status": "M0 DEFAULT (tunable) \u2014 hooks emitted in M2-12; alert delivery + final thresholds tuned with hoodpad-security before beta deploy (gate 7)."
+    }
+  },
+  "external": {
+    "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "v3Factory": "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+    "positionManager": "0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3",
+    "swapRouter02": "0xcaf681a66d020601342297493863e78c959e5cb2",
+    "quoterV2": "0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7",
+    "treasurySafe": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+  },
+  "provenance": {
+    "generator": "tools/m0/derive.ts (@robbed/m0)",
+    "gitSha": "011a33219614e469a1197ab3925e39d0abeb2e61",
+    "ethUsdSource": "coingecko (https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd&precision=8)",
+    "ethUsdPrice": "1771.50888854",
+    "fetchedAt": "2026-07-10T06:43:28.947Z",
+    "specRefs": [
+      "\u00a72.2",
+      "\u00a76.2",
+      "\u00a76.3",
+      "\u00a76.4",
+      "\u00a76.5",
+      "\u00a78.5",
+      "\u00a710",
+      "\u00a711.0",
+      "\u00a712.11",
+      "\u00a712.18",
+      "\u00a712.26",
+      "\u00a713",
+      "\u00a714"
+    ],
+    "status": "OPEN ITEM \u00a713 \u2014 constants not final until reviewed by hoodpad-architect",
+    "simulation": {
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25
+      ],
+      "runs": 25,
+      "maxTerminalPriceErrPpb": "0",
+      "maxCurveRoundingDustTokenWei": "476989939"
+    }
+  },
+  "derivation": {
+    "note": "vT0 = S\u00b2/(2S\u2212T\u2212f), vE0 = p\u00b7(L+f)\u00b2/(2S\u2212T\u2212f), G = p\u00b7(L+f) with f=(gradFee+callerReward)/p; p = exact price of targetTickToken0. Full algebra in tools/m0/lib/curve.ts.",
+    "gradMcapTargetUsd": "69000",
+    "graduationFeeModel": {
+      "basis": "cost-based (\u00a712.26) \u2014 migrationGasEstimate \u00d7 gasPriceWei \u00d7 (marginNum/marginDen); NOT %-of-raise, no hardcoded USD",
+      "migrationGasEstimate": "3000000",
+      "gasPriceWei": "100000000",
+      "gasPriceBasis": "placeholder",
+      "gasPriceSource": "ROBINHOOD_RPC_URL unset \u2014 M0 placeholder (finalize at M1 vs real testnet gas)",
+      "gasPriceFetchedAt": "2026-07-10T07:03:46.381Z",
+      "marginNum": 3,
+      "marginDen": 2,
+      "graduationFeeWei": "450000000000000",
+      "status": "M0 PLACEHOLDER inputs \u2014 exact fee finalized at M1 against real graduate() gas on testnet"
+    },
+    "rawTickToken0BeforeAlignment": -170619,
+    "k": "3061033031788861896951862079727077686189743042",
+    "ethToLpWei": "8073596822140981824",
+    "lpDust": {
+      "token0IsToken": {
+        "tokenWei": "2729",
+        "wethWei": "2221",
+        "liquidity": "40870859820916040276058"
+      },
+      "token0IsWeth": {
+        "tokenWei": "2723",
+        "wethWei": "2221",
+        "liquidity": "40870859820916040276058"
+      }
+    }
+  },
+  "humanReadable": {
+    "virtualEth0": "2.852303 ETH",
+    "virtualToken0": "1073.1791e6 tokens",
+    "graduationEth": "8.076868 ETH (net-of-fee, \u00a712.11) \u2248 $14308.24 @snapshot",
+    "graduationMcap": "39.0217 ETH \u2248 $69127.35 @snapshot (target $69000)",
+    "initialMcap": "2.6578 ETH \u2248 $4708.33 @snapshot",
+    "graduationFee": "0.000450 ETH \u2248 $0.80 @snapshot \u2014 cost-based flat (\u00a712.26), gas placeholder (USD shown is informational only)",
+    "creationFee": "0.000847 ETH \u2248 $1.50 @snapshot",
+    "callerReward": "0.002822 ETH \u2248 $5.00 @snapshot",
+    "maxEarlyBuy": "0.201922 ETH \u2248 $357.71 @snapshot",
+    "ethToLp": "8.073596 ETH"
+  },
+  "reviewRequired": [
+    "\u00a713 GATE: ALL constants below are open item \u00a713 until hoodpad-architect reviews this output; gate approval closes the item.",
+    "fees.graduationFeeWei: COST-BASED per \u00a712.26 (decision 26) \u2014 a small flat fee = migrationGasEstimate \u00d7 gasPriceWei \u00d7 margin (see derivation.graduationFeeModel), NOT a %-of-raise and never a hardcoded USD figure. All inputs are M0 PLACEHOLDERS; the exact fee is finalized at M1 against real graduate() gas on testnet. gasPrice is fetched live when ROBINHOOD_RPC_URL is set, otherwise a labeled placeholder is used.",
+    "fees.callerRewardWei: PROPOSAL (O-9) \u2014 sized \u2248$5 equivalent at snapshot; re-validate \u226510\u00d7 graduate() gas on testnet at M1.",
+    "antiSniper.*: PROPOSAL (O-7) \u2014 8s timestamp window (\u00a712.18) with per-tx cap = 2.5% of GRADUATION_ETH; multi-wallet bypass documented.",
+    "v3.toleranceTicks / maxArbIterations / migrationSlippageBps: PROPOSAL (O-8) \u2014 needed before gate-2 fuzz bounds are final.",
+    "beta.*: PLACEHOLDER (O-10) \u2014 mainnet values set with hoodpad-security before beta deploy.",
+    "governance.organicVolumeFloor: M0-4 DEFAULT (\u00a714 Gate G-A.1) \u2014 floor = 5 \u00d7 GRADUATION_ETH / 7d of OWN-INDEXER organic curve volume (\u00a78.5); NOT a headline metric (\u00a72). The magnitude ('what counts as not-collapsed') is a product/policy call \u2192 hoodpad-architect ratifies before Gate G-A; recalibrate at M2 with real organic series.",
+    "governance.clusterAlertThresholds: M0-4 DEFAULT (\u00a710 gate 7 amend, \u00a78.5) \u2014 per-token X=25% / platform Y=10% of curve volume over 24h; ADVISORY alert only, never gates chain state (\u00a78.4/\u00a78.5). Final tuning with hoodpad-security before beta.",
+    "external.v3Factory / positionManager / swapRouter02 / quoterV2: CONFIRMED on 4663 (spec \u00a712.28, O-4 RESOLVED) \u2014 registry-sourced + on-chain verified, never invented; deploy script still runtime-asserts feeAmountTickSpacing(10000)==200, NPM.factory(), NPM.WETH9() (contracts.md \u00a77.2) so a wrong address fails closed.",
+    "external.treasurySafe: UNSET (O-6, spec \u00a713) \u2014 zero address on purpose; deploy script's zero-address guard must fail until filled from the official Safe deployment on 4663. Never invented.",
+    "Graduation threshold counts NET-of-1%-fee real reserves \u2014 resolved \u00a712.11; restated so the deploy reviewer re-confirms."
+  ],
+  "notes": [
+    "DEV-FORK FIXTURE (tools/localstack) \u2014 NOT for any real deploy. Identical to tools/m0/out/constants.json except external.treasurySafe, which is set to anvil dev account 1 as a LOCAL STAND-IN so Deploy.s.sol's live-mode O-6 guard passes on a local anvil fork of chain 4663. The canonical constants.json keeps treasurySafe UNSET (never invented, spec s13); production requires the real Gnosis Safe on 4663."
+  ]
+}

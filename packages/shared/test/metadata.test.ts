@@ -142,18 +142,52 @@ describe("tokenMetadataSchema (fixed field set + version tag, api.md §3.2)", ()
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, extra: "nope" }).success).toBe(false);
   });
 
-  it("enforces field limits (name ≤64, ticker ≤10, description ≤500)", () => {
-    expect(tokenMetadataSchema.safeParse({ ...baseMeta, name: "x".repeat(65) }).success).toBe(false);
-    expect(tokenMetadataSchema.safeParse({ ...baseMeta, ticker: "ABCDEFGHIJK" }).success).toBe(false);
+  it("enforces name ≤32 BYTES / ticker ≤10 BYTES (§12.30) at the boundary", () => {
+    // ASCII boundary: 32 bytes ok, 33 bytes rejected (name)
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, name: "x".repeat(32) }).success).toBe(true);
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, name: "x".repeat(33) }).success).toBe(false);
+    // ASCII boundary: 10 bytes ok, 11 bytes rejected (ticker)
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, ticker: "y".repeat(10) }).success).toBe(true);
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, ticker: "y".repeat(11) }).success).toBe(false);
+    // Non-empty floor
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, name: "" }).success).toBe(false);
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, ticker: "" }).success).toBe(false);
+  });
+
+  it("counts BYTES not chars: multibyte under char-limit but over byte-limit rejects", () => {
+    // ticker "ÜÜÜÜÜ" = 5 chars / 10 bytes → ok; "ÜÜÜÜÜÜ" = 6 chars / 12 bytes → reject
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, ticker: "Ü".repeat(5) }).success).toBe(true);
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, ticker: "Ü".repeat(6) }).success).toBe(false);
+    // name "🚀"×8 = 16 code units / 32 bytes → ok; "🚀"×9 = 18 code units / 36 bytes → reject.
+    // A char/code-unit .max(32) would WRONGLY accept both — the byte refinement rejects the 36-byte one.
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, name: "🚀".repeat(8) }).success).toBe(true);
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, name: "🚀".repeat(9) }).success).toBe(false);
+  });
+
+  it("enforces description ≤500 (char cap; not on-chain)", () => {
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, description: "x".repeat(501) }).success).toBe(false);
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, description: "x".repeat(500) }).success).toBe(true);
   });
 
-  it("rejects malformed imageHash / imageUrl / links / version", () => {
+  it("rejects malformed imageHash / imageUrl / links", () => {
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, imageHash: "0x1234" }).success).toBe(false);
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, imageHash: IMAGE_HASH.toUpperCase() }).success).toBe(false);
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, imageUrl: "not-a-url" }).success).toBe(false);
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, links: { website: "nope" } }).success).toBe(false);
+  });
+});
+
+describe("metadata version frozen at 1 (§12.31 / X-13 close-out — negative path)", () => {
+  it("rejects version omitted, version:0, version:2 — the literal is a real gate", () => {
+    const { version: _v, ...noVersion } = baseMeta;
+    expect(tokenMetadataSchema.safeParse(noVersion).success).toBe(false);
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, version: 0 }).success).toBe(false);
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, version: 2 }).success).toBe(false);
+  });
+
+  it("accepts version:1 and it still hashes to the frozen golden value (preimage unchanged)", () => {
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, version: 1 }).success).toBe(true);
+    const f = METADATA_GOLDEN_FIXTURES[0]!;
+    expect(metadataHash(f.input)).toBe(f.hash); // byte-length change did NOT perturb canonicalization
   });
 });

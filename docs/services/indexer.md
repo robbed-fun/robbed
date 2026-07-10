@@ -8,7 +8,7 @@
 
 ## 1. Purpose
 
-The indexer is the single source of derived truth for hoodpad:
+The indexer is the single source of derived truth for ROBBED_:
 
 1. Indexes the six event families (§8, §12.15–16): `TokenCreated`, `Trade`, `Graduated`, LaunchToken `Transfer`, V3 `Swap`, V3 `Collect`.
 2. Maintains **venue-continuous** price/candle series per token across graduation (§5.2, §8) — one unbroken series from curve trades into V3 swaps.
@@ -65,7 +65,9 @@ event TokenCreated(
 );
 ```
 
-Initial `virtual_eth`/`virtual_token` and `graduation_eth` are **factory immutables** (contracts.md §2.2) — read once from the factory at indexer startup and cached; no per-event RPC. Block timestamp comes from the log's block. The creator's initial buy (if any) arrives as the first `Trade` in the same tx (§12.15 — not in this event). `v3_pool_address` is populated here from `pool` (the pool exists pre-graduation by design), but V3 `Swap` indexing still begins only at `Graduated` (§12.16).
+Initial `virtual_eth`/`virtual_token` and `graduation_eth` are **factory immutables** (contracts.md §2.2), read once at indexer startup from `CurveFactory.config()` (→ `virtualEth0`/`virtualToken0`/`graduationEth`/`curveSupply`/`lpTranche`) via the **shared read-function ABI in `packages/shared/src/abi/` (§12.38)** and cached; no per-event RPC. **This `config()` read supersedes the env-interim curve-constants source** used before the shared read-ABI landed (M2-4 note); the read ABI is a compilation-time artifact (needs only `forge build`, no deploy — contracts.md §7.4). Block timestamp comes from the log's block. The creator's initial buy (if any) arrives as the first `Trade` in the same tx (§12.15 — not in this event; capture path + fallback in §7.4). `v3_pool_address` is populated here from `pool` (the pool exists pre-graduation by design), but V3 `Swap` indexing still begins only at `Graduated` (§12.16).
+
+**Per-token `trade_fee_bps` (§12.40d).** `setTradeFeeBps` governs future curves only, so the live factory config would misreport the fee of any curve created under a prior fee. At `TokenCreated` the handler reads the curve's public `TRADE_FEE_BPS` immutable (via the §12.38 shared read-ABI — creation is low-frequency, not a hot path) and stores it as `tokens.trade_fee_bps`, a per-token immutable snapshot. This column is the source for the API `trust.feePolicy.tradeFeeBps` (api.md §3.4) — never the factory config. **Wiring follow-up (2026-07-10, decisions §7):** the shared `db-rows.ts` `TokenRow` type carries `trade_fee_bps: number`, and the API card/detail projection reads it from this column — **not** from `apps/api/src/config.ts` (config is factory-current and would misreport older curves). Owner: **hoodpad-shared** (type) + hoodpad-indexer/API (wire).
 
 Fields consumed: all. Derived records: one `tokens` row; `metadata_verifications` row seeded `unfetched`; WS publish to `global:launches` and `token:{address}:events`.
 
@@ -75,6 +77,7 @@ CREATE TABLE tokens (
   curve_address        text NOT NULL UNIQUE,
   creator              text NOT NULL,              -- §7: day 1, even though creator fees are Phase 2
   creator_fee_bps      integer NOT NULL DEFAULT 0, -- §7: 0 in v1; column exists so Phase 2 needs no migration
+  trade_fee_bps        integer NOT NULL,           -- §12.40d: per-token immutable snapshot, read from curve TRADE_FEE_BPS at TokenCreated (NOT factory config); Trust-panel source
   name                 text NOT NULL,
   ticker               text NOT NULL,              -- ≤10 chars enforced upstream; indexer stores verbatim
   metadata_hash        text NOT NULL,              -- bytes32 hex, verbatim from chain (§8.3)
@@ -425,6 +428,21 @@ Because curve trades and V3 swaps insert into the same `trades` table with a uni
 
 `volume_eth_24h` decay: recomputed by a periodic job (every 60s) from `trades` — acceptable staleness; never computed in the WS hot path.
 
+### 4.5 24h change anchor (`change24hPct`, §12.40e)
+
+`TokenCard.change24hPct` (api.md §3.4) needs a 24h-open price anchor. Definition (indexer/API-owned, tunable like the §12.22 ranking formulas; frontend renders only):
+
+```
+change24hPct = (lastPrice − anchorPrice) / anchorPrice
+  anchorPrice = close of the most-recent 1h candle at or before (now − 24h)
+  if token age < 24h:  anchorPrice = first-trade price (creation-anchored)
+  if no trades:        change24hPct = 0
+```
+
+`lastPrice` = `tokens.last_price_eth`. The 1h series already exists (§4.1); the anchor is a bucket lookup, no new write path. Recomputed alongside `volume_eth_24h` (or resolved at read time from the 1h candles) — never in the WS hot path. Same source used for the `/tokens` list and detail so the value is consistent across surfaces.
+
+> **Anti-drift follow-up (2026-07-10, decisions §7):** this anchor resolver has **≥2 consumers** (indexer materialization + API `card` projection), so per the anti-drift rule it is hosted **once in `packages/shared`** and both services import it — not duplicated in `apps/indexer/src/change24h.ts` and `apps/api/src/projections/card.ts` (which today returns `change24hPct: null`). Owner: **hoodpad-shared** hosts the resolver; API consumes.
+
 ## 5. Confirmation-state pipeline (§2.1)
 
 ### 5.1 Detection
@@ -490,6 +508,8 @@ Ponder-managed (schema in `ponder.schema.ts`): `tokens`, `trades`, `transfers`, 
 - V3 pools: Ponder `factory()` source over `Graduated(pool)` — only graduated pools are indexed.
 - LaunchToken `Transfer`: `factory()` source over `TokenCreated(token)` (ratified §12.16).
 - `Collect`: single source on the NPM address, handler filters by known `lp_token_id`s (kept in an in-memory set loaded at startup + updated on `Graduated` — no per-event DB read).
+
+**Same-tx factory-child capture — M2-0b spike + pre-sanctioned fallback (§12.41, E-3).** A curve's atomic initial buy emits `Trade` in the **same tx** as the `TokenCreated` that registers that curve as a Ponder `factory()` child. The **M2-0b spike** (runs at Phase-I/M2 start once the local stack is up — anvil+Ponder+Postgres, using the I-2 same-tx create+buy fixture) verifies Ponder captures such same-tx child events; it is BLOCKING before M2-5 handler work relies on native same-tx capture. **Pre-sanctioned fallback if Ponder cannot:** the `TokenCreated` handler derives the creator's initial buy by parsing the first `Trade` log from the `createToken` transaction **receipt** (via the §12.15 event ABI), instead of relying on child-source firing for the same-tx `Trade`. This fallback is pre-approved (spec §12.41), so a failing spike does **not** re-escalate — implement the receipt path and record the Ponder-version finding here. Record the spike outcome (native-capture vs receipt-fallback) in this section at M2.
 
 ## 8. Redis pub/sub → Bun WS fanout (§8)
 

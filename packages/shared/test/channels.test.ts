@@ -1,12 +1,14 @@
 /** Channel taxonomy builders (indexer.md §8.1). */
 import { describe, expect, it } from "bun:test";
 import {
+  CONTROL_REVERIFY,
   GLOBAL_CHANNELS,
   GLOBAL_CONFIRMATIONS,
   GLOBAL_LAUNCHES,
   GLOBAL_TRADES,
   TOKEN_CHANNEL_PATTERN,
   channelSeqKey,
+  controlReverifySchema,
   tokenCandles,
   tokenEvents,
   tokenTrades,
@@ -34,5 +36,12 @@ describe("channel taxonomy (indexer.md §8.1 — ratified names)", () => {
   it("per-channel seq key (INCR channel:seq at publish, indexer.md §8.2)", () => {
     expect(channelSeqKey("global:trades")).toBe("global:trades:seq");
     expect(channelSeqKey(tokenTrades(ADDR))).toBe(`token:${LOWER}:trades:seq`);
+  });
+
+  it("control:reverify admin seam (X-9) — channel name + { token } payload", () => {
+    expect(CONTROL_REVERIFY).toBe("control:reverify");
+    expect(controlReverifySchema.safeParse({ token: LOWER }).success).toBe(true);
+    expect(controlReverifySchema.safeParse({ token: "0xNOTHEX" }).success).toBe(false);
+    expect(controlReverifySchema.safeParse({}).success).toBe(false);
   });
 });

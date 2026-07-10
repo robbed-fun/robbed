@@ -51,6 +51,18 @@ interface INonfungiblePositionManager is IERC721 {
     /// @notice Collects accrued fees; sole call made by LPFeeVault.collect (spec §6.3.4).
     function collect(CollectParams calldata params) external payable returns (uint256 amount0, uint256 amount1);
 
+    /// @notice The Uniswap V3 Factory this NPM was deployed against (IPeripheryImmutableState).
+    /// @dev Deploy-time V3 runtime assertion (contracts.md §7.2, spec §12.28):
+    ///      `NPM.factory() == v3Factory` proves the registry-sourced NPM and Factory addresses on
+    ///      4663 belong to the same deployment — fail-closed otherwise.
+    function factory() external view returns (address);
+
+    /// @notice The WETH9 this NPM wraps ETH through (IPeripheryImmutableState).
+    /// @dev Deploy-time V3 runtime assertion (contracts.md §7.2, spec §12.28):
+    ///      `NPM.WETH9() == 0x0Bd7…AD73` binds the periphery to the canonical 4663 WETH used by the
+    ///      curve/migrator WETH leg — fail-closed otherwise.
+    function WETH9() external view returns (address);
+
     /// @notice Position data; used by tests to verify the minted full-range position
     ///         (gate-2 row 6 "position value ratio at target", contracts.md §6).
     function positions(uint256 tokenId)

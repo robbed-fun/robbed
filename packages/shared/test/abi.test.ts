@@ -9,7 +9,7 @@ import {
   bondingCurveEventsAbi,
   curveFactoryEventsAbi,
   graduatedEvent,
-  hoodpadEventsAbi,
+  robbedEventsAbi,
   launchTokenEventsAbi,
   tokenCreatedEvent,
   tradeEvent,
@@ -93,10 +93,10 @@ describe("artifact groupings (one source for Ponder config + frontend decoding)"
   });
 
   it("combined artifact covers the six ratified event families (§12.15-16), all type:'event'", () => {
-    expect(hoodpadEventsAbi.length).toBe(6);
-    for (const ev of hoodpadEventsAbi) expect(ev.type).toBe("event");
+    expect(robbedEventsAbi.length).toBe(6);
+    for (const ev of robbedEventsAbi) expect(ev.type).toBe("event");
     // selectors are pairwise distinct
-    const selectors = hoodpadEventsAbi.map((e) => toEventSelector(e as AbiEvent));
+    const selectors = robbedEventsAbi.map((e) => toEventSelector(e as AbiEvent));
     expect(new Set(selectors).size).toBe(6);
   });
 });

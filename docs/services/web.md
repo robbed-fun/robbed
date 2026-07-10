@@ -1,4 +1,4 @@
-# hoodpad web frontend — service design (`apps/web`)
+# ROBBED_ web frontend — service design (`apps/web`)
 
 **Status:** Design v1.0 — drives M3 implementation. Documentation-first: building from this doc should be a transcription exercise.
 **Owner:** hoodpad-frontend. Consumes contract types from `packages/shared` only; any missing indexer/API data is a gap reported to hoodpad-indexer via the orchestrator — never faked client-side.
@@ -31,47 +31,75 @@ Cross-cutting product rules implemented by this app:
 - **No hardcoded market metrics (§2):** no inline ETH/USD, TVL, volume, or mcap constants anywhere in code or copy. Everything is computed from live on-chain reads or indexer data, or cited with source + timestamp.
 - **Per-token OG image (§5.2, §9):** the viral share unit; SSR'd, renders with zero client JS.
 
-Stack (§9): Next.js 15 App Router on Bun · wagmi v2 + viem + RainbowKit (custom chain 4663) · TanStack Query + WS · `lightweight-charts` · Tailwind dark-first · satori OG · Playwright e2e on fork + Vitest units.
+Stack (§9): Next.js 16 + React 19 (exact majors, no ranges — spec §12.37) App Router on Bun · wagmi v2 + viem + RainbowKit (custom chain 4663) · TanStack Query + WS · `lightweight-charts` · Tailwind dark-first · satori OG · Playwright e2e on fork + Vitest units.
 
 ---
 
 ## 2. App structure
 
-### 2.1 Directory layout
+### 2.1 Directory layout — Feature-Sliced Design (FSD)
+
+`apps/web` is structured with **Feature-Sliced Design** (https://feature-sliced.design). This is a hard rule for all frontend work (M3-2 onward); consult the FSD docs (Layers, Slices & Segments, Public API, and the **Next.js guide**) before placing code — do not improvise the methodology.
+
+**Layers & the strict downward import rule** (top → bottom): `app → views → widgets → features → entities → shared`. A module may import ONLY from layers strictly below it — never upward, never sideways between two sibling slices on the same layer. Cross-slice access goes ONLY through each slice's `index.ts` **public API**; intra-slice files use relative imports (and must not import their own barrel, to avoid cycles).
+
+**Next.js App Router adaptation** (per the FSD Next.js guide): the Next `app/` directory is **routing only** — thin `page.tsx`/`layout.tsx` files that re-export a `views/*` screen. All real components + logic live under `src/`. Since a root-level `app/` is present, Next ignores `src/app/`, so FSD's canonical `app` layer safely lives at `src/app/` and the `pages` layer is renamed **`views`** to avoid the Next `pages` collision.
 
 ```
 apps/web/
-├── app/
-│   ├── layout.tsx                     // root layout: html.dark, fonts, <Providers>, header/nav, footer
-│   ├── providers.tsx                  // "use client": Wagmi + QueryClient + RainbowKit + WsProvider
-│   ├── page.tsx                       // Discover (§5.1) — server component shell
-│   ├── t/[address]/
-│   │   ├── page.tsx                   // Token Detail (§5.2) — SSR shell + client islands
-│   │   ├── opengraph-image.tsx        // satori OG image (§5.2, §9) — see §6 of this doc
-│   │   └── not-found.tsx              // unknown/hidden token
-│   ├── launch/page.tsx                // Launch flow (§5.3) — client-heavy form
-│   ├── globals.css                    // Tailwind, design tokens (§7 of this doc)
-│   └── error.tsx / not-found.tsx      // global boundaries
-├── components/
-│   ├── discover/    // KingOfTheHillHero, LaunchTicker, TokenGrid, TokenCard, SortTabs, FilterTabs, SearchBox
-│   ├── token/       // PriceChart, TradeWidget, TrustPanel, TradeFeed, HolderTable, TokenInfo, CreatorLink
-│   ├── launch/      // LaunchForm, ImageUpload, EconomicsPanel, InitialBuyField, LaunchProgress
-│   └── shared/      // ConfirmationBadge, ProgressBar, AddressLink, TokenAvatar, Amount, UsdAmount,
-│                    //   RelativeTime, EmptyState, ErrorState, SkeletonRow
-├── lib/
-│   ├── chain.ts       // defineChain(4663) — the ONLY file allowed an inline 0x literal (WETH)
-│   ├── addresses.ts   // GENERATED from deploy output / M0 constants — Router, CurveFactory, LPFeeVault,
-│   │                  //   V3Migrator, treasury, V3 factory/NPM/Quoter/SwapRouter. Never hand-edited.
-│   ├── wagmi.ts       // wagmi config + RainbowKit connectors
-│   ├── api.ts         // typed REST client over packages/shared contract types
-│   ├── ws.ts          // WS client: multiplexed channels, reconnect, cache patching
-│   ├── quotes.ts      // thin wrapper re-exporting curve quote math from packages/shared
-│   ├── trades.ts      // optimistic trade store + reconciliation reducer (§4 of this doc)
-│   ├── og.ts          // OG data fetch + layout helpers for satori
-│   └── format.ts      // amount/percent/age formatting (no USD without source, §2)
-├── e2e/               // Playwright specs (§8 of this doc)
-└── tests/             // Vitest units
+├── app/                          // Next 16 router — ROUTING ONLY (thin re-exports)
+│   ├── layout.tsx                //   html.dark + self-hosted IBM Plex Mono (src/app/fonts.ts) + ROBBED_ metadata
+│   ├── page.tsx                  //   Discover: `export { default } from "@/views/discover"`
+│   ├── not-found.tsx             //   global 404 boundary
+│   ├── t/[address]/              //   Token Detail (M3-6/8): page.tsx → @/views/token-detail; opengraph-image.tsx
+│   ├── create/page.tsx           //   Create (RENAMED from /launch — ROBBED_ redesign): → @/views/create
+│   └── portfolio/page.tsx        //   Portfolio (NEW — ROBBED_ redesign): → @/views/portfolio
+│       //   /launch → /create redirect lives in next.config.ts (non-permanent)
+└── src/
+    ├── app/                      // FSD app layer: providers.tsx (Wagmi→Query→RainbowKit(green/none)→Ws),
+    │                             //   globals.css (ROBBED_ tokens), fonts.ts + fonts/ (vendored Plex Mono, OFL)
+    ├── views/                    // FSD pages layer (renamed): one composed screen per route
+    │   ├── discover/             //   ui/DiscoverView (SSR shell + islands), ui/DiscoverControls; index.ts
+    │   ├── token-detail/         //   ui/TokenDetailView (SSR) + client island; model/metadata.ts
+    │   ├── create/               //   ui/CreateView (renamed from views/launch — ROBBED_ redesign)
+    │   └── portfolio/            //   ui/PortfolioView — Phase-F SHELL; Portfolio page agent fills it
+    ├── widgets/                  // large self-contained page regions; each = ui/ + optional model/ + index.ts
+    │   ├── app-header/           //   ROBBED_ header (wordmark·nav·search·+CREATE·wallet), mobile-first collapse
+    │   ├── mobile-nav/           //   bottom nav < md (discover · portfolio · + create)
+    │   ├── site-header/          //   LEGACY — superseded by app-header; kept additively until Phase P cleanup
+    │   ├── token-grid/           //   ui/TokenGrid, ui/TokenGridSkeleton, model/live.ts (WS→cache patch, TokensPage)
+    │   ├── king-of-the-hill-hero/
+    │   ├── launch-ticker/
+    │   ├── price-chart/ · trade-widget/ · trade-feed/ · trust-panel/ · holder-table/ · token-og/
+    │   └── live-status-banner/
+    ├── features/                 // user actions / interactions
+    │   ├── search-tokens/        //   ui/SearchBox + search query logic
+    │   ├── launch-token/         //   the create-token flow (slice name unchanged by the /create route rename)
+    │   └── connect-wallet/       //   ui/WalletConnectButton (RainbowKit ConnectButton wrapper)
+    ├── entities/                 // business-domain models: ui/ + model/ + (api/ when a slice needs its own) + index.ts
+    │   ├── token/ · trade/ · holder/ · curve/
+    │   └── //   FUTURE (Phase P): entities/portfolio (holdings/activity per address)
+    └── shared/                   // business-agnostic; importable by everything, imports nothing above it
+        ├── ui/                   //   ROBBED_ atomic kit (MonoText/MonoLabel, Chip, Tab/TabBar, SideBadge, Delta,
+        │   │                     //     StatCell, CursorTag, Wordmark, Divider, AddressChip, LiveDot, AmountInput)
+        │   │                     //     + pre-redesign display atoms (Amount, UsdAmount, ProgressBar, RelativeTime,
+        │   │                     //     EmptyState, ErrorState, AddressLink, TokenAvatar) + index.ts
+        │   └── kit/              //   vendored shadcn primitives (button, input, textarea, …) restyled to the
+        │                         //     terminal tokens — color-lint EXEMPT
+        ├── lib/                  //   chain.ts (defineChain 4663; WETH from @robbed/shared), wagmi.ts, ws.tsx,
+        │                         //     ws-client.ts, query-keys.ts, format.ts, env.ts, utils.ts, wallets/, og/
+        ├── api/                  //   index.ts — typed REST client over the frozen @robbed/shared contract
+        └── config/              //   addresses.ts (GENERATED — never hand-edited), copy.ts (LP/AMM copy + BRAND)
+
+apps/web/tests/                   // Vitest units (outside the layer graph)
+apps/web/e2e/                     // Playwright specs (§8 of this doc)
 ```
+
+**Placement decision rule** (apply when unsure): business-agnostic → `shared`; a domain noun → `entity`; a user verb/action → `feature`; a page-region composition of several → `widget`; a whole screen → `view`. Notable calls made in the M3 restructure: the token sort/filter vocabulary lives in `entities/token/model` (a property of the token domain, consumed by both the grid widget and the Discover view); the grid's WS→cache patch (`TokensPage`, `patchTradePrice`) lives in `widgets/token-grid/model` (it patches the grid's paginated page shape, a widget concern); the optimistic trade reducer lives in `entities/trade/model` (the trade domain model); the base REST client stays in `shared/api` (business-agnostic typed client), so entities do not each shatter it into per-entity `api/` files unless a real need arises.
+
+**Path alias:** `@/*` → `src/*` (tsconfig `paths` + vitest `resolve.alias`). Root `app/` files reach into `src` via `@/…` too (e.g. `@/app/globals.css`, `@/views/discover`).
+
+**Import-boundary linter:** TODO — wire the FSD `steiger` linter (or `eslint-plugin-boundaries`) once the frontend gains an ESLint/lint pipeline; deferred from the M3 restructure to avoid touching the shared pnpm lockfile. Boundaries are currently enforced by review + the layer layout above.
 
 ### 2.2 Route map — SSR vs client boundaries
 
@@ -80,7 +108,8 @@ apps/web/
 | `/` | Server component; initial grid/hero/ticker data fetched server-side from API (short revalidate, ~5s) so the page paints with content | `LaunchTicker` (WS), `TokenGrid` (TanStack Query + WS patch), `SearchBox`, sort/filter tabs (URL searchParams-driven) |
 | `/t/[address]` | **SSR required** (§5.2): server component fetches token summary + metadata for full HTML + OG/meta tags; must be meaningful without client JS (crawlers see name, ticker, mcap, progress, description) | `PriceChart`, `TradeWidget`, `TrustPanel` (live on-chain reads), `TradeFeed` (WS), `HolderTable` |
 | `/t/[address]/opengraph-image` | Route handler, satori → PNG. No client JS by construction | — |
-| `/launch` | Server shell (economics copy is static-per-deploy except fee values, which are read live); form is a client component | `LaunchForm` (entire flow) |
+| `/create` | (renamed from `/launch` — ROBBED_ redesign; `/launch` redirects) Server shell (economics copy is static-per-deploy except fee values, which are read live); form is a client component | `LaunchForm` (entire flow) |
+| `/portfolio` | NEW (ROBBED_ redesign; was §5.4 Phase-2). Phase-F shell; Phase-P page agent fills: address header, stat cells, HOLDINGS/ACTIVITY/CREATED tabs, holdings table — live data only (§2) | wallet-derived content (entire screen) |
 
 Rules:
 - Server components fetch via `lib/api.ts` with `fetch` caching (`revalidate`), never through TanStack Query.
@@ -144,7 +173,7 @@ Order (outermost first): `WagmiProvider` → `QueryClientProvider` → `RainbowK
 | Curve reserves, graduation threshold, pause flags, deploy fee, quote inputs | **On-chain via viem/wagmi** | Trust panel demands live chain reads, not cached API values (§5.2); fees/thresholds are contract constants (§6.4) — reading them live is how we avoid hardcoding |
 | ETH/USD | `GET /v1/eth-usd` → `{ price, source, asOf }` (api.md §3.5; backed by `eth_usd_snapshots`) | §2: never hardcode; display always carries source + timestamp |
 
-ABIs: imported from the shared/generated package (deploy artifacts → `packages/shared` codegen). **No ABI duplicated or hand-written in `apps/web`.**
+ABIs: imported from the **full read-function ABIs in `packages/shared/src/abi/`** — the compilation-time codegen artifact ratified in spec §12.38 (emitted from `contracts/out/*.json` by `forge build`, no deploy needed; contracts.md §7.4). This is what unblocks every M3-5 live read (`reserves()`, `phase()`, `quoteBuy/quoteSell`, per-token `TRADE_FEE_BPS`, `totalSupply()`, factory `config()`); the deployed **addresses** come from the separate deploy-time codegen (`lib/addresses.ts`). **No ABI duplicated or hand-written in `apps/web`.** The Trust-panel trade-fee figure is read live from the **curve's per-token `TRADE_FEE_BPS`** (never the factory config, which governs future curves only — §12.40d), matching the API's `trust.feePolicy.tradeFeeBps` source.
 
 Degraded modes: WS down → banner "Live updates degraded — reconnecting", queries fall back to 5s polling on visible views. RPC down → Trust panel live reads show explicit "on-chain read unavailable" (never silently substitute API values for the reserve figures). API down → SSR error boundary with retry.
 
@@ -274,7 +303,7 @@ These are **advisory estimates** (spec §8.5 is labeling-only, never gates anyth
 `GET /v1/tokens/:address/holders?limit=20`: rank, address (flags: **creator / bonding curve / LP fee vault**), balance, % of supply, bar. Refresh on WS trade events (throttled ≥5s). Empty pre-first-trade: curve row at ~100%. **(v1.2, spec §5.2/§8.5) Funding-cluster grouping:** rows carrying the same `clusterId` (shared gas-funding source, from the API `botFlags`/`clusterId` fields) are **visually grouped** and `botFlags` (`farm`/`sniper`/`programmatic`/`wash`/`arb_exit`) render as small advisory badges — heuristic labels only, never presented as fact, never gating anything.
 
 **Page states**
-- SSR 404 → `not-found.tsx` ("Token not found on hoodpad" + address echo + Blockscout link).
+- SSR 404 → `not-found.tsx` ("Token not found on ROBBED_" + address echo + Blockscout link).
 - Moderation-hidden token (§8.4): render a minimal "listing hidden" page — moderation gates listing, never chain state; the Blockscout link remains.
 - Brand-new token (arriving from Launch): page renders from WS/optimistic data immediately; chart shows "first trades incoming" empty state until candles exist.
 
@@ -383,25 +412,41 @@ Global mutations follow the same pattern: token creation (Launch stepper), gradu
 The per-token OG image is **the viral share unit** — a link paste into X/Telegram/Discord must sell the token at a glance, with zero client JS.
 
 - **Route:** `app/t/[address]/opengraph-image.tsx` (Next.js file convention → auto `og:image`/`twitter:image` meta on the page). 1200×630 PNG via satori.
-- **Runtime:** we self-host on Bun — do **not** assume the Edge runtime. Use `ImageResponse` from `next/og` on the Node-compatible runtime, or raw `satori` + `@resvg/resvg-js` in a route handler if `next/og` misbehaves under Bun. Verify at M3 start (this doc §9.7); the layout code is runtime-agnostic either way.
+- **Deploy target = Cloudflare Workers via OpenNext** (`@opennextjs/cloudflare`, spec §12.45 / deploy-komodo-cloudflare.md Part B; NOT Bun self-host, NOT Pages-edge). `apps/web/wrangler.jsonc` (`name: robbed`, `nodejs_compat` + `global_fetch_strictly_public`, `ASSETS` + R2 `ASSETS_BUCKET`/`NEXT_INC_CACHE_R2_BUCKET` → `robbed-assets`), `apps/web/open-next.config.ts` (`r2IncrementalCache`, ISR day one), `next.config.ts` dev hook `initOpenNextCloudflareForDev()`. Scripts: `build:cf` / `deploy:cf` / `preview:cf` / `cf-typegen`. All `NEXT_PUBLIC_*` are build-inlined → set as Workers **build vars** (root `.env.example`); the env reads (`shared/lib/env.ts`) tolerate missing vars during `next build` (placeholder, no hard-fail) but still fail loud at runtime.
+- **Runtime / raster backend (UPDATED — supersedes the earlier "self-host on Bun / raw resvg-js" note; web-7/M3-8 retargeted to workerd):** the OG raster is **Next's `ImageResponse` from `next/og`** (satori → **resvg-WASM**, bundled by Next). `workerd` **cannot load native N-API addons**, so the native `@resvg/resvg-js` backend was removed (dep + `serverExternalPackages` entry gone; `satori` direct dep also dropped — `next/og` bundles it). `ImageResponse` is the workerd-native path and also renders `image/png` 1200×630 in the Vitest Node env, so `tests/og.test.ts` still proves the M3-8 contract without booting Next. Fonts are **base64-embedded** (`shared/lib/og/fonts-data.ts`, generated) and decoded at module scope — Workers has no filesystem, so the previous `node:fs.readFileSync` of the `.ttf` files could not run there. `shared/lib/og/render.ts` keeps the `renderOgPng(element, { fonts })` signature so the card layout + tests are unchanged. Verified: `build:cf` produces `.open-next/worker.js` with no `.node` addon; local `wrangler dev` boots the worker on workerd (both R2 bindings resolve, static route 200).
 - **Content (spec-exact, §5.2):** chart snapshot + mcap + graduation progress —
   - token image (from R2 CDN), name, ticker;
   - **price sparkline/mini-candles** rendered as inline SVG paths from `GET /v1/tokens/:address/candles?interval=15m&from=<now−12h>&to=<now>` (≈ 48 buckets; the candles endpoint takes `from`/`to`, **not** `limit` — api.md §3.4; the OG route computes the window from the current time). Satori renders SVG; no canvas;
   - **mcap** in ETH (USD secondary only if the ETH/USD endpoint responds — with source label; a fetch failure degrades to ETH-only, never a stale constant);
   - **graduation progress bar** + % (or "Graduated → Uniswap V3" band);
   - brand mark + `soft-confirmed trading` tag line (AMM framing, §1).
-- **Data path:** server-side fetch from the API (token summary + candles) with `revalidate: 60`; response headers `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`. Unknown token → 404. Fonts loaded once at module scope (Inter, weights 400/700, subset).
+- **Data path:** server-side fetch from the API (token summary + candles) with `revalidate: 60`; response headers `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`. Unknown token → 404. Fonts loaded once at module scope (Inter, weights 400/700; base64-embedded per the workerd note above).
 - **SSR of the page itself** (§5.2): Token Detail's server-rendered HTML includes title/description/OG tags and the meaningful above-the-fold content (name, ticker, mcap, progress, trust summary) so crawlers and JS-off clients get the pitch — the interactive chart/widget hydrate on top.
 
 ---
 
-## 7. Design system (§9: dark, dense, fast)
+## 7. Design system (§9: dark, dense, fast) — **ROBBED_ terminal skin (redesign Phase F, 2026-07-10)**
 
-- **Component library: shadcn/ui (ratified — spec §12.24).** Design is not ready (§13 name/brand open), so the library must be trivially re-themeable: shadcn/ui is Tailwind-native (our §9 stack), components are **vendored into `apps/web/components/ui/` via the shadcn CLI** — copied code we own, no runtime component dependency — built on Radix primitives, RSC/Next-15-compatible, dark-first. Domain components in `components/discover|token|launch|shared` compose the `ui/` primitives.
-- **Re-theming strategy = token swap.** All color/spacing/radius/typography decisions route through the semantic CSS custom-property tokens below; shadcn components consume only those tokens. When the final design lands, it is applied by (a) swapping token *values* in `globals.css` and (b) selective restyles of individual vendored components — never a rewrite. **Rule (lint-enforced, §8.3): no component — vendored or domain — may carry bespoke styling that bypasses the token system.** No raw hex/rgb/hsl literals, no arbitrary-value color classes (`bg-[#…]`) outside `globals.css`; the grep in §8.3 blocks CI on violations.
-- **Dark-first, dark-only in v1.** `<html class="dark">` hard-set; Tailwind dark palette is the default token set; no theme toggle (ratified — spec §12.23). Zero flash-of-light-theme by construction.
-- **Tokens (`globals.css`, Tailwind v4 `@theme`):** proposed — `--bg: #0a0c10`, `--surface: #11151c`, `--surface-2: #161b24`, `--border: #232a36`, `--text: #e6e9ef`, `--muted: #8b93a3`, `--buy/up: #22c55e`, `--sell/down: #ef4444`, `--accent: #7c3aed` (brand pending — §13 name/brand open), `--warn/soft-confirmed: #f59e0b`, `--posted: #3b82f6`, `--finalized: #22c55e`. Exact hues are art-directable; the semantic token names are the contract. shadcn's own theme variables (`--background`, `--primary`, …) are mapped onto these semantic tokens in `globals.css` — one indirection layer, one place to re-theme.
-- **Density:** base `text-sm/14px`, `leading-tight`; data tables 32px rows, `tabular-nums` for every numeric column; cards `p-3`; no hero whitespace. Terminal-adjacent, not terminal-cosplay.
+> **SUPERSEDES the M3-2 look** (user-directed redesign; see `docs/design/robbed-redesign-plan.md`).
+> Brand: **`ROBBED_`** (blinking green `_` cursor motif — `<Wordmark/>`/`<CursorTag/>`; `BRAND` constant
+> in `shared/config/copy.ts`). Deviations recorded for hoodpad-architect §12: (1) four pages incl.
+> Portfolio (overrides §5 "exactly three" / §5.4 Phase-2); (2) `/launch`→`/create`; (3) brand
+> ROBBED_→ROBBED_ (§13 brand question resolved by direction); (4) terminal-mono skin supersedes the
+> §12.24 shadcn look (primitives remain, restyled); (5) mobile-first primary layout. Protocol rules
+> (§2 live-metrics, §6.5 sells-open, LP copy, §2.1 tiers) UNCHANGED.
+
+- **Component model: atomic × FSD.** Atoms/molecules = `shared/ui` (MonoText/MonoLabel, Chip, Tab/TabBar, SideBadge, Delta, StatCell, TokenAvatar, ProgressBar, CursorTag, Wordmark, Divider, AddressChip, LiveDot, AmountInput); shadcn primitives stay vendored under `shared/ui/kit` restyled to tokens; organisms = `widgets/*`; templates = `views/*`.
+- **Re-theming = token swap (unchanged rule, lint-enforced §8.3):** no raw hex/rgb/hsl or arbitrary color classes outside `globals.css` (+ `shared/ui/kit` and non-presentational `shared/lib|api|config`).
+- **Dark-only** (`<html class="dark">`, §12.23) — the terminal skin is inherently dark; no toggle.
+- **Tokens (`globals.css`, Tailwind v4 `@theme`) — EXACT values, sampled from `docs/Robbed.html` computed styles (Playwright, 2026-07-10):**
+  - surfaces `--color-bg #0B0D0B` · `--color-surface #0F130F` · `--color-surface-2 #141914` · `--color-border #1C221C` · `--color-border-soft #141914` (row hairlines) · `--color-border-strong #2A342A` · `--color-active #1C221C` (active tab/chip fill)
+  - text ramp `--color-text #EDF3ED` · `--color-text-secondary #C9D3C9` · `--color-text-tertiary #8FA08F` · `--color-muted #6E7A6E` · `--color-faint #54604F`
+  - accents `--color-green #4ADE80` (primary/BUY/+Δ/CTAs) · `--color-green-dim #16301F` · `--color-green-soft #2E4A34` (up-candles) · `--color-red #F87171` (SELL/−Δ) · `--color-red-dim #4A2E2E` (down-candles) · `--color-purple #A78BFA` (GRADUATE) · `--color-accent = green`, `--color-accent-foreground #0B0D0B`
+  - tiers (§2.1) `--color-soft-confirmed #F59E0B` · `--color-posted #3B82F6` · `--color-finalized #4ADE80` (kept distinct from trade hues; mockup shows none — Phase-F decision)
+  - type: **IBM Plex Mono self-hosted** (`next/font/local`, `src/app/fonts/`, OFL — no external fetch/CSP-safe), weights 400/500/600; mono-everywhere (`--font-sans` == `--font-mono`); scale `--text-2xs 10.5px` / `xs 11` / `sm 12` / `base 13` / `md 14` (wordmark) / `lg 15` / `xl 17`; `--tracking-label 0.12em` (wordmark + micro-labels)
+  - radii: **square** — `--radius-sm/md/lg/xl: 0px` (every sampled control is 0); `rounded-full` only for avatars + the live dot; `--animate-blink` = the cursor motif
+  - RainbowKit theme: `darkTheme({ accentColor: "var(--color-green)", borderRadius: "none" })` — CSS-var indirection keeps hexes out of `providers.tsx`.
+- **Density:** base 13px mono, `leading-[1.45]`; hairline `border-soft` row dividers (tape rows ≈45px, pad `11px 24px` desktop); `tabular-nums` for every numeric column; flat — no shadows.
 - **Speed:** skeletons with fixed dimensions (no CLS); WS patches over refetch loops; route prefetch on card hover; `next/image` for token images via R2 CDN; no heavyweight animation lib — CSS transitions only; ticker animates with CSS transform.
 - **lightweight-charts config:** `layout.background: --bg`, grid lines `--border` at low alpha, up/down colors = buy/sell tokens, `timeScale.secondsVisible: true` for 1s/15s intervals, `rightPriceScale` autoscale, crosshair magnet. Chart height 420px desktop / 280px mobile.
 - **Mobile:** single column — header → chart → TradeWidget (sticky Buy/Sell bottom bar) → TrustPanel → TradeFeed → holders → info. Discover grid becomes a card list; ticker stays. All tap targets ≥40px despite density.
@@ -466,10 +511,14 @@ Plus: LP sentence exists **only** as the single exported constant (grep for the 
 8. **LP wording divergence** — **RESOLVED (spec §12.14).** Canonical sentence confirmed: "LP principal permanently locked; trading fees claimable by treasury." Spec §5.2 amended; single exported constant stands.
 9. **Dark-only v1** — **RESOLVED (spec §12.23).** Dark-only, no toggle.
 
-**Still open (owners in spec §13):**
+**M3-1 runtime-check dispositions (recorded 2026-07-10, hoodpad-frontend; for architect §12/§13):**
 
-6. **WalletConnect projectId & Robinhood Wallet verification** — env/ops item; confirm `robinhoodWallet` RainbowKit connector works against chain 4663 (M3 start, hoodpad-frontend verifies, architect records).
-7. **Runtime verifications at M3 start** — `next/og`/satori under Bun self-hosting (fallback: raw satori + resvg route handler); Multicall3 presence on 4663 (affects wagmi batch reads for the Trust panel).
+6. **WalletConnect projectId & Robinhood Wallet verification** — **NEEDS-USER (unresolved by design; env/ops).**
+   - **projectId:** `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` is a per-org secret obtainable only at cloud.walletconnect.com — the user must furnish it. Disposition (`src/shared/lib/wagmi.ts`): injected (browser-extension) wallets work in **dev with no projectId**; the WalletConnect group and the Robinhood Wallet entry are **omitted from the wallet list until the id is set** (never a broken connector). `.env.example` carries the `web-6 NEEDS-USER` note.
+   - **Robinhood Wallet connector:** docs-first finding — RainbowKit 2.2.11 ships **no `robinhoodWallet`** export (verified: no entry in `walletConnectors/`; GitHub code search `robinhood repo:rainbow-me/rainbowkit` → 0 hits). The `robinhoodWallet` in web.md §2.4 was an assumed export. Interim (safest-correct, `src/shared/lib/wallets/robinhoodWallet.ts`): a **custom RainbowKit wallet wrapping the shared WalletConnect connector** via the documented `getWalletConnectConnector` (web.md §2.4: "WalletConnect-based under the hood"). It is **UNVERIFIED on a real Robinhood Wallet on chain 4663** — no on-device / deep-link / WC-metadata test, and it only appears when a projectId is present. **NEEDS-USER:** a real Robinhood Wallet device connection test on 4663 + official WC metadata + brand icon (§13 brand pending). Flagged to hoodpad-architect (§13).
+7. **Runtime verifications at M3 start** — **RESOLVED (both legs).**
+   - **`next/og`/satori under Bun self-hosting:** RESOLVED — M3-8 does **not** use `next/og`. The OG route (`app/t/[address]/opengraph-image.tsx`) is a metadata Route Handler that calls **raw `satori` + `@resvg/resvg-js`** (`src/widgets/token-og` → `src/shared/lib/og/render.ts`), so there is no dependency on `next/og`'s runtime behavior under Bun. Proven by `tests/og.test.ts` (returns `image/png` 1200×630). No `ImageResponse`/edge assumption anywhere.
+   - **Multicall3 on 4663:** **UNCONFIRMED** — canonical `0xcA11…` deployment on 4663 is not verified. Disposition: `src/shared/lib/chain.ts` **omits** `contracts.multicall3` (commented, with rationale); Trust-panel batch reads use **parallel `readContract` / `useReadContracts` without a multicall aggregator** (viem falls back to individual `eth_call`s when no `multicall3` is configured). No behavior depends on Multicall3; if/when it is confirmed on 4663, adding the address is a pure optimization. Flagged to hoodpad-architect (§13) as an infra confirmation item, not a blocker.
 10. **Large-value disclosure threshold** — §2.1 requires posted/finalized disclosure on "large-value displays"; ETH notional threshold needs an M0/architect number before M3 exit (config value, not a literal). Spec §13.
 11. **Pending §13 upstream:** V3 Factory/NPM/Quoter/SwapRouter addresses on 4663 **RESOLVED (spec §12.28)** — recorded in CLAUDE.md/constants; the post-grad widget + `addresses.ts` codegen consume them (codegen still comes from the M1 deploy pipeline, never hand-edited). Name/domain/brand (blocks OG brand mark and header); legal wrapper/ToS jurisdiction (blocks footer links); final curve constants + graduation tick (M0 — blocks economics display values, all read live regardless) remain open.
 

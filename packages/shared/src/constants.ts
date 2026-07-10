@@ -19,6 +19,26 @@ export const CHAIN_ID = 4663;
 export const WETH_ADDRESS = "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73" as const;
 
 /**
+ * Canonical Uniswap V3 deployment on Robinhood Chain (chain 4663) — confirmed
+ * and recorded as source of truth in spec §12.28 (2026-07-09; closes O-4 /
+ * OI-13 / web-11 / E-1). Transcribed VERBATIM from §12.28 — never invented,
+ * casing preserved as recorded (also mirrored in M0 `out/constants.json.external`
+ * and contracts.md §4). These are the FIXED external registry addresses (the
+ * chain's Uniswap deployment), distinct from the per-deployment robbed contract
+ * addresses that M1-14 codegen emits — no overlap; downstream imports here.
+ *
+ * Deploy-time runtime assertions remain MANDATORY and fail-closed (contracts.md
+ * §7.2): `factory.feeAmountTickSpacing(10000) == 200`, `NPM.factory() == factory`,
+ * `NPM.WETH9() == WETH_ADDRESS`. The indexer asserts each is non-zero at startup.
+ */
+export const UNISWAP_V3 = {
+  factory: "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+  positionManager: "0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3",
+  swapRouter02: "0xcaf681a66d020601342297493863e78c959e5cb2",
+  quoterV2: "0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7",
+} as const;
+
+/**
  * The canonical LP sentence — single string constant everywhere, including the
  * §5.2 Trust panel (spec §12.14; CLAUDE.md hard rule). Never "burned".
  */
@@ -48,13 +68,17 @@ export const MAX_CANDLE_BUCKETS = 5000;
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
 /**
- * Metadata field limits (api.md §3.2 POST /v1/metadata).
- * NOTE (flagged to hoodpad-architect): contracts.md §2.2 validates on-chain
- * `bytes(name).length in [1,32]` while api.md caps name at 64 — see the
- * cross-doc discrepancy report. Values below transcribe api.md verbatim.
+ * Metadata name/ticker limits are **UTF-8 BYTE** limits (§12.30 DECIDED,
+ * 2026-07-09; findings X-1), NOT character/code-unit limits. They equal the
+ * on-chain gate `bytes(name).length ∈ [1,32]` / `bytes(symbol).length ∈ [1,10]`
+ * (contracts.md §2.2). Enforced via a `TextEncoder` byte-length refinement
+ * (`byteBoundedString`, text.ts) — never `.max()`, which counts UTF-16 code
+ * units and would let a multibyte name pass the API and then revert at
+ * `createToken`. `TextEncoder` emits UTF-8, byte-identical to Solidity
+ * `bytes(x).length`, so API acceptance ⇒ on-chain acceptance by construction.
  */
-export const METADATA_NAME_MAX = 64;
-/** Ticker ≤10 (spec §5.3; contracts.md §2.2 validates bytes(symbol).length in [1,10]). */
+export const METADATA_NAME_MAX = 32;
+/** Ticker ≤10 UTF-8 bytes (§12.30; contracts.md §2.2 `bytes(symbol).length ∈ [1,10]`). */
 export const METADATA_TICKER_MAX = 10;
 /** Description ≤500 (spec §5.3). */
 export const METADATA_DESCRIPTION_MAX = 500;

@@ -1,0 +1,19 @@
+{
+  "//": "ROBBED_ gate-1 Slither config (spec §10 gate 1, contracts.md §6). Invoked in CI by crytic/slither-action from the REPO ROOT as `slither contracts --config-file contracts/slither.config.json --fail-on low`; run it the same way locally so finding IDs (and the triage DB) match. Every remaining finding is dispositioned: blanket-informational style classes are excluded here with rationale; all Low/Medium/High instances are per-instance triaged in slither.db.json (detectors stay LIVE, so any future code re-triggers them). Human-readable dispositions: slither.triage.json.",
+
+  "detectors_to_run": "all",
+  "exclude_dependencies": true,
+  "exclude_optimization": true,
+  "filter_paths": "contracts/test/|contracts/script/|contracts/lib/|/lib/|test/mocks/",
+  "triage_database": "contracts/slither.db.json",
+  "show_ignored_findings": false,
+
+  "detectors_to_exclude": "naming-convention,low-level-calls,too-many-digits,cyclomatic-complexity,unindexed-event-address",
+  "exclude_informational_rationale": {
+    "naming-convention": "Deliberate: UPPER_SNAKE_CASE public view getters (e.g. TRADE_FEE_BPS(), VIRTUAL_ETH_0(), MAX_EARLY_BUY(), FEE_TIER()) mirror the per-curve immutables and are the CANONICAL ABI names consumed by the indexer/frontend read paths (contracts.md §7.4, spec §12.38). Renaming would break the cross-service ABI contract. Style-only, no security impact.",
+    "low-level-calls": "Deliberate: ETH is sent via `.call{value:}(\"\")` with typed custom-error reverts (spec §5.4) — the only correct primitive for the pull-payment/trader-payout paths (BondingCurve._sendEth, Router._sendEth). Recipients are the factory treasury, the seller, or the graduation caller; each site is nonReentrant + CEI.",
+    "too-many-digits": "Single site: CurveFactory._computeCurveAddress uses the CREATE2 init-code keccak literal — inherent to deterministic address precomputation (contracts.md §2.2 decision #1).",
+    "cyclomatic-complexity": "Informational; BondingCurve.buy is the graduation-clamp + anti-sniper + slippage path and is intentionally linear/branchy for auditability, not decomposed across trust boundaries.",
+    "unindexed-event-address": "RouterSet(address)/MigratorSet(address) are one-time deploy-wiring admin events (contracts.md §7.2 step 5); not indexed by the Ponder pipeline (spec §8), indexing them buys nothing."
+  }
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hoodpad pre-commit: the entire CI validation suite runs before every commit
+# ROBBED_ pre-commit: the entire CI validation suite runs before every commit
 # (project policy). Mirrors .github/workflows/ci.yml via scripts/validate.sh.
 # Emergency bypass: SKIP_VALIDATION=1 git commit …  (CI still enforces everything)
 

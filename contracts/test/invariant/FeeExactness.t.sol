@@ -12,26 +12,31 @@ import {CurveHandler} from "test/invariant/handlers/CurveHandler.sol";
 ///         native-ETH balance must equal the ghost sum exactly. Fees are computed IN-CONTRACT
 ///         only — never caller-supplied (spec §4.1); this invariant is what makes any drift
 ///         (rounding, double-charge, skimming) a hard failure.
+import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
+
+/// forge-config: default.invariant.fail-on-revert = true
 contract FeeExactnessInvariant is Test {
     CurveHandler internal handler;
 
     function setUp() public {
         handler = new CurveHandler();
         targetContract(address(handler));
-        // M1: set `fail_on_revert = true` for this suite.
     }
 
-    /// @notice EXACT ASSERTION (contracts.md §6 row 3):
-    ///         treasury.balance == ghost_feeSum, to the wei.
-    /// @dev Native-ETH leg only: creation fee + trade fees + graduation fee are all paid in ETH.
-    ///      Graduation WETH dust also goes to the treasury but as WETH (spec §12.13) — asserted
-    ///      separately in M1 unit tests, deliberately excluded from this ETH-exactness identity.
-    function invariant_feeExactness() public {
-        vm.skip(true); // PENDING IMPLEMENTATION (M1) — remove once CurveHandler wires the stack.
+    /// @notice EXACT ASSERTION (contracts.md §6 row 3, §12.25-updated):
+    ///         treasury.balance + curve.accruedFees == ghost_feeSum, to the wei.
+    /// @dev Under §12.25 trade fees accrue in-contract (`accruedFees`) and are pulled by
+    ///      `sweepFees()`; only the creation-fee and graduation-fee legs are pushed to the treasury.
+    ///      So the treasury receipts plus the still-escrowed fees must equal every computed
+    ///      in-contract fee (treasury is a plain EOA with no other inflows). Native-ETH leg only:
+    ///      graduation WETH dust also goes to the treasury but as WETH (spec §12.13) — excluded here,
+    ///      asserted separately in unit tests.
+    function invariant_feeExactness() public view {
+        IBondingCurve curve = handler.curve();
         assertEq(
-            handler.treasury().balance,
+            handler.treasury().balance + curve.accruedFees(),
             handler.ghost_feeSum(),
-            "gate-2 row 3: treasury ETH receipts != sum of computed in-contract fees (wei-exact)"
+            "gate-2 row 3 (12.25): treasury receipts + accruedFees != sum of computed fees (wei-exact)"
         );
     }
 }

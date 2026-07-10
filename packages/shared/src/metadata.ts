@@ -26,6 +26,7 @@ import {
   METADATA_TICKER_MAX,
   METADATA_VERSION,
 } from "./constants";
+import { byteBoundedString } from "./text";
 
 // ── Schema (api.md §5 metadata.ts row: name/ticker/description/links/imageUrl/imageHash/version) ──
 
@@ -47,8 +48,9 @@ export type TokenMetadataLinks = z.infer<typeof tokenMetadataLinksSchema>;
  */
 export const tokenMetadataSchema = z.strictObject({
   version: z.literal(METADATA_VERSION),
-  name: z.string().min(1).max(METADATA_NAME_MAX),
-  ticker: z.string().min(1).max(METADATA_TICKER_MAX),
+  // Byte-length limits (§12.30) — mirror the on-chain gate exactly (text.ts).
+  name: byteBoundedString(METADATA_NAME_MAX, "name"),
+  ticker: byteBoundedString(METADATA_TICKER_MAX, "ticker"),
   description: z.string().max(METADATA_DESCRIPTION_MAX).optional(),
   links: tokenMetadataLinksSchema.optional(),
   imageUrl: z.url(),

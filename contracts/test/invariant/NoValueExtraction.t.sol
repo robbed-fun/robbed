@@ -10,26 +10,32 @@ import {CurveHandler} from "test/invariant/handlers/CurveHandler.sol";
 ///         refunds; treasury and caller-reward flows excluded) can never exceed Σ actor-ETH-in
 ///         (accepted buy gross + donations) minus the in-contract fees minus what the curve still
 ///         holds. Any violation = value extraction (sandwich/reentrancy/rounding-pump/etc.).
+import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
+
+/// forge-config: default.invariant.fail-on-revert = true
 contract NoValueExtractionInvariant is Test {
     CurveHandler internal handler;
 
     function setUp() public {
         handler = new CurveHandler();
         targetContract(address(handler));
-        // M1: set `fail_on_revert = true` for this suite.
     }
 
-    /// @notice EXACT ASSERTION (contracts.md §6 row 7, verbatim identity):
-    ///         ghost_totalEthOut ≤ ghost_totalEthIn − ghost_fees − address(curve).balance
-    /// @dev The subtraction underflowing is itself a violation (out+fees+balance > in) and fails
-    ///      the run. Post-graduation the curve balance term goes to ~0 and the identity keeps
-    ///      holding over the remaining flows (LP value stays locked in the V3 position).
-    function invariant_noExtractionBeyondFairValue() public {
-        vm.skip(true); // PENDING IMPLEMENTATION (M1) — remove once CurveHandler wires the stack.
+    /// @notice EXACT ASSERTION (contracts.md §6 row 7, §12.25-updated identity):
+    ///         ghost_totalEthOut ≤ ghost_totalEthIn − ghost_feeSum − (curve.balance − accruedFees)
+    /// @dev Under §12.25 the accrued trade fees sit inside `curve.balance` but are ALSO counted in
+    ///      `ghost_feeSum`; subtracting the balance net of `accruedFees` avoids double-counting them
+    ///      (the pre-§12.25 form subtracted the full balance, which under pull-payment would
+    ///      underflow by exactly `accruedFees`). The subtraction underflowing is itself a violation
+    ///      (out + fees + locked value > in) and fails the run. Post-graduation `curve.balance`
+    ///      equals `accruedFees` so the balance term is 0 and the identity keeps holding over the
+    ///      remaining flows (LP value stays locked in the migrator/V3 position).
+    function invariant_noExtractionBeyondFairValue() public view {
+        IBondingCurve curve = handler.curve();
         assertLe(
             handler.ghost_totalEthOut(),
-            handler.ghost_totalEthIn() - handler.ghost_feeSum() - address(handler.curve()).balance,
-            "gate-2 row 7: actors extracted ETH beyond fair curve value"
+            handler.ghost_totalEthIn() - handler.ghost_feeSum() - (address(curve).balance - curve.accruedFees()),
+            "gate-2 row 7 (12.25): actors extracted ETH beyond fair curve value"
         );
     }
 }

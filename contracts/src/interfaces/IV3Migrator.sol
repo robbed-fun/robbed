@@ -60,7 +60,7 @@ interface IV3Migrator is IUniswapV3SwapCallback {
     // Immutable-parameter getters (contracts.md §2.5 storage table; public so gate-2/gate-3
     // tests can verify tick tolerance and ordering without re-deriving M0 constants).
 
-    /// @notice The hoodpad CurveFactory.
+    /// @notice The ROBBED_ CurveFactory.
     function factory() external view returns (address);
 
     /// @notice Uniswap V3 Factory (constructor param — open item O-4, never invented).

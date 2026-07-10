@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-/// @title hoodpad shared custom errors
+/// @title ROBBED_ shared custom errors
 /// @notice Free-standing declarations shared across all six contracts. Custom errors only — no
 ///         revert strings anywhere (contracts.md §2). Transcribed from the per-contract error
 ///         lists in contracts.md §2.2 (CurveFactory), §2.3 (BondingCurve), §2.4 (Router),
@@ -43,6 +43,18 @@ error InvalidSymbol();
 
 /// @notice metadataHash == bytes32(0) — the §8.3 integrity commitment is mandatory (contracts.md §2.2).
 error ZeroMetadataHash();
+
+/// @notice metadataUri length outside [1,256] bytes (contracts.md §2.2). Distinct from
+///         {ZeroMetadataHash} — the URI is the event-only indexer pointer, the hash is the on-chain
+///         integrity commitment; conflating their reverts was fixup F-4 (M1-7/M1-8 security gate).
+error InvalidMetadataUri();
+
+/// @notice Deploy-time misconfig: the worst-case owner-settable graduation-fee + caller-reward
+///         ceilings would meet or exceed the net-of-fee graduation threshold, leaving graduation
+///         permanently unfundable (no ETH left for the LP mint). Enforced in the constructor so a
+///         misconfigured deploy fails fast rather than shipping a curve that can never graduate
+///         (fixup F-3, M1-7/M1-8 security gate; guards spec §12.11 reachability).
+error GraduationUnfundable();
 
 /// @notice Launches are paused (`pauseCreates`, spec §6.5 granular pause) (contracts.md §2.2, §2.4).
 error CreatesPaused();

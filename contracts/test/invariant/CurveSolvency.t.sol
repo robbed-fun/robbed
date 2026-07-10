@@ -13,29 +13,32 @@ import {CurveHandler} from "test/invariant/handlers/CurveHandler.sol";
 ///         token amount can be sold and actually paid out ("drain" assertion under
 ///         snapshot/revert). Also pins the sells-never-pausable sentinel: a phase-Trading sell
 ///         has no legal revert path regardless of pauseBuys/pauseCreates (spec §6.5).
+/// forge-config: default.invariant.fail-on-revert = true
 contract CurveSolvencyInvariant is Test {
     CurveHandler internal handler;
 
     function setUp() public {
         handler = new CurveHandler();
         targetContract(address(handler));
-        // M1: set `fail_on_revert = true` for this suite.
     }
 
-    /// @notice EXACT ASSERTIONS (contracts.md §6 row 2):
-    ///         (1) address(curve).balance ≥ realEthReserves — donations only ever widen the gap
-    ///             (`≥`, contracts.md §5.7);
+    /// @notice EXACT ASSERTIONS (contracts.md §6 row 2, §12.25-updated):
+    ///         (1) address(curve).balance ≥ realEthReserves + accruedFees — the §12.25 solvency
+    ///             form; donations only ever widen the gap (`≥`, contracts.md §5.7);
     ///         (2) sells never reverted while paused (sentinel, spec §6.5);
     ///         (3) drain: at this checkpoint, force-sell every actor's full balance sequentially,
     ///             assert all succeed with ETH actually received, then roll back.
     function invariant_curveSolvency() public {
-        vm.skip(true); // PENDING IMPLEMENTATION (M1) — remove once CurveHandler wires the stack.
         IBondingCurve curve = handler.curve();
         ILaunchToken token = handler.token();
         IRouter router = handler.router();
 
         (,, uint256 realEth,) = curve.reserves();
-        assertGe(address(curve).balance, realEth, "gate-2 row 2: curve balance < realEthReserves");
+        assertGe(
+            address(curve).balance,
+            realEth + curve.accruedFees(),
+            "gate-2 row 2 (12.25): curve balance < realEthReserves + accruedFees"
+        );
         assertFalse(handler.ghost_sellRevertedWhilePaused(), "gate-2 row 2 / spec 6.5: a Trading-phase sell reverted");
 
         // Drain assertion — checked under snapshot, then rolled back (contracts.md §6 row 2).

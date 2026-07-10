@@ -143,7 +143,7 @@ export const v3PoolEventsAbi = [v3SwapEvent] as const;
 export const v3PositionManagerEventsAbi = [v3CollectEvent] as const;
 
 /** Everything the indexer consumes, in one artifact (§8, §12.15-16). */
-export const hoodpadEventsAbi = [
+export const robbedEventsAbi = [
   tokenCreatedEvent,
   tradeEvent,
   graduatedEvent,

@@ -1,0 +1,3 @@
+target	valid_mutants	killed	survivors	score	tool
+CurveMath.sol	64	58	6	0.906	universalmutator-1.14.1
+V3Migrator.sol(arb-back)	200	117	83	0.585	universalmutator-1.14.1

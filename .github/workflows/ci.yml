@@ -1,4 +1,4 @@
-# hoodpad CI — spec §10 gate 1 (static analysis + fmt) and gate 2 entry (tests).
+# ROBBED_ CI — spec §10 gate 1 (static analysis + fmt) and gate 2 entry (tests).
 # Jobs are conditional on their service directory existing so CI stays green
 # while milestones land incrementally.
 name: CI
@@ -37,9 +37,43 @@ jobs:
         with:
           submodules: recursive
       - uses: foundry-rs/foundry-toolchain@v1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # §10 gate 1 lint tooling — versions PINNED so findings are reproducible in review.
+      - name: install static-analysis tools
+        run: npm i -g solhint@6.2.3 @cyfrin/aderyn@0.6.8
       # §10 gate 1: fmt enforced
       - name: forge fmt
         run: forge fmt --check
+      # Hard-rule greps (auto-fail) — spec §2/§6.5/§6.7/§4.1. Comments are stripped first so a
+      # doc-comment that merely names a banned token cannot false-fail; scans src/ only.
+      - name: hard-rule greps
+        run: |
+          status=0
+          viol(){ echo "::error::HARD-RULE VIOLATION: $1"; status=1; }
+          scan(){ hits=$(for f in $(find src -name '*.sol'); do sed -E 's://.*$::; s:/\*.*\*/::g' "$f" | grep -nE "$2" | sed "s#^#$f:#"; done); if [ -n "$hits" ]; then echo "$hits"; viol "$1"; fi; }
+          scan "block.number banned (spec 2/6.5)" 'block\.number'
+          scan "pragma range banned - exact pin only (spec 6.7)" '\^0\.8|>=[[:space:]]*0\.8'
+          scan "caller-supplied fee / checkFee banned (spec 4.1)" 'checkFee'
+          scan "OZ Pausable/whenNotPaused banned (spec 6.5)" 'Pausable|whenNotPaused'
+          scan "sell-pause identifier banned (spec 6.5)" 'pauseSell'
+          [ $status -eq 0 ] && echo "greps: clean"
+          exit $status
+      # §10 gate 1: solhint — .solhint.json errors on the load-bearing rules (compiler pin,
+      # no-global-import, gas-custom-errors, func-visibility). Warnings are dispositioned in
+      # contracts/slither.triage.json and do not fail the build.
+      - name: solhint
+        run: solhint 'src/**/*.sol'
+      # §10 gate 1: Aderyn (report-only; every finding triaged in slither.triage.json). Non-blocking
+      # by design (Slither + greps are the hard gate); the report is uploaded as an artifact.
+      - name: aderyn
+        run: aderyn -o aderyn.report.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aderyn-report
+          path: contracts/aderyn.report.json
       # §6.7: whole workspace on the single pinned solc (foundry.toml)
       - name: build
         run: forge build --sizes
@@ -57,12 +91,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      # §10 gate 1: zero unexplained findings — triage lives in contracts/slither.config.json
-      # + inline dispositions; anything undispositioned fails the job.
+      # §10 gate 1: zero unexplained findings. Config = contracts/slither.config.json (path/dep
+      # filters + informational-class exclusions with rationale); per-instance dispositions live in
+      # contracts/slither.db.json (triage DB, content-hash keyed — detectors stay LIVE so future
+      # code re-triggers them). slither-version is PINNED to match the DB's finding IDs: a version
+      # bump can shift IDs and forces re-triage. Any undispositioned Low+ finding fails the job.
       - uses: crytic/slither-action@v0.4.0
         with:
           target: contracts
           fail-on: low
+          slither-version: 0.11.5
           slither-args: --config-file contracts/slither.config.json
 
   apps:

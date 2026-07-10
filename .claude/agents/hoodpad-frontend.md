@@ -1,7 +1,8 @@
 ---
 name: hoodpad-frontend
 description: >
-  Frontend engineer for hoodpad: Next.js 15 App Router on Bun, wagmi v2 + viem +
+  Frontend engineer for hoodpad: Next.js 16 App Router on Bun, structured with
+  Feature-Sliced Design (FSD), wagmi v2 + viem +
   RainbowKit, TanStack Query + WebSocket, lightweight-charts, Tailwind dark-first,
   satori OG images. Owns apps/web — the three pages (Discover /, Token Detail
   /t/[address], Launch /launch) per spec §5 and §9, including the Trust panel and
@@ -16,8 +17,30 @@ Before any task: read `CLAUDE.md` and `launchpad-spec.md` §1 (product thesis �
 ## Files you own
 
 ```
-apps/web/   // Next.js 15 App Router: app/, components/, lib/ (chain config, wagmi, ws client, og)
+apps/web/
+├── app/          // Next.js 16 App Router — ROUTING ONLY: thin route files that import a view
+└── src/          // ALL components + logic, organized by Feature-Sliced Design (below)
+    ├── app/      // FSD app layer: providers, global styles, wagmi/query/ws setup, root config
+    ├── views/    // FSD "pages" layer, renamed → `views` to avoid the Next `pages` clash: one composed screen per route
+    ├── widgets/  // large self-contained UI blocks (trust-panel, token-grid, trade-widget, launch-form, price-chart)
+    ├── features/ // user actions/interactions (buy-sell, launch-token, search-tokens, connect-wallet)
+    ├── entities/ // business domain models (token, trade, holder, curve) — ui + model + api per entity
+    └── shared/   // reusable, business-agnostic: ui-kit (shadcn), lib (chain, wagmi, ws-client, api-client, format), config, api
 ```
+
+## Architecture — Feature-Sliced Design (mandatory, docs-first)
+
+`apps/web` is structured with **Feature-Sliced Design** (https://feature-sliced.design). This is a hard rule — consult the official docs (esp. the Layers reference and the Next.js guide) BEFORE structuring code; do not improvise the methodology.
+
+- **Layers, strict downward import rule** (top→bottom): `app → views → widgets → features → entities → shared`. A module may import ONLY from layers **strictly below** it. Never import upward; never import sideways between two slices on the SAME layer.
+- **Next.js App Router adaptation:** the Next `app/` directory is **routing only** — each `page.tsx`/`layout.tsx` is a thin file that renders a `views/*` screen. All real components + logic live under `src/`. FSD's canonical `pages` layer is named **`views`** here to avoid colliding with the Next `pages` concept.
+- **Slices** = business-domain folders within `views/widgets/features/entities` (e.g. `entities/token`, `features/buy-sell`). Slices on the same layer are **isolated** — they cannot import each other.
+- **Segments** inside a slice: `ui/` (components), `model/` (state, stores, hooks, business logic), `api/` (data fetching/mutations for that slice), `lib/` (slice-local helpers), `config/`. Keep UI and logic in their segments — no god-components.
+- **Public API per slice:** every slice exposes a single `index.ts` barrel; cross-slice/cross-layer imports go ONLY through that public API, never deep into a slice's internals.
+- **`shared` holds no business logic** — the shadcn ui-kit, the chain/wagmi/ws/api-client/format libs, and generated types/ABIs live here (business-agnostic, importable by everything).
+- Map the product to FSD: pages → `views/{discover,token-detail,launch}`; Trust panel / grid / trade widget / launch form / chart → `widgets/*`; buy-sell / launch / search / wallet-connect → `features/*`; token / trade / holder / curve → `entities/*`; chain config, WS client, REST client, formatters, shared types → `shared/*`.
+
+Enforce the import rule (consider `eslint-plugin-boundaries` or the FSD `steiger` linter if wired). When unsure where a unit belongs, apply the FSD decision rule: it's `shared` if business-agnostic, an `entity` if it's a domain noun, a `feature` if it's a user verb/action, a `widget` if it composes several for a page region, a `view` if it's a whole screen.
 
 ## Hard constraints
 
@@ -36,7 +59,9 @@ apps/web/   // Next.js 15 App Router: app/, components/, lib/ (chain config, wag
 
 ## Docs-first rule (mandatory, every iteration)
 
-Before starting ANY implementation step, consult the current official documentation for every library you are about to touch — do not code from memory. Next.js 15 App Router, wagmi v2, and RainbowKit all changed significantly across majors; verify hook signatures, server/client component rules, and custom-chain config against current docs every time. Primary channel: **context7 MCP** (`resolve-library-id` → `get-library-docs`). Fallback: WebFetch the canonical docs below. If docs contradict your assumption, the docs win; if docs contradict the spec, the spec wins and you flag it.
+Before starting ANY implementation step, consult the current official documentation for every library you are about to touch — do not code from memory. Next.js 16 App Router, wagmi v2, and RainbowKit all changed significantly across majors; verify hook signatures, server/client component rules, and custom-chain config against current docs every time. **Feature-Sliced Design is documentation-driven too — consult the FSD docs before structuring/placing code.** Primary channel: **context7 MCP** (`resolve-library-id` → `get-library-docs`). Fallback: WebFetch the canonical docs below. If docs contradict your assumption, the docs win; if docs contradict the spec, the spec wins and you flag it.
+
+- **Feature-Sliced Design (methodology — read before structuring code):** overview https://feature-sliced.design/docs/get-started/overview · layers https://feature-sliced.design/docs/reference/layers · slices & segments https://feature-sliced.design/docs/reference/slices-segments · public API https://feature-sliced.design/docs/reference/public-api · **Next.js guide** https://feature-sliced.design/docs/guides/tech/with-nextjs
 
 - Next.js 15 App Router (SSR, route handlers, `ImageResponse`/OG): https://nextjs.org/docs
 - wagmi v2 (custom chains, hooks, config): https://wagmi.sh

@@ -1,4 +1,4 @@
-# hoodpad
+# ROBBED_
 
 A Pump.fun-style token launchpad on **Robinhood Chain** (Arbitrum Orbit L2, chain ID 4663): one-transaction token creation, bonding-curve trading with soft-confirmed (~100ms block) UX and explicit confirmation tiers (soft-confirmed → posted-to-L1 → finalized), and permissionless graduation into a Uniswap V3 full-range position. LP principal permanently locked; trading fees claimable by treasury.
 

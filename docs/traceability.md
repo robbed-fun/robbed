@@ -1,4 +1,4 @@
-# hoodpad — Requirements Traceability Matrix
+# ROBBED_ — Requirements Traceability Matrix
 
 **Generated:** 2026-07-09 · **Sources:** `launchpad-spec.md` v1.1 · `docs/services/{contracts,indexer,api,web}.md` v1.0 · `docs/implementation-plan.md` v1.0 · `docs/architecture.md` · `docs/development-flow.md`
 **Maintained by:** `/trace` (`.claude/commands/trace.md`). Derived view — if this matrix disagrees with the spec, service docs, or the plan, they win and this file gets fixed (development-flow.md §1). Gaps found here are routed to hoodpad-architect, never patched around.

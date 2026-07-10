@@ -8,7 +8,7 @@
 
 ## 1. Purpose & spec coverage
 
-The contract layer is the entire on-chain surface of hoodpad: token creation, bonding-curve trading, graduation to Uniswap V3, and permanent LP fee capture. Six immutable contracts (no proxies; upgrade = new factory version), one exact compiler pin, deployed to Robinhood Chain (chain ID 4663, Arbitrum Orbit L2).
+The contract layer is the entire on-chain surface of ROBBED_: token creation, bonding-curve trading, graduation to Uniswap V3, and permanent LP fee capture. Six immutable contracts (no proxies; upgrade = new factory version), one exact compiler pin, deployed to Robinhood Chain (chain ID 4663, Arbitrum Orbit L2).
 
 Architecture template is Gnad.fun (§4.1): Factory → Curve → Token pattern, Router as single user entrypoint, virtual-reserve constant product, custom errors, event taxonomy. Dropped from the template: caller-supplied fees, V2 graduation, bespoke multisig, `^0.8.13` range, `UNLICENSED`.
 
@@ -104,7 +104,7 @@ Deploys token+curve pairs, holds global config within code-enforced hard caps, t
 
 1. `curveAddr = computeCreate2Address(salt, keccak256(type(BondingCurve).creationCode))` where `salt = keccak256(abi.encode(creator, tokenCounter))`. `BondingCurve` takes **no constructor args** — it reads `ICurveFactory(msg.sender).curveParameters()` in its constructor, so the init-code hash is constant and the address is precomputable.
 2. Deploy `LaunchToken(name, symbol, metadataHash, curveAddr)` (plain CREATE) — supply lands at the not-yet-deployed curve address.
-3. Write the staged `CurveParameters` storage struct (token, router, migrator, snapshot of all curve economics), CREATE2-deploy `BondingCurve` at `curveAddr`, delete the staged struct. (Plain storage staging, not transient storage — gas is irrelevant here and it avoids any ArbOS/Cancun assumption.)
+3. Write the staged `CurveParameters` storage struct (token, router, migrator, snapshot of all curve economics), CREATE2-deploy `BondingCurve` at `curveAddr`, delete the staged struct. (Plain storage staging, not transient storage — gas is irrelevant here and it keeps transient storage `TSTORE`/`TLOAD` deliberately unused, per §12.44; the `cancun` target relies on `mcopy` only.)
 4. Call `migrator.initializePool(token)` → creates + initializes the V3 1% pool at the deterministic graduation price (§6.3.2). Returns `pool`.
 5. Register: `curveOf[token] = curve; isCurve[curve] = true; tokenOf[curve] = token;`
 6. Emit `TokenCreated`.
@@ -154,6 +154,41 @@ function setMigrator(address migrator_) external onlyOwner;                // ON
 
 - **Snapshotted into each curve at creation** (owner changes affect future launches only): `virtualEth0`, `virtualToken0`, `curveSupply`, `lpTranche`, `graduationEth`, `tradeFeeBps`, `creatorFeeBps` (always 0), `graduationFee`, `callerReward`, `earlyWindowSeconds`, `maxEarlyBuyWei`.
 - **Read live from the factory at call time** (operational, never blocks sells, never alters economics): `treasury` (fee destination), `pauseBuys` (buy-side kill switch), `perTokenEthCap` / `globalEthCap` (beta risk caps, buy-side only).
+
+**`FactoryConfig` struct (ratified — spec §12.39; returned whole by `config()`).** The single current-config snapshot consumed by Router, the UI/Trust-panel, and the indexer startup read (§12.38). It mirrors the storage field set below — **no invented fields**. Two subtleties: (1) it carries the immutable **curve-shape defaults** so the indexer gets every constant it caches from one read; (2) these fields are *factory-current* — an owner `setTradeFeeBps`/`setGraduationFee`/… affects **future curves only**, so per-token live economics (e.g. an older curve's `TRADE_FEE_BPS`, §12.40d) are read from **that curve**, never from `config()`. This is separate from `CurveParameters` (the staged per-curve deploy struct, valid only mid-`createToken`).
+
+```solidity
+struct FactoryConfig {
+    // operational, owner-settable (govern future curves for snapshotted economics)
+    address treasury;
+    address router;
+    address migrator;
+    address weth;
+    uint16  tradeFeeBps;
+    uint16  creatorFeeBps;        // ≡ 0 (§7), no fee-path reader
+    uint256 creationFee;
+    uint256 graduationFee;
+    uint256 callerReward;
+    uint64  earlyWindowSeconds;
+    uint128 maxEarlyBuyWei;
+    uint128 perTokenEthCap;
+    uint128 globalEthCap;
+    bool    pauseCreates;
+    bool    pauseBuys;
+    // immutable ceilings (deploy-time bounds on the setters)
+    uint256 maxCreationFee;
+    uint256 maxGraduationFee;
+    uint256 maxCallerReward;
+    // immutable curve-shape defaults (indexer caches these for new curves — §12.38)
+    uint256 virtualEth0;
+    uint256 virtualToken0;
+    uint256 curveSupply;
+    uint256 lpTranche;
+    uint256 graduationEth;
+}
+```
+
+hoodpad-contracts aligns the M1 implementation to this itemization; any divergence in the landed M1-8 struct is reported to hoodpad-architect, never silently differed.
 
 **Storage**
 
@@ -394,7 +429,7 @@ function uniswapV3SwapCallback(int256 amount0Delta, int256 amount1Delta, bytes c
 | `TARGET_TICK_TOKEN0`, `TARGET_TICK_TOKEN1` | `int24` | `immutable` (M0) |
 | `TOLERANCE_TICKS` | `int24` | `immutable` (M0, e.g. ±10) |
 | `MAX_ARB_ITERATIONS` | `uint8` | `immutable` (M0, e.g. 5) |
-| `MIGRATION_SLIPPAGE_BPS` | `uint16` | `immutable` (M0; amount-mins for mint) |
+| `MIGRATION_SLIPPAGE_BPS` | `uint16` | `immutable` (M0; mint amount-mins **and** the symmetric per-leg arb budget — token leg may draw down to `LP_TOKEN_TRANCHE·(1−bps)`, WETH leg may spend `wethForMint·bps`, M-10-A) |
 | `FEE_TIER` | `uint24` constant = `10_000`; `TICK_LOWER = -887_200`, `TICK_UPPER = 887_200` | `constant` (full range at spacing 200) |
 | `_activePool` | `address` | storage slot written/deleted within `migrate` (callback auth) |
 
@@ -544,14 +579,16 @@ Trigger: any address calls `curve.graduate()` while `phase == ReadyToGraduate`.
 2. **Migrator:** deduct flat `GRADUATION_FEE` → treasury **first** (§6.3 step 1).
 3. Wrap remaining ETH → WETH.
 4. Read `pool.slot0()`. Compute `targetTick` for this token's ordering.
-5. **Pre-seed defense arb-back loop** (bounded, `MAX_ARB_ITERATIONS`):
+5. **Pre-seed defense arb-back loop** (bounded, `MAX_ARB_ITERATIONS`). **Both legs draw from a SYMMETRIC, `MIGRATION_SLIPPAGE_BPS`-bounded budget against their own mint requirement (M-10-A fix, 2026-07-10 — see below).**
    - If `|currentTick − targetTick| ≤ TOLERANCE_TICKS` → exit loop.
-   - If pool price of token > target (token overpriced): `pool.swap` selling **tokens** with `sqrtPriceLimitX96 = targetSqrtPrice` (exact-input of remaining token inventory beyond `LP_TOKEN_TRANCHE` needs — capped so the mint stays fundable; if inventory insufficient → `ArbBudgetExceeded`).
-   - If token underpriced: `pool.swap` selling **WETH** with the same price limit, capped by WETH beyond mint needs.
+   - If pool price of token > target (token overpriced): `pool.swap` selling **tokens** with `sqrtPriceLimitX96 = targetSqrtPrice`; the arb may draw the token balance **down to `LP_TOKEN_TRANCHE · (10_000 − MIGRATION_SLIPPAGE_BPS) / 10_000`** (i.e. spend at most dust + `LP_TOKEN_TRANCHE · MIGRATION_SLIPPAGE_BPS`). If that floor is hit still off-target → `ArbBudgetExceeded`.
+   - If token underpriced: `pool.swap` selling **WETH** with the same price limit; the arb may spend at most `wethForMint · MIGRATION_SLIPPAGE_BPS / 10_000`.
    - Swaps use the migrator's own `uniswapV3SwapCallback` (pool address verified via `_activePool`); no external SwapRouter dependency.
    - Price-limited swaps normally land the tick on target in one iteration; extra iterations cover attacker-minted concentrated liquidity. Whatever the attacker donated/swapped in becomes migrator inventory (griefing is strictly money-losing for the attacker).
+
+   > **M-10-A / UM-2 (token-leg freeze), 2026-07-10.** The token-leg budget was originally `balanceOf(token) − LP_TOKEN_TRANCHE`, but the curve forwards ≈ **exactly** `LP_TOKEN_TRANCHE` at graduation (rounding favours the curve → only dust above it), so a token-**overpriced** pool gave the token arb ≈ **0** budget → `ArbBudgetExceeded` → `graduate()` reverted → the curve froze in `ReadyToGraduate` (both directions locked, §12.12) while the attacker held a withdrawable concentrated-LP position — a money-neutral freeze grief the WETH-leg reasoning did not cover. **Fix:** the token leg now mirrors the WETH leg — its mint requirement is the full `LP_TOKEN_TRANCHE` and it may skew that by up to `MIGRATION_SLIPPAGE_BPS`, so **token-side mispricing self-corrects within tolerance exactly like WETH-side**. **Parity reasoning (§12.11), both legs symmetric:** the arb can under-fund the position by at most `MIGRATION_SLIPPAGE_BPS` **on whichever side it reduced** (token OR WETH), and the mint's `amount0Min`/`amount1Min` (each = pre-arb `LP_TOKEN_TRANCHE` / `wethForMint` × `(10_000 − MIGRATION_SLIPPAGE_BPS)/10_000`) re-enforce that same floor independently — so the ≈$69k parity skews by ≤ `MIGRATION_SLIPPAGE_BPS` in either direction. Mispricing **beyond** the slippage-recoverable range still reverts (retriable once the pool corrects); fully closing that residual is the **UM-2 caps-lift disposition (escalated to architect — §12.12 question)**, not resolved here. Proven by gate-2 invariant-6 liveness coverage (`ghost_tokenLegLivenessGraduations > 0`) + the directed `test_M10A_tokenLegGrief_*` regressions (pre-fix: `ArbBudgetExceeded`; post-fix: graduates within tolerance).
 6. **Post-loop check:** if still outside tolerance → `revert PoolPriceUnrecoverable(finalTick, targetTick)`. **The migrator never mints into a hostile ratio.** The revert unwinds `graduate()` entirely; the curve remains `ReadyToGraduate` and anyone may retry — including after independent arbitrageurs profitably restore the mispriced public pool, so liveness is economically self-healing.
-7. Mint full-range position: `NPM.mint` with `LP_TOKEN_TRANCHE` tokens + all remaining WETH, `tickLower/Upper = ±887_200`, `amount0Min/amount1Min = expected · (10_000 − MIGRATION_SLIPPAGE_BPS) / 10_000`, `recipient = LPFeeVault`, `deadline = block.timestamp`. NFT is minted directly to the vault (vault's `onERC721Received` verifies sender = NPM).
+7. Mint full-range position: `NPM.mint` with the migrator's **live (arb-adjusted) token + WETH balances** as `amount{0,1}Desired` (token side no longer fixed at `LP_TOKEN_TRANCHE`, since the arb may have drawn it down by ≤ `MIGRATION_SLIPPAGE_BPS`), `tickLower/Upper = ±887_200`, `amount0Min/amount1Min = expected · (10_000 − MIGRATION_SLIPPAGE_BPS) / 10_000`, `recipient = LPFeeVault`, `deadline = block.timestamp`. At the verified target price the pool ratio is fixed, so whichever side the arb reduced binds and only its counterpart is pulled; the surplus side's leftover is settled as dust (step 8/9), so donated tokens are never deposited into the LP. NFT is minted directly to the vault (vault's `onERC721Received` verifies sender = NPM).
 8. Residual token dust (mint leftovers + arb leftovers + donations) → `0x…dEaD` ("burned"; token has no burn fn).
 9. Residual WETH dust → treasury (ratified, spec §12.13).
 10. `emit Graduated(...)`.
@@ -587,7 +624,7 @@ sequenceDiagram
     end
 ```
 
-Post-graduation: curve is terminal and empty; trading moves to the public V3 pool; **no hoodpad contract has any pause or admin authority over it** (§6.5).
+Post-graduation: curve is terminal and empty; trading moves to the public V3 pool; **no ROBBED_ contract has any pause or admin authority over it** (§6.5).
 
 ### 3.5 Fee collection (§6.3.4)
 
@@ -751,7 +788,7 @@ Targets: `libs/CurveMath.sol` and `V3Migrator` migrate/arb-back logic (operator 
 
 ### 7.1 Toolchain
 
-- `foundry.toml`: `solc = "0.8.35"`, `optimizer = true` (runs value fixed in repo and recorded for verification), `evm_version` chosen to match Robinhood ArbOS support (confirm at implementation; do not assume Cancun features — no transient storage used in v1 code). Single profile compiles the whole workspace on the one pinned version.
+- `foundry.toml`: `solc = "0.8.35"`, `optimizer = true` (runs value fixed in repo and recorded for verification), `evm_version = "cancun"` (§12.44) — the compile/deploy target. Rationale: OZ v5.5's mandatory `ERC20Permit → ECDSA → EIP712 → Strings → Bytes.sol` chain emits `MCOPY` (EIP-5656), so **pre-Cancun fails to compile** the token; Robinhood ArbOS ≥ 32 supports it (ArbOS 20 "Atlas" added `MCOPY`) and the Blockscout verifier lists `cancun`. **Only `mcopy` is relied upon; transient storage (`TSTORE`/`TLOAD`) remains deliberately unused** (storage-based `ReentrancyGuard`, §5.4). Final `cancun`-target Blockscout verification is folded into the O-5 pin check at **M1-2/O-5**. Single profile compiles the whole workspace on the one pinned version.
 - **Pin caveat:** `0.8.35` is the candidate; reviewer reports Blockscout verification failures on 0.8.36 for this chain. **Verify 0.8.35 against robinhoodchain.blockscout.com before first deploy (open item O-5).** If it fails, the pin changes by explicit decision (hoodpad-architect, recorded in §12) — never silently.
 - Vendored `TickMath`/`FullMath`: use Uniswap's 0.8-compatible ports (v3-core `0.8` branch), re-pragma'd to exactly `0.8.35`, checked into `libs/` with upstream commit hash noted in the file header.
 - OpenZeppelin v5 via locked dependency (submodule pinned to a tag).
@@ -775,6 +812,16 @@ Testnet (M1) uses the same script with a testnet constants file; mainnet beta (M
 
 Owner = Safe can only: toggle `pauseCreates`/`pauseBuys`, retune fees within immutable ceilings (future curves only), update treasury destination, adjust anti-sniper defaults (future curves), move beta caps. It can **not**: touch a live curve's economics, pause sells, upgrade anything, or extract from LPFeeVault. These negative properties are unit-tested (gate 2 additional coverage).
 
+### 7.4 Shared codegen (ABIs + addresses) — two independent legs (§12.38)
+
+The contracts pipeline owns all generated interface artifacts consumed by the other services (architecture.md §4; anti-drift: single source, apps never hand-write ABIs). There are **two independent codegen legs** with different trigger points:
+
+1. **Event ABIs — `packages/shared/events.json`** (M1-3). Canonical event fragments only, byte-for-byte per spec §12.15. Trigger: interface freeze.
+2. **Full read-function ABIs — `packages/shared/src/abi/*.json` + typed index** (M1-3b, spec §12.38). The **complete** ABI of each of the six contracts, emitted from `contracts/out/*.json` at **compilation time** (`forge build` — **no deploy required**). Consumers: the frontend M3-5 Trust-panel live reads (`reserves()`, `phase()`, `quoteBuy/quoteSell`, per-token `TRADE_FEE_BPS`, `totalSupply()`, factory `config()`) and the indexer startup curve-constants read (`config()` → `virtualEth0`/`virtualToken0`/`graduationEth`/`curveSupply`/`lpTranche`, replacing the env-interim path — indexer.md §2/§3.1). Because it needs only `forge build`, it lands at M1 and is available to M2/M3 independent of any broadcast.
+3. **Deploy-time addresses — generated `addresses`** (M1-14, needs a broadcast). Separate from the ABIs above; carries the deployed contract addresses per network. Consumed by indexer config + web `lib/addresses.ts` (never hand-edited).
+
+Legs 1–2 are compilation-time (M1 exit hands them to M2/M3); leg 3 is deploy-time. `packages/shared` hosts all three; the M1-14 smoke and the I-2 local bring-up re-run leg 3 against the local deployment.
+
 ---
 
 ## 8. Open items & decisions needed
@@ -789,10 +836,10 @@ Items below were flagged for hoodpad-architect / §12 resolution — **not decid
 | **O-4** | V3 Factory / NonfungiblePositionManager (+ SwapRouter02 / QuoterV2) addresses on 4663 (§13). | **RESOLVED — spec §12.28 (2026-07-09):** Uniswap V3 confirmed on 4663; Factory `0x1f7d7550…D2EfA`, NPM `0x73991a25…DE0D3`, SwapRouter02 `0xcaf681a6…e5cb2`, QuoterV2 `0x33e885ed…c8a9e7` recorded in `out/constants.json.external`. Deploy-time runtime assertions mandatory (`feeAmountTickSpacing(10000)==200`, `NPM.factory()`/`WETH9()`). |
 | **C-1** | Sell-freeze via reverting/hostile treasury pointer (fee pushed on the sell path). | **RESOLVED — spec §12.25 (2026-07-09):** pull-payment fee escrow — fees accrue to `accruedFees`, withdrawn by permissionless non-phase-gated `sweepFees()`; no trade path calls the treasury. Solvency/exact-fee invariants updated (§6 rows 2/3); reverting-treasury sell test added to the pause matrix. Restores "sells always open" by construction. |
 | **U-3** | Graduation-fee model + anti-sniper v1 scope. | **RESOLVED — spec §12.26/§12.27 (2026-07-09):** graduation fee is small flat cost-based (≈ migration gas + thin margin, not %-of-raise; exact number at M1); anti-sniper v1 ships the §12.18 fixed timestamp window, decaying+size-based redesign deferred to pre-caps-lift. |
-| **O-5** | Compiler pin `0.8.35` unverified against Robinhood Blockscout verifier (§6.7, §13). | Verify with a throwaway contract before M1 deploy; if unsupported, architect picks the nearest supported exact pin and records it in §12. All code written pin-agnostically except the pragma line (one sed away). |
+| **O-5** | Compiler pin `0.8.35` **and the `cancun` evm_version target (§12.44)** unverified against Robinhood Blockscout verifier (§6.7, §7.1, §13). | Verify **both** with one throwaway contract before M1 deploy; if either is unsupported, architect picks the nearest supported exact pin/target and records it in §12. All code written pin-agnostically except the pragma line (one sed away); `cancun` is required by the OZ v5.5 `Bytes.sol` `MCOPY` dependency, not optional. |
 | **O-6** | Safe deployment on chain 4663 (§6.6, §13) + signer set (M-of-N). | Check official Safe deployments; if absent, deploy canonical Safe contracts permissionlessly. Signer set is an ops/architect decision — blocks step 7 of deploy order only. |
 | **O-7** | Anti-sniper concrete values (window seconds, `MAX_EARLY_BUY`) and mechanism confirmation (timestamp vs `arbBlockNumber`). | **Mechanism RESOLVED — spec §12.18 (2026-07-09):** `block.timestamp` window. **Values OPEN** (M0, spec §13): 5–10s suggested, cap sized by M0; land in constants.json. |
-| **O-8** | Arb-back parameters: `TOLERANCE_TICKS`, `MAX_ARB_ITERATIONS`, `MIGRATION_SLIPPAGE_BPS`, and the inventory budget rule. | **Budget rule RESOLVED — spec §13 note (2026-07-09):** arb spend may only consume inventory **above** what the target-price mint requires. **Numbers OPEN** (M0, spec §13); needed before gate-2 fuzz bounds are final. |
+| **O-8** | Arb-back parameters: `TOLERANCE_TICKS`, `MAX_ARB_ITERATIONS`, `MIGRATION_SLIPPAGE_BPS`, and the inventory budget rule. | **Budget rule RESOLVED — spec §13 note (2026-07-09) + M-10-A amend (2026-07-10):** arb spend is bounded per-leg by `MIGRATION_SLIPPAGE_BPS` of that leg's mint requirement — token leg draws down to `LP_TOKEN_TRANCHE·(1−bps)`, WETH leg spends `wethForMint·bps` (the original "inventory above `LP_TOKEN_TRANCHE`" wording froze the token leg → §3.4 step 5 M-10-A note). **Values SET** — spec §12.33 (`toleranceTicks=100`, `maxArbIterations=8`, `migrationSlippageBps=100`). Residual (mispricing beyond the recoverable range) is the **UM-2 caps-lift item escalated to architect**. |
 | **O-9** | Graduation caller reward value (spec: "small"). | Cover gas ×~10 at chain gas prices, from M0; hard ceiling `maxCallerReward` immutable. |
 | **O-10** | Beta cap values (`perTokenEthCap`, `globalEthCap`, gate 7) — risk/ops numbers, not code. | Placeholder values in testnet constants; mainnet numbers set with hoodpad-security before beta deploy. |
 | **O-11** | Whether `TokenCreated` should also carry the creator's initial-buy size (indexer convenience) or the indexer derives it from the first `Trade`. | **RESOLVED — spec §12.15 (2026-07-09):** derive from first `Trade` in the same tx; `TokenCreated` instead carries `metadataUri` (indexer requirement, OI-1). Event shapes in §2.2/§2.3 are now the canonical cross-service contract. |

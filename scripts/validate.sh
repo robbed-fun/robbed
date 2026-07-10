@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hoodpad local validation — the single entrypoint mirroring .github/workflows/ci.yml.
+# ROBBED_ local validation — the single entrypoint mirroring .github/workflows/ci.yml.
 # Runs from the pre-commit hook (policy: the entire CI suite runs before every
 # commit) and manually via `bun run validate` / `scripts/validate.sh`.
 #

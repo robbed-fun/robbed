@@ -95,6 +95,29 @@ export const wsMetadataVerifiedDataSchema = z.object({
   status: z.enum(["match", "mismatch", "unfetched"]),
 });
 
+/**
+ * `fee_collected` on `token:{address}:events` (findings X-6; channel taxonomy
+ * promised it, the union was missing it → fee-dashboard live updates were
+ * silently dropped). Projection of the on-chain `LPFeeVault.Collect` /
+ * `FeeCollected` event and the REST `feeCollectionEntrySchema` (api-types.ts):
+ * the same fee-collection shape drives REST and WS, so the `/fees` dashboard
+ * reads identical fields whether it hydrates from REST or a live push. Block
+ * coordinates follow the `trade` payload convention (dedup + confirmation
+ * upgrade). Scalars are reused (`addressSchema`/`decimalStringSchema`/
+ * `hex32Schema`) — no new fee shape is invented (decision D2, plans/shared.md).
+ */
+export const wsFeeCollectedDataSchema = z.object({
+  token: addressSchema,
+  recipient: addressSchema,
+  amountToken: decimalStringSchema,
+  amountWeth: decimalStringSchema,
+  blockNumber: z.number().int().nonnegative(),
+  blockTimestamp: z.number().int().nonnegative(),
+  txHash: hex32Schema,
+  logIndex: z.number().int().nonnegative(),
+  confirmationState: confirmationStateSchema,
+});
+
 // ── Envelope + discriminated union ──────────────────────────────────────────
 
 const envelopeBase = {
@@ -112,6 +135,7 @@ export const wsMessageSchema = z.discriminatedUnion("type", [
   z.object({ ...envelopeBase, type: z.literal("confirmations"), data: wsConfirmationsDataSchema }),
   z.object({ ...envelopeBase, type: z.literal("reorg"), data: wsReorgDataSchema }),
   z.object({ ...envelopeBase, type: z.literal("metadata_verified"), data: wsMetadataVerifiedDataSchema }),
+  z.object({ ...envelopeBase, type: z.literal("fee_collected"), data: wsFeeCollectedDataSchema }),
 ]);
 
 export type WsMessage = z.infer<typeof wsMessageSchema>;
@@ -123,6 +147,7 @@ export type WsGraduatedData = z.infer<typeof wsGraduatedDataSchema>;
 export type WsConfirmationsData = z.infer<typeof wsConfirmationsDataSchema>;
 export type WsReorgData = z.infer<typeof wsReorgDataSchema>;
 export type WsMetadataVerifiedData = z.infer<typeof wsMetadataVerifiedDataSchema>;
+export type WsFeeCollectedData = z.infer<typeof wsFeeCollectedDataSchema>;
 
 // ── Client → server ops (indexer.md §8.1; api.md §6.5: sub/unsub/ping only) ─
 
