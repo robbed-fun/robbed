@@ -24,6 +24,7 @@ import { InMemoryRateLimitStore } from "../src/mw/ratelimit";
 import { stubVendors } from "../src/moderation/vendors";
 import type {
   AddressPnlRow,
+  CandleRow,
   ConfirmationWatermarksRow,
   EthUsdSnapshotRow,
   ModerationStatusRow,
@@ -185,8 +186,10 @@ export class FakeDb implements Db {
   async getTradesByTx() {
     return [];
   }
-  async getCandles() {
-    return [];
+  /** Overridable candle fixture (OG sparkline + candles route tests). */
+  candles: CandleRow[] = [];
+  async getCandles(): Promise<CandleRow[]> {
+    return this.candles;
   }
   async getHolders(): Promise<HolderJoinedRow[]> {
     return [];
@@ -265,6 +268,7 @@ export function makeFakeStorage(base = "https://cdn.test"): Storage & { objects:
   const strip = (h: string) => (h.startsWith("0x") ? h.slice(2) : h);
   const imageKey = (h: string) => `images/${strip(h)}.webp`;
   const metadataKey = (h: string) => `metadata/${strip(h)}.json`;
+  const ogKey = (a: string, v: string) => `og/${strip(a).toLowerCase()}/${v}.png`;
   return {
     objects,
     imageKey,
@@ -279,6 +283,15 @@ export function makeFakeStorage(base = "https://cdn.test"): Storage & { objects:
     },
     async imageExists(h) {
       return objects.has(imageKey(h));
+    },
+    ogKey,
+    ogUrl: (a, v) => `${base}/${ogKey(a, v)}`,
+    async putOg(a, v, bytes) {
+      objects.set(ogKey(a, v), bytes);
+    },
+    async readOg(a, v) {
+      const obj = objects.get(ogKey(a, v));
+      return obj instanceof Uint8Array ? obj : null;
     },
     async ping() {
       return true;
@@ -345,6 +358,8 @@ export function makeTestDeps(overrides: Partial<AppDeps> = {}): AppDeps {
     walletBalance: overrides.walletBalance ?? { async read() {
       return "0";
     } },
+    // Hermetic OG image inliner: no network in tests → always the monogram path.
+    ogImage: overrides.ogImage ?? (async () => null),
     now: overrides.now ?? (() => 1_700_000_300_000),
     secureCookies: overrides.secureCookies ?? false,
   };

@@ -26,7 +26,7 @@ If `$ARGUMENTS` names an item, select it but still enforce 1–3 (refuse with th
 
 ## 3. Execute via the owning agent
 
-Delegate to the agent named on the item (hoodpad-contracts / hoodpad-indexer / hoodpad-frontend / hoodpad-security / hoodpad-architect — path ownership per development-flow §4, including the plan's `tools/localstack` extension). Never implement a service item in the main session. The delegation prompt must include:
+Delegate to the agent named on the item (robbed-contracts / robbed-indexer / robbed-frontend / robbed-security / robbed-architect — path ownership per development-flow §4, including the plan's `tools/localstack` extension). Never implement a service item in the main session. The delegation prompt must include:
 
 - The item id + full text, the doc section(s) it **transcribes** (the code is a transcription — development-flow §2), and the verification command that defines done.
 - The standing loop obligations: docs-first (context7 MCP → WebFetch fallback for every library touched), service-doc coverage before code, the doc's test floor, self-check greps, report format.
@@ -36,8 +36,8 @@ After the agent reports:
 
 - Run the item's `Verify:` command yourself. Failing → the item stays `[ ]`; iterate or report the failure.
 - Run `/spec-check` on the diff (every change, no exceptions — development-flow §5.7). High+ findings block.
-- Diff under `contracts/` → dispatch **hoodpad-security** for the adversarial gate before considering the item done (development-flow §5.8); findings go back to hoodpad-contracts, dispositions recorded.
-- Agent surfaced an ambiguity → route it to **hoodpad-architect** per development-flow §3 (spec §12/§13 + decisions.md), never resolve it yourself, never let the sub-agent self-resolve.
+- Diff under `contracts/` → dispatch **robbed-security** for the adversarial gate before considering the item done (development-flow §5.8); findings go back to robbed-contracts, dispositions recorded.
+- Agent surfaced an ambiguity → route it to **robbed-architect** per development-flow §3 (spec §12/§13 + decisions.md), never resolve it yourself, never let the sub-agent self-resolve.
 
 ## 4. Human decisions: stop, don't invent
 
@@ -45,7 +45,7 @@ If the selected (or only remaining eligible) item is **NEEDS-USER** or blocked o
 
 ## 5. Record and report
 
-On success, edit `docs/implementation-plan.md`: `- [x] … — done YYYY-MM-DD; evidence: <one-line verification result or commit ref>`. If the item resolved a §13 item, confirm hoodpad-architect recorded it in spec §12 + `docs/decisions.md` before marking done.
+On success, edit `docs/implementation-plan.md`: `- [x] … — done YYYY-MM-DD; evidence: <one-line verification result or commit ref>`. If the item resolved a §13 item, confirm robbed-architect recorded it in spec §12 + `docs/decisions.md` before marking done.
 
 Final report, always:
 

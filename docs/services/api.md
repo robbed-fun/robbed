@@ -214,6 +214,27 @@ GET /v1/eth-usd                → { price, source, asOf }                      
 GET /v1/healthz                → liveness; /v1/readyz → DB+Redis+R2 checks (gate-7 probes)
 ```
 
+### 3.5a OG share cards (spec §5.2 share card)
+
+```
+GET /v1/og/{address}.png        → image/png 1200×630 — the token's ROBBED_ terminal share card
+  (also accepts /v1/og/{address}). Rendered server-side with native satori → @resvg/resvg-js
+  (NOT @vercel/og): the API runs on Bun/Komodo with no Worker size limit, so OG generation moved
+  OFF the web's Cloudflare Worker and the frontend just points <meta og:image> at this URL. This is
+  the SINGLE OG renderer — no cross-service duplication.
+  Data: reuses the /tokens card projection (name/ticker/status/graduated/progress) + the mini candle
+    window (12h @ 15m) + mcap ETH-first with USD `asOf` (§2 — no hardcoded metric). Token logo is
+    fetched + inlined server-side (resvg can't fetch remote URLs at raster time); failures degrade to
+    a monogram tile so the image always renders.
+  Cache: R2 `robbed-assets` key `og/{address}/{version}.png`, where `version` = a hash of the DISPLAY
+    fields (name, mcap, progress, status, sparkline, logo) prefixed by a renderer version. A stats
+    change ⇒ new hash ⇒ new key ⇒ fresh render (content-addressed; can't serve stale). `version` is
+    also the `ETag` → a matching `If-None-Match` short-circuits to 304 (no render, no R2 read).
+    Cache hit reads bytes from R2; miss renders once, stores, serves. `X-Robbed-Og-Cache: hit|miss`.
+    `Cache-Control: public, max-age=300, s-maxage=300, stale-while-revalidate=86400`.
+  404 → unknown token; 400 → malformed address. Never mutates chain state (§8.4).
+```
+
 ### 3.6 Moderation — admin endpoints (§8.4)
 
 All under `/v1/admin/*`, auth per §6. Every action audit-logged.

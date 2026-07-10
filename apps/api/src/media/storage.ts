@@ -7,6 +7,8 @@
  *
  * Objects are CONTENT-ADDRESSED → writes are idempotent and dedupe:
  *   images/{keccak256}.webp   metadata/{hash}.json
+ *   og/{address}/{version}.png   (rendered OG cards, keyed by a display-data hash
+ *                                 so a stats change regenerates — og/data.ts)
  */
 export interface Storage {
   imageKey(keccak: string): string;
@@ -16,6 +18,12 @@ export interface Storage {
   putImage(keccak: string, bytes: Uint8Array): Promise<void>;
   putMetadata(hash: string, json: string): Promise<void>;
   imageExists(keccak: string): Promise<boolean>;
+  // ── OG card cache (api.md §3 OG endpoint) ──────────────────────────────────
+  ogKey(address: string, version: string): string;
+  ogUrl(address: string, version: string): string;
+  putOg(address: string, version: string, bytes: Uint8Array): Promise<void>;
+  /** Read a cached OG PNG; `null` on a cache miss (never throws for absence). */
+  readOg(address: string, version: string): Promise<Uint8Array | null>;
   ping(): Promise<boolean>;
 }
 
@@ -48,6 +56,8 @@ export function createBunStorage(cfg: StorageConfig): Storage {
 
   const imageKey = (keccak: string) => `images/${stripHashPrefix(keccak)}.webp`;
   const metadataKey = (hash: string) => `metadata/${stripHashPrefix(hash)}.json`;
+  const ogKey = (address: string, version: string) =>
+    `og/${stripHashPrefix(address).toLowerCase()}/${version}.png`;
 
   return {
     imageKey,
@@ -62,6 +72,21 @@ export function createBunStorage(cfg: StorageConfig): Storage {
     },
     async imageExists(keccak) {
       return client.file(imageKey(keccak)).exists();
+    },
+    ogKey,
+    ogUrl: (address, version) => `${base}/${ogKey(address, version)}`,
+    async putOg(address, version, bytes) {
+      await client.file(ogKey(address, version)).write(bytes, { type: "image/png" });
+    },
+    async readOg(address, version) {
+      // Bun's S3 `arrayBuffer()` throws on a missing key → treat as a cache miss.
+      try {
+        const file = client.file(ogKey(address, version));
+        if (!(await file.exists())) return null;
+        return new Uint8Array(await file.arrayBuffer());
+      } catch {
+        return null;
+      }
     },
     async ping() {
       try {
@@ -78,6 +103,7 @@ export function createBunStorage(cfg: StorageConfig): Storage {
 interface BunS3File {
   write(data: Uint8Array | string, opts?: { type?: string }): Promise<number>;
   exists(): Promise<boolean>;
+  arrayBuffer(): Promise<ArrayBuffer>;
 }
 interface BunS3Client {
   file(key: string): BunS3File;

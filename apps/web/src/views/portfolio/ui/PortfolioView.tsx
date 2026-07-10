@@ -1,27 +1,39 @@
 import { AppHeader } from "@/widgets/app-header";
-import { MobileNav } from "@/widgets/mobile-nav";
 import { LiveStatusBanner } from "@/widgets/live-status-banner";
-import { CursorTag, MonoLabel } from "@/shared/ui";
+import { MobileNav } from "@/widgets/mobile-nav";
+
+import { PortfolioClient } from "./PortfolioClient";
 
 /**
- * Portfolio `/portfolio` — Phase F PLACEHOLDER shell (ROBBED_ mockup "2c").
- * The Portfolio page agent (Phase P) replaces the main content with the real
- * screen: address·you header, stat cells (TOTAL VALUE / LOOT ALL-TIME /
- * WALLET ETH), HOLDINGS/ACTIVITY/CREATED tabs, holdings table — all from live
- * indexer/on-chain data (§2: no mocked metrics; the shell intentionally shows
- * none).
+ * Portfolio `/portfolio` (§5.4 — Phase-2 page surfaced day 1 by the ROBBED_
+ * redesign, docs/Robbed.html "2c"). SERVER shell: the SSR chrome (status banner,
+ * header, bottom nav) matches every other view, while the wallet-scoped content
+ * hydrates as one client island (`PortfolioClient`) — the subject address comes
+ * from the connected wallet or an explicit `?address=`, so there is nothing
+ * meaningful to server-render inside the panel until the client resolves it.
+ *
+ * NO mocked metrics (§2): every value under the panel is a live
+ * `/v1/portfolio/*` read (totals/PnL are ETH-first with a live-priced USD
+ * mirror; PnL is a nullable range — §5.2). NO OG work here (out of scope).
  */
-export default function PortfolioView() {
+export default async function PortfolioView({
+  searchParams,
+}: {
+  // Next 16 App Router: `searchParams` is a Promise (verified 2026-07-10).
+  searchParams?: Promise<{ address?: string | string[] }>;
+}) {
+  const params = (await searchParams) ?? {};
+  const raw = Array.isArray(params.address) ? params.address[0] : params.address;
+  const initialAddress = raw && /^0x[0-9a-fA-F]{40}$/.test(raw) ? raw : undefined;
+
   return (
     <>
       <LiveStatusBanner />
       <AppHeader />
-      <main className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-6 pb-16 md:pb-6">
-        <MonoLabel>Portfolio</MonoLabel>
-        <p className="text-sm text-muted">
-          Connect a wallet to see holdings, activity, and created tokens.
-        </p>
-        <CursorTag>coming online</CursorTag>
+      <main className="mx-auto w-full max-w-6xl pb-20 md:px-4 md:py-4 md:pb-6">
+        <div className="border-y border-border bg-bg md:border">
+          <PortfolioClient initialAddress={initialAddress} />
+        </div>
       </main>
       <MobileNav />
     </>

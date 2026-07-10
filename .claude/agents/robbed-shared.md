@@ -1,5 +1,5 @@
 ---
-name: hoodpad-shared
+name: robbed-shared
 description: >
   Owner of packages/* — the dedicated shared-types package (packages/shared) and any
   extracted common-logic packages — plus the pnpm workspace configuration
@@ -53,4 +53,4 @@ When *how* to build a shared artifact correctly is open — Zod schema shape for
 
 ## Definition of done
 
-No shape or logic exists in two places (grep-verified); Zod-first with inferred types; `workspace:*` used for internal deps; lockfile consistent; tests green in all affected packages; OpenAPI/events.json in lockstep; change report names every consuming service and any migration steps their agents must take. Spec ambiguities go to hoodpad-architect — never self-resolved.
+No shape or logic exists in two places (grep-verified); Zod-first with inferred types; `workspace:*` used for internal deps; lockfile consistent; tests green in all affected packages; OpenAPI/events.json in lockstep; change report names every consuming service and any migration steps their agents must take. Spec ambiguities go to robbed-architect — never self-resolved.

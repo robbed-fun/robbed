@@ -20,6 +20,7 @@ import { healthRoutes } from "./routes/health";
 import { holderRoutes } from "./routes/holders";
 import { metaRoutes } from "./routes/meta";
 import { metadataRoutes } from "./routes/metadata";
+import { ogRoutes } from "./routes/og";
 import { portfolioRoutes } from "./routes/portfolio";
 import { searchRoutes } from "./routes/search";
 import { statsRoutes } from "./routes/stats";
@@ -59,6 +60,8 @@ export function createApp(deps: AppDeps) {
   app.use("/v1/stats", reads);
   app.use("/v1/confirmations", reads);
   app.use("/v1/eth-usd", reads);
+  // OG render is a read; rate-limit it in the reads class (crawler-facing).
+  app.use("/v1/og/*", reads);
 
   // ── central error + 404 ───────────────────────────────────────────────────
   app.onError((err, c) => toErrorResponse(c, err));
@@ -77,6 +80,7 @@ export function createApp(deps: AppDeps) {
   app.route("/", statsRoutes(deps));
   app.route("/", uploadRoutes(deps));
   app.route("/", metadataRoutes(deps));
+  app.route("/", ogRoutes(deps));
   app.route("/", adminRoutes(deps));
 
   return app;

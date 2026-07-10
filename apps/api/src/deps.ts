@@ -18,6 +18,7 @@ import type { Reencoder } from "./media/reencode";
 import { createSharpReencoder } from "./media/reencode";
 import type { Storage } from "./media/storage";
 import { createBunStorage } from "./media/storage";
+import { fetchImageDataUri } from "./og/image";
 import type { WalletBalanceReader } from "./lib/wallet-balance";
 import { createRpcWalletBalance, zeroWalletBalance } from "./lib/wallet-balance";
 import type { ModerationVendors } from "./moderation/vendors";
@@ -49,6 +50,12 @@ export interface AppDeps {
   uncollectedFees: UncollectedFeesReader;
   /** Live native-ETH balance reader (portfolio summary; RPC, never hot path). */
   walletBalance: WalletBalanceReader;
+  /**
+   * Fetch a token logo and inline it as a data URI for the OG card (resvg can't
+   * fetch remote URLs at raster time). Injectable so OG route tests stay hermetic
+   * (no network); real boot uses `fetchImageDataUri`.
+   */
+  ogImage: (url: string | null | undefined) => Promise<string | null>;
   now: () => number;
   /** Set `false` in dev so cookies work over http (Secure flag). */
   secureCookies: boolean;
@@ -98,6 +105,7 @@ export function buildDeps(dbFactory: (cfg: Config) => Db): AppDeps {
     walletBalance: config.ROBINHOOD_RPC_URL
       ? createRpcWalletBalance(config.ROBINHOOD_RPC_URL)
       : zeroWalletBalance,
+    ogImage: fetchImageDataUri,
     now: () => Date.now(),
     secureCookies: config.API_ENV === "production",
   };

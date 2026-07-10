@@ -1,5 +1,5 @@
 ---
-description: Re-derive the requirements-traceability matrix for the spec sections named in $ARGUMENTS (default; sections touched by the current diff), diff it against docs/traceability.md, update changed rows, and report new orphans. Genuine gaps are routed to hoodpad-architect, never resolved here.
+description: Re-derive the requirements-traceability matrix for the spec sections named in $ARGUMENTS (default; sections touched by the current diff), diff it against docs/traceability.md, update changed rows, and report new orphans. Genuine gaps are routed to robbed-architect, never resolved here.
 allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent
 ---
 
@@ -35,7 +35,7 @@ Maintain `docs/traceability.md` — the matrix mapping every normative requireme
 
 ## Routing gaps — never invent mappings
 
-- If a requirement has **no designing doc section**, **no plan item**, or the spec is ambiguous about what the requirement even is: record it in orphan table A and **route it to `hoodpad-architect`** (Agent tool, subagent_type `hoodpad-architect`) with the requirement text, § anchor, and what's missing — the architect owns spec §12/§13 arbitration and plan fixes (development-flow.md §3). Do **not** fabricate a Design/Build/Verify cell to make a row look FULL, do not edit the spec, service docs, or the plan, and do not implement anything.
+- If a requirement has **no designing doc section**, **no plan item**, or the spec is ambiguous about what the requirement even is: record it in orphan table A and **route it to `robbed-architect`** (Agent tool, subagent_type `robbed-architect`) with the requirement text, § anchor, and what's missing — the architect owns spec §12/§13 arbitration and plan fixes (development-flow.md §3). Do **not** fabricate a Design/Build/Verify cell to make a row look FULL, do not edit the spec, service docs, or the plan, and do not implement anything.
 - If a service doc and the spec disagree while mapping, the spec wins — flag the conflict as an A-row and route it; never reinterpret (development-flow.md §1).
 
 ## Report
@@ -43,7 +43,7 @@ Maintain `docs/traceability.md` — the matrix mapping every normative requireme
 1. Resolved scope (sections + why).
 2. Row delta table: `ID | change (added/updated/removed/unchanged-count) | what changed`.
 3. **New or changed orphans**, tables A and B, verbatim as written to the file. State explicitly if there are none.
-4. Anything routed to hoodpad-architect (with the message sent).
+4. Anything routed to robbed-architect (with the message sent).
 5. Updated totals (rows, FULL/PARTIAL/DEFERRED/DOC-ONLY, orphan counts).
 
 This command reports and maintains the matrix; it fixes nothing else.

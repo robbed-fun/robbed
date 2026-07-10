@@ -606,6 +606,48 @@ paths:
                   error: { type: "null" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /v1/og/{address}.png:
+    get:
+      tags: [meta]
+      operationId: getTokenOgImage
+      summary: Rendered OG share card (image/png 1200×630) for a token
+      description: >-
+        The token's ROBBED_ terminal share card, rendered server-side with native
+        `satori` + `@resvg/resvg-js` and cached in R2 (`og/{address}/{version}.png`,
+        where `version` hashes the display fields so a stats change regenerates).
+        This is the SINGLE OG renderer — the web sets `<meta og:image>` to this URL
+        (OG generation was moved off the Cloudflare Worker to drop the `@vercel/og`
+        WASM bundle). All metrics are live indexer values (spec §2); USD carries its
+        `asOf`. The extensionless form `/v1/og/{address}` is also accepted. Cache
+        hits serve stored bytes; the content `version` is returned as the `ETag`, so
+        a matching `If-None-Match` short-circuits to 304. Not chain-mutating (§8.4).
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/Address" }
+          description: Token contract address (a trailing `.png` is stripped).
+      responses:
+        "200":
+          description: The rendered card. `X-Robbed-Og-Cache` is `hit` (from R2) or `miss` (freshly rendered + stored).
+          headers:
+            Cache-Control:
+              schema: { type: string }
+              description: "public, max-age=300, s-maxage=300, stale-while-revalidate=86400"
+            ETag:
+              schema: { type: string }
+              description: Content-version hash of the display data (quoted).
+            X-Robbed-Og-Cache:
+              schema: { type: string, enum: [hit, miss] }
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "304":
+          description: Not modified — `If-None-Match` matched the current content version. Empty body.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
   /v1/healthz:
     get:
       tags: [meta]
