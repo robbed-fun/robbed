@@ -3,8 +3,10 @@
  * guide). Screen composition + data fetching live in the `views/token-detail`
  * slice; this file only unwraps the (Next 16) Promise params and delegates.
  *
- * The per-token OG image auto-wires from the sibling `opengraph-image.tsx` (M3-8)
- * — no explicit og:image wiring here.
+ * The per-token `og:image` is set inside `generateTokenMetadata` and points at
+ * the API-served, R2-cached PNG (`{API_ORIGIN}/v1/og/{address}.png`) — the web no
+ * longer renders OG images itself (that dropped `@vercel/og`/resvg-WASM from the
+ * Cloudflare Worker bundle to fit the 3 MiB Free limit).
  */
 import type { Metadata } from "next";
 

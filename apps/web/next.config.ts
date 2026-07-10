@@ -31,12 +31,12 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [{ source: "/launch", destination: "/create", permanent: false }];
   },
-  // OG renderer: the raster backend moved from native `@resvg/resvg-js` to Next's
-  // `next/og` `ImageResponse` (satori → resvg-WASM, bundled) because the deploy
-  // target is Cloudflare Workers via OpenNext, and workerd cannot load native
-  // N-API addons (deploy-komodo-cloudflare.md Part B §B.6, spec §12.45). `next/og`
-  // needs no `serverExternalPackages` entry (Next handles its own WASM), so the
-  // previous native-addon opt-out is gone.
+  // OG images are NOT rendered by the web anymore: the API serves them at
+  // `{API_ORIGIN}/v1/og/{address}.png` (R2-cached PNG) and the token-detail
+  // metadata just references that absolute URL. This removed `next/og`
+  // (`@vercel/og` → resvg/yoga WASM ≈ 1.5 MB raw) from the Cloudflare Worker
+  // bundle so it fits under Cloudflare's 3 MiB (3072 KiB gzip) Free limit
+  // (deploy-komodo-cloudflare.md Part B §B.6, spec §12.45).
 };
 
 export default nextConfig;
