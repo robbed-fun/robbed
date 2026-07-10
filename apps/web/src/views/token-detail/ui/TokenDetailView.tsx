@@ -53,8 +53,8 @@ export default async function TokenDetailView({ address }: { address: string }) 
     <>
       <LiveStatusBanner />
       <AppHeader />
-      <main className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 pb-16 md:pb-4">
-        <TokenHeader token={token} />
+      <main className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 pb-24 md:pb-4">
+        <TokenHeader token={token} holderCount={initialHolders?.holderCount} />
         <TokenDetailClient
           token={token}
           initialTrades={initialTrades}

@@ -107,10 +107,10 @@ Not a service — the interface layer all three consume (see §4).
 
 | Contract surface | Owner (authoritative doc) | Consumers |
 |---|---|---|
-| Event ABIs (`TokenCreated`, `Trade`, `Graduated`, `GraduationReady`, `FeesSwept`, `PoolInitialized`, `FeesCollected`) — canonical shapes ratified in spec §12.15/§12.25 | hoodpad-contracts — contracts.md §2 | indexer (handlers), shared `events.ts`, web (receipt parsing) |
-| On-chain view surface (`quoteBuy/quoteSell`, `reserves`, `phase`, factory config getters) | hoodpad-contracts — contracts.md §2.3/§2.4 | web Trust panel + TradeWidget (live reads), API fees endpoint |
-| Postgres table shapes | hoodpad-indexer — indexer.md §3 | API (read-only role), shared `db-rows.ts` |
-| WS channel taxonomy + message schemas | hoodpad-indexer — indexer.md §8.1/§8.2 | WS fanout (api), web; types in shared `channels.ts`/`ws-messages.ts` |
+| Event ABIs (`TokenCreated`, `Trade`, `Graduated`, `GraduationReady`, `FeesSwept`, `PoolInitialized`, `FeesCollected`) — canonical shapes ratified in spec §12.15/§12.25 | robbed-contracts — contracts.md §2 | indexer (handlers), shared `events.ts`, web (receipt parsing) |
+| On-chain view surface (`quoteBuy/quoteSell`, `reserves`, `phase`, factory config getters) | robbed-contracts — contracts.md §2.3/§2.4 | web Trust panel + TradeWidget (live reads), API fees endpoint |
+| Postgres table shapes | robbed-indexer — indexer.md §3 | API (read-only role), shared `db-rows.ts` |
+| WS channel taxonomy + message schemas | robbed-indexer — indexer.md §8.1/§8.2 | WS fanout (api), web; types in shared `channels.ts`/`ws-messages.ts` |
 | REST endpoint paths + DTOs (`/v1/...`) | hoodpad-indexer (API doc) — api.md §3 | web; types in shared `api-types.ts` |
 | Metadata canonicalization (`canonicalizeMetadata`, `metadataHash`) + golden fixtures | `packages/shared` `metadata.ts` — **single implementation**, api.md §5 | API (hash at publish), web (pre-sign verify), indexer (verify vs chain) |
 | Confirmation vocabulary `soft_confirmed \| posted_to_l1 \| finalized` | shared `confirmation.ts` (semantics: spec §2.1, pipeline: indexer.md §5) | all three |

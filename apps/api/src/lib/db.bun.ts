@@ -13,6 +13,7 @@
  */
 import { SQL } from "bun";
 import type {
+  AddressPnlRow,
   BotFlag,
   CandleRow,
   ConfirmationWatermarksRow,
@@ -29,6 +30,7 @@ import type {
   Db,
   HolderJoinedRow,
   ListTokensInput,
+  PortfolioHoldingRow,
   RawQuery,
   TokenDetailRow,
   TokenListRow,
@@ -122,6 +124,32 @@ function mapFee(r: Record<string, unknown>): FeeCollectionRow {
     confirmation_state: r.confirmation_state as FeeCollectionRow["confirmation_state"],
   };
 }
+
+/** balances ⋈ tokens → the Portfolio HOLDINGS join row (pricing + ref columns). */
+function mapHolding(r: Record<string, unknown>): PortfolioHoldingRow {
+  return {
+    token_address: String(r.token_address),
+    balance: str(r.balance),
+    total_eth_in: str(r.total_eth_in),
+    total_bought_tokens: str(r.total_bought_tokens),
+    name: String(r.name),
+    ticker: String(r.ticker),
+    image_url: nstr(r.image_url),
+    graduated: Boolean(r.graduated),
+    real_eth_reserves: str(r.real_eth_reserves),
+    graduation_eth: str(r.graduation_eth),
+    virtual_eth: str(r.virtual_eth),
+    virtual_token: str(r.virtual_token),
+    last_price_eth: r.last_price_eth == null ? null : Number(r.last_price_eth),
+    trade_fee_bps: num(r.trade_fee_bps),
+  };
+}
+
+const HOLDING_SELECT = `
+  b.token_address, b.balance, b.total_eth_in, b.total_bought_tokens,
+  t.name, t.ticker, t.image_url, t.graduated, t.real_eth_reserves, t.graduation_eth,
+  t.virtual_eth, t.virtual_token, t.last_price_eth, t.trade_fee_bps`;
+const HOLDING_FROM = `FROM balances b JOIN tokens t ON t.address = b.token_address`;
 
 function mapModeration(r: Record<string, unknown>): ModerationStatusRow {
   return {
@@ -398,6 +426,90 @@ export function createBunDb(config: Config): Db {
         [token],
       )) as Record<string, unknown>[];
       return rows.map(mapFee);
+    },
+
+    // ── portfolio (spec §5.4) ─────────────────────────────────────────────────
+    async getAddressPnl(address) {
+      const rows = (await ro.unsafe(
+        `SELECT address, first_seen_at, last_active_at, trade_count, tokens_created,
+                total_eth_in, total_eth_out, realized_pnl_low, realized_pnl_high,
+                pnl_confidence, updated_at
+           FROM address_pnl WHERE address = $1`,
+        [address],
+      )) as Record<string, unknown>[];
+      const r = rows[0];
+      if (!r) return null;
+      return {
+        address: String(r.address),
+        first_seen_at: num(r.first_seen_at),
+        last_active_at: num(r.last_active_at),
+        trade_count: num(r.trade_count),
+        tokens_created: num(r.tokens_created),
+        total_eth_in: str(r.total_eth_in),
+        total_eth_out: str(r.total_eth_out),
+        realized_pnl_low: str(r.realized_pnl_low),
+        realized_pnl_high: str(r.realized_pnl_high),
+        pnl_confidence: (r.pnl_confidence as AddressPnlRow["pnl_confidence"]) ?? null,
+        updated_at: iso(r.updated_at),
+      } satisfies AddressPnlRow;
+    },
+
+    async getAllHoldings(address) {
+      const rows = (await ro.unsafe(
+        `SELECT ${HOLDING_SELECT} ${HOLDING_FROM}
+         WHERE b.holder = $1 AND b.balance::numeric > 0`,
+        [address],
+      )) as Record<string, unknown>[];
+      return rows.map(mapHolding);
+    },
+
+    async listHoldings(input) {
+      const where: string[] = ["b.holder = $1", "b.balance::numeric > 0"];
+      const params: unknown[] = [input.address];
+      if (input.cursorBalance != null && input.cursorToken != null) {
+        params.push(input.cursorBalance, input.cursorToken);
+        where.push(
+          `(b.balance::numeric, b.token_address) < ($${params.length - 1}::numeric, $${params.length})`,
+        );
+      }
+      params.push(input.limit);
+      const text = `SELECT ${HOLDING_SELECT} ${HOLDING_FROM}
+        WHERE ${where.join(" AND ")}
+        ORDER BY b.balance::numeric DESC, b.token_address DESC
+        LIMIT $${params.length}`;
+      const rows = (await ro.unsafe(text, params)) as Record<string, unknown>[];
+      return rows.map(mapHolding);
+    },
+
+    async listAddressTrades(input) {
+      const where: string[] = ["trader = $1"];
+      const params: unknown[] = [input.address];
+      if (input.cursorTs != null && input.cursorId != null) {
+        params.push(input.cursorTs, input.cursorId);
+        where.push(`(block_timestamp, id) < ($${params.length - 1}, $${params.length})`);
+      }
+      params.push(input.limit);
+      const text = `SELECT * FROM trades WHERE ${where.join(" AND ")}
+        ORDER BY block_timestamp DESC, id DESC LIMIT $${params.length}`;
+      const rows = (await ro.unsafe(text, params)) as Record<string, unknown>[];
+      return rows.map(mapTrade);
+    },
+
+    async listCreatedTokens(input) {
+      // Listing-gated like /tokens: hidden creations are excluded (§8.4). Ordered
+      // newest-first with (created_at, address) keyset — stable under new launches.
+      const where: string[] = ["t.creator = $1", "(m.visibility IS DISTINCT FROM 'hidden')"];
+      const params: unknown[] = [input.address];
+      if (input.cursorTs != null && input.cursorToken != null) {
+        params.push(input.cursorTs, input.cursorToken);
+        where.push(`(t.created_at, t.address) < ($${params.length - 1}, $${params.length})`);
+      }
+      params.push(input.limit);
+      const text = `SELECT ${TOKEN_LIST_SELECT} ${TOKEN_LIST_FROM}
+        WHERE ${where.join(" AND ")}
+        ORDER BY t.created_at DESC, t.address DESC LIMIT $${params.length}`;
+      const rows = (await ro.unsafe(text, params)) as Record<string, unknown>[];
+      return rows.map(mapTokenList);
     },
 
     async getStats(nowSec) {

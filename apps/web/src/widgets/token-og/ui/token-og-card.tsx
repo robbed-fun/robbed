@@ -1,43 +1,40 @@
 import type { ReactElement } from "react";
 
-import { AMM_TAGLINE, BRAND } from "@/shared/config/copy";
-import { OG_COLORS, OG_HEIGHT, OG_WIDTH, sparklineDataUri } from "@/shared/lib/og";
+import { TAGLINE_TRADE } from "@/shared/config/copy";
+import { OG_COLORS, OG_FONT_FAMILY, OG_HEIGHT, OG_WIDTH } from "@/shared/lib/og";
 
 /**
  * The OG card element tree fed to satori (web.md §6). NOT a DOM component — it is
  * never mounted client-side (no client JS in the OG path). All colors come from
- * the mirrored OG palette (`OG_COLORS`) so the token-bypass lint stays clean; the
- * "soft-confirmed trading" tag is the approved AMM framing (§1). Brand: ROBBED_
- * (redesign Phase F); the terminal-skin OG re-art lands with Phase P.
+ * the mirrored OG palette (`OG_COLORS`) so the token-bypass lint stays clean.
+ *
+ * ROBBED_ terminal re-art (task A): mono (IBM Plex Mono), the dark ROBBED_ canvas
+ * and green accent (values live in `OG_COLORS`), the `ROBBED_` wordmark with its
+ * green `_`, square panels, uppercase letter-spaced micro-labels — the terminal
+ * language of the app skin. Spec content (§5.2) is unchanged: chart snapshot (mini candles) +
+ * mcap + graduation progress. The `rob responsibly_` tagline replaces the old
+ * AMM-framing footer; the AMM guarantee is carried by the page copy + alt text.
  *
  * satori uses a Flexbox-only layout engine: every container with more than one
  * child sets `display: 'flex'` explicitly. Layout flows top→bottom; the mcap +
- * progress + brand block is pinned to the bottom via `marginTop: 'auto'`.
+ * progress block is pinned to the bottom via `marginTop: 'auto'`.
  */
 import type { TokenOgData } from "../api/get-og-data";
 
 const PAD = 48;
 const CONTENT_W = OG_WIDTH - PAD * 2;
-const SPARK_PAD = 16;
-const SPARK_H = 190;
-const SPARK_W = CONTENT_W - SPARK_PAD * 2;
+// Fixed vertical budget (satori/yoga resolves percentage bar heights only against
+// an explicit parent height, not a flex-basis one) so the whole card fits 630px.
+const CHART_PANEL_H = 156;
+const CANDLES_H = CHART_PANEL_H - 36 /* pad */ - 24 /* label */ - 14 /* gap */;
+const LABEL: React.CSSProperties = {
+  display: "flex",
+  fontSize: 22,
+  letterSpacing: "0.14em",
+  color: OG_COLORS.faint,
+};
 
 export function buildTokenOgCard(data: TokenOgData): ReactElement {
-  const first = data.sparkline.at(0);
-  const last = data.sparkline.at(-1);
-  const up =
-    first !== undefined && last !== undefined && data.sparkline.length >= 2 && last >= first;
-  const lineColor = up ? OG_COLORS.buy : OG_COLORS.sell;
-
-  const spark = sparklineDataUri(data.sparkline, {
-    width: SPARK_W,
-    height: SPARK_H,
-    stroke: lineColor,
-    fill: lineColor,
-    strokeWidth: 5,
-    padding: 10,
-  });
-
   const progress = clampPct(data.progressPct);
 
   return (
@@ -48,13 +45,23 @@ export function buildTokenOgCard(data: TokenOgData): ReactElement {
         display: "flex",
         flexDirection: "column",
         backgroundColor: OG_COLORS.bg,
-        color: OG_COLORS.text,
-        fontFamily: "Inter",
+        color: OG_COLORS.textSecondary,
+        fontFamily: OG_FONT_FAMILY,
         padding: PAD,
       }}
     >
-      {/* ── Header: logo + name/ticker + status pill ─────────────────────── */}
+      {/* ── Top bar: ROBBED_ wordmark · status ───────────────────────────── */}
       <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
+        <Wordmark />
+        <div style={{ display: "flex", marginLeft: "auto" }}>
+          <StatusTag data={data} />
+        </div>
+      </div>
+
+      <Hairline marginTop={18} />
+
+      {/* ── Token identity: avatar · NAME TICKER · PRICE ─────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", width: "100%", marginTop: 20 }}>
         <Logo data={data} />
         <div
           style={{
@@ -62,35 +69,47 @@ export function buildTokenOgCard(data: TokenOgData): ReactElement {
             flexDirection: "column",
             marginLeft: 26,
             flex: 1,
+            minWidth: 0,
           }}
         >
-          <div style={{ display: "flex", fontSize: 50, fontWeight: 700, lineHeight: 1.05 }}>
-            {truncate(data.name, 22)}
-          </div>
-          <div style={{ display: "flex", fontSize: 28, color: OG_COLORS.muted, marginTop: 6 }}>
-            {`$${data.ticker}`}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              fontSize: 52,
+              fontWeight: 600,
+              color: OG_COLORS.text,
+              lineHeight: 1.05,
+            }}
+          >
+            {truncate(data.name, 20)}
+            <span style={{ marginLeft: 16, fontSize: 26, fontWeight: 400, color: OG_COLORS.faint }}>
+              {data.ticker.toUpperCase()}
+            </span>
           </div>
         </div>
-        <StatusPill data={data} />
       </div>
 
-      {/* ── Sparkline ────────────────────────────────────────────────────── */}
+      {/* ── Chart snapshot: mini candles (price / ETH) ───────────────────── */}
       <div
         style={{
           display: "flex",
-          marginTop: 26,
-          borderRadius: 16,
-          backgroundColor: OG_COLORS.surface,
+          height: CHART_PANEL_H,
+          flexDirection: "column",
+          marginTop: 22,
           border: `1px solid ${OG_COLORS.border}`,
-          padding: SPARK_PAD,
+          backgroundColor: OG_COLORS.surface,
+          padding: 18,
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- satori element tree, not DOM */}
-        <img src={spark} width={SPARK_W} height={SPARK_H} alt="" />
+        <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
+          <span style={LABEL}>PRICE / ETH</span>
+        </div>
+        <Candles data={data} />
       </div>
 
-      {/* ── Bottom block: mcap + graduation, then brand — pinned to bottom ── */}
-      <div style={{ display: "flex", flexDirection: "column", marginTop: "auto" }}>
+      {/* ── Bottom: MCAP · graduation ────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", marginTop: 22 }}>
         <div
           style={{
             display: "flex",
@@ -103,17 +122,39 @@ export function buildTokenOgCard(data: TokenOgData): ReactElement {
           <Graduation data={data} progress={progress} />
         </div>
 
-        {/* ROBBED_ wordmark (redesign Phase F; final OG art re-skin = Phase P). */}
-        <div style={{ display: "flex", alignItems: "center", marginTop: 26 }}>
-          <div style={{ display: "flex", fontSize: 26, fontWeight: 700, color: OG_COLORS.accent }}>
-            {BRAND}
-          </div>
-          <div style={{ display: "flex", fontSize: 22, color: OG_COLORS.muted, marginLeft: 16 }}>
-            {AMM_TAGLINE}
-          </div>
+        <Hairline marginTop={18} />
+
+        <div style={{ display: "flex", alignItems: "center", marginTop: 14 }}>
+          <span style={{ display: "flex", fontSize: 22, color: OG_COLORS.faint }}>
+            {`${TAGLINE_TRADE}_`}
+          </span>
         </div>
       </div>
     </div>
+  );
+}
+
+function Wordmark(): ReactElement {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        fontSize: 34,
+        fontWeight: 600,
+        letterSpacing: "0.12em",
+        color: OG_COLORS.text,
+      }}
+    >
+      ROBBED
+      <span style={{ color: OG_COLORS.accent }}>_</span>
+    </div>
+  );
+}
+
+function Hairline({ marginTop }: { marginTop: number }): ReactElement {
+  return (
+    <div style={{ display: "flex", width: "100%", height: 1, backgroundColor: OG_COLORS.border, marginTop }} />
   );
 }
 
@@ -123,10 +164,10 @@ function Logo({ data }: { data: TokenOgData }): ReactElement {
       // eslint-disable-next-line @next/next/no-img-element -- satori element tree
       <img
         src={data.imageDataUri}
-        width={118}
-        height={118}
+        width={92}
+        height={92}
         alt=""
-        style={{ borderRadius: 18, objectFit: "cover" }}
+        style={{ borderRadius: 46, objectFit: "cover" }}
       />
     );
   }
@@ -135,15 +176,15 @@ function Logo({ data }: { data: TokenOgData }): ReactElement {
     <div
       style={{
         display: "flex",
-        width: 118,
-        height: 118,
-        borderRadius: 18,
-        backgroundColor: OG_COLORS.accent,
-        color: OG_COLORS.accentForeground,
+        width: 92,
+        height: 92,
+        borderRadius: 46,
+        backgroundColor: OG_COLORS.greenDim,
+        color: OG_COLORS.accent,
         alignItems: "center",
         justifyContent: "center",
-        fontSize: 60,
-        fontWeight: 700,
+        fontSize: 48,
+        fontWeight: 600,
       }}
     >
       {initial}
@@ -151,24 +192,24 @@ function Logo({ data }: { data: TokenOgData }): ReactElement {
   );
 }
 
-function StatusPill({ data }: { data: TokenOgData }): ReactElement {
+function StatusTag({ data }: { data: TokenOgData }): ReactElement {
   const label = data.graduated
-    ? "Graduated"
+    ? "GRADUATED"
     : data.status === "graduating"
-      ? "Graduating"
-      : "Bonding curve";
-  const color = data.graduated ? OG_COLORS.buy : OG_COLORS.softConfirmed;
+      ? "GRADUATING"
+      : "BONDING";
+  const color = data.graduated ? OG_COLORS.accent : data.status === "graduating" ? OG_COLORS.purple : OG_COLORS.buy;
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
-        fontSize: 24,
-        fontWeight: 700,
+        fontSize: 22,
+        fontWeight: 600,
+        letterSpacing: "0.1em",
         color,
-        border: `2px solid ${color}`,
-        borderRadius: 999,
-        padding: "8px 22px",
+        border: `1px solid ${color}`,
+        padding: "8px 20px",
       }}
     >
       {label}
@@ -176,11 +217,70 @@ function StatusPill({ data }: { data: TokenOgData }): ReactElement {
   );
 }
 
+/**
+ * Mini candle chart (mockup token-detail chart). Maps the price series to bar
+ * heights [22%..96%]; each bar is coloured up/down vs the previous close using
+ * the terminal candle fills — a "chart snapshot" that reads as candles, not a
+ * line. All values are indexer-supplied (§2); no market math is invented here.
+ */
+function Candles({ data }: { data: TokenOgData }): ReactElement {
+  const values = data.sparkline;
+  const bars = candleBars(values, CONTENT_W);
+  return (
+    <div
+      style={{
+        display: "flex",
+        height: CANDLES_H,
+        alignItems: "flex-end",
+        marginTop: 14,
+        width: "100%",
+      }}
+    >
+      {bars.length === 0 ? (
+        <div
+          style={{
+            display: "flex",
+            width: "100%",
+            height: "100%",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 22,
+            color: OG_COLORS.faint,
+          }}
+        >
+          first trades incoming_
+        </div>
+      ) : (
+        bars.map((b, i) => (
+          <div
+            key={i}
+            style={{
+              display: "flex",
+              flex: 1,
+              height: `${b.heightPct}%`,
+              marginLeft: i === 0 ? 0 : 4,
+              backgroundColor: b.up ? OG_COLORS.candleUp : OG_COLORS.candleDown,
+            }}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
 function Mcap({ data }: { data: TokenOgData }): ReactElement {
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", fontSize: 22, color: OG_COLORS.muted }}>Market cap</div>
-      <div style={{ display: "flex", fontSize: 54, fontWeight: 700, marginTop: 4 }}>
+      <span style={LABEL}>MCAP</span>
+      <div
+        style={{
+          display: "flex",
+          fontSize: 50,
+          fontWeight: 600,
+          color: OG_COLORS.text,
+          marginTop: 6,
+        }}
+      >
         {data.mcapEth ? `${data.mcapEth} ETH` : "—"}
       </div>
       {data.mcapUsd ? (
@@ -205,33 +305,31 @@ function Graduation({
         style={{
           display: "flex",
           alignItems: "center",
-          fontSize: 28,
-          fontWeight: 700,
-          color: OG_COLORS.buy,
-          border: `2px solid ${OG_COLORS.buy}`,
-          borderRadius: 14,
-          padding: "12px 24px",
+          fontSize: 24,
+          fontWeight: 600,
+          letterSpacing: "0.06em",
+          color: OG_COLORS.accent,
+          border: `1px solid ${OG_COLORS.accent}`,
+          padding: "12px 22px",
         }}
       >
-        Graduated → Uniswap V3
+        GRADUATED → UNISWAP V3
       </div>
     );
   }
-  const width = 400;
+  const width = 420;
   return (
     <div style={{ display: "flex", flexDirection: "column", width, alignItems: "flex-end" }}>
       <div style={{ display: "flex", fontSize: 22, color: OG_COLORS.muted }}>
-        {`${progress.toFixed(1)}% to graduation`}
+        {`${progress.toFixed(1)}% BONDING`}
       </div>
       <div
         style={{
           display: "flex",
           width,
-          height: 18,
-          marginTop: 10,
-          borderRadius: 999,
-          backgroundColor: OG_COLORS.surface2,
-          border: `1px solid ${OG_COLORS.border}`,
+          height: 14,
+          marginTop: 12,
+          backgroundColor: OG_COLORS.border,
         }}
       >
         <div
@@ -239,13 +337,36 @@ function Graduation({
             display: "flex",
             width: Math.max(6, (width * progress) / 100),
             height: "100%",
-            borderRadius: 999,
             backgroundColor: OG_COLORS.accent,
           }}
         />
       </div>
     </div>
   );
+}
+
+/**
+ * Normalise a price series to candle bars sized to the chart width. Bar count is
+ * capped so wide series stay legible; heights map min..max → 22%..96% so a flat
+ * series still shows visible bars.
+ */
+function candleBars(
+  values: number[],
+  chartWidth: number,
+): { heightPct: number; up: boolean }[] {
+  const finite = values.filter((v) => Number.isFinite(v));
+  if (finite.length === 0) return [];
+  const maxBars = Math.max(8, Math.min(48, Math.floor(chartWidth / 22)));
+  const series = finite.length > maxBars ? finite.slice(finite.length - maxBars) : finite;
+  const min = Math.min(...series);
+  const max = Math.max(...series);
+  const span = max - min || 1;
+  return series.map((v, i) => {
+    const norm = (v - min) / span; // 0..1
+    const heightPct = 22 + norm * 74;
+    const prev = i === 0 ? v : series[i - 1]!;
+    return { heightPct, up: v >= prev };
+  });
 }
 
 function clampPct(pct: number): number {

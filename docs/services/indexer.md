@@ -43,7 +43,7 @@ Startup assertions: `pg_trgm` installed; V3 addresses present and non-zero; WETH
 
 ## 3. Event inventory & Postgres schema
 
-Event signatures below are the **canonical shapes ratified in spec §12.15** and normatively defined in `docs/services/contracts.md` §2 (contracts.md is authoritative for ABIs; this doc mirrors them). M1 artifacts must match byte-for-byte; **any divergence at implementation time is reported to hoodpad-architect, not worked around** (OI-1, resolved — the shapes are now a contract, not an assumption).
+Event signatures below are the **canonical shapes ratified in spec §12.15** and normatively defined in `docs/services/contracts.md` §2 (contracts.md is authoritative for ABIs; this doc mirrors them). M1 artifacts must match byte-for-byte; **any divergence at implementation time is reported to robbed-architect, not worked around** (OI-1, resolved — the shapes are now a contract, not an assumption).
 
 Ponder note: tables are declared in `ponder.schema.ts`; the SQL below is the *target relational shape* Ponder must produce (Ponder generates DDL from the schema file — column names/types below are normative, exact DDL is Ponder's). Tables marked **[offchain]** are written outside Ponder's reorg-tracked store (see §7.3) because they are updated by side processes (confirmation tracker, metadata verifier, moderation sync) and must not be rolled back by Ponder reorg handling.
 
@@ -574,6 +574,16 @@ WS provides *freshness*, REST provides *truth*. On reconnect (or detected `seq` 
 ### 8.5.3 hood.fun traction snapshot (spec §3/§13/§14)
 
 A weekly scheduled job records a **source+timestamped** snapshot of hood.fun traction (tokens created/day, graduation count, visible volume) via own indexer (if hood.fun contracts are indexable) or a Dune query — **never a hardcoded metric (§2)**. Stored in `competitor_snapshots(source, captured_at, tokens_per_day, graduations, visible_volume_eth)`; feeds **Gate G-A.2** (spec §14). Manual/Dune until the job lands.
+
+## 8.6 Portfolio `address_pnl` roll-up (spec §5.4)
+
+**M2 feature (Phase-2 page surfaced day 1 by the ROBBED_ redesign).** A per-**address** portfolio roll-up backing `GET /v1/portfolio/:address` (api.md §3.4a; db-rows.ts `AddressPnlRow`). Same shape as the §8.5 side jobs: **offchain, indexer-owned table + SQL views + a scheduled recompute-from-raw job** over the Ponder `trades`+`transfers`+`tokens` tables — advisory / read-only, never gates chain state or listing (§8.4). Fully rebuildable from raw events (§4.4): the job TRUNCATEs and re-inserts the whole set each tick, so the recompute **is** the rebuild path (no incremental writer to drift from).
+
+- **Table (offchain, `public`, migration `0006_address_pnl.sql`):** `address_pnl(address, first_seen_at, last_active_at, trade_count, tokens_created, total_eth_in, total_eth_out, realized_pnl_low, realized_pnl_high, pnl_confidence, updated_at)`. Aggregate across ALL of an address's tokens; the per-(token, holder) detail stays in `balances` (§3.6) — this is its address-level roll-up, NOT a duplicate.
+- **Views (Ponder schema, `0007_address_pnl_views.sql`):** `pnl_trade_legs` (per-(address, token) buy/sell ETH+token totals, split by venue, `has_v3`), `pnl_address_activity` (trade count + first/last trade), `pnl_address_seen` (first/last Transfer touch; zero address excluded), `pnl_tokens_created` (creator counts, §7).
+- **Compute (pure, `src/pnl/compute.ts`, unit-tested):** average-cost **realized** PnL over the closed (matched) leg per token, summed per address. **Realized is a RANGE** because V3-leg cost basis is best-effort (recipient is often a router — §12.16/OI-5): the band brackets **curve-only realized (V3 attribution discarded) vs full realized (V3 trusted)** → `low = min`, `high = max`. Curve-only address ⇒ `low == high`, `exact`; any V3 leg ⇒ `estimated`; no cost basis anywhere ⇒ `pnl_confidence = null` (range 0) so the API surfaces `pnlAllTime = null` (§5.2 forbids false precision).
+- **NOT materialized (computed live at the API):** wallet native-ETH balance (RPC `eth_getBalance`, chain truth) and **unrealized / all-time PnL** (live curve-quote price × balance − remaining basis) — price is live, so these are read-time, never stored.
+- **Cadence:** wall-clock `setInterval` (default 60s, `PNL_JOB_INTERVAL_MS`), same pattern as the §8.5 flow job; wired from the sidecar boot (`src/pnl/job.ts` + `src/pnl/store.ts`).
 
 ## 9. Testing & operational concerns
 

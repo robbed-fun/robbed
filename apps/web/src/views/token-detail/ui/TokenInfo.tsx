@@ -1,27 +1,32 @@
 import type { TokenDetail } from "@robbed/shared";
 
-import { AddressLink, Card } from "@/shared/ui";
+import { AddressLink, Card, Divider, MonoLabel, MonoText } from "@/shared/ui";
 import { shortAddress } from "@/shared/lib/format";
 
 /**
- * Token info panel (§5.2): description, external links, contract + curve + pool
- * Blockscout links, creator profile, created-at, metadata JSON link. Server-safe
- * (no client JS) so it is part of the SSR pitch. External links are always
- * `rel="noopener noreferrer"` (threat-model UM-5); stored links are rendered as
- * plain text hrefs (never dangerouslySetInnerHTML) so a stored-link XSS cannot
- * execute (web.md §8.2 stored-link XSS flow).
+ * Token info panel (§5.2) — ROBBED_ terminal skin: description, external links,
+ * contract + curve + pool Blockscout links, creator profile, created-at,
+ * metadata JSON link. Server-safe (no client JS) so it is part of the SSR pitch.
+ * External links are always `rel="noopener noreferrer"` (threat-model UM-5);
+ * stored links are rendered as plain text hrefs (never dangerouslySetInnerHTML)
+ * so a stored-link XSS cannot execute (web.md §8.2 stored-link XSS flow).
  */
 export function TokenInfo({ token }: { token: TokenDetail }) {
   const links = token.links;
+  const hasLinks = links && (links.website || links.x || links.telegram);
   return (
     <Card className="flex flex-col gap-3 p-4">
+      <MonoLabel size="2xs" className="text-text-tertiary">
+        Token info
+      </MonoLabel>
+
       {token.description && (
-        <p className="whitespace-pre-wrap break-words text-sm text-foreground">
+        <p className="whitespace-pre-wrap break-words text-sm text-text-secondary">
           {token.description}
         </p>
       )}
 
-      {links && (links.website || links.x || links.telegram) && (
+      {hasLinks && (
         <div className="flex flex-wrap gap-3 text-xs">
           {links.website && <ExtLink href={links.website} label="Website" />}
           {links.x && <ExtLink href={links.x} label="X" />}
@@ -29,7 +34,9 @@ export function TokenInfo({ token }: { token: TokenDetail }) {
         </div>
       )}
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+      <Divider />
+
+      <dl className="flex flex-col gap-2 text-xs">
         <Row label="Contract">
           <AddressLink address={token.address} kind="token" />
         </Row>
@@ -42,10 +49,10 @@ export function TokenInfo({ token }: { token: TokenDetail }) {
           </Row>
         )}
         <Row label="Creator">
-          <span className="font-mono text-muted-foreground">
+          <MonoText tone="muted">
             {shortAddress(token.creator.address)}
-            <span className="ml-1">· {token.creator.tokensCreated} launched</span>
-          </span>
+            <span className="ml-1 text-faint">· {token.creator.tokensCreated} launched</span>
+          </MonoText>
         </Row>
       </dl>
     </Card>
@@ -55,7 +62,7 @@ export function TokenInfo({ token }: { token: TokenDetail }) {
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <dt className="text-muted-foreground">{label}</dt>
+      <MonoLabel size="2xs">{label}</MonoLabel>
       <dd>{children}</dd>
     </div>
   );
@@ -67,7 +74,7 @@ function ExtLink({ href, label }: { href: string; label: string }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+      className="text-muted underline decoration-dotted underline-offset-2 transition-colors hover:text-text"
     >
       {label} ↗
     </a>

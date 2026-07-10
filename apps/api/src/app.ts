@@ -20,6 +20,7 @@ import { healthRoutes } from "./routes/health";
 import { holderRoutes } from "./routes/holders";
 import { metaRoutes } from "./routes/meta";
 import { metadataRoutes } from "./routes/metadata";
+import { portfolioRoutes } from "./routes/portfolio";
 import { searchRoutes } from "./routes/search";
 import { statsRoutes } from "./routes/stats";
 import { tokenRoutes } from "./routes/tokens";
@@ -54,6 +55,7 @@ export function createApp(deps: AppDeps) {
   app.use("/v1/tokens", reads);
   app.use("/v1/tokens/*", reads);
   app.use("/v1/trades/*", reads);
+  app.use("/v1/portfolio/*", reads);
   app.use("/v1/stats", reads);
   app.use("/v1/confirmations", reads);
   app.use("/v1/eth-usd", reads);
@@ -68,6 +70,7 @@ export function createApp(deps: AppDeps) {
   app.route("/", searchRoutes(deps));
   app.route("/", tokenRoutes(deps));
   app.route("/", tradeRoutes(deps));
+  app.route("/", portfolioRoutes(deps));
   app.route("/", candleRoutes(deps));
   app.route("/", holderRoutes(deps));
   app.route("/", feeRoutes(deps));

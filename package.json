@@ -17,5 +17,16 @@
       "utf-8-validate",
       "keccak"
     ]
+  },
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "catalog": {
+      "zod": "4.4.3",
+      "viem": "2.55.0",
+      "hono": "4.12.28"
+    }
   }
 }

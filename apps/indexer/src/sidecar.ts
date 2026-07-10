@@ -25,6 +25,8 @@ import { createPgMetadataStore } from "./metadataStore";
 import { loadFlowThresholds } from "./flags/heuristics";
 import { buildOwnContractWhitelist, createPgFlowStore } from "./flags/store";
 import { startFlowJob, FLOW_JOB_INTERVAL_MS } from "./flags/job";
+import { createPgPnlStore } from "./pnl/store";
+import { startPnlJob, PNL_JOB_INTERVAL_MS } from "./pnl/job";
 import { initClusterShareMetrics, loadClusterAlertThresholds } from "./metrics";
 import { createPgMetricsStore } from "./metricsStore";
 import { startMetricsServer } from "./metricsServer";
@@ -115,6 +117,12 @@ export async function startSidecars(): Promise<void> {
       flowIntervalMs,
     );
     console.log("[indexer sidecar] §8.5 flow job started.");
+
+    // Portfolio address_pnl roll-up (spec §5.4). Advisory / read-only derive from
+    // trades+transfers+tokens; wallet ETH + unrealized PnL stay live at the API.
+    const pnlIntervalMs = Number(process.env.PNL_JOB_INTERVAL_MS) || PNL_JOB_INTERVAL_MS;
+    startPnlJob({ store: createPgPnlStore(pool, schema) }, pnlIntervalMs);
+    console.log("[indexer sidecar] address_pnl roll-up job started.");
 
     // M2-14 weekly hood.fun competitor snapshot (source unconfigured → no-op writes).
     const competitorIntervalMs = Number(process.env.COMPETITOR_SNAPSHOT_INTERVAL_MS) || COMPETITOR_SNAPSHOT_INTERVAL_MS;

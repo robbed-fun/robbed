@@ -12,6 +12,7 @@
  */
 import type {
   AddressFlagsRow,
+  AddressPnlRow,
   AnchorCandle,
   BalanceRow,
   CandleRow,
@@ -66,6 +67,36 @@ export interface TokenDetailRow extends TokenListRow {
 
 export interface HolderJoinedRow extends BalanceRow {
   flags: Pick<AddressFlagsRow, "flags" | "cluster_id"> | null;
+}
+
+/**
+ * A Portfolio HOLDINGS row: `balances` (Transfer-truth balance + cost-basis
+ * accumulators) JOINed to the token pricing/ref columns. NOT a new wire shape —
+ * it projects into `@robbed/shared` `portfolioHoldingSchema` (anti-drift:
+ * `BalanceRow` already IS the holding, db-rows.ts). Only the balance/cost-basis
+ * columns the read-time price + unrealized-PnL math consumes are carried, plus
+ * the `tokenRef` fields (name/ticker/image/graduated/status inputs).
+ */
+export interface PortfolioHoldingRow {
+  token_address: string;
+  /** Current balance, wei — Transfer-truth (`balances.balance`). */
+  balance: string;
+  /** ETH spent buying (curve exact; v3 best-effort, OI-5) — cost-basis input. */
+  total_eth_in: string;
+  /** Tokens bought — cost-basis denominator (0 ⇒ no basis ⇒ unrealized null). */
+  total_bought_tokens: string;
+  // ── token pricing / ref columns (from `tokens`) ──
+  name: string;
+  ticker: string;
+  image_url: string | null;
+  graduated: boolean;
+  real_eth_reserves: string;
+  graduation_eth: string;
+  virtual_eth: string;
+  virtual_token: string;
+  last_price_eth: number | null;
+  /** Per-curve immutable fee snapshot (§12.40d) — the curve-quote fee input. */
+  trade_fee_bps: number;
 }
 
 /** Result of a pre-built search/list query: rows + whether a sort key exists. */
@@ -127,6 +158,37 @@ export interface Db {
   }): Promise<CandleRow[]>;
   getHolders(input: { token: string; limit: number }): Promise<HolderJoinedRow[]>;
   getFeeCollections(token: string): Promise<FeeCollectionRow[]>;
+
+  // ── portfolio (spec §5.4; api.md §3) ──────────────────────────────────────
+  /** Per-address materialized roll-up backing GET /v1/portfolio/:address; null when the address never appeared. */
+  getAddressPnl(address: string): Promise<AddressPnlRow | null>;
+  /**
+   * ALL priceable holdings for an address (balance > 0), unpaginated — the
+   * summary aggregates totalValueEth + unrealized PnL over the whole set. Bounded
+   * by the address's distinct positive-balance token count.
+   */
+  getAllHoldings(address: string): Promise<PortfolioHoldingRow[]>;
+  /** Cursor-paginated HOLDINGS tab (balance DESC, token_address DESC tiebreak). */
+  listHoldings(input: {
+    address: string;
+    cursorBalance: string | null;
+    cursorToken: string | null;
+    limit: number;
+  }): Promise<PortfolioHoldingRow[]>;
+  /** Per-address ACTIVITY slice of the unified trade feed (reuse `TradeRowDb`). */
+  listAddressTrades(input: {
+    address: string;
+    cursorTs: number | null;
+    cursorId: string | null;
+    limit: number;
+  }): Promise<TradeRowDb[]>;
+  /** CREATED tab: tokens whose `creator` == address (reuse the card row). */
+  listCreatedTokens(input: {
+    address: string;
+    cursorTs: number | null;
+    cursorToken: string | null;
+    limit: number;
+  }): Promise<TokenListRow[]>;
 
   // ── stats ─────────────────────────────────────────────────────────────────
   getStats(nowSec: number): Promise<{

@@ -1,7 +1,9 @@
 /**
- * Projection helpers shared across card/detail/trade/holder. No wire shapes are
- * declared here — only math/format utilities feeding the frozen shared DTOs.
+ * Projection helpers shared across card/detail/trade/holder/portfolio. No wire
+ * shapes are declared here — only math/format utilities feeding the frozen shared
+ * DTOs.
  */
+import type { TokenCard } from "@robbed/shared";
 import type { EthUsdSnapshot } from "../lib/usd";
 
 /** Epoch-zero placeholder when NO snapshot exists — marks the value stale
@@ -31,4 +33,20 @@ export function ratio(numer: string, denom: string): number {
 export function progressFraction(realEth: string, gradEth: string): number {
   const p = ratio(realEth, gradEth);
   return p > 1 ? 1 : p;
+}
+
+/**
+ * Derived venue/status pill (indexer.md §3.2): `graduated` → graduated;
+ * `real_eth ≥ graduation_eth` and not yet graduated → the §12.12 lock window
+ * `graduating`; else `curve`. SINGLE source used by the card and portfolio
+ * token-ref projections so the pill can't drift between surfaces.
+ */
+export function statusFrom(
+  graduated: boolean,
+  realEthReserves: string,
+  graduationEth: string,
+): TokenCard["status"] {
+  if (graduated) return "graduated";
+  if (BigInt(realEthReserves || "0") >= BigInt(graduationEth || "0")) return "graduating";
+  return "curve";
 }

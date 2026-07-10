@@ -27,7 +27,7 @@ Source of truth: `launchpad-spec.md` (v1.1). When code and spec disagree, the sp
 ## Stack
 
 - Monorepo: **pnpm workspaces** (dependency management, strict node_modules — https://pnpm.io/workspaces); **Bun stays the runtime and test runner** (§8/§9). One lockfile: `pnpm-lock.yaml`. Internal deps via `workspace:*`; shared lib versions via pnpm catalogs.
-- **Anti-drift rule:** every cross-service type/schema/ABI lives ONCE in `packages/shared` (Zod-first, TS types via `z.infer`); any logic used by ≥2 services is extracted to `packages/*`. Apps import — never redeclare. `packages/*` and workspace config are owned by the `hoodpad-shared` agent.
+- **Anti-drift rule:** every cross-service type/schema/ABI lives ONCE in `packages/shared` (Zod-first, TS types via `z.infer`); any logic used by ≥2 services is extracted to `packages/*`. Apps import — never redeclare. `packages/*` and workspace config are owned by the `robbed-shared` agent.
 - Contracts: Solidity + Foundry + OpenZeppelin v5, `contracts/` (LaunchToken, CurveFactory, BondingCurve, Router, V3Migrator, LPFeeVault)
 - Indexer: Ponder → Postgres (+pg_trgm) + Redis pub/sub → Bun WS
 - API: Hono on Bun (API-mediated R2 uploads — §12.19; moderation, search)
@@ -48,4 +48,4 @@ Before any implementation step, consult current official documentation for every
 
 ## Agents
 
-Specialized subagents live in `.claude/agents/`. Use `hoodpad-architect` for spec interpretation, decision arbitration, and authoring new agents/skills/commands. Delegate contract work to `hoodpad-contracts`, indexer/API to `hoodpad-indexer`, frontend to `hoodpad-frontend`, security gates to `hoodpad-security`, and anything in `packages/*` or workspace config to `hoodpad-shared`.
+Specialized subagents live in `.claude/agents/`. Use `robbed-architect` for spec interpretation, decision arbitration, and authoring new agents/skills/commands. Delegate contract work to `robbed-contracts`, indexer/API to `robbed-indexer`, frontend to `robbed-frontend`, security gates to `robbed-security`, and anything in `packages/*` or workspace config to `robbed-shared`.

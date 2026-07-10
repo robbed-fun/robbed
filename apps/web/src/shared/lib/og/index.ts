@@ -6,7 +6,7 @@
  */
 export { renderOgPng } from "./render";
 export type { FontOptions, RenderOptions } from "./render";
-export { OG_FONTS } from "./fonts";
+export { OG_FONTS, OG_FONT_FAMILY } from "./fonts";
 export {
   OG_COLORS,
   OG_CONTENT_TYPE,

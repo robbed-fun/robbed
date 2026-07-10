@@ -11,21 +11,32 @@
  * this non-DOM render surface can hold the mirrored palette). Re-theming stays a
  * value swap: update `globals.css` and this mirror together.
  *
- * Brand accent is a PLACEHOLDER (§13 name/brand pending — NEEDS-USER final art).
+ * ROBBED_ terminal re-art (task A): these are the EXACT ROBBED_ token values
+ * sampled from `docs/Robbed.html` (web.md §7) — dark `#0B0D0B` canvas, green
+ * `#4ADE80` accent, the mono text ramp. The wordmark accent is now the brand
+ * green (no longer a §13 placeholder violet).
  */
 export const OG_COLORS = {
-  bg: "#0a0c10",
-  surface: "#11151c",
-  surface2: "#161b24",
-  border: "#232a36",
-  text: "#e6e9ef",
-  muted: "#8b93a3",
-  buy: "#22c55e",
-  sell: "#ef4444",
-  // §13 brand pending — placeholder violet, mirrors --color-accent.
-  accent: "#7c3aed",
-  accentForeground: "#ffffff",
-  softConfirmed: "#f59e0b",
+  bg: "#0B0D0B",
+  surface: "#0F130F",
+  surface2: "#141914",
+  border: "#1C221C",
+  borderSoft: "#141914",
+  text: "#EDF3ED",
+  textSecondary: "#C9D3C9",
+  muted: "#6E7A6E",
+  faint: "#54604F",
+  buy: "#4ADE80",
+  sell: "#F87171",
+  // ROBBED_ up/down candle fills (mockup chart bars).
+  candleUp: "#2E4A34",
+  candleDown: "#4A2E2E",
+  // Brand accent = ROBBED_ green (§13 brand resolved by the redesign direction).
+  accent: "#4ADE80",
+  accentForeground: "#0B0D0B",
+  greenDim: "#16301F",
+  softConfirmed: "#F59E0B",
+  purple: "#A78BFA",
 } as const;
 
 /** Fixed OG canvas (web.md §6): 1200×630, the X/Telegram/Discord share unit. */

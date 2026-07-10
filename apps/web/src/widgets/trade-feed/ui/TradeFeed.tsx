@@ -9,18 +9,26 @@ import {
 import { useMemo, useState } from "react";
 
 import { ConfirmationBadge, useOptimisticTradesContext } from "@/entities/trade";
-import { AddressLink, Badge, Card, RelativeTime } from "@/shared/ui";
+import {
+  AddressLink,
+  Card,
+  MonoLabel,
+  MonoText,
+  RelativeTime,
+  SideBadge,
+} from "@/shared/ui";
 import { useWsChannel } from "@/shared/lib/ws";
-import { formatEthFromWei, formatTokenFromWei, shortAddress } from "@/shared/lib/format";
+import { formatEthFromWei, shortAddress } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 import { type FeedRow, buildFeedRows, prependTrade } from "../model/merge";
 
 /**
- * Live trade feed (§5.2/§2.1). Seeds from the SSR `GET /trades` page, prepends
- * WS `trade` messages, and MERGES the user's own optimistic trades from the
- * shared store — a buy placed in the widget appears here instantly as
- * soft-confirmed and reconciles in place (§4). Every row shows the
+ * Live trade feed (§5.2/§2.1) — ROBBED_ terminal TRADES TABLE (docs/Robbed.html
+ * "2a": AGE · SIDE · TRADER · AMOUNT · PRICE). Seeds from the SSR `GET /trades`
+ * page, prepends WS `trade` messages, and MERGES the user's own optimistic
+ * trades from the shared store — a buy placed in the widget appears here
+ * instantly as soft-confirmed and reconciles in place (§4). Every row shows the
  * `ConfirmationBadge`; a soft-confirmed row never renders as unqualified-final.
  */
 export function TradeFeed({
@@ -51,16 +59,26 @@ export function TradeFeed({
   );
 
   return (
-    <Card className="flex flex-col p-3">
-      <h3 className="mb-2 text-sm font-semibold text-foreground">Live trades</h3>
+    <Card className="flex flex-col p-4">
+      {/* Column header — mockup grid: AGE 70 · SIDE 70 · TRADER 1fr · AMOUNT · PRICE */}
+      <div className="grid grid-cols-[52px_52px_1fr_auto] items-center gap-3 border-b border-border-soft pb-2 sm:grid-cols-[64px_64px_1fr_110px_96px]">
+        <MonoLabel size="2xs">Age</MonoLabel>
+        <MonoLabel size="2xs">Side</MonoLabel>
+        <MonoLabel size="2xs">Trader</MonoLabel>
+        <MonoLabel size="2xs" className="text-right">
+          Amount
+        </MonoLabel>
+        <MonoLabel size="2xs" className="hidden text-right sm:block">
+          Price
+        </MonoLabel>
+      </div>
+
       {rows.length === 0 ? (
-        <p className="py-6 text-center text-xs text-muted-foreground">
-          No trades yet — be the first.
-        </p>
+        <p className="py-6 text-center text-xs text-muted">No trades yet — be the first.</p>
       ) : (
-        <div className="flex flex-col divide-y divide-border/60">
+        <div className="flex flex-col">
           {rows.map((r) => (
-            <FeedRowItem key={r.key} row={r} />
+            <TradeTableRow key={r.key} row={r} />
           ))}
         </div>
       )}
@@ -68,45 +86,58 @@ export function TradeFeed({
   );
 }
 
-function FeedRowItem({ row }: { row: FeedRow }) {
+function TradeTableRow({ row }: { row: FeedRow }) {
   const ageUnix =
     row.blockTimestamp ??
     (row.submittedAtMs !== null ? Math.floor(row.submittedAtMs / 1000) : null);
+
   return (
     <div
       className={cn(
-        "flex items-center gap-2 py-1.5 text-xs",
+        "grid grid-cols-[52px_52px_1fr_auto] items-center gap-3 border-b border-border-soft py-[7px] text-xs last:border-b-0 sm:grid-cols-[64px_64px_1fr_110px_96px]",
         row.isOptimistic && "opacity-90",
         row.justUpdated && "animate-pulse",
       )}
     >
-      <span
-        className={cn(
-          "w-8 shrink-0 font-medium uppercase",
-          row.isBuy ? "text-buy" : "text-sell",
-        )}
-      >
-        {row.isBuy ? "Buy" : "Sell"}
+      {/* AGE */}
+      <span className="text-faint tabular-nums">
+        {ageUnix !== null ? <RelativeTime unixSeconds={ageUnix} /> : "—"}
       </span>
-      <span className="tabular-nums text-foreground">{formatEthFromWei(row.ethAmount)} ETH</span>
-      <span className="tabular-nums text-muted-foreground">
-        {formatTokenFromWei(row.tokenAmount)}
-      </span>
-      <span className="ml-auto flex items-center gap-1.5">
-        {row.isCreator && (
-          <Badge variant="outline" className="px-1 py-0 text-[10px]">
-            creator
-          </Badge>
-        )}
+
+      {/* SIDE */}
+      <SideBadge side={row.isBuy ? "buy" : "sell"} />
+
+      {/* TRADER (+ creator flag, confirmation tier) */}
+      <span className="flex min-w-0 items-center gap-1.5">
         {row.txHash ? (
-          <AddressLink address={row.txHash} kind="tx" label={shortAddress(row.trader)} />
+          <AddressLink
+            address={row.txHash}
+            kind="tx"
+            label={shortAddress(row.trader)}
+            className="text-muted"
+          />
         ) : (
-          <span className="font-mono text-muted-foreground">{shortAddress(row.trader)}</span>
+          <MonoText tone="muted" className="truncate">
+            {shortAddress(row.trader)}
+          </MonoText>
         )}
-        {ageUnix !== null && (
-          <RelativeTime unixSeconds={ageUnix} className="text-muted-foreground" />
+        {row.isCreator && (
+          <MonoLabel tone="green" size="2xs">
+            dev
+          </MonoLabel>
         )}
         <ConfirmationBadge state={row.displayState} awaitingIndex={row.awaitingIndex} />
+      </span>
+
+      {/* AMOUNT (ETH) */}
+      <span className="text-right tabular-nums text-text-secondary">
+        {formatEthFromWei(row.ethAmount)}
+        <span className="ml-1 text-faint">ETH</span>
+      </span>
+
+      {/* PRICE (ETH/token) — hidden on the narrowest widths */}
+      <span className="hidden text-right tabular-nums text-muted sm:block">
+        {row.priceEth === null ? "—" : row.priceEth.toPrecision(2)}
       </span>
     </div>
   );

@@ -29,8 +29,8 @@ Rules of precedence, mechanical:
 
 Implementing agents **never self-resolve** spec ambiguities, contradictions, or silences. The pipeline:
 
-1. Implementing agent hits an ambiguity → records it in their service doc's "Open items" table with an ID, a recommendation, and status `pending`, and reports it to the orchestrator for **hoodpad-architect**.
-2. hoodpad-architect arbitrates:
+1. Implementing agent hits an ambiguity → records it in their service doc's "Open items" table with an ID, a recommendation, and status `pending`, and reports it to the orchestrator for **robbed-architect**.
+2. robbed-architect arbitrates:
    - **Decided** → one-line entry in spec **§12** (numbered, dated), amend any conflicting spec section text, propagate into every affected service doc, cross-reference in `docs/decisions.md`.
    - **Genuinely open** → spec **§13** with an owner and a latest-decision milestone; `docs/decisions.md` mirrors it.
 3. Until arbitrated, the agent may proceed only on paths the ambiguity doesn't touch, or implement the documented *recommended default* clearly marked `pending §12` — never silently.

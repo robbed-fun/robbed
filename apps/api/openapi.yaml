@@ -33,6 +33,8 @@ tags:
     description: Launch flow — image upload + canonical metadata (spec §5.3, §8.3, §12.19)
   - name: tokens
     description: Read API over indexer tables (spec §5.1, §5.2)
+  - name: portfolio
+    description: Per-address portfolio — summary + holdings/activity/created (spec §5.4)
   - name: search
     description: pg_trgm search over name / ticker / contract / creator (spec §5.1)
   - name: meta
@@ -429,6 +431,143 @@ paths:
                 properties:
                   data: { $ref: "#/components/schemas/StatsResponse" }
                   error: { type: "null" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  # ── Portfolio (spec §5.4 — was Phase-2; surfaced day 1 by the ROBBED_ redesign
+  #    page 4. Advisory / read-only: no path mutates or depends on mutating chain
+  #    state, §8.4. An unknown address is an EMPTY portfolio, never a 404 — the
+  #    wallet ETH balance is a live chain read independent of the indexer.) ──────
+  /v1/portfolio/{address}:
+    get:
+      tags: [portfolio]
+      operationId: getPortfolioSummary
+      summary: Per-address portfolio summary (spec §5.4 stat cells)
+      description: |
+        Aggregate roll-up: TOTAL VALUE / LOOT ALL-TIME / WALLET ETH + first-seen · trades.
+        `walletEthBalance` is a live RPC `eth_getBalance` read (chain truth, exact); the
+        roll-up (first-seen, trade/created counts, realized PnL) comes from the indexer's
+        materialized `address_pnl`; `totalValueEth` + unrealized PnL are computed at request
+        time from live curve-quote prices. PnL is a nullable RANGE (no false precision, §5.2).
+        Like other aggregate roll-ups it carries NO `confirmationState`.
+      parameters:
+        - $ref: "#/components/parameters/TokenAddress"
+      responses:
+        "200":
+          description: Portfolio summary (any address resolves; unknown → empty portfolio)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data: { $ref: "#/components/schemas/PortfolioSummary" }
+                  error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/portfolio/{address}/holdings:
+    get:
+      tags: [portfolio]
+      operationId: getPortfolioHoldings
+      summary: HOLDINGS tab — token · balance · price · value · PNL (spec §5.4)
+      description: |
+        Projects `balances ⋈ tokens` (BalanceRow IS the holding — anti-drift, db-rows.ts).
+        `balance` is Transfer-truth; `priceEth`/`valueEth`/`value` are computed at read-time
+        via `@robbed/shared` curve-quote (liquidation value from live reserves) and are `null`
+        when the token has never traded (unpriceable — no false price). `unrealizedPnl` is a
+        nullable range (null when the holding has no cost basis, §5.2). Cursor-paginated
+        (balance DESC).
+      parameters:
+        - $ref: "#/components/parameters/TokenAddress"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Holdings page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [holdings, nextCursor]
+                    properties:
+                      holdings:
+                        type: array
+                        items: { $ref: "#/components/schemas/PortfolioHolding" }
+                      nextCursor: { $ref: "#/components/schemas/NextCursor" }
+                  error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/portfolio/{address}/activity:
+    get:
+      tags: [portfolio]
+      operationId: getPortfolioActivity
+      summary: ACTIVITY tab — per-address slice of the trade feed (spec §5.4)
+      description: |
+        REUSES the shared `TradeRow` (curve + v3 unified; each row carries venue +
+        `confirmationState`) — the per-address slice of the same feed as
+        `/v1/tokens/{address}/trades`, no parallel shape. Cursor-paginated (newest first).
+      parameters:
+        - $ref: "#/components/parameters/TokenAddress"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Activity page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [activity, nextCursor]
+                    properties:
+                      activity:
+                        type: array
+                        items: { $ref: "#/components/schemas/TradeRow" }
+                      nextCursor: { $ref: "#/components/schemas/NextCursor" }
+                  error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/portfolio/{address}/created:
+    get:
+      tags: [portfolio]
+      operationId: getPortfolioCreated
+      summary: CREATED tab — tokens whose creator == address (spec §5.4, §7)
+      description: |
+        REUSES the `TokenCard` projection (same card as `/v1/tokens`), filtered to tokens
+        whose on-chain `creator` == the address (§7 — creator tracked from day 1). Listing-
+        gated like `/tokens` (hidden creations excluded, §8.4). Cursor-paginated (newest first).
+      parameters:
+        - $ref: "#/components/parameters/TokenAddress"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Created-tokens page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [tokens, nextCursor]
+                    properties:
+                      tokens:
+                        type: array
+                        items: { $ref: "#/components/schemas/TokenCard" }
+                      nextCursor: { $ref: "#/components/schemas/NextCursor" }
+                  error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
   /v1/confirmations:
@@ -1110,6 +1249,88 @@ components:
         clusterId:
           type: string
           description: Shared gas-funder cluster id → grouped on the holder list (spec §5.2)
+
+    # ── Portfolio DTOs (spec §5.4; mirror packages/shared api-types.ts) ──────
+    EthPnlRange:
+      type: object
+      required: [low, high, confidence]
+      description: >-
+        Best-effort signed ETH-value range (wei) for PnL where the cost basis is
+        imprecise (§5.2 — no false precision). `low`/`high` are SIGNED decimal
+        strings (may be negative); `low ≤ high` (compared as bigint). A precisely-
+        known value sets `low === high` with `confidence: exact`. The whole field
+        is nullable at each DTO site (null when NO cost basis exists at all).
+      properties:
+        low:
+          type: string
+          pattern: "^-?[0-9]+$"
+        high:
+          type: string
+          pattern: "^-?[0-9]+$"
+        confidence:
+          type: string
+          enum: [exact, estimated]
+    TokenRef:
+      type: object
+      required: [address, name, ticker, imageUrl, graduated, status]
+      description: Compact token reference for portfolio lists — `.pick` of TokenCard (anti-drift)
+      properties:
+        address: { $ref: "#/components/schemas/Address" }
+        name: { type: string }
+        ticker: { type: string }
+        imageUrl:
+          oneOf: [{ type: string }, { type: "null" }]
+        graduated: { type: boolean }
+        status: { $ref: "#/components/schemas/TokenStatus" }
+    PortfolioHolding:
+      type: object
+      required: [token, balance, priceEth, valueEth, value, unrealizedPnl]
+      description: >-
+        HOLDINGS row — `balances ⋈ tokens` (BalanceRow IS the holding). `balance`
+        is Transfer-truth; `priceEth`/`valueEth`/`value` are computed READ-TIME via
+        curve-quote and null when the token has never traded; `unrealizedPnl` is
+        null when there is no cost basis (§5.2).
+      properties:
+        token: { $ref: "#/components/schemas/TokenRef" }
+        balance: { $ref: "#/components/schemas/DecimalString" }
+        priceEth:
+          oneOf: [{ type: number }, { type: "null" }]
+          description: Display spot price, ETH float; null before the token's first trade
+        valueEth:
+          oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }]
+          description: Liquidation value, wei; null when unpriceable
+        value:
+          oneOf: [{ $ref: "#/components/schemas/UsdValue" }, { type: "null" }]
+          description: USD mirror of valueEth (derived, §2); null when unpriceable
+        unrealizedPnl:
+          oneOf: [{ $ref: "#/components/schemas/EthPnlRange" }, { type: "null" }]
+    PortfolioSummary:
+      type: object
+      required:
+        [address, firstSeenAt, tradeCount, tokensCreated, walletEthBalance,
+         totalValueEth, totalValue, pnlAllTime]
+      description: >-
+        Per-address aggregate roll-up (TOTAL VALUE / LOOT ALL-TIME / WALLET ETH +
+        first-seen · trades). Carries NO confirmationState (aggregate, not a single
+        event-derived object). `walletEthBalance` is a live RPC read (chain truth);
+        `pnlAllTime` = realized + unrealized best-effort range, null when no cost basis.
+      properties:
+        address: { $ref: "#/components/schemas/Address" }
+        firstSeenAt:
+          oneOf: [{ type: integer, minimum: 0 }, { type: "null" }]
+          description: Earliest Transfer touching this address (unix sec); null if never seen
+        tradeCount: { type: integer, minimum: 0 }
+        tokensCreated: { type: integer, minimum: 0 }
+        walletEthBalance:
+          allOf: [{ $ref: "#/components/schemas/DecimalString" }]
+          description: Live native ETH balance, wei — RPC read (chain truth, exact)
+        totalValueEth:
+          allOf: [{ $ref: "#/components/schemas/DecimalString" }]
+          description: Sum of priceable holdings' value, wei; "0" when nothing is priceable
+        totalValue: { $ref: "#/components/schemas/UsdValue" }
+        pnlAllTime:
+          oneOf: [{ $ref: "#/components/schemas/EthPnlRange" }, { type: "null" }]
+          description: All-time PnL ("LOOT") = realized + unrealized; null when no cost basis (§5.2)
 
     FeesResponse:
       type: object

@@ -8,9 +8,8 @@ import {
   METADATA_NAME_MAX,
   METADATA_TICKER_MAX,
 } from "@robbed/shared";
-import { Button, Card, Input } from "@/shared/ui";
-import { cn } from "@/shared/lib/utils";
-import { formatEthFromWei, formatTokenFromWei } from "@/shared/lib/format";
+import { AmountInput, Button, Input, MonoLabel, MonoText, TextArea } from "@/shared/ui";
+import { formatTokenFromWei } from "@/shared/lib/format";
 
 import { launchTextSchema, parseInitialBuyEth } from "../model/schema";
 import { initialBuyMinTokensOut, previewInitialBuy } from "../model/initial-buy-preview";
@@ -22,11 +21,19 @@ import { ImageUpload } from "./ImageUpload";
 import { LaunchProgress } from "./LaunchProgress";
 
 /**
- * Launch form (§5.3). Client orchestrator: holds field state, validates with the
- * SHARED zod schemas (byte limits §12.30, never redeclared), eagerly API-uploads
- * the image on select (§12.19), and drives the single `createToken` submit via
- * `useLaunch`. `pauseCreates` (live factory read) disables submit; sells elsewhere
- * are unaffected (granular flag, §6.5).
+ * Launch form (§5.3) — ROBBED_ terminal skin (docs/Robbed.html "Create"),
+ * mobile-first single column: dashed 512×512 logo slot beside NAME / TICKER,
+ * DESCRIPTION, INITIAL BUY, the live economics summary, and the green LAUNCH
+ * TOKEN action.
+ *
+ * Re-skin only — the data layer is untouched: field state validates with the
+ * SHARED zod schemas (byte limits §12.30, never redeclared), the image is
+ * eagerly API-uploaded on select (§12.19, re-encode + content-address server
+ * side), the client re-verifies the metadata hash before signing (§12.19
+ * normative, inside `useLaunch`), and the single atomic `createToken`
+ * ({deployFee + initialBuy}) submit + optimistic stepper run unchanged.
+ * `pauseCreates` (live factory read) disables submit only; sells elsewhere are
+ * never affected (granular flag, §6.5).
  *
  * `launchOptions` lets a test inject the network/navigation deps (deterministic).
  */
@@ -38,14 +45,12 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
   const [name, setName] = useState("");
   const [ticker, setTicker] = useState("");
   const [description, setDescription] = useState("");
-  const [website, setWebsite] = useState("");
-  const [x, setX] = useState("");
-  const [telegram, setTelegram] = useState("");
   const [initialBuy, setInitialBuy] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const inFlight = isLaunchInFlight(launcher.step);
   const disabledForm = inFlight;
+  const unit = ticker.trim() ? ticker.trim() : "tokens";
 
   const initialBuyParse = useMemo(() => parseInitialBuyEth(initialBuy), [initialBuy]);
 
@@ -67,15 +72,10 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
   const minTokensOut = useMemo(() => initialBuyMinTokensOut(preview), [preview]);
 
   function collectValues() {
-    const links: Record<string, string> = {};
-    if (website.trim()) links.website = website.trim();
-    if (x.trim()) links.x = x.trim();
-    if (telegram.trim()) links.telegram = telegram.trim();
     return {
       name: name.trim(),
       ticker: ticker.trim(),
       description: description.trim() ? description.trim() : undefined,
-      links: Object.keys(links).length > 0 ? links : undefined,
     };
   }
 
@@ -90,7 +90,7 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
       }
     }
     if (!launcher.image.url || !launcher.image.hash) {
-      next.image = launcher.image.error ?? "An image is required.";
+      next.image = launcher.image.error ?? "A logo image is required.";
     }
     if (!initialBuyParse.ok) next.initialBuy = initialBuyParse.error;
 
@@ -107,7 +107,6 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
       name: values.name,
       ticker: values.ticker,
       description: values.description,
-      links: values.links,
       initialBuyWei: initialBuyParse.wei,
       minTokensOut,
       deployFeeWei: econ.deployFeeWei ?? 0n,
@@ -118,174 +117,127 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
   const submitDisabled = disabledForm || createsPaused || launcher.image.uploading;
 
   return (
-    <div className="grid gap-4 md:grid-cols-[1fr_20rem]">
-      <form onSubmit={onSubmit} className="flex flex-col gap-4">
-        <Card className="flex flex-col gap-4 p-4">
-          <Field
-            label="Name"
-            required
-            error={errors.name}
-            counter={byteCounter(name, METADATA_NAME_MAX)}
-          >
+    <form onSubmit={onSubmit} className="flex flex-col gap-5">
+      {/* Logo slot beside NAME / TICKER (mockup top block). */}
+      <div className="flex gap-4">
+        <ImageUpload
+          image={launcher.image}
+          onSelect={launcher.uploadImage}
+          onClear={launcher.clearImage}
+          disabled={disabledForm}
+          className="w-28 shrink-0 sm:w-36"
+        />
+
+        <div className="flex flex-1 flex-col gap-4">
+          <Field label="Name" error={errors.name}>
             <Input
               value={name}
               disabled={disabledForm}
-              placeholder="Cash Cat"
+              placeholder="Moonmilk"
               onChange={(e) => setName(e.target.value)}
+              className="h-11"
             />
           </Field>
 
-          <Field
-            label="Ticker"
-            required
-            error={errors.ticker}
-            counter={byteCounter(ticker, METADATA_TICKER_MAX)}
-          >
-            <Input
-              value={ticker}
-              disabled={disabledForm}
-              placeholder="CASHCAT"
-              onChange={(e) => setTicker(e.target.value.toUpperCase())}
-            />
-          </Field>
-
-          <Field
-            label="Description"
-            error={errors.description}
-            counter={`${description.length}/${METADATA_DESCRIPTION_MAX}`}
-          >
-            <textarea
-              value={description}
-              disabled={disabledForm}
-              maxLength={METADATA_DESCRIPTION_MAX}
-              placeholder="What is this token about?"
-              onChange={(e) => setDescription(e.target.value)}
-              className="min-h-20 w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-            />
-          </Field>
-
-          <ImageUpload
-            image={launcher.image}
-            onSelect={launcher.uploadImage}
-            onClear={launcher.clearImage}
-            disabled={disabledForm}
-          />
-          {errors.image && !launcher.image.error && (
-            <p className="-mt-2 text-xs text-sell">{errors.image}</p>
-          )}
-        </Card>
-
-        <Card className="flex flex-col gap-3 p-4">
-          <p className="text-xs font-medium text-muted-foreground">
-            Links <span className="font-normal">(optional, https only)</span>
-          </p>
-          <Field label="Website" error={errors["links.website"]} compact>
-            <Input
-              value={website}
-              disabled={disabledForm}
-              placeholder="https://…"
-              onChange={(e) => setWebsite(e.target.value)}
-            />
-          </Field>
-          <Field label="X (Twitter)" error={errors["links.x"]} compact>
-            <Input
-              value={x}
-              disabled={disabledForm}
-              placeholder="https://x.com/…"
-              onChange={(e) => setX(e.target.value)}
-            />
-          </Field>
-          <Field label="Telegram" error={errors["links.telegram"]} compact>
-            <Input
-              value={telegram}
-              disabled={disabledForm}
-              placeholder="https://t.me/…"
-              onChange={(e) => setTelegram(e.target.value)}
-            />
-          </Field>
-        </Card>
-
-        <Card className="flex flex-col gap-2 p-4">
-          <Field
-            label="Initial buy (optional)"
-            error={errors.initialBuy}
-            hint="Buy your own token atomically in the same transaction — anti-self-snipe."
-          >
-            <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2">
+          <Field label="Ticker" error={errors.ticker}>
+            <div className="relative">
               <Input
-                inputMode="decimal"
-                value={initialBuy}
+                value={ticker}
                 disabled={disabledForm}
-                placeholder="0.0"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "" || /^\d*\.?\d*$/.test(v)) setInitialBuy(v);
-                }}
-                className="border-0 bg-transparent px-0 tabular-nums focus-visible:ring-0"
+                placeholder="MILK"
+                onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                className="h-11 pr-14"
               />
-              <span className="shrink-0 text-sm text-muted-foreground">ETH</span>
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-2xs tabular-nums text-faint">
+                {byteCounter(ticker, METADATA_TICKER_MAX)}
+              </span>
             </div>
           </Field>
+        </div>
+      </div>
 
-          {/* M3-6: tokens-received preview (no on-chain call — shared curve math). */}
-          {initialBuyWei > 0n && (
-            <div className="flex flex-col gap-1 rounded-md border border-border/60 p-2 text-xs">
-              {preview ? (
-                <>
-                  <PreviewRow label="You receive">
-                    ≈ {formatTokenFromWei(preview.tokensOut)}{" "}
-                    {ticker.trim() ? ticker.trim() : "tokens"}
-                  </PreviewRow>
-                  <PreviewRow label="Min received (2% slippage)">
-                    {formatTokenFromWei(minTokensOut)}{" "}
-                    {ticker.trim() ? ticker.trim() : "tokens"}
-                  </PreviewRow>
-                </>
-              ) : (
-                <span className="text-muted-foreground">
-                  Token preview appears once economics load from chain.
-                </span>
-              )}
-            </div>
-          )}
-        </Card>
-
-        {createsPaused && (
-          <p className="rounded-md border border-soft-confirmed/40 bg-soft-confirmed/10 p-2 text-xs text-soft-confirmed">
-            New launches are temporarily paused.
-          </p>
-        )}
-
-        {!isConnected && (
-          <p className="text-xs text-muted-foreground">
-            Connect your wallet (top right) to launch.
-          </p>
-        )}
-
-        {launcher.error && launcher.step !== "verify-failed" && launcher.step !== "error" && (
-          <p className="text-xs text-sell">{launcher.error}</p>
-        )}
-
-        <Button
-          type="submit"
-          disabled={submitDisabled || !isConnected}
-          className={cn("w-full bg-buy text-white hover:bg-buy/90")}
-        >
-          {submitLabel(launcher.step, econ.deployFeeWei, initialBuyParse.ok ? initialBuyParse.wei : 0n)}
-        </Button>
-
-        <LaunchProgress
-          step={launcher.step}
-          error={launcher.error}
-          tokenAddress={launcher.tokenAddress}
-          optimisticTrade={launcher.optimisticTrade}
+      <Field label="Description" optional="OPTIONAL" error={errors.description}>
+        <TextArea
+          value={description}
+          disabled={disabledForm}
+          maxLength={METADATA_DESCRIPTION_MAX}
+          placeholder="what is this token about"
+          onChange={(e) => setDescription(e.target.value)}
+          className="min-h-24"
         />
-      </form>
+      </Field>
 
-      <aside className="flex flex-col gap-4">
-        <EconomicsPanel />
-      </aside>
-    </div>
+      <div className="flex flex-col gap-2">
+        <AmountInput
+          label={
+            <>
+              Initial buy <span className="text-faint">— optional, be first in</span>
+            </>
+          }
+          value={initialBuy}
+          onValueChange={(v) => {
+            if (v === "" || /^\d*\.?\d*$/.test(v)) setInitialBuy(v);
+          }}
+          unit="ETH"
+          disabled={disabledForm}
+        />
+        {errors.initialBuy && (
+          <MonoText tone="red" size="xs">
+            {errors.initialBuy}
+          </MonoText>
+        )}
+
+        {/* M3-6: tokens-received preview (no on-chain call — shared curve math). */}
+        {initialBuyWei > 0n && preview && (
+          <div className="flex flex-col gap-1 pt-1">
+            <PreviewRow label="You receive">
+              ≈ {formatTokenFromWei(preview.tokensOut)} {unit}
+            </PreviewRow>
+            <PreviewRow label="Min received (2% slippage)">
+              {formatTokenFromWei(minTokensOut)} {unit}
+            </PreviewRow>
+          </div>
+        )}
+      </div>
+
+      {/* Deploy cost / starting price / supply + §5.3 economics + LP sentence. */}
+      <EconomicsPanel ticker={ticker} />
+
+      {createsPaused && (
+        <MonoText size="xs" className="text-soft-confirmed">
+          New launches are temporarily paused.
+        </MonoText>
+      )}
+
+      {launcher.error && launcher.step !== "verify-failed" && launcher.step !== "error" && (
+        <MonoText tone="red" size="xs">
+          {launcher.error}
+        </MonoText>
+      )}
+
+      <Button
+        type="submit"
+        variant="buy"
+        size="lg"
+        disabled={submitDisabled || !isConnected}
+        className="w-full uppercase tracking-label"
+      >
+        {submitLabel(launcher.step)}
+      </Button>
+
+      {!isConnected && (
+        <MonoText tone="faint" size="xs" className="text-center">
+          Connect your wallet (top right) to launch.
+        </MonoText>
+      )}
+
+      <LaunchProgress
+        step={launcher.step}
+        error={launcher.error}
+        tokenAddress={launcher.tokenAddress}
+        optimisticTrade={launcher.optimisticTrade}
+      />
+    </form>
   );
 }
 
@@ -293,41 +245,48 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
 
 function Field({
   label,
-  required,
+  optional,
   error,
   counter,
-  hint,
-  compact,
   children,
 }: {
   label: string;
-  required?: boolean;
+  /** Faint " — {optional}" suffix on the micro-label (mockup DESCRIPTION). */
+  optional?: string;
   error?: string;
   counter?: string;
-  hint?: string;
-  compact?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("flex flex-col gap-1", compact && "gap-0.5")}>
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-muted-foreground">
-          {label} {required && <span className="text-sell">*</span>}
-        </label>
-        {counter && <span className="text-[11px] tabular-nums text-muted-foreground">{counter}</span>}
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between">
+        <MonoLabel tone="muted" size="2xs">
+          {label}
+          {optional && <span className="text-faint"> — {optional}</span>}
+        </MonoLabel>
+        {counter && (
+          <span className="text-2xs tabular-nums text-faint">{counter}</span>
+        )}
       </div>
       {children}
-      {hint && !error && <p className="text-[11px] text-muted-foreground">{hint}</p>}
-      {error && <p className="text-xs text-sell">{error}</p>}
+      {error && (
+        <MonoText tone="red" size="xs">
+          {error}
+        </MonoText>
+      )}
     </div>
   );
 }
 
 function PreviewRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="tabular-nums text-foreground">{children}</span>
+    <div className="flex items-baseline justify-between gap-3">
+      <MonoText tone="muted" size="xs">
+        {label}
+      </MonoText>
+      <MonoText tone="secondary" size="xs" numeric className="text-right">
+        {children}
+      </MonoText>
     </div>
   );
 }
@@ -335,13 +294,11 @@ function PreviewRow({ label, children }: { label: string; children: React.ReactN
 /** UTF-8 byte counter (matches the §12.30 byte limit the shared schema enforces). */
 function byteCounter(value: string, max: number): string {
   const bytes = new TextEncoder().encode(value).length;
-  return `${bytes}/${max} B`;
+  return `${bytes}/${max}`;
 }
 
-function submitLabel(step: LaunchStep, deployFeeWei: bigint | null, initialBuyWei: bigint): string {
+function submitLabel(step: LaunchStep): string {
   if (step === "verify-failed") return "Launch blocked — hash mismatch";
   if (isLaunchInFlight(step)) return "Launching…";
-  const total = (deployFeeWei ?? 0n) + initialBuyWei;
-  if (deployFeeWei === null) return "Launch";
-  return `Launch — ${formatEthFromWei(total)} ETH`;
+  return "Launch token";
 }

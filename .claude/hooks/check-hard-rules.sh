@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hoodpad hard-rule enforcement (CLAUDE.md / launchpad-spec.md).
+# robbed hard-rule enforcement (CLAUDE.md / launchpad-spec.md).
 # PostToolUse hook for Write|Edit|MultiEdit: greps the just-written file for
 # spec violations. Exit 2 blocks the result and feeds the message back to the
 # agent; exit 0 passes. High-precision rules only — anything fuzzy belongs in

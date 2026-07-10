@@ -170,6 +170,42 @@ GET /v1/stats
   Global: tokens launched, graduations, 24h volume, treasury fees collected. All computed; USD per §2 convention.
 ```
 
+### 3.4a Portfolio (§5.4 — Phase-2 page surfaced day 1 by the ROBBED_ redesign)
+
+Advisory / read-only: no path mutates or depends on mutating chain state (§8.4). Any address resolves — an unknown address is an **empty** portfolio, never a 404 (the wallet ETH balance is a live chain read independent of the indexer). Shapes are the frozen `@robbed/shared` DTOs (`portfolioSummarySchema`, `portfolioHoldingSchema`, `tokenRefSchema`, `ethPnlRangeSchema`, `portfolio{Holdings,Activity,Created}ResponseSchema`) — never redeclared. **All ETH-first (§2):** value/PnL are wei decimal strings, USD mirrors derive at request time; **PnL is a nullable RANGE, no false precision (§5.2).**
+
+> **Spec deviation (flagged for robbed-architect §12 disposition):** §5.4 Portfolio was **Phase-2**; the ROBBED_ redesign (docs/design/robbed-redesign-plan.md page 4) surfaces it day 1. The DTO schemas were ratified into `packages/shared` and this endpoint set implements them, but the **Phase-2 → day-1 promotion itself** still wants a formal §12 disposition (mirrors the redesign plan's "4 pages incl. Portfolio overrides §5" item). Recorded here, not self-resolved.
+
+```
+GET /v1/portfolio/:address                                     (§5.4 stat cells)
+  200 → PortfolioSummary: address, firstSeenAt, tradeCount, tokensCreated,
+        walletEthBalance,                                       -- live RPC eth_getBalance (chain truth, exact)
+        totalValueEth, totalValue{usd,ethUsd,asOf},             -- Σ priceable holdings' liquidation value; USD derived (§2)
+        pnlAllTime: EthPnlRange | null                          -- realized (address_pnl) + unrealized (live); null when no cost basis
+  NO confirmationState (aggregate roll-up, like /stats and holders).
+  Source: indexer `address_pnl` (roll-up) + `balances` (holdings) + RPC (wallet ETH).
+
+GET /v1/portfolio/:address/holdings?cursor=&limit=              (§5.4 HOLDINGS table)
+  Projects balances ⋈ tokens (BalanceRow IS the holding — anti-drift). Cursor: balance DESC.
+  200 → { holdings: PortfolioHolding[], nextCursor }
+  PortfolioHolding: token: TokenRef{address,name,ticker,imageUrl,graduated,status},
+        balance,                                                -- Transfer-truth (balances.balance)
+        priceEth: number | null,                                -- display spot; null before first trade
+        valueEth: string | null,                                -- READ-TIME curve-quote liquidation value; null when unpriceable
+        value: {usd,ethUsd,asOf} | null,                        -- USD mirror; null when unpriceable
+        unrealizedPnl: EthPnlRange | null                       -- null when no cost basis (§5.2)
+
+GET /v1/portfolio/:address/activity?cursor=&limit=             (§5.4 ACTIVITY tab)
+  Per-address slice of the unified trade feed — REUSES TradeRow (no parallel shape). Cursor: (block_timestamp, id) DESC.
+  200 → { activity: TradeRow[], nextCursor }                    -- each row carries venue + confirmationState
+
+GET /v1/portfolio/:address/created?cursor=&limit=             (§5.4 CREATED tab, §7)
+  Tokens whose on-chain creator == :address — REUSES the TokenCard projection. Listing-gated (§8.4). Cursor: (created_at, address) DESC.
+  200 → { tokens: TokenCard[], nextCursor }
+```
+
+**Materialization (indexer `address_pnl`, db-rows.ts `AddressPnlRow`).** The per-address roll-up (`first_seen_at`/`last_active_at`/`trade_count`/`tokens_created`/`total_eth_in`/`total_eth_out`/realized-PnL range `realized_pnl_low/high` + `pnl_confidence`) is a **scheduled recompute-from-raw job** over `trades`+`transfers`+`tokens` (indexer.md §5.4 / SQL views `pnl_*` + TRUNCATE+re-insert, rebuildable §4.4). Balances stay Transfer-truth (existing `BalanceRow`, X-4/X-5). **Wallet ETH** = RPC balance read at the API layer; **all-time/unrealized PnL** is computed at request time (live price × balance − remaining basis), NOT materialized.
+
 ### 3.5 Confirmation & meta
 
 ```
@@ -249,10 +285,10 @@ Single source consumed by web + indexer + api; nothing below may be redeclared e
 
 Canonicalization is defined once, here, RFC-8785-style (UTF-8, sorted keys at every depth, no whitespace, canonical number/string forms); the indexer doc's byte-identical requirement (indexer.md §6.1) is satisfied by construction because there is exactly one implementation.
 
-**Frozen-schema notes for hoodpad-shared (this ratification pass):**
+**Frozen-schema notes for robbed-shared (this ratification pass):**
 - **`api-types.ts` additions (§12.40a):** `export type` aliases `ConfirmationsResponse` (`GET /v1/confirmations` → `{ safeBlock, finalizedBlock, latestBlock, updatedAt }`), `EthUsdResponse` (`GET /v1/eth-usd` → `{ price, source, asOf }`), `ModerationQueueItem` (admin queue row, §3.6) — for naming consistency with the other DTOs.
 - **`api-types.ts` error-code union (§12.40b):** the union lists **only codes the API actually returns**; `conflict`/409 is **dropped** (no genuine resource-conflict path exists in v1 — content-addressed image + metadata are idempotent). The metadata imageHash-reference mismatch is `invalid_request` (HTTP 400, §3.2).
-- `metadata.ts` `TokenMetadata`: `name` max = **32 bytes**, `ticker` max = **10 bytes** (UTF-8 byte length via a custom zod refinement, not `.max()` char count — must equal the on-chain byte limits, §12.30). `version` is a literal `1` (frozen inside the hash preimage, §12.31). The prior `name ≤ 64 chars` is superseded — hoodpad-shared updates the frozen schema and the OpenAPI (`apps/api/openapi.yaml`) to match.
+- `metadata.ts` `TokenMetadata`: `name` max = **32 bytes**, `ticker` max = **10 bytes** (UTF-8 byte length via a custom zod refinement, not `.max()` char count — must equal the on-chain byte limits, §12.30). `version` is a literal `1` (frozen inside the hash preimage, §12.31). The prior `name ≤ 64 chars` is superseded — robbed-shared updates the frozen schema and the OpenAPI (`apps/api/openapi.yaml`) to match.
 - `api-types.ts` **`TokenCard.creator` is an address string; `TokenDetail.creator` is `{ address, tokensCreated }`** (an enriched object) — by design (card vs detail), documented here so consumers don't expect one shape (X-13). `ws-messages.ts` gains the `fee_collected` message (indexer.md §8.2, X-6).
 
 ## 6. Auth, rate limiting, abuse surface
@@ -322,7 +358,7 @@ Two processes from one codebase: `apps/api/src/index.ts` (Hono HTTP) and `apps/a
 | OI-A1 | "R2 presigned uploads" (§8) read as browser-direct presign vs API-mediated upload | — | **RESOLVED — spec §12.19 (2026-07-09):** API-mediated; presign only on the API→R2 leg; spec §5.3/§8 amended |
 | OI-A2 | Search ranking (ticker boost ×1.2, volume tiebreak, similarity floor 0.25) | — | **RESOLVED — spec §12.22:** as stated; tunable config, tune in beta |
 | OI-A3 | `trending` sort + King-of-the-Hill formula | — | **RESOLVED — spec §12.22:** KotH `progress × ln(1+vol24h)`; trending `vol24h × exp(−age/24h)`; tunable config, not consensus values |
-| OI-A4 | Moderation job queue tech (BullMQ vs minimal Redis worker) | Minimal Redis list worker — one less dependency; revisit if retry semantics outgrow it | Implementation choice, hoodpad-indexer's call — not a spec matter |
+| OI-A4 | Moderation job queue tech (BullMQ vs minimal Redis worker) | Minimal Redis list worker — one less dependency; revisit if retry semantics outgrow it | Implementation choice, robbed-indexer's call — not a spec matter |
 | OI-A5 | `pending_review` default visibility + whether WS `global:launches` respects moderation | — | **RESOLVED — spec §12.21:** default-listed; WS ticker unmoderated in v1 (moderation-aware fanout would need hot-path DB reads) |
 | OI-A6 | Hidden tokens on direct `/tokens/:address` fetch: 404 vs visible-with-flag | — | **RESOLVED — spec §12.21:** visible-with-flag |
 | OI-A7 | Moderation vendor selection (CSAM hash-match + NSFW classifier) + mandated-reporting legal flow | Interfaces (§4.3) let M2 ship with stubs behind a boot guard | **OPEN — spec §13** |

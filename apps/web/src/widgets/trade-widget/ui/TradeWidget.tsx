@@ -23,16 +23,27 @@ import {
   type TradeSide,
 } from "@/entities/curve";
 import { WalletConnectButton } from "@/features/connect-wallet";
-import { AddressLink, Badge, Button, Card, Input } from "@/shared/ui";
-import { explorer } from "@/shared/lib/chain";
-import { formatEthFromWei, formatEthNumber, formatTokenFromWei } from "@/shared/lib/format";
+import {
+  AddressLink,
+  AmountInput,
+  Card,
+  Chip,
+  CursorTag,
+  MonoLabel,
+  MonoText,
+  SideBadge,
+} from "@/shared/ui";
+import { TAGLINE_TRADE } from "@/shared/config/copy";
+import { formatEthFromWei, formatTokenFromWei } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 import { useTradeSubmit } from "../model/use-trade-submit";
+import { isLargeValueWei, largeValueThresholdWei } from "../model/large-value";
 
 /**
- * Buy/Sell widget with the INVISIBLE VENUE SWITCH (§5.2). One design, two
- * engines, selected by the indexed `status` — never a user choice:
+ * Buy/Sell widget with the INVISIBLE VENUE SWITCH (§5.2) — ROBBED_ terminal skin
+ * (docs/Robbed.html "2a" trade panel). One design, two engines, selected by the
+ * indexed `status` — never a user choice:
  *   status=curve/graduating → curve engine (Router.buy/sell, on-chain quote)
  *   status=graduated        → Uniswap V3 engine
  *
@@ -46,6 +57,11 @@ import { useTradeSubmit } from "../model/use-trade-submit";
  * - Anti-sniper: inside the early window the per-tx buy cap is surfaced up-front
  *   (§6.5) rather than letting the tx revert.
  * - Slippage default 2%, deadline on every trade (§5.2).
+ *
+ * FOLDED-IN (§12.47, task B): when a trade's ETH notional ≥
+ * `NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD` (default 1.0 ETH) the widget surfaces
+ * the extra confirmation-tier disclosure (§2.1) — large-value displays must
+ * disclose the posted/finalized tiers, not just soft-confirmed.
  */
 export function TradeWidget({ token }: { token: TokenDetail }) {
   const venue = venueForStatus(token.status);
@@ -100,6 +116,10 @@ function CurveVenue({
     [side, amountWei, quote, reads],
   );
 
+  // §12.47: ETH notional = the ETH leg — the input for a buy, the expected ETH
+  // out for a sell.
+  const ethNotionalWei = side === "buy" ? amountWei : (quote?.amountOut ?? null);
+
   const canSubmit =
     isConnected &&
     !graduatingLock &&
@@ -115,13 +135,13 @@ function CurveVenue({
   };
 
   return (
-    <Card className="flex flex-col gap-3 p-4">
+    <Card className="flex flex-col gap-3.5 p-4">
       <SideTabs side={side} onChange={setSide} disabled={graduatingLock} />
 
       {graduatingLock && <GraduatingInterstitial />}
 
-      <div className="relative flex flex-col gap-3" aria-disabled={graduatingLock}>
-        <AmountField
+      <div className="relative flex flex-col gap-3.5" aria-disabled={graduatingLock}>
+        <PayField
           token={token}
           side={side}
           raw={raw}
@@ -132,7 +152,7 @@ function CurveVenue({
         {/* Buy-only pause gate. The Sell tab never renders this and its enable/
             submit logic never reads pauseBuys (§6.5/§12.25). */}
         {buyPaused && (
-          <p className="rounded-md bg-soft-confirmed/10 px-2 py-1.5 text-xs text-soft-confirmed">
+          <p className="border-l-2 border-soft-confirmed bg-soft-confirmed/10 px-2 py-1.5 text-xs text-soft-confirmed">
             Buying is temporarily paused — selling remains open.
           </p>
         )}
@@ -144,43 +164,42 @@ function CurveVenue({
           </p>
         )}
         {!overCap && side === "buy" && inEarlyWindow && reads.maxEarlyBuyWei !== null && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted">
             Early-launch window active — max {formatEthFromWei(reads.maxEarlyBuyWei)} ETH
             per buy.
           </p>
         )}
 
-        <QuoteLine
+        <ReceiveBox
           side={side}
-          quote={quote}
-          minOut={minOut}
+          token={token}
+          out={quote?.amountOut ?? null}
           isFetching={isFetching}
+        />
+
+        <InfoRows
+          side={side}
+          feeLabel={feeLabelFromBps(reads.tradeFeeBps)}
+          minOut={minOut}
           impact={impact}
+          refund={quote?.refund}
         />
 
         <SlippageControl bps={slippageBps} onChange={setSlippageBps} />
 
-        {error && <p className="text-xs text-sell">{error}</p>}
+        <LargeValueDisclosure ethWei={ethNotionalWei} side={side} />
 
-        {!isConnected ? (
-          <WalletConnectButton />
-        ) : (
-          <Button
-            onClick={onSubmit}
-            disabled={!canSubmit || isSubmitting}
-            variant={side === "buy" ? "default" : "outline"}
-            className={cn(
-              "w-full",
-              side === "buy" ? "bg-buy text-white hover:bg-buy/90" : "border-sell text-sell",
-            )}
-          >
-            {isSubmitting
-              ? "Confirming…"
-              : side === "buy"
-                ? "Buy"
-                : "Sell"}
-          </Button>
-        )}
+        {error && <p className="text-xs text-red">{error}</p>}
+
+        <ActionButton
+          isConnected={isConnected}
+          side={side}
+          disabled={!canSubmit || isSubmitting}
+          isSubmitting={isSubmitting}
+          onSubmit={onSubmit}
+        />
+
+        <Tagline />
       </div>
     </Card>
   );
@@ -198,32 +217,37 @@ function SideTabs({
   disabled: boolean;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-1 rounded-lg bg-secondary p-1">
-      {(["buy", "sell"] as const).map((s) => (
-        <button
-          key={s}
-          type="button"
-          role="tab"
-          aria-selected={side === s}
-          disabled={disabled}
-          onClick={() => onChange(s)}
-          className={cn(
-            "rounded-md py-1.5 text-sm font-medium capitalize transition-colors disabled:opacity-50",
-            side === s
-              ? s === "buy"
-                ? "bg-buy/15 text-buy"
-                : "bg-sell/15 text-sell"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {s}
-        </button>
-      ))}
+    // Mockup: 2-col bordered toggle; active BUY = green-dim fill/green text,
+    // active SELL = red-dim fill/red text. role="tab" preserved for a11y + tests.
+    <div role="tablist" className="grid grid-cols-2 border border-border">
+      {(["buy", "sell"] as const).map((s) => {
+        const active = side === s;
+        return (
+          <button
+            key={s}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            disabled={disabled}
+            onClick={() => onChange(s)}
+            className={cn(
+              "py-2.5 text-center text-xs font-semibold capitalize transition-colors disabled:opacity-50",
+              active
+                ? s === "buy"
+                  ? "bg-green-dim text-green"
+                  : "bg-red-dim text-red"
+                : "text-muted hover:text-text",
+            )}
+          >
+            {s}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function AmountField({
+function PayField({
   token,
   side,
   raw,
@@ -251,120 +275,133 @@ function AmountField({
     query: { enabled: side === "sell" && !!address },
   });
 
-  const onMax = () => {
-    if (side === "buy") {
-      const bal = nativeBalance.data?.value;
-      if (bal === undefined) return;
-      // Leave ~1% headroom for gas (no ETH literal — proportional buffer).
-      onRaw(formatEther((bal * 99n) / 100n));
-    } else {
-      const bal = tokenBalance.data as bigint | undefined;
-      if (bal === undefined) return;
-      onRaw(formatUnits(bal, 18));
-    }
+  const setFromWei = (bal: bigint | undefined, num: bigint, den: bigint, buy: boolean) => {
+    if (bal === undefined) return;
+    const v = (bal * num) / den;
+    onRaw(buy ? formatEther(v) : formatUnits(v, 18));
   };
 
+  const maxBuy = () => {
+    // Leave ~1% headroom for gas (no ETH literal — proportional buffer).
+    setFromWei(nativeBalance.data?.value, 99n, 100n, true);
+  };
+  const maxSell = () => setFromWei(tokenBalance.data as bigint | undefined, 1n, 1n, false);
+
+  const quick =
+    side === "buy"
+      ? [
+          { label: "0.1", onSelect: () => onRaw("0.1"), active: raw === "0.1" },
+          { label: "0.5", onSelect: () => onRaw("0.5"), active: raw === "0.5" },
+          { label: "1", onSelect: () => onRaw("1"), active: raw === "1" },
+          { label: "MAX", onSelect: maxBuy },
+        ]
+      : [
+          {
+            label: "25%",
+            onSelect: () => setFromWei(tokenBalance.data as bigint | undefined, 1n, 4n, false),
+          },
+          {
+            label: "50%",
+            onSelect: () => setFromWei(tokenBalance.data as bigint | undefined, 1n, 2n, false),
+          },
+          { label: "MAX", onSelect: maxSell },
+        ];
+
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>You {side === "buy" ? "pay" : "sell"}</span>
-        {address && (
-          <button
-            type="button"
-            onClick={onMax}
-            disabled={disabled}
-            className="uppercase tracking-wide hover:text-foreground disabled:opacity-50"
-          >
-            Max
-          </button>
-        )}
-      </div>
-      <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2">
-        <Input
-          inputMode="decimal"
-          placeholder="0.0"
-          value={raw}
-          disabled={disabled}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v === "" || /^\d*\.?\d*$/.test(v)) onRaw(v);
-          }}
-          className="border-0 bg-transparent px-0 text-lg tabular-nums focus-visible:ring-0"
-        />
-        <span className="shrink-0 text-sm font-medium text-muted-foreground">{unit}</span>
-      </div>
-    </div>
+    <AmountInput
+      label="You pay"
+      value={raw}
+      onValueChange={(v) => {
+        if (v === "" || /^\d*\.?\d*$/.test(v)) onRaw(v);
+      }}
+      unit={unit}
+      quick={address ? quick : undefined}
+      disabled={disabled}
+    />
   );
 }
 
-function QuoteLine({
+function ReceiveBox({
   side,
-  quote,
-  minOut,
+  token,
+  out,
   isFetching,
-  impact,
 }: {
   side: TradeSide;
-  quote: ReturnType<typeof useCurveQuote>["quote"];
-  minOut: bigint | null;
+  token: TokenDetail;
+  out: bigint | null;
   isFetching: boolean;
-  impact: number | null;
 }) {
-  const outUnit = side === "buy" ? "tokens" : "ETH";
-  const fmtOut = (v: bigint) =>
-    side === "buy" ? `${formatTokenFromWei(v)} tokens` : `${formatEthFromWei(v)} ETH`;
-
+  const unit = side === "buy" ? token.ticker : "ETH";
+  const text =
+    out !== null
+      ? side === "buy"
+        ? formatTokenFromWei(out)
+        : formatEthFromWei(out)
+      : isFetching
+        ? "quoting…"
+        : "0.0";
   return (
-    <div className="flex flex-col gap-1 rounded-md border border-border/60 p-2 text-xs">
-      <Line label="Expected out">
-        {quote ? (
-          <span className="tabular-nums text-foreground">{fmtOut(quote.amountOut)}</span>
-        ) : (
-          <span className="text-muted-foreground">{isFetching ? "quoting…" : "—"}</span>
-        )}
-      </Line>
-      <Line label="Min received (after slippage)">
-        {minOut !== null ? (
-          <span className="tabular-nums text-foreground">{fmtOut(minOut)}</span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </Line>
-      <Line label="Fee">
-        {quote ? (
-          <span className="tabular-nums text-muted-foreground">
-            {formatEthFromWei(quote.feeEth)} ETH → treasury
-          </span>
-        ) : (
-          <span className="text-muted-foreground">curve fee → treasury</span>
-        )}
-      </Line>
-      <Line label="Price impact">
+    <div className="flex w-full flex-col gap-1.5">
+      <MonoLabel size="2xs">You receive</MonoLabel>
+      <div className="flex items-center gap-2 border border-border px-3 py-2.5">
         <span
           className={cn(
-            "tabular-nums",
-            impact !== null && impact > 5 ? "text-soft-confirmed" : "text-muted-foreground",
+            "min-w-0 flex-1 truncate text-xl tabular-nums",
+            out !== null ? "text-text" : "text-faint",
           )}
         >
-          {impact === null ? "—" : `${impact.toFixed(2)}%`}
+          {text}
         </span>
-      </Line>
-      {quote?.refund !== undefined && quote.refund > 0n && (
-        <Line label="Graduation refund">
-          <span className="tabular-nums text-muted-foreground">
-            {formatEthFromWei(quote.refund)} ETH
-          </span>
-        </Line>
-      )}
-      <span className="sr-only">{outUnit}</span>
+        <span className="shrink-0 text-xs text-faint">{unit}</span>
+      </div>
     </div>
   );
 }
 
-function Line({ label, children }: { label: string; children: React.ReactNode }) {
+function InfoRows({
+  side,
+  feeLabel,
+  minOut,
+  impact,
+  refund,
+}: {
+  side: TradeSide;
+  feeLabel: string;
+  minOut: bigint | null;
+  impact: number | null;
+  refund?: bigint;
+}) {
+  const fmtOut = (v: bigint) =>
+    side === "buy" ? `${formatTokenFromWei(v)}` : `${formatEthFromWei(v)} ETH`;
+  return (
+    <div className="flex flex-col gap-2 border-t border-border-soft pt-3 text-xs text-muted">
+      <Row label="Price impact">
+        <span className={cn("tabular-nums", impact !== null && impact > 5 && "text-soft-confirmed")}>
+          {impact === null ? "—" : `${impact.toFixed(2)}%`}
+        </span>
+      </Row>
+      <Row label="Fee">
+        <span className="tabular-nums">{feeLabel} → treasury</span>
+      </Row>
+      <Row label="Min received">
+        <span className="tabular-nums text-text-secondary">
+          {minOut !== null ? fmtOut(minOut) : "—"}
+        </span>
+      </Row>
+      {refund !== undefined && refund > 0n && (
+        <Row label="Graduation refund">
+          <span className="tabular-nums">{formatEthFromWei(refund)} ETH</span>
+        </Row>
+      )}
+    </div>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
+      <span>{label}</span>
       {children}
     </div>
   );
@@ -380,49 +417,109 @@ function SlippageControl({
   const pct = bps / 100;
   const warn = bps > SLIPPAGE_WARN_BPS;
   return (
-    <div className="flex items-center justify-between text-xs">
-      <span className="text-muted-foreground">Slippage · deadline 10m</span>
-      <div className="flex items-center gap-1">
+    <div className="flex items-center justify-between text-xs text-muted">
+      <span>Max slippage · deadline 10m</span>
+      <div className="flex items-center gap-1.5">
         {[50, 100, 200].map((preset) => (
-          <button
+          <Chip
             key={preset}
-            type="button"
+            variant="outline"
+            active={bps === preset}
             onClick={() => onChange(preset)}
-            className={cn(
-              "rounded px-1.5 py-0.5",
-              bps === preset ? "bg-secondary text-foreground" : "text-muted-foreground",
-            )}
           >
             {preset / 100}%
-          </button>
+          </Chip>
         ))}
-        <div className="flex items-center gap-0.5">
-          <Input
-            inputMode="decimal"
-            value={String(pct)}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              if (Number.isFinite(v)) onChange(clampSlippageBps(v * 100));
-            }}
-            className={cn(
-              "h-6 w-12 px-1 text-right text-xs tabular-nums",
-              warn && "text-soft-confirmed",
-            )}
-          />
-          <span className="text-muted-foreground">%</span>
-        </div>
+        <span className={cn("tabular-nums", warn && "text-soft-confirmed")}>
+          {pct}%
+        </span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * §12.47 large-value disclosure (task B). Above the ETH threshold, a trade's
+ * confirmation tiers matter: it renders soft-confirmed NOW, then posts to L1,
+ * then finalizes — settlement finality follows L1 posting on this single-
+ * sequencer L2. We surface that here rather than implying instant settlement.
+ */
+function LargeValueDisclosure({
+  ethWei,
+  side,
+}: {
+  ethWei: bigint | null;
+  side: TradeSide;
+}) {
+  const thresholdWei = largeValueThresholdWei();
+  if (ethWei === null || !isLargeValueWei(ethWei, thresholdWei)) return null;
+  const noun = side === "buy" ? "buy" : "sale";
+  return (
+    <div className="flex flex-col gap-1.5 border border-soft-confirmed/40 bg-soft-confirmed/5 p-2.5 text-xs">
+      <div className="flex items-center gap-2">
+        <SideBadge side="buy" label="LARGE" className="text-soft-confirmed" />
+        <MonoText tone="default" numeric>
+          {formatEthFromWei(ethWei)} ETH
+        </MonoText>
+      </div>
+      <p className="text-muted">
+        This {noun} is <span className="text-soft-confirmed">soft-confirmed</span> the
+        instant the sequencer includes it, then upgrades to{" "}
+        <span className="text-posted">posted to L1</span> and{" "}
+        <span className="text-finalized">finalized</span>. At this size, wait for the
+        posted/finalized tier in the trades feed before treating it as settled.
+      </p>
+    </div>
+  );
+}
+
+function ActionButton({
+  isConnected,
+  side,
+  disabled,
+  isSubmitting,
+  onSubmit,
+}: {
+  isConnected: boolean;
+  side: TradeSide;
+  disabled: boolean;
+  isSubmitting: boolean;
+  onSubmit: () => void;
+}) {
+  if (!isConnected) return <WalletConnectButton />;
+  return (
+    <button
+      type="button"
+      onClick={onSubmit}
+      disabled={disabled}
+      className={cn(
+        "w-full py-3 text-center text-sm font-semibold text-accent-foreground transition-colors disabled:opacity-40",
+        side === "buy" ? "bg-green hover:bg-green/90" : "bg-red hover:bg-red/90",
+      )}
+    >
+      {/* Accessible name stays exactly "Buy"/"Sell" (test contract). */}
+      {isSubmitting ? "Confirming…" : side === "buy" ? "Buy" : "Sell"}
+    </button>
+  );
+}
+
+function Tagline() {
+  return (
+    <div className="pt-0.5 text-center">
+      <CursorTag>{TAGLINE_TRADE}</CursorTag>
     </div>
   );
 }
 
 function GraduatingInterstitial() {
   return (
-    <div className="rounded-md border border-soft-confirmed/40 bg-soft-confirmed/10 p-3 text-center">
-      <Badge variant="soft-confirmed" className="mb-1">
-        Graduating to Uniswap V3…
-      </Badge>
-      <p className="text-xs text-muted-foreground">
+    <div className="border border-soft-confirmed/40 bg-soft-confirmed/10 p-3 text-center">
+      <div className="mb-1 flex justify-center">
+        {/* Mixed-case textContent (CSS uppercases visually) — the §12.12 copy
+            contract asserts on the literal "Graduating to Uniswap V3". */}
+        <SideBadge side="graduate" label="Graduating to Uniswap V3…" />
+      </div>
+      <p className="text-xs text-muted">
         The curve has reached its threshold and is locked while it migrates. Both
         buying and selling resume on Uniswap V3 in a moment — this is an automatic
         protocol step, not a pause.
@@ -461,6 +558,7 @@ function V3Venue({ token }: { token: TokenDetail }) {
   });
 
   const minOut = amountOut !== null ? applySlippageFloor(amountOut, slippageBps) : null;
+  const ethNotionalWei = side === "buy" ? amountWei : amountOut;
   const canSubmit =
     isConnected && amountWei !== null && amountWei > 0n && amountOut !== null && amountOut > 0n;
 
@@ -470,87 +568,54 @@ function V3Venue({ token }: { token: TokenDetail }) {
   };
 
   return (
-    <Card className="flex flex-col gap-3 p-4">
+    <Card className="flex flex-col gap-3.5 p-4">
       <div className="flex items-center justify-between">
-        <Badge variant="finalized">Graduated</Badge>
-        <span className="text-xs text-muted-foreground">Trading on Uniswap V3</span>
+        <SideBadge side="graduate" label="GRADUATED" />
+        <MonoText tone="muted" size="xs">
+          Trading on Uniswap V3
+        </MonoText>
       </div>
 
       <SideTabs side={side} onChange={setSide} disabled={false} />
 
-      <AmountField token={token} side={side} raw={raw} onRaw={setRaw} disabled={false} />
+      <PayField token={token} side={side} raw={raw} onRaw={setRaw} disabled={false} />
 
-      <V3QuoteLine side={side} amountOut={amountOut} minOut={minOut} isFetching={isFetching} />
+      <ReceiveBox side={side} token={token} out={amountOut} isFetching={isFetching} />
+
+      <InfoRows
+        side={side}
+        feeLabel={`Uniswap V3 pool ${V3_FEE_TIER / 10000}%`}
+        minOut={minOut}
+        impact={null}
+      />
 
       <SlippageControl bps={slippageBps} onChange={setSlippageBps} />
 
-      {error && <p className="text-xs text-sell">{error}</p>}
+      <LargeValueDisclosure ethWei={ethNotionalWei} side={side} />
 
-      {!isConnected ? (
-        <WalletConnectButton />
-      ) : (
-        <Button
-          onClick={onSubmit}
-          disabled={!canSubmit || isSubmitting}
-          variant={side === "buy" ? "default" : "outline"}
-          className={cn(
-            "w-full",
-            side === "buy" ? "bg-buy text-white hover:bg-buy/90" : "border-sell text-sell",
-          )}
-        >
-          {isSubmitting ? "Confirming…" : side === "buy" ? "Buy" : "Sell"}
-        </Button>
-      )}
+      {error && <p className="text-xs text-red">{error}</p>}
+
+      <ActionButton
+        isConnected={isConnected}
+        side={side}
+        disabled={!canSubmit || isSubmitting}
+        isSubmitting={isSubmitting}
+        onSubmit={onSubmit}
+      />
 
       {token.v3PoolAddress ? (
-        <a
-          href={explorer.address(token.v3PoolAddress)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-center text-[11px] text-muted-foreground hover:text-foreground"
-        >
-          View the Uniswap V3 pool ↗
-        </a>
+        <div className="text-center">
+          <AddressLink
+            address={token.v3PoolAddress}
+            kind="address"
+            label="View the Uniswap V3 pool ↗"
+            className="text-[11px] text-muted"
+          />
+        </div>
       ) : null}
-    </Card>
-  );
-}
 
-function V3QuoteLine({
-  side,
-  amountOut,
-  minOut,
-  isFetching,
-}: {
-  side: TradeSide;
-  amountOut: bigint | null;
-  minOut: bigint | null;
-  isFetching: boolean;
-}) {
-  const fmtOut = (v: bigint) =>
-    side === "buy" ? `${formatTokenFromWei(v)} tokens` : `${formatEthFromWei(v)} ETH`;
-  return (
-    <div className="flex flex-col gap-1 rounded-md border border-border/60 p-2 text-xs">
-      <Line label="Expected out">
-        {amountOut !== null ? (
-          <span className="tabular-nums text-foreground">{fmtOut(amountOut)}</span>
-        ) : (
-          <span className="text-muted-foreground">{isFetching ? "quoting…" : "—"}</span>
-        )}
-      </Line>
-      <Line label="Min received (after slippage)">
-        {minOut !== null ? (
-          <span className="tabular-nums text-foreground">{fmtOut(minOut)}</span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </Line>
-      <Line label="Venue">
-        <span className="tabular-nums text-muted-foreground">
-          Uniswap V3 · {V3_FEE_TIER / 10000}% pool
-        </span>
-      </Line>
-    </div>
+      <Tagline />
+    </Card>
   );
 }
 
@@ -563,6 +628,15 @@ function parseAmount(side: TradeSide, raw: string): bigint | null {
   } catch {
     return null;
   }
+}
+
+/** bps → "1%" / "1.5%" fee label, rendered from the on-chain value (never a copy
+ *  literal, §2). `null` (read pending) degrades to "curve fee". */
+function feeLabelFromBps(bps: number | null): string {
+  if (bps === null) return "curve fee";
+  const pct = bps / 100;
+  const s = Number.isInteger(pct) ? pct.toString() : pct.toFixed(2).replace(/0+$/, "");
+  return `${s}% curve fee`;
 }
 
 function computeImpact(

@@ -10,17 +10,13 @@ import type { Change24hAnchor, TokenListRow } from "../lib/db";
 import { projectConfirmation } from "../lib/confirmation";
 import type { EthUsdSnapshot } from "../lib/usd";
 import { usdFromEthFloat } from "../lib/usd";
-import { progressFraction, resolveSnapshot } from "./common";
+import { progressFraction, resolveSnapshot, statusFrom } from "./common";
 
 const WEI_PER_ETH = 1e18;
 const WEI_PER_ETH_BIG = 10n ** 18n;
 
 export function deriveStatus(row: TokenListRow): TokenCard["status"] {
-  if (row.graduated) return "graduated";
-  if (BigInt(row.real_eth_reserves || "0") >= BigInt(row.graduation_eth || "0")) {
-    return "graduating";
-  }
-  return "curve";
+  return statusFrom(row.graduated, row.real_eth_reserves, row.graduation_eth);
 }
 
 /** mcap in ETH (float) = price(ETH/token) × totalSupply(tokens). USD derives from this. */

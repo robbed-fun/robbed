@@ -25,7 +25,7 @@ optimizer_runs = 200
 # stack on "shanghai" HARD-FAILS: solc "Error (7755): the mcopy instruction is only available for
 # Cancun-compatible VMs". So Cancun opcodes are already unavoidable in our deployed bytecode short of
 # downgrading OZ — making "cancun" the correct, honest target. (§7.1 amendment flagged to
-# hoodpad-architect for a §12 decision, 2026-07-10.)
+# robbed-architect for a §12 decision, 2026-07-10.)
 #
 # ArbOS Cancun support (docs-first, checked 2026-07-10):
 #   - CONFIRMED: ArbOS 20 "Atlas" added the Cancun EVM opcodes — "Addition of the MCOPY EVM opcode

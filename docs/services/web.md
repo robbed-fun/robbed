@@ -1,7 +1,7 @@
 # ROBBED_ web frontend — service design (`apps/web`)
 
 **Status:** Design v1.0 — drives M3 implementation. Documentation-first: building from this doc should be a transcription exercise.
-**Owner:** hoodpad-frontend. Consumes contract types from `packages/shared` only; any missing indexer/API data is a gap reported to hoodpad-indexer via the orchestrator — never faked client-side.
+**Owner:** robbed-frontend. Consumes contract types from `packages/shared` only; any missing indexer/API data is a gap reported to robbed-indexer via the orchestrator — never faked client-side.
 **Spec:** `launchpad-spec.md` v1.1 — §1, §2, §2.1, §5.1–5.4, §8, §8.3, §9. `CLAUDE.md` hard rules apply.
 
 ---
@@ -429,7 +429,7 @@ The per-token OG image is **the viral share unit** — a link paste into X/Teleg
 
 > **SUPERSEDES the M3-2 look** (user-directed redesign; see `docs/design/robbed-redesign-plan.md`).
 > Brand: **`ROBBED_`** (blinking green `_` cursor motif — `<Wordmark/>`/`<CursorTag/>`; `BRAND` constant
-> in `shared/config/copy.ts`). Deviations recorded for hoodpad-architect §12: (1) four pages incl.
+> in `shared/config/copy.ts`). Deviations recorded for robbed-architect §12: (1) four pages incl.
 > Portfolio (overrides §5 "exactly three" / §5.4 Phase-2); (2) `/launch`→`/create`; (3) brand
 > ROBBED_→ROBBED_ (§13 brand question resolved by direction); (4) terminal-mono skin supersedes the
 > §12.24 shadcn look (primitives remain, restyled); (5) mobile-first primary layout. Protocol rules
@@ -511,14 +511,14 @@ Plus: LP sentence exists **only** as the single exported constant (grep for the 
 8. **LP wording divergence** — **RESOLVED (spec §12.14).** Canonical sentence confirmed: "LP principal permanently locked; trading fees claimable by treasury." Spec §5.2 amended; single exported constant stands.
 9. **Dark-only v1** — **RESOLVED (spec §12.23).** Dark-only, no toggle.
 
-**M3-1 runtime-check dispositions (recorded 2026-07-10, hoodpad-frontend; for architect §12/§13):**
+**M3-1 runtime-check dispositions (recorded 2026-07-10, robbed-frontend; for architect §12/§13):**
 
 6. **WalletConnect projectId & Robinhood Wallet verification** — **NEEDS-USER (unresolved by design; env/ops).**
    - **projectId:** `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` is a per-org secret obtainable only at cloud.walletconnect.com — the user must furnish it. Disposition (`src/shared/lib/wagmi.ts`): injected (browser-extension) wallets work in **dev with no projectId**; the WalletConnect group and the Robinhood Wallet entry are **omitted from the wallet list until the id is set** (never a broken connector). `.env.example` carries the `web-6 NEEDS-USER` note.
-   - **Robinhood Wallet connector:** docs-first finding — RainbowKit 2.2.11 ships **no `robinhoodWallet`** export (verified: no entry in `walletConnectors/`; GitHub code search `robinhood repo:rainbow-me/rainbowkit` → 0 hits). The `robinhoodWallet` in web.md §2.4 was an assumed export. Interim (safest-correct, `src/shared/lib/wallets/robinhoodWallet.ts`): a **custom RainbowKit wallet wrapping the shared WalletConnect connector** via the documented `getWalletConnectConnector` (web.md §2.4: "WalletConnect-based under the hood"). It is **UNVERIFIED on a real Robinhood Wallet on chain 4663** — no on-device / deep-link / WC-metadata test, and it only appears when a projectId is present. **NEEDS-USER:** a real Robinhood Wallet device connection test on 4663 + official WC metadata + brand icon (§13 brand pending). Flagged to hoodpad-architect (§13).
+   - **Robinhood Wallet connector:** docs-first finding — RainbowKit 2.2.11 ships **no `robinhoodWallet`** export (verified: no entry in `walletConnectors/`; GitHub code search `robinhood repo:rainbow-me/rainbowkit` → 0 hits). The `robinhoodWallet` in web.md §2.4 was an assumed export. Interim (safest-correct, `src/shared/lib/wallets/robinhoodWallet.ts`): a **custom RainbowKit wallet wrapping the shared WalletConnect connector** via the documented `getWalletConnectConnector` (web.md §2.4: "WalletConnect-based under the hood"). It is **UNVERIFIED on a real Robinhood Wallet on chain 4663** — no on-device / deep-link / WC-metadata test, and it only appears when a projectId is present. **NEEDS-USER:** a real Robinhood Wallet device connection test on 4663 + official WC metadata + brand icon (§13 brand pending). Flagged to robbed-architect (§13).
 7. **Runtime verifications at M3 start** — **RESOLVED (both legs).**
    - **`next/og`/satori under Bun self-hosting:** RESOLVED — M3-8 does **not** use `next/og`. The OG route (`app/t/[address]/opengraph-image.tsx`) is a metadata Route Handler that calls **raw `satori` + `@resvg/resvg-js`** (`src/widgets/token-og` → `src/shared/lib/og/render.ts`), so there is no dependency on `next/og`'s runtime behavior under Bun. Proven by `tests/og.test.ts` (returns `image/png` 1200×630). No `ImageResponse`/edge assumption anywhere.
-   - **Multicall3 on 4663:** **UNCONFIRMED** — canonical `0xcA11…` deployment on 4663 is not verified. Disposition: `src/shared/lib/chain.ts` **omits** `contracts.multicall3` (commented, with rationale); Trust-panel batch reads use **parallel `readContract` / `useReadContracts` without a multicall aggregator** (viem falls back to individual `eth_call`s when no `multicall3` is configured). No behavior depends on Multicall3; if/when it is confirmed on 4663, adding the address is a pure optimization. Flagged to hoodpad-architect (§13) as an infra confirmation item, not a blocker.
+   - **Multicall3 on 4663:** **UNCONFIRMED** — canonical `0xcA11…` deployment on 4663 is not verified. Disposition: `src/shared/lib/chain.ts` **omits** `contracts.multicall3` (commented, with rationale); Trust-panel batch reads use **parallel `readContract` / `useReadContracts` without a multicall aggregator** (viem falls back to individual `eth_call`s when no `multicall3` is configured). No behavior depends on Multicall3; if/when it is confirmed on 4663, adding the address is a pure optimization. Flagged to robbed-architect (§13) as an infra confirmation item, not a blocker.
 10. **Large-value disclosure threshold** — §2.1 requires posted/finalized disclosure on "large-value displays"; ETH notional threshold needs an M0/architect number before M3 exit (config value, not a literal). Spec §13.
 11. **Pending §13 upstream:** V3 Factory/NPM/Quoter/SwapRouter addresses on 4663 **RESOLVED (spec §12.28)** — recorded in CLAUDE.md/constants; the post-grad widget + `addresses.ts` codegen consume them (codegen still comes from the M1 deploy pipeline, never hand-edited). Name/domain/brand (blocks OG brand mark and header); legal wrapper/ToS jurisdiction (blocks footer links); final curve constants + graduation tick (M0 — blocks economics display values, all read live regardless) remain open.
 
@@ -537,4 +537,4 @@ Plus: LP sentence exists **only** as the single exported constant (grep for the 
 - [ ] Per-token OG image renders (chart snapshot + mcap + progress), page SSR meaningful without client JS
 - [ ] Dark-first dense Tailwind UI; TanStack Query + WS wiring with reconnect/invalidation
 - [ ] `bun run build` green under Bun; Vitest + Playwright green on fork; copy-lint greps clean
-- [ ] All §9-of-this-doc gaps reported / decisions escalated to hoodpad-architect, none self-resolved
+- [ ] All §9-of-this-doc gaps reported / decisions escalated to robbed-architect, none self-resolved

@@ -19,10 +19,9 @@ import {
 } from "lightweight-charts";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Card } from "@/shared/ui";
+import { Card, MonoLabel, Tab, TabBar } from "@/shared/ui";
 import { useWsChannel } from "@/shared/lib/ws";
 import { readChartPalette } from "@/shared/lib/theme-colors";
-import { cn } from "@/shared/lib/utils";
 
 import {
   isApplicableUpdate,
@@ -166,33 +165,33 @@ export function PriceChart({
   const empty = !feed.isLoading && (feed.data?.candles.length ?? 0) === 0;
 
   return (
-    <Card className="flex flex-col gap-2 p-3">
-      <div className="flex items-center justify-between">
-        <div className="flex gap-1">
+    // ROBBED_ terminal chart panel (docs/Robbed.html "2a"): interval TabBar +
+    // "price / ETH" micro-label over one venue-continuous series.
+    // DECISION (hoodpad-frontend): the mockup shows 1H/4H/1D/ALL, but the data
+    // contract is INTERVAL-based (`CANDLE_INTERVALS` from @robbed/shared / the
+    // candles API), not range-based — the buttons switch candle granularity. We
+    // keep the real intervals (never redeclare the shared contract) styled as the
+    // terminal tab strip; the mockup labels were illustrative.
+    <Card className="flex flex-col gap-3 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <TabBar>
           {CANDLE_INTERVALS.map((iv) => (
-            <button
+            <Tab
               key={iv}
-              type="button"
+              active={iv === interval}
               onClick={() => setInterval(iv)}
-              className={cn(
-                "rounded px-1.5 py-0.5 text-xs tabular-nums transition-colors",
-                iv === interval
-                  ? "bg-secondary text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
+              className="tabular-nums"
             >
               {iv}
-            </button>
+            </Tab>
           ))}
-        </div>
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-          Price · ETH
-        </span>
+        </TabBar>
+        <MonoLabel size="2xs">price / ETH</MonoLabel>
       </div>
-      <div className="relative h-[320px] w-full">
+      <div className="relative h-[280px] w-full sm:h-[340px]">
         <div ref={containerRef} className="h-full w-full" />
         {empty && (
-          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
+          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted">
             First trades incoming — the chart fills as the curve trades.
           </div>
         )}

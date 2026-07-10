@@ -16,7 +16,7 @@ Build **Milestone 0** (spec §11.0): the parameter notebook that derives all dep
 
 ```
 tools/m0/
-├── package.json          // @hoodpad/m0, bun script: "derive": "bun run derive.ts"
+├── package.json          // @robbed/m0, bun script: "derive": "bun run derive.ts"
 ├── derive.ts             // main: fetch ETH/USD → derive → validate → emit
 ├── lib/curve.ts          // virtual-reserve constant-product math (§6.2)
 ├── lib/v3tick.ts         // V3 tick math for graduation price (1% tier, tickSpacing 200)
@@ -48,4 +48,4 @@ tools/m0/
 
 ## Definition of done
 
-`bun run derive` in `tools/m0/` exits 0, writes `out/constants.json` (with provenance: source, price, timestamp, git SHA), `out/Constants.sol.txt`, and plots; all validations pass; no literal USD/ETH prices anywhere in source (only targets like "$69k parity" from §6.4, which are spec constants, clearly commented with their §6.4 origin). Report: derived values table, the ETH/USD source + timestamp used, the gross-vs-net-fee threshold decision flagged for hoodpad-architect (§12/§13), and a reminder that gate approval of final constants closes the §13 open item.
+`bun run derive` in `tools/m0/` exits 0, writes `out/constants.json` (with provenance: source, price, timestamp, git SHA), `out/Constants.sol.txt`, and plots; all validations pass; no literal USD/ETH prices anywhere in source (only targets like "$69k parity" from §6.4, which are spec constants, clearly commented with their §6.4 origin). Report: derived values table, the ETH/USD source + timestamp used, the gross-vs-net-fee threshold decision flagged for robbed-architect (§12/§13), and a reminder that gate approval of final constants closes the §13 open item.

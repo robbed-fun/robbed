@@ -1,28 +1,52 @@
 "use client";
 
-import { Card } from "@/shared/ui";
+import { formatEther, formatUnits } from "viem";
+import { TOTAL_SUPPLY_WEI } from "@robbed/shared";
+
+import { MonoText } from "@/shared/ui";
 import { LP_DESTINY_COPY } from "@/shared/config/copy";
-import { formatEthFromWei } from "@/shared/lib/format";
+import { formatEthFromWei, formatEthNumber } from "@/shared/lib/format";
 
 import { useLaunchEconomics } from "../model/use-launch-economics";
 
 /**
- * "Economics displayed plainly" (§5.3). Every figure is READ LIVE from the
- * CurveFactory (`useLaunchEconomics`) — the deploy fee, the graduation threshold
- * in ETH, the trade-fee bps — never a constant (§2, CLAUDE.md); the graduation
- * threshold is shown as its on-chain ETH value, never a USD literal (§5 copy
- * rule 3). The LP line is the single shared constant, verbatim (§12.14) —
- * the forbidden LP verb (CLAUDE.md) never appears; this renders LP_DESTINY_COPY.
+ * "Economics displayed plainly" (§5.3) — ROBBED_ terminal summary block
+ * (docs/Robbed.html "Create"): a hairline-topped stack of label→value rows,
+ * exactly the mockup's Deploy cost / Starting price / Supply, extended with the
+ * §5.3-mandated Trade fee + Graduation rows and the verbatim LP sentence (those
+ * are product guarantees the mockup omits; kept, styled to match).
+ *
+ * Every figure is READ LIVE from the CurveFactory (`useLaunchEconomics`) — the
+ * deploy fee, the trade-fee bps, the graduation threshold in ETH, the seed
+ * virtual reserves that yield the starting price — never a constant (§2,
+ * CLAUDE.md). The graduation threshold shows its on-chain ETH value, never a USD
+ * literal (§5 copy rule 3). Supply is the fixed protocol constant from
+ * `@robbed/shared` (§6.1), not a hardcoded market metric. The LP line is the
+ * single shared constant, verbatim (§12.14) — the forbidden LP verb never appears.
  *
  * Until the M1-14 deploy codegen furnishes the factory address the reads are
  * disabled (`available === false`) and the live numbers show "read on-chain"
  * rather than a fabricated value.
  */
-export function EconomicsPanel() {
+export function EconomicsPanel({ ticker }: { ticker?: string }) {
   const econ = useLaunchEconomics();
+  const unit = ticker?.trim() ? ticker.trim() : "tokens";
 
-  const feeValue = (wei: bigint | null): string =>
+  const ethValue = (wei: bigint | null): string =>
     wei !== null ? `${formatEthFromWei(wei)} ETH` : liveHint(econ.available, econ.isError);
+
+  // Starting price = seed virtual ETH ÷ seed virtual tokens (curve config, read
+  // live — a derived on-chain value, never a market-price constant, §2).
+  const startingPrice =
+    econ.virtualEth0 !== null && econ.virtualToken0 !== null && econ.virtualToken0 !== 0n
+      ? `${formatEthNumber(
+          Number(formatEther(econ.virtualEth0)) / Number(formatUnits(econ.virtualToken0, 18)),
+        )} ETH`
+      : liveHint(econ.available, econ.isError);
+
+  const supply = `${new Intl.NumberFormat("en-US").format(
+    TOTAL_SUPPLY_WEI / 10n ** 18n,
+  )} ${unit}`;
 
   const tradeFee =
     econ.tradeFeeBps !== null
@@ -30,32 +54,32 @@ export function EconomicsPanel() {
       : liveHint(econ.available, econ.isError);
 
   return (
-    <Card className="flex flex-col gap-2.5 p-4">
-      <h3 className="text-sm font-semibold text-foreground">Economics</h3>
-
-      <Row label="Creation fee">{feeValue(econ.deployFeeWei)}</Row>
-      <Row label="Trade fee">{tradeFee}</Row>
-      <Row label="Graduation threshold">{feeValue(econ.graduationEthWei)}</Row>
-
-      <div className="mt-1 border-t border-border/60 pt-2">
-        <p className="text-xs text-muted-foreground">Liquidity at graduation</p>
-        {/* The exact, single-sourced LP sentence — verbatim (§12.14). */}
-        <p className="mt-0.5 text-sm text-foreground">{LP_DESTINY_COPY}</p>
-      </div>
-
-      <p className="text-[11px] text-muted-foreground">
-        Fixed 1,000,000,000 supply · ownerless token · no mint, no blacklist. Fees
-        are computed in-contract. All figures read live from chain.
-      </p>
-    </Card>
+    <div className="flex flex-col">
+      <div className="h-px w-full bg-border" />
+      <dl className="flex flex-col gap-2 pt-4">
+        <Row label="Deploy cost">{ethValue(econ.deployFeeWei)}</Row>
+        <Row label="Starting price">{startingPrice}</Row>
+        <Row label="Supply">{supply}</Row>
+        <Row label="Trade fee">{tradeFee}</Row>
+        <Row label="Graduation">{ethValue(econ.graduationEthWei)}</Row>
+      </dl>
+      {/* The exact, single-sourced LP sentence — verbatim (§12.14). */}
+      <MonoText tone="faint" size="xs" className="pt-3 leading-relaxed">
+        {LP_DESTINY_COPY}
+      </MonoText>
+    </div>
   );
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="tabular-nums text-foreground">{children}</span>
+    <div className="flex items-baseline justify-between gap-3">
+      <MonoText tone="muted" size="sm" className="shrink-0">
+        {label}
+      </MonoText>
+      <MonoText tone="secondary" size="sm" numeric className="text-right">
+        {children}
+      </MonoText>
     </div>
   );
 }

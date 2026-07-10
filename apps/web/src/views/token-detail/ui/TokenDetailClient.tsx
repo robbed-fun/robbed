@@ -39,16 +39,31 @@ export function TokenDetailClient({
 }) {
   return (
     <OptimisticTradesProvider>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex min-w-0 flex-col gap-4">
+      {/*
+        Mockup layout (docs/Robbed.html "2a"): chart column + right-rail trade
+        panel, Trust panel below the widget. MOBILE-FIRST ordering (web.md §7):
+        chart → trade widget → trust → trades → holders → info — the right rail
+        STACKS UNDER THE CHART on mobile, not above it.
+
+        DECISION (hoodpad-frontend): a single grid whose right rail is ONE cell
+        spanning both rows decouples the two columns' vertical flow (no shared-row
+        whitespace under the chart), while `order-*` gives the exact mobile
+        sequence. `lg:items-start` keeps each column top-aligned.
+      */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+        <div className="order-1 flex min-w-0 flex-col lg:col-start-1 lg:row-start-1">
           <PriceChart token={token} initialCandles={initialCandles} />
+        </div>
+
+        <div className="order-2 flex flex-col gap-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+          <TradeWidget token={token} />
+          <TrustPanel token={token} />
+        </div>
+
+        <div className="order-3 flex min-w-0 flex-col gap-4 lg:col-start-1 lg:row-start-2">
           <TradeFeed token={token} initialTrades={initialTrades} />
           <HolderTable token={token} initialData={initialHolders} />
           <TokenInfo token={token} />
-        </div>
-        <div className="order-first flex flex-col gap-4 lg:order-none">
-          <TradeWidget token={token} />
-          <TrustPanel token={token} />
         </div>
       </div>
     </OptimisticTradesProvider>

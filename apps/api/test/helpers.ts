@@ -10,6 +10,7 @@ import type {
   Db,
   HolderJoinedRow,
   ListTokensInput,
+  PortfolioHoldingRow,
   RawQuery,
   TokenDetailRow,
   TokenListRow,
@@ -22,9 +23,11 @@ import type { Storage } from "../src/media/storage";
 import { InMemoryRateLimitStore } from "../src/mw/ratelimit";
 import { stubVendors } from "../src/moderation/vendors";
 import type {
+  AddressPnlRow,
   ConfirmationWatermarksRow,
   EthUsdSnapshotRow,
   ModerationStatusRow,
+  TradeRowDb,
 } from "@robbed/shared";
 
 /**
@@ -88,6 +91,31 @@ export function fixtureToken(overrides: Partial<TokenDetailRow> = {}): TokenDeta
   };
 }
 
+export const TEST_HOLDER = "0x4444444444444444444444444444444444444444";
+
+/** A Portfolio HOLDINGS join row (balances ⋈ tokens) — pre-graduation curve token. */
+export function fixtureHolding(
+  overrides: Partial<PortfolioHoldingRow> = {},
+): PortfolioHoldingRow {
+  return {
+    token_address: TEST_ADDR,
+    balance: (1_000_000n * 10n ** 18n).toString(), // 1M tokens held
+    total_eth_in: (1n * 10n ** 18n).toString(), // spent 1 ETH buying
+    total_bought_tokens: (1_000_000n * 10n ** 18n).toString(),
+    name: "Test Token",
+    ticker: "TEST",
+    image_url: "https://cdn.test/images/x.webp",
+    graduated: false,
+    real_eth_reserves: (5n * 10n ** 18n).toString(),
+    graduation_eth: (85n * 10n ** 18n).toString(),
+    virtual_eth: (30n * 10n ** 18n).toString(),
+    virtual_token: (1_073_000_000n * 10n ** 18n).toString(),
+    last_price_eth: 0.00000003,
+    trade_fee_bps: 100,
+    ...overrides,
+  };
+}
+
 export class FakeDb implements Db {
   wm: ConfirmationWatermarksRow = {
     id: 1,
@@ -103,6 +131,10 @@ export class FakeDb implements Db {
   };
   tokens = new Map<string, TokenDetailRow>();
   moderation = new Map<string, ModerationStatusRow>();
+  // ── portfolio fixtures (spec §5.4) ──
+  pnl = new Map<string, AddressPnlRow>();
+  holdings = new Map<string, PortfolioHoldingRow[]>();
+  addressTrades: TradeRowDb[] = [];
   audit: Array<{ id: string; actor: string; action: string; target: string; reason: string | null; ts: string }> = [];
 
   constructor(tokens: TokenDetailRow[] = [fixtureToken()]) {
@@ -161,6 +193,25 @@ export class FakeDb implements Db {
   }
   async getFeeCollections() {
     return [];
+  }
+  async getAddressPnl(a: string) {
+    return this.pnl.get(a) ?? null;
+  }
+  async getAllHoldings(a: string) {
+    return this.holdings.get(a) ?? [];
+  }
+  async listHoldings(input: { address: string; limit: number }) {
+    return (this.holdings.get(input.address) ?? []).slice(0, input.limit);
+  }
+  async listAddressTrades(input: { address: string; limit: number }) {
+    return this.addressTrades
+      .filter((t) => t.trader === input.address)
+      .slice(0, input.limit);
+  }
+  async listCreatedTokens(input: { address: string; limit: number }) {
+    return [...this.tokens.values()]
+      .filter((t) => t.creator === input.address)
+      .slice(0, input.limit);
   }
   async getStats() {
     return {
@@ -290,6 +341,9 @@ export function makeTestDeps(overrides: Partial<AppDeps> = {}): AppDeps {
       },
     uncollectedFees: overrides.uncollectedFees ?? { async read() {
       return { token: "0", weth: "0" };
+    } },
+    walletBalance: overrides.walletBalance ?? { async read() {
+      return "0";
     } },
     now: overrides.now ?? (() => 1_700_000_300_000),
     secureCookies: overrides.secureCookies ?? false,

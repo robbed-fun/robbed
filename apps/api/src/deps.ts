@@ -18,6 +18,8 @@ import type { Reencoder } from "./media/reencode";
 import { createSharpReencoder } from "./media/reencode";
 import type { Storage } from "./media/storage";
 import { createBunStorage } from "./media/storage";
+import type { WalletBalanceReader } from "./lib/wallet-balance";
+import { createRpcWalletBalance, zeroWalletBalance } from "./lib/wallet-balance";
 import type { ModerationVendors } from "./moderation/vendors";
 import { stubVendors } from "./moderation/vendors";
 import {
@@ -45,6 +47,8 @@ export interface AppDeps {
   rateLimit: RateLimitStore;
   watchlist: ImpersonationWatchlist;
   uncollectedFees: UncollectedFeesReader;
+  /** Live native-ETH balance reader (portfolio summary; RPC, never hot path). */
+  walletBalance: WalletBalanceReader;
   now: () => number;
   /** Set `false` in dev so cookies work over http (Secure flag). */
   secureCookies: boolean;
@@ -90,6 +94,10 @@ export function buildDeps(dbFactory: (cfg: Config) => Db): AppDeps {
     rateLimit: new InMemoryRateLimitStore(),
     watchlist: loadWatchlist(),
     uncollectedFees: zeroUncollectedFees,
+    // Real RPC reader when the chain RPC is configured; else the "0" stub (dev).
+    walletBalance: config.ROBINHOOD_RPC_URL
+      ? createRpcWalletBalance(config.ROBINHOOD_RPC_URL)
+      : zeroWalletBalance,
     now: () => Date.now(),
     secureCookies: config.API_ENV === "production",
   };

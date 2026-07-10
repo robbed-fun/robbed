@@ -19,18 +19,17 @@ export default function CreateView() {
     <>
       <LiveStatusBanner />
       <AppHeader />
-      <main className="mx-auto flex max-w-2xl flex-col gap-4 px-4 py-6 pb-16 md:pb-6">
-        <header className="flex flex-col gap-1">
-          <h1 className="text-base font-semibold uppercase tracking-label text-text">
+      <main className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-6 pb-20 md:pb-8">
+        <header className="flex flex-col gap-1.5">
+          <h1 className="text-xl font-semibold uppercase tracking-label text-text">
             Launch a token
           </h1>
           <p className="text-sm text-muted">
-            Deploys on Robinhood Chain — ownerless, fixed 1B supply, tradeable in
-            under a second, soft-confirmed on the bonding curve.
+            Deploys on Robinhood Chain · bonding curve launch
           </p>
         </header>
         <LaunchForm />
-        <div className="flex justify-center pt-2">
+        <div className="flex justify-center pt-1">
           <CursorTag>{TAGLINE_CREATE}</CursorTag>
         </div>
       </main>

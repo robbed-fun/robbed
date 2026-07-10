@@ -40,4 +40,4 @@ A findings table, most severe first:
 
 Severity: **Critical** (funds at risk / hard-rule violation in contract logic) · **High** (hard-rule violation elsewhere: copy, config, schema) · **Medium** (spec deviation, not a hard rule) · **Low/Info** (drift, ambiguity worth flagging).
 
-After the table: a one-line verdict (`CLEAN` or `N findings, worst: <severity>`), and a "Spec ambiguities" list for anything where the spec is silent or self-contradictory — recommend routing those to `hoodpad-architect` for §12/§13, do not resolve them here. Do not fix anything; this command only reports.
+After the table: a one-line verdict (`CLEAN` or `N findings, worst: <severity>`), and a "Spec ambiguities" list for anything where the spec is silent or self-contradictory — recommend routing those to `robbed-architect` for §12/§13, do not resolve them here. Do not fix anything; this command only reports.

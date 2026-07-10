@@ -5,7 +5,7 @@ import { formatUnits } from "viem";
 import type { Address } from "viem";
 
 import { useCurveReads } from "@/entities/curve";
-import { AddressLink, Button, Card } from "@/shared/ui";
+import { AddressLink, Button, Card, MonoLabel } from "@/shared/ui";
 import { LP_DESTINY_COPY } from "@/shared/config/copy";
 import { ROBBED, isPlaceholder } from "@/shared/config/addresses";
 import { useWsChannel } from "@/shared/lib/ws";
@@ -52,8 +52,10 @@ export function TrustPanel({ token }: { token: TokenDetail }) {
 
   return (
     <Card className="p-4">
-      <div className="mb-1 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-foreground">Trust panel</h3>
+      <div className="mb-1 flex items-center justify-between border-b border-border pb-2">
+        <MonoLabel size="xs" className="text-text-tertiary">
+          Trust panel
+        </MonoLabel>
         {readUnavailable && (
           <Button
             size="sm"

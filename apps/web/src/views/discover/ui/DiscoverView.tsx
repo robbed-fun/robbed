@@ -1,64 +1,57 @@
-import { Suspense } from "react";
-
-import { DiscoverControls } from "./DiscoverControls";
-import { KingOfTheHillHero } from "@/widgets/king-of-the-hill-hero";
-import { LaunchTicker } from "@/widgets/launch-ticker";
-import { TokenGrid } from "@/widgets/token-grid";
-import { LiveStatusBanner } from "@/widgets/live-status-banner";
 import { AppHeader } from "@/widgets/app-header";
+import { EventTape } from "@/widgets/event-tape";
+import { LiveStatusBanner } from "@/widgets/live-status-banner";
 import { MobileNav } from "@/widgets/mobile-nav";
-import { parseFilter, parseSort } from "@/entities/token";
-import { getKingOfTheHill, getTokens } from "@/shared/api";
+import { TrendingCarousel } from "@/widgets/trending-carousel";
+import { getTokens } from "@/shared/api";
 
 /**
- * Discover `/` (§5.1). Server component: the hero and the grid's first page are
- * fetched server-side (short `revalidate`, ~5s) so the page paints with real
- * content and is SSR-consistent with the URL state; the live bits (ticker, grid
- * WS patches, search) are client islands hydrated on top.
+ * Discover `/` (§5.1) — ROBBED_ terminal redesign (docs/Robbed.html "2d").
+ *
+ * The screen is a single dense terminal panel: a TRENDING carousel over a live
+ * event tape. Both hang off the indexer's `/v1/tokens` projection fetched
+ * server-side (short `revalidate`, ~5s) so the page paints with real content
+ * before the WS streams hydrate the tape.
  *
  * DECISIONS (hoodpad-frontend; basis recorded):
- * - SSR-vs-client split (Next 16 App Router, verified 2026-07-10): `searchParams`
- *   is a Promise → awaited here; sort/filter parsed with the SHARED zod enums
- *   (params.ts) so server and client agree on the active state. Reading
- *   `searchParams` opts the route into dynamic rendering — correct: the grid is
- *   URL-stateful and shareable. The fetch cache (`revalidate: 5`) still
- *   deduplicates upstream calls across requests.
- * - `Promise.allSettled` isolates hero vs grid failures (§5.1: "hero failure must
- *   not blank the grid and vice versa"). A rejected hero renders nothing; a
- *   rejected grid fetch drops `initialData` and the client grid refetches (and
- *   shows its own ErrorState if that also fails).
- * - The grid receives its SSR first page as `initialData`, avoiding a
- *   double-fetch flash while keeping the client query authoritative for
- *   pagination + WS patching.
+ * - Two isolated fetches via `Promise.allSettled` so a TRENDING failure never
+ *   blanks the tape and vice versa (§5.1 error isolation). `volume24h` drives
+ *   TRENDING ("by 24h volume", API-owned order — §12.22); `newest` seeds the
+ *   tape's LAUNCH snapshot + the enrichment registry. The two lists are merged
+ *   (deduped) for the tape so a trade on a trending-but-not-newest token still
+ *   resolves its name/mcap/Δ% (never fabricated — see event-tape/model).
+ * - Sort/filter/grid controls are RETIRED here: the mockup Discover is
+ *   TRENDING + tape only; header search remains the discovery entry point.
+ *   GAP reported (event-tape/model/events.ts): no global recent-activity REST
+ *   endpoint exists, so historical trade/graduation rows arrive live over WS.
  */
-export default async function DiscoverPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
-  const sp = await searchParams;
-  const sort = parseSort(sp.sort);
-  const filter = parseFilter(sp.filter);
-
-  const [kothResult, gridResult] = await Promise.allSettled([
-    getKingOfTheHill({ revalidate: 5 }),
-    getTokens({ sort, filter, limit: 48 }, { revalidate: 5 }),
+export default async function DiscoverView() {
+  const [trendingRes, newestRes] = await Promise.allSettled([
+    getTokens({ sort: "volume24h", filter: "all", limit: 8 }, { revalidate: 5 }),
+    getTokens({ sort: "newest", filter: "all", limit: 40 }, { revalidate: 5 }),
   ]);
 
-  const koth = kothResult.status === "fulfilled" ? kothResult.value.token : null;
-  const initialGrid = gridResult.status === "fulfilled" ? gridResult.value : undefined;
+  const trending = trendingRes.status === "fulfilled" ? trendingRes.value.tokens : [];
+  const newest = newestRes.status === "fulfilled" ? newestRes.value.tokens : [];
+
+  // Merge (dedupe by address) → the tape registry resolves aggregates for both
+  // newest and trending tokens; newest ordering is preserved for the launch seed
+  // (seedLaunches re-sorts by createdAt).
+  const seen = new Set(newest.map((t) => t.address.toLowerCase()));
+  const registryTokens = [
+    ...newest,
+    ...trending.filter((t) => !seen.has(t.address.toLowerCase())),
+  ];
 
   return (
     <>
       <LiveStatusBanner />
       <AppHeader />
-      <main className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 pb-16 md:pb-4">
-        <KingOfTheHillHero token={koth} />
-        <LaunchTicker />
-        <Suspense fallback={<div className="h-9" />}>
-          <DiscoverControls />
-        </Suspense>
-        <TokenGrid sort={sort} filter={filter} initialData={initialGrid} />
+      <main className="mx-auto max-w-6xl pb-16 md:px-4 md:py-4 md:pb-4">
+        <div className="border-y border-border bg-bg md:border">
+          <TrendingCarousel tokens={trending} />
+          <EventTape tokens={registryTokens} />
+        </div>
       </main>
       <MobileNav />
     </>

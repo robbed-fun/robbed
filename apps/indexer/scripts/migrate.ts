@@ -59,17 +59,20 @@ async function main(): Promise<void> {
       await runIn(client, "public", "0001_extensions.sql");
       await runIn(client, "public", "0002_offchain_core.sql");
       await runIn(client, "public", "0004_flow_tables.sql");
+      await runIn(client, "public", "0006_address_pnl.sql");
 
-      // GIN indexes (0003) + §8.5 flow views (0005) reference the Ponder-managed
-      // tables — only creatable once Ponder has built them. Skip gracefully
-      // otherwise (re-run later). Both apply in the Ponder schema.
+      // GIN indexes (0003) + §8.5 flow views (0005) + address_pnl views (0007)
+      // reference the Ponder-managed tables — only creatable once Ponder has built
+      // them. Skip gracefully otherwise (re-run later). All apply in the Ponder schema.
       if (await tableExists(client, ponderSchema, "tokens")) {
         await runIn(client, ponderSchema, "0003_trgm_gin_indexes.sql");
         await runIn(client, ponderSchema, "0005_flow_views.sql");
+        await runIn(client, ponderSchema, "0007_address_pnl_views.sql");
       } else {
         console.warn(
-          `[migrate] skipping 0003 GIN indexes + 0005 flow views — "${ponderSchema}".tokens ` +
-            `not found yet; re-run \`bun run migrate\` after \`ponder start\` builds it.`,
+          `[migrate] skipping 0003 GIN indexes + 0005 flow views + 0007 address_pnl views — ` +
+            `"${ponderSchema}".tokens not found yet; re-run \`bun run migrate\` after ` +
+            `\`ponder start\` builds it.`,
         );
       }
     } finally {
