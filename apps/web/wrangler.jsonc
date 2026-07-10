@@ -24,6 +24,16 @@
     // the same bucket, isolated under the default `incremental-cache/` prefix.
     { "binding": "NEXT_INC_CACHE_R2_BUCKET", "bucket_name": "robbed-assets" }
   ],
+  // Runtime env (temporary): free public Robinhood RPC + placeholder API/WS +
+  // R2 public base, until the Komodo backend + real per-env config land. These
+  // stop the "Missing NEXT_PUBLIC_*" runtime throw; API fetches degrade to empty
+  // states until a real API origin is set.
+  "vars": {
+    "NEXT_PUBLIC_RPC_HTTP": "https://rpc.mainnet.chain.robinhood.com",
+    "NEXT_PUBLIC_API_BASE_URL": "https://api.robbed.fun",
+    "NEXT_PUBLIC_WS_URL": "wss://api.robbed.fun/ws",
+    "NEXT_PUBLIC_R2_PUBLIC_BASE_URL": "https://pub-1f7ef06884964a2f82e21cd86e1893b0.r2.dev"
+  },
   // Observability: persist Worker logs (incl. auto invocation logs) to the
   // Cloudflare dashboard for debugging. Free-tier compatible. head_sampling_rate
   // 1 = keep 100% while volume is low; lower it if log volume grows.
