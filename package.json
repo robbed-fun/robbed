@@ -6,5 +6,16 @@
   "scripts": {
     "prepare": "git config core.hooksPath .githooks",
     "validate": "scripts/validate.sh"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@tailwindcss/oxide",
+      "esbuild",
+      "sharp",
+      "workerd",
+      "bufferutil",
+      "utf-8-validate",
+      "keccak"
+    ]
   }
 }
