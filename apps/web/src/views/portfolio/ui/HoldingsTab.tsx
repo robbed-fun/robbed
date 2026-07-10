@@ -1,29 +1,49 @@
 "use client";
 
 import {
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+import { Fragment } from "react";
+
+import {
   Button,
   EmptyState,
   ErrorState,
-  MonoLabel,
   Skeleton,
 } from "@/shared/ui";
 import {
   HOLDINGS_GRID,
   HoldingRow,
+  holdingColumns,
   usePortfolioHoldings,
 } from "@/entities/portfolio";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * HOLDINGS tab (mockup "2c"): the TOKEN / BALANCE / PRICE / VALUE / PNL table.
- * The column header (md+) reuses `HOLDINGS_GRID` so it stays aligned with every
- * `HoldingRow`; on mobile the header is hidden and rows become stacked cards.
+ * HOLDINGS tab (mockup "2c"): the TOKEN / BALANCE / PRICE / VALUE / PNL table,
+ * read through the `usePortfolioHoldings` TanStack Query hook and rendered from a
+ * headless `@tanstack/react-table` row model (typed `holdingColumns`; v8,
+ * docs-first 2026-07-10). The column header (md+) is rendered from the SAME table
+ * model as every `HoldingRow`, so they stay column-aligned by construction; on
+ * mobile the header is hidden and rows become stacked cards. VALUE is sortable
+ * (getSortedRowModel) — default order stays the API's balance-DESC cursor.
  */
 export function HoldingsTab({ address }: { address: string }) {
   const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
     usePortfolioHoldings(address);
 
   const holdings = data?.pages.flatMap((p) => p.holdings) ?? [];
+
+  const table = useReactTable({
+    data: holdings,
+    columns: holdingColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getRowId: (row) => row.token.address,
+  });
 
   if (isLoading) {
     return (
@@ -63,6 +83,8 @@ export function HoldingsTab({ address }: { address: string }) {
     );
   }
 
+  const headerCells = table.getHeaderGroups()[0]?.headers ?? [];
+
   return (
     <div className="px-4 pb-6 md:px-6">
       {/* Column header — md+ only (mobile rows are self-labelled cards). */}
@@ -72,24 +94,16 @@ export function HoldingsTab({ address }: { address: string }) {
           "hidden border-b border-border py-2.5 md:grid",
         )}
       >
-        <MonoLabel size="2xs">Token</MonoLabel>
-        <MonoLabel size="2xs" className="text-right">
-          Balance
-        </MonoLabel>
-        <MonoLabel size="2xs" className="text-right">
-          Price
-        </MonoLabel>
-        <MonoLabel size="2xs" className="text-right">
-          Value
-        </MonoLabel>
-        <MonoLabel size="2xs" className="text-right">
-          PnL
-        </MonoLabel>
+        {headerCells.map((header) => (
+          <Fragment key={header.id}>
+            {flexRender(header.column.columnDef.header, header.getContext())}
+          </Fragment>
+        ))}
       </div>
 
       <div className="flex flex-col">
-        {holdings.map((h) => (
-          <HoldingRow key={h.token.address} holding={h} />
+        {table.getRowModel().rows.map((row) => (
+          <HoldingRow key={row.id} row={row} />
         ))}
       </div>
 

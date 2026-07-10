@@ -2,8 +2,14 @@
 
 import type { TokenCard, WsMessage } from "@robbed/shared";
 import { GLOBAL_LAUNCHES, GLOBAL_TRADES } from "@robbed/shared";
+import {
+  type ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   type MockTapeEntry,
@@ -46,13 +52,25 @@ import { useWsChannel } from "@/shared/lib/ws";
  * `global:launches`) — see model/events.ts for the protocol-discipline notes
  * (mcap/Δ% are resolved from the registry, never fabricated from a trade; §2).
  *
+ * The row grid is driven by a headless `@tanstack/react-table` model (v8,
+ * docs-first tanstack.com/table 2026-07-10): typed `ColumnDef<TapeEvent>[]`
+ * (age/side/token/amount ETH/mcap/Δ%) supply the cell renderers, and each visible
+ * row iterates the table row model. The tape has no visible column header (the
+ * filter tabs sit where a header would); the design's clickable flex `<Link>` row
+ * + `Divider` separators are preserved verbatim, and cells reproduce the mockup
+ * spans → byte-identical DOM. mcap/Δ% resolve from the token REGISTRY passed to
+ * the columns (never invented; unknown tokens render "—").
+ *
  * DECISIONS (hoodpad-frontend; basis recorded):
  * - Filter state is LOCAL, not URL: the tape is an ephemeral live view (unlike
  *   the retired grid's shareable sort/filter). A tab click never navigates.
  * - Age is recomputed on a 10s tick so "4s → 1m" stays honest without a per-row
- *   timer; the tick is a cheap `now` bump, not a refetch.
+ *   timer; the tick is a cheap `now` bump that rebuilds the column closures.
  * - Rows link to `/t/[address]`; unknown-token rows still link (address known)
  *   and show mcap/Δ% "—" rather than inventing aggregates.
+ * - The tape is SEEDED server-side (the Discover view passes `tokens` from its
+ *   SSR `/v1/tokens` read) and streamed over WS — it does no ad-hoc client fetch,
+ *   so it stays on the App Router server-fetch pattern (no TanStack Query read).
  */
 export function EventTape({
   tokens,
@@ -95,6 +113,14 @@ export function EventTape({
   useWsChannel(GLOBAL_LAUNCHES, onLaunches);
 
   const visible = filterEvents(events, filter);
+  const columns = useMemo(() => buildTapeColumns(registry, now), [registry, now]);
+
+  const table = useReactTable({
+    data: visible,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getRowId: (event) => event.id,
+  });
 
   return (
     <section aria-label="Live event tape">
@@ -124,10 +150,23 @@ export function EventTape({
         </div>
       ) : (
         <ul>
-          {visible.map((e, i) => (
-            <li key={e.id}>
+          {table.getRowModel().rows.map((row, i) => (
+            <li key={row.id}>
               {i > 0 && <Divider />}
-              <EventRow event={e} info={registry.get(e.token)} now={now} />
+              <Link
+                href={`/t/${row.original.token}`}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface md:px-6",
+                  // mockup: LAUNCH rows carry a subtle raised surface background
+                  row.original.kind === "launch" && "bg-surface",
+                )}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <Fragment key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </Fragment>
+                ))}
+              </Link>
             </li>
           ))}
         </ul>
@@ -136,99 +175,115 @@ export function EventTape({
   );
 }
 
-function EventRow({
-  event,
-  info,
-  now,
-}: {
-  event: TapeEvent;
-  info: TokenInfo | undefined;
-  now: number;
-}) {
-  const name = info?.name ?? (event.kind === "launch" ? event.name : shortAddress(event.token));
-  const imageUrl =
-    info?.imageUrl ?? (event.kind === "launch" ? event.imageUrl : null);
-  const ticker = info?.ticker ?? (event.kind === "launch" ? event.ticker : "");
-  // Demo rows carry a per-event Δ% override (task A, §2-gated); live rows resolve
-  // the token's 24h Δ% from the registry.
-  const delta = event.deltaPct !== undefined ? event.deltaPct : info?.change24hPct ?? null;
-  const amountWei =
-    "ethAmount" in event && event.ethAmount !== undefined ? event.ethAmount : null;
-
-  return (
-    <Link
-      href={`/t/${event.token}`}
-      className={cn(
-        "flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface md:px-6",
-        // mockup: LAUNCH rows carry a subtle raised surface background
-        event.kind === "launch" && "bg-surface",
-      )}
-    >
-      {/* age */}
-      <MonoText tone="tertiary" size="xs" numeric className="w-9 shrink-0">
-        {formatAge(event.ts, now)}
-      </MonoText>
-
-      {/* side */}
-      <span className="w-[4.5rem] shrink-0">
-        <SideBadge side={event.kind} />
-      </span>
-
-      {/* token */}
-      <span className="flex min-w-0 flex-1 items-center gap-2">
-        <TokenAvatar imageUrl={imageUrl} name={name} ticker={ticker} size={22} />
-        <MonoText tone="default" size="base" className="truncate">
-          {name}
+/**
+ * Column model for the tape row — cells close over the token `registry` and the
+ * age `now` tick so mcap/Δ%/age resolve from live indexer aggregates by reference
+ * (§2), never fabricated. Rebuilt on the 10s `now` tick.
+ */
+function buildTapeColumns(
+  registry: Map<string, TokenInfo>,
+  now: number,
+): ColumnDef<TapeEvent>[] {
+  return [
+    {
+      id: "age",
+      cell: ({ row }) => (
+        <MonoText tone="tertiary" size="xs" numeric className="w-9 shrink-0">
+          {formatAge(row.original.ts, now)}
         </MonoText>
-        {event.kind === "launch" && (
-          <MonoText tone="faint" size="xs" className="hidden shrink-0 sm:inline">
-            by {shortAddress(event.creator)}
-          </MonoText>
-        )}
-        {event.kind === "graduate" && (
-          <MonoText tone="green" size="xs" className="hidden shrink-0 sm:inline">
-            → AMM pool live
-          </MonoText>
-        )}
-      </span>
-
-      {/* amount ETH (present on every row that supplies one) */}
-      <span className="hidden w-28 shrink-0 text-right text-text-secondary sm:block">
-        {amountWei !== null ? (
-          <EthAmount wei={amountWei} unit="ETH" className="text-sm" />
-        ) : null}
-      </span>
-
-      {/* mcap — resolved from the registry, never fabricated (§2) */}
-      <span className="hidden w-28 shrink-0 text-right md:block">
-        <Mcap info={info} />
-      </span>
-
-      {/* Δ% */}
-      <span className="w-16 shrink-0 text-right">
-        {event.kind === "launch" ? (
-          <MonoText tone="faint" size="sm">
-            new
-          </MonoText>
-        ) : (
-          <Delta value={delta} className="text-sm" />
-        )}
-      </span>
-    </Link>
-  );
+      ),
+    },
+    {
+      id: "side",
+      cell: ({ row }) => (
+        <span className="w-[4.5rem] shrink-0">
+          <SideBadge side={row.original.kind} />
+        </span>
+      ),
+    },
+    {
+      id: "token",
+      cell: ({ row }) => {
+        const event = row.original;
+        const info = registry.get(event.token);
+        const name =
+          info?.name ?? (event.kind === "launch" ? event.name : shortAddress(event.token));
+        const imageUrl = info?.imageUrl ?? (event.kind === "launch" ? event.imageUrl : null);
+        const ticker = info?.ticker ?? (event.kind === "launch" ? event.ticker : "");
+        return (
+          <span className="flex min-w-0 flex-1 items-center gap-2">
+            <TokenAvatar imageUrl={imageUrl} name={name} ticker={ticker} size={22} />
+            <MonoText tone="default" size="base" className="truncate">
+              {name}
+            </MonoText>
+            {event.kind === "launch" && (
+              <MonoText tone="faint" size="xs" className="hidden shrink-0 sm:inline">
+                by {shortAddress(event.creator)}
+              </MonoText>
+            )}
+            {event.kind === "graduate" && (
+              <MonoText tone="green" size="xs" className="hidden shrink-0 sm:inline">
+                → AMM pool live
+              </MonoText>
+            )}
+          </span>
+        );
+      },
+    },
+    {
+      id: "amount",
+      cell: ({ row }) => {
+        const event = row.original;
+        const amountWei =
+          "ethAmount" in event && event.ethAmount !== undefined ? event.ethAmount : null;
+        return (
+          <span className="hidden w-28 shrink-0 text-right text-text-secondary sm:block">
+            {amountWei !== null ? <EthAmount wei={amountWei} unit="ETH" className="text-sm" /> : null}
+          </span>
+        );
+      },
+    },
+    {
+      id: "mcap",
+      cell: ({ row }) => <Mcap info={registry.get(row.original.token)} />,
+    },
+    {
+      id: "delta",
+      cell: ({ row }) => {
+        const event = row.original;
+        const info = registry.get(event.token);
+        // Demo rows carry a per-event Δ% override (task A, §2-gated); live rows
+        // resolve the token's 24h Δ% from the registry.
+        const delta = event.deltaPct !== undefined ? event.deltaPct : info?.change24hPct ?? null;
+        return (
+          <span className="w-16 shrink-0 text-right">
+            {event.kind === "launch" ? (
+              <MonoText tone="faint" size="sm">
+                new
+              </MonoText>
+            ) : (
+              <Delta value={delta} className="text-sm" />
+            )}
+          </span>
+        );
+      },
+    },
+  ];
 }
 
 /** mcap cell — only renders a USD figure when a live-priced snapshot exists (§2). */
 function Mcap({ info }: { info: TokenInfo | undefined }) {
   const hasLiveUsd = info?.mcap?.usd != null && info.mcap.asOf != null;
   return (
-    <span className={cn("text-sm tabular-nums text-muted")}>
-      <span className="mr-1">mcap</span>
-      {hasLiveUsd ? (
-        <UsdAmount value={info!.mcap} className="text-text-secondary" />
-      ) : (
-        <span className="text-faint">—</span>
-      )}
+    <span className="hidden w-28 shrink-0 text-right md:block">
+      <span className="text-sm tabular-nums text-muted">
+        <span className="mr-1">mcap</span>
+        {hasLiveUsd ? (
+          <UsdAmount value={info!.mcap} className="text-text-secondary" />
+        ) : (
+          <span className="text-faint">—</span>
+        )}
+      </span>
     </span>
   );
 }

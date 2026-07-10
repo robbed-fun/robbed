@@ -2,7 +2,16 @@
 
 import { type HolderRow, type TokenDetail, tokenTrades } from "@robbed/shared";
 import { useQuery } from "@tanstack/react-query";
-import { useRef } from "react";
+import {
+  type ColumnDef,
+  type Row,
+  type SortingFn,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+import { Fragment, useRef } from "react";
 
 import {
   BOT_FLAG_LABELS,
@@ -14,7 +23,6 @@ import { getHolders } from "@/shared/api";
 import { qk } from "@/shared/lib/query-keys";
 import { useWsChannel } from "@/shared/lib/ws";
 import { formatPercent, formatTokenFromWei, shortAddress } from "@/shared/lib/format";
-import { cn } from "@/shared/lib/utils";
 
 /**
  * Holder distribution — top 20 (§5.2). Structural flags (creator / bonding curve /
@@ -22,7 +30,74 @@ import { cn } from "@/shared/lib/utils";
  * `clusterId` (same gas-funding source, §8.5) are visually grouped and `botFlags`
  * render as small ADVISORY badges — heuristic labels only, gating nothing (spec
  * §5.2/§8.5). Refreshes on WS trades, throttled ≥5s (web.md §3.2).
+ *
+ * Driven by a headless `@tanstack/react-table` row model (v8, docs-first
+ * tanstack.com/table 2026-07-10): typed `ColumnDef<HolderRow>[]` supply each
+ * row's cells (address+flags+progress · balance+pct), the BALANCE column is
+ * sortable (spec-directed "holders by balance"; default order = the API's
+ * balance-DESC ranking, so no sort is applied and the DOM is unchanged), and the
+ * funding-cluster grouping runs over the table's (sorted) row model. Cells
+ * reproduce the mockup spans verbatim → byte-identical DOM.
  */
+
+/** Balance sort (wei decimal string). */
+const byBalance: SortingFn<HolderRow> = (a, b) => {
+  const d = BigInt(a.original.balance) - BigInt(b.original.balance);
+  return d > 0n ? 1 : d < 0n ? -1 : 0;
+};
+
+const holderColumns: ColumnDef<HolderRow>[] = [
+  {
+    id: "distribution",
+    cell: ({ row }) => {
+      const holder = row.original;
+      return (
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className="flex flex-wrap items-center gap-1">
+            <AddressLink
+              address={holder.address}
+              kind="address"
+              label={shortAddress(holder.address)}
+            />
+            {holder.flags.map((f) => (
+              <Badge key={f} variant="outline" className="px-1 py-0 text-[10px]">
+                {HOLDER_FLAG_LABELS[f]}
+              </Badge>
+            ))}
+            {holder.botFlags?.map((b) => (
+              <Badge
+                key={b}
+                variant="soft-confirmed"
+                className="px-1 py-0 text-[10px]"
+                title="Advisory heuristic label (§8.5) — not a fact, gates nothing"
+              >
+                {BOT_FLAG_LABELS[b]}
+              </Badge>
+            ))}
+          </div>
+          <ProgressBar pct={holder.pct} showValue={false} />
+        </div>
+      );
+    },
+  },
+  {
+    id: "amounts",
+    enableSorting: true,
+    sortingFn: byBalance,
+    cell: ({ row }) => {
+      const holder = row.original;
+      return (
+        <div className="flex w-24 shrink-0 flex-col items-end">
+          <span className="tabular-nums text-foreground">
+            {formatTokenFromWei(holder.balance)}
+          </span>
+          <span className="tabular-nums text-muted-foreground">{formatPercent(holder.pct)}</span>
+        </div>
+      );
+    },
+  },
+];
+
 export function HolderTable({
   token,
   initialData,
@@ -47,7 +122,22 @@ export function HolderTable({
   });
 
   const holders = query.data?.holders ?? [];
-  const clusters = groupHoldersByCluster(holders);
+
+  const table = useReactTable({
+    data: holders,
+    columns: holderColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getRowId: (row) => row.address,
+  });
+
+  // Group the (sorted) row model by funding cluster, reusing the pure helper on
+  // the ordered originals, then render each holder from its table Row.
+  const orderedRows = table.getRowModel().rows;
+  const rowByAddress = new Map<string, Row<HolderRow>>(
+    orderedRows.map((r) => [r.original.address, r]),
+  );
+  const clusters = groupHoldersByCluster(orderedRows.map((r) => r.original));
   let rank = 0;
 
   return (
@@ -68,7 +158,7 @@ export function HolderTable({
         </p>
       ) : (
         <div className="flex flex-col gap-1">
-          {clusters.map((cluster, ci) =>
+          {clusters.map((cluster) =>
             cluster.clusterId ? (
               <div
                 key={`cluster-${cluster.clusterId}`}
@@ -78,11 +168,15 @@ export function HolderTable({
                   Funding cluster · {cluster.rows.length} addresses (heuristic)
                 </div>
                 {cluster.rows.map((h) => (
-                  <HolderRowItem key={h.address} holder={h} rank={++rank} />
+                  <HolderRowItem key={h.address} row={rowByAddress.get(h.address)!} rank={++rank} />
                 ))}
               </div>
             ) : (
-              <HolderRowItem key={cluster.rows[0]!.address} holder={cluster.rows[0]!} rank={++rank} />
+              <HolderRowItem
+                key={cluster.rows[0]!.address}
+                row={rowByAddress.get(cluster.rows[0]!.address)!}
+                rank={++rank}
+              />
             ),
           )}
         </div>
@@ -91,35 +185,15 @@ export function HolderTable({
   );
 }
 
-function HolderRowItem({ holder, rank }: { holder: HolderRow; rank: number }) {
+function HolderRowItem({ row, rank }: { row: Row<HolderRow>; rank: number }) {
   return (
     <div className="flex items-center gap-2 px-1 py-1 text-xs">
       <span className="w-5 shrink-0 tabular-nums text-muted-foreground">{rank}</span>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex flex-wrap items-center gap-1">
-          <AddressLink address={holder.address} kind="address" label={shortAddress(holder.address)} />
-          {holder.flags.map((f) => (
-            <Badge key={f} variant="outline" className="px-1 py-0 text-[10px]">
-              {HOLDER_FLAG_LABELS[f]}
-            </Badge>
-          ))}
-          {holder.botFlags?.map((b) => (
-            <Badge
-              key={b}
-              variant="soft-confirmed"
-              className="px-1 py-0 text-[10px]"
-              title="Advisory heuristic label (§8.5) — not a fact, gates nothing"
-            >
-              {BOT_FLAG_LABELS[b]}
-            </Badge>
-          ))}
-        </div>
-        <ProgressBar pct={holder.pct} showValue={false} />
-      </div>
-      <div className="flex w-24 shrink-0 flex-col items-end">
-        <span className="tabular-nums text-foreground">{formatTokenFromWei(holder.balance)}</span>
-        <span className="tabular-nums text-muted-foreground">{formatPercent(holder.pct)}</span>
-      </div>
+      {row.getVisibleCells().map((cell) => (
+        <Fragment key={cell.id}>
+          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+        </Fragment>
+      ))}
     </div>
   );
 }
