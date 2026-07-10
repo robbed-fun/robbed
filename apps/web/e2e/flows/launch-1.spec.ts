@@ -34,16 +34,16 @@ test(
 
     let tokenAddress = "";
     await assertUi("form submits, stepper soft-confirms and redirects to /t/[address]", async () => {
-      await page.getByLabel(/name/i).first().fill("Launched Coin");
-      await page.getByLabel(/ticker|symbol/i).first().fill("LNCH");
-      await page.getByLabel(/description/i).first().fill("LAUNCH-1 e2e create, no initial buy.");
-      await page.locator('input[type="file"]').first().setInputFiles({
+      await launch.name(page).fill("Launched Coin");
+      await launch.ticker(page).fill("LNCH");
+      await launch.description(page).fill("LAUNCH-1 e2e create, no initial buy.");
+      await launch.fileInput(page).setInputFiles({
         name: "logo.png",
         mimeType: "image/png",
         buffer: PNG,
       });
       // Eager upload + metadata pin complete before submit becomes enabled.
-      await page.getByRole("button", { name: /launch|create/i }).first().click();
+      await launch.submit(page).click();
       await expect(page.getByText(/Soft-confirmed/i).first()).toBeVisible({ timeout: 20_000 });
       await page.waitForURL(/\/t\/0x[0-9a-fA-F]{40}/, { timeout: 20_000 });
       tokenAddress = new URL(page.url()).pathname.split("/t/")[1] ?? "";

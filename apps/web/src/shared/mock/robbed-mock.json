@@ -7,6 +7,15 @@
     "generatedAt": "2026-07-10T12:00:00.000Z",
     "imageBase": "https://pub-1f7ef06884964a2f82e21cd86e1893b0.r2.dev/mocked"
   },
+  "launchEconomics": {
+    "note": "DEMO-ONLY curve-config reads for the Create economics block (docs/Robbed.html §2b: Deploy cost 0.0005 ETH · Starting price 0.0000010 ETH · Supply 1,000,000,000). Mirrors the CurveFactory reads useLaunchEconomics() makes on the prod path; NEVER reached with the flag off.",
+    "deployFeeWei": "500000000000000",
+    "graduationEthWei": "85000000000000000000",
+    "tradeFeeBps": 100,
+    "virtualEth0": "30000000000000000000",
+    "virtualToken0": "30000000000000000000000000",
+    "pauseCreates": false
+  },
   "discover": {
     "trending": [
       {

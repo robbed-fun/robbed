@@ -6,6 +6,7 @@ import {
   assertUi,
   connectAs,
   expect,
+  launch,
   publicClient,
   routes,
   test,
@@ -30,17 +31,17 @@ test(
 
     let tokenAddress = "";
     await assertUi("initial-buy preview shows minTokensOut at 2% slippage, then submits", async () => {
-      await page.getByLabel(/name/i).first().fill("Snipe-Safe Coin");
-      await page.getByLabel(/ticker|symbol/i).first().fill("SAFE");
-      await page.locator('input[type="file"]').first().setInputFiles({
+      await launch.name(page).fill("Snipe-Safe Coin");
+      await launch.ticker(page).fill("SAFE");
+      await launch.fileInput(page).setInputFiles({
         name: "logo.png",
         mimeType: "image/png",
         buffer: PNG,
       });
-      await page.getByLabel(/initial buy|creator buy/i).first().fill("0.05");
+      await launch.initialBuy(page).fill("0.05");
       // Live preview of tokens received + min-received (anti-self-snipe §5.3/§6.5).
       await expect(page.getByText(/min|slippage|receive/i).first()).toBeVisible();
-      await page.getByRole("button", { name: /launch|create/i }).first().click();
+      await launch.submit(page).click();
       await expect(page.getByText(/Soft-confirmed/i).first()).toBeVisible({ timeout: 20_000 });
       await page.waitForURL(/\/t\/0x[0-9a-fA-F]{40}/, { timeout: 20_000 });
       tokenAddress = new URL(page.url()).pathname.split("/t/")[1] ?? "";

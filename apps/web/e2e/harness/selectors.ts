@@ -51,12 +51,12 @@ export const sel = {
 
 /** Launch form fields — the form uses PLACEHOLDERS, not labels (verified DOM). */
 export const launch = {
-  name: (page: Page) => page.getByPlaceholder("Moonmilk"),
-  ticker: (page: Page) => page.getByPlaceholder("MILK"),
-  description: (page: Page) => page.getByPlaceholder(/what is this token about/i),
-  initialBuy: (page: Page) => page.getByLabel(/initial buy/i),
+  name: (page: Page) => page.getByPlaceholder("Moonmilk").first(),
+  ticker: (page: Page) => page.getByPlaceholder("MILK").first(),
+  description: (page: Page) => page.getByPlaceholder(/what is this token about/i).first(),
+  initialBuy: (page: Page) => page.getByLabel(/initial buy/i).first(),
   fileInput: (page: Page) => page.locator('input[type="file"]').first(),
-  submit: (page: Page) => page.getByRole("button", { name: /launch token/i }),
+  submit: (page: Page) => page.getByRole("button", { name: /launch token/i }).first(),
 } as const;
 
 /** Discover / Token-Detail route builders. */

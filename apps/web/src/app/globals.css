@@ -112,6 +112,19 @@
       opacity: 0;
     }
   }
+
+  /* TRENDING carousel marquee — pixel-matched to docs/Robbed.html #2d
+   * (`feat-scroll 32s linear infinite`, translateX 0 → -50% over a track that
+   * holds two identical card sets for a seamless loop). Pure CSS, no client JS. */
+  --animate-feat-scroll: feat-scroll 32s linear infinite;
+  @keyframes feat-scroll {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
 }
 
 /* ── Layer 2: shadcn variable contract, mapped onto Layer 1. Dark-only, so the
@@ -163,7 +176,13 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
+  /* NB: do NOT re-map `--color-border` here. `:root` sets `--border:
+   * var(--color-border)` and re-inlining `--color-border: var(--border)` forms a
+   * cycle that resolves to EMPTY → every `border-border` utility and the
+   * `@layer base *{border-color}` default fall back to `currentColor` (bright
+   * text) instead of the #1C221C token, so app-wide borders render far too light
+   * vs docs/Robbed.html. Leaving `--color-border` as its Layer-1 @theme value
+   * (#1c221c) lets both the Tailwind utility and shadcn `--border` resolve it. */
   --color-input: var(--input);
   --color-ring: var(--ring);
 }

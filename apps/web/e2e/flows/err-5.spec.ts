@@ -10,6 +10,7 @@ import {
   expect,
   makeTreasuryRevert,
   publicClient,
+  restoreTreasury,
   routes,
   seedToken,
   sel,
@@ -20,6 +21,14 @@ import {
 
 // @flow:ERR-5 — Sell stays open while treasury reverts (§12.25)
 // assertable-layers: on-chain · indexed · UI  (full 3-layer — the sell must SUCCEED + index)
+
+// ALWAYS restore the treasury to a plain EOA, else the reverting bytecode set by
+// makeTreasuryRevert() persists and every later createToken (deploy fee → treasury)
+// reverts with EthTransferFailed.
+test.afterEach(async () => {
+  await restoreTreasury();
+});
+
 test(
   "ERR-5 a reverting treasury can never wedge a sell (pull-payment fee accrual)",
   { tag: ["@flow:ERR-5", "@layer:on-chain", "@layer:indexed", "@layer:ui"] },

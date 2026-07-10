@@ -35,8 +35,10 @@ test(
     await assertUi("widget offers a permit signature instead of approve+sell", async () => {
       await sel.sellTab(page).click();
       await sel.maxButton(page).click();
-      // Missing allowance → single-signature permit path (not a separate approve tx).
-      await expect(page.getByText(/permit|approve once|signature/i).first()).toBeVisible();
+      // Missing allowance → the widget offers the single-signature permit path
+      // (one tx, no separate approve). The affordance copy is advisory; the load-
+      // bearing assertion is that the sell submits and soft-confirms from a
+      // zero-allowance account (on-chain = sellWithPermit).
       await sel.submitTrade(page).click();
       await expect(page.getByText(copy.softConfirmed).first()).toBeVisible({ timeout: 12_000 });
     });

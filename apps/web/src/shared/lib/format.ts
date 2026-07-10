@@ -1,6 +1,8 @@
 import { formatEther, formatUnits } from "viem";
 import type { UsdValue } from "@robbed/shared";
 
+import { env } from "@/shared/lib/env";
+
 /**
  * Display formatting (web.md §7). NO market metric is ever inlined here (§2);
  * these are pure formatters over live values. USD is renderable ONLY with a live
@@ -80,15 +82,20 @@ export function formatUsd(value: UsdValue | null | undefined): {
     );
   }
   const usdNum = Number(value.usd);
-  // Full precision (not compact): the value is rendered VERBATIM from the indexer
-  // payload so the exact figure the user sees is the exact figure the indexer
-  // priced (§2 source-fidelity; asserted by tests/discover-card.test.tsx). The
-  // mockup's compact USD styling is a documented deviation (see report).
+  // PROD (default): full precision, NOT compact — the value is rendered VERBATIM
+  // from the indexer payload so the exact figure the user sees is the exact figure
+  // the indexer priced (§2 source-fidelity; asserted by tests/discover-card.test.tsx).
+  // DEMO MODE (Gap 2): render compact (e.g. 610K, 1.2M form) to match the ROBBED_
+  // terminal mockup (docs/Robbed.html) exactly. Gated by `env.mockData()` — the
+  // prod formatter keeps full precision; this branch is dead with the flag off.
+  const compact = env.mockData();
   const text = Number.isFinite(usdNum)
     ? new Intl.NumberFormat("en-US", {
         style: "currency",
         currency: "USD",
-        maximumFractionDigits: usdNum >= 1 ? 0 : 4,
+        ...(compact
+          ? { notation: "compact" as const }
+          : { maximumFractionDigits: usdNum >= 1 ? 0 : 4 }),
       }).format(usdNum)
     : "—";
   return {

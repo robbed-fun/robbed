@@ -13,6 +13,7 @@ import {
   seedToken,
   sel,
   test,
+  warpTime,
 } from "../harness";
 
 // @flow:ERR-1 — Slippage revert (buy or sell) (§5.2)
@@ -51,6 +52,9 @@ test(
       // Race the price up so the widget's stale quote trips the guard.
       await sel.buyTab(page).click();
       await sel.amountInput(page).fill("0.02");
+      // Warp past the anti-sniper early window so the large price-moving front-run
+      // isn't itself clamped by MAX_EARLY_BUY.
+      await warpTime(10);
       await buyOnChain({ buyer: ROLES.trader2, token: token.token, ethWei: 3n * 10n ** 17n });
       await sel.submitTrade(page).click();
       await expect(page.getByText(/slippage|failed|try again|refresh/i).first()).toBeVisible({

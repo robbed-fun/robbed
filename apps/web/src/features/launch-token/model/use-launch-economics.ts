@@ -4,6 +4,8 @@ import { curveFactoryAbi } from "@robbed/shared/abi";
 import { useReadContracts } from "wagmi";
 
 import { ROBBED, isPlaceholder } from "@/shared/config/addresses";
+import { env } from "@/shared/lib/env";
+import { mockLaunchEconomics } from "@/shared/mock/mock-api";
 
 /**
  * Live economics read from the CurveFactory (§5.3 "economics displayed plainly").
@@ -41,7 +43,12 @@ const toBig = (v: unknown): bigint | null =>
   typeof v === "bigint" ? v : typeof v === "number" ? BigInt(v) : null;
 
 export function useLaunchEconomics(): LaunchEconomics {
-  const available = !isPlaceholder(ROBBED.curveFactory);
+  // DEMO MODE (Gap 1): the CurveFactory `eth_call`s are short-circuited to the
+  // fixture so Create shows real Deploy cost / Starting price / Supply instead of
+  // "read on-chain". The wagmi read is DISABLED but still called unconditionally
+  // to keep hook order stable. Strictly gated — dead branch with the flag off.
+  const mock = env.mockData();
+  const available = mock || !isPlaceholder(ROBBED.curveFactory);
   const factory = ROBBED.curveFactory;
 
   const { data, isLoading, isError } = useReadContracts({
@@ -53,11 +60,20 @@ export function useLaunchEconomics(): LaunchEconomics {
       { address: factory, abi: curveFactoryAbi, functionName: "pauseCreates" },
     ],
     query: {
-      enabled: available,
+      enabled: available && !mock,
       refetchInterval: 8_000,
       staleTime: 4_000,
     },
   });
+
+  if (mock) {
+    return {
+      ...mockLaunchEconomics(),
+      available: true,
+      isLoading: false,
+      isError: false,
+    };
+  }
 
   const at = (i: number): unknown => {
     const cell = data?.[i];

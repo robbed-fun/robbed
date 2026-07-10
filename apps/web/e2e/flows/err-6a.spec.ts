@@ -1,4 +1,4 @@
-import { CORS_HEADERS, assertUi, connectAs, expect, routes, test } from "../harness";
+import { CORS_HEADERS, assertUi, connectAs, expect, launch, routes, test } from "../harness";
 
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
@@ -30,14 +30,14 @@ test(
     await connectAs(page, "creator");
 
     await assertUi("client detects the mismatch and blocks signing; no navigation", async () => {
-      await page.getByLabel(/name/i).first().fill("Mismatch Coin");
-      await page.getByLabel(/ticker|symbol/i).first().fill("MISM");
-      await page.locator('input[type="file"]').first().setInputFiles({
+      await launch.name(page).fill("Mismatch Coin");
+      await launch.ticker(page).fill("MISM");
+      await launch.fileInput(page).setInputFiles({
         name: "logo.png",
         mimeType: "image/png",
         buffer: PNG,
       });
-      await page.getByRole("button", { name: /launch|create/i }).first().click();
+      await launch.submit(page).click();
       await expect(page.getByText(/mismatch|verify|hash|does not match/i).first()).toBeVisible({
         timeout: 15_000,
       });

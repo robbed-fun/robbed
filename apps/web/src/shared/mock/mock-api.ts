@@ -206,6 +206,73 @@ export function resolveMock(path: string): unknown {
   throw new Error(`[robbed/web mock] No demo payload mapped for path: ${path}`);
 }
 
+/**
+ * DEMO-MODE curve reads (Gap 1). The Trust panel's live rows (reserves /
+ * graduation threshold / fee policy / fixed-supply) and the anti-sniper cap read
+ * the curve DIRECTLY via wagmi/viem — a path the transport-layer mock above does
+ * NOT cover (it fakes the REST/indexer, not `eth_call`). In mock mode
+ * `useCurveReads` returns THESE values, sourced verbatim from the fixture
+ * `tokenDetail.detail` (so they match the mockup: realEth 52.7 of 85 ETH ⇒ 62%,
+ * 1e27 fixed supply, 100 bps fee) instead of degrading to "on-chain read
+ * unavailable". Strictly gated by `env.mockData()` at the call site — never
+ * reached on the prod path. Values are the fixture's illustrative demo figures.
+ */
+export function mockCurveReads(): {
+  totalSupply: bigint;
+  reserves: {
+    virtualEth: bigint;
+    virtualToken: bigint;
+    realEth: bigint;
+    realToken: bigint;
+  };
+  graduationEth: bigint;
+  tradeFeeBps: number;
+  earlyWindowEnd: bigint;
+  maxEarlyBuyWei: bigint;
+} {
+  const d = mock.tokenDetail.detail;
+  return {
+    totalSupply: BigInt(d.supply.total),
+    reserves: {
+      virtualEth: BigInt(d.reserves.virtualEth),
+      virtualToken: BigInt(d.reserves.virtualToken),
+      realEth: BigInt(d.reserves.realEth),
+      realToken: BigInt(d.reserves.realToken),
+    },
+    graduationEth: BigInt(d.graduation.thresholdEth),
+    tradeFeeBps: d.trust.feePolicy.tradeFeeBps,
+    earlyWindowEnd: 0n,
+    maxEarlyBuyWei: 0n,
+  };
+}
+
+/**
+ * DEMO-MODE launch economics (Gap 1). The Create page's economics block reads the
+ * CurveFactory config (deploy fee, seed virtual reserves ⇒ starting price, fee
+ * bps, graduation threshold) via wagmi — the same uncovered `eth_call` path. In
+ * mock mode `useLaunchEconomics` returns THESE fixture figures so Create shows
+ * "0.0005 ETH / 0.000001 ETH / 1,000,000,000 …" (docs/Robbed.html §2b) instead of
+ * "read on-chain". Gated by `env.mockData()`; never reached on the prod path.
+ */
+export function mockLaunchEconomics(): {
+  deployFeeWei: bigint;
+  graduationEthWei: bigint;
+  tradeFeeBps: number;
+  virtualEth0: bigint;
+  virtualToken0: bigint;
+  pauseCreates: boolean;
+} {
+  const e = mock.launchEconomics;
+  return {
+    deployFeeWei: BigInt(e.deployFeeWei),
+    graduationEthWei: BigInt(e.graduationEthWei),
+    tradeFeeBps: e.tradeFeeBps,
+    virtualEth0: BigInt(e.virtualEth0),
+    virtualToken0: BigInt(e.virtualToken0),
+    pauseCreates: e.pauseCreates,
+  };
+}
+
 /** DEMO-ONLY event-tape fixture (mixed BUY/LAUNCH/SELL/GRADUATE rows). */
 export const MOCK_EVENT_TAPE = mock.discover.eventTape;
 

@@ -21,16 +21,38 @@ const PLACEHOLDER = "0x0000000000000000000000000000000000000000" as const;
 const deployment = getDeployment(CHAIN_ID);
 
 /**
+ * E2E-ONLY address override (plan I-5). An ephemeral anvil fork of 4663 deploys
+ * fresh contract addresses each `docker compose up`, which are NOT codegen'd into
+ * `@robbed/shared` (that would bake fork addresses into the real-4663 prod build).
+ * When `NEXT_PUBLIC_E2E==="true"`, the fork's deployed addresses are supplied via
+ * `NEXT_PUBLIC_E2E_*` env (from `tools/localstack/out/local.env`) so the e2e build
+ * can trade. Prod NEVER sets `NEXT_PUBLIC_E2E`, so this branch is inert there and
+ * the real (codegen'd) `@robbed/shared` map is the only source. addresses.ts is
+ * the sanctioned home for address literals (copy-lint exempt).
+ */
+const e2e =
+  process.env.NEXT_PUBLIC_E2E === "true"
+    ? {
+        router: process.env.NEXT_PUBLIC_E2E_ROUTER as Address | undefined,
+        curveFactory: process.env.NEXT_PUBLIC_E2E_CURVE_FACTORY as Address | undefined,
+        lpFeeVault: process.env.NEXT_PUBLIC_E2E_LP_FEE_VAULT as Address | undefined,
+        v3Migrator: process.env.NEXT_PUBLIC_E2E_MIGRATOR as Address | undefined,
+        treasury: process.env.NEXT_PUBLIC_E2E_TREASURY as Address | undefined,
+      }
+    : null;
+
+/**
  * Per-deployment robbed contract addresses (spec §6) for CHAIN_ID, derived from
- * the generated @robbed/shared map. Router, CurveFactory, LPFeeVault, V3Migrator,
- * and the treasury Safe (§6.6). ZERO sentinels until a CHAIN_ID deploy is codegen'd.
+ * the generated @robbed/shared map (or the e2e env override on a fork). Router,
+ * CurveFactory, LPFeeVault, V3Migrator, and the treasury Safe (§6.6). ZERO
+ * sentinels until a CHAIN_ID deploy is codegen'd.
  */
 export const ROBBED = {
-  router: deployment?.robbed.router ?? PLACEHOLDER,
-  curveFactory: deployment?.robbed.curveFactory ?? PLACEHOLDER,
-  lpFeeVault: deployment?.robbed.lpFeeVault ?? PLACEHOLDER,
-  v3Migrator: deployment?.robbed.v3Migrator ?? PLACEHOLDER,
-  treasury: deployment?.robbed.treasury ?? PLACEHOLDER,
+  router: e2e?.router ?? deployment?.robbed.router ?? PLACEHOLDER,
+  curveFactory: e2e?.curveFactory ?? deployment?.robbed.curveFactory ?? PLACEHOLDER,
+  lpFeeVault: e2e?.lpFeeVault ?? deployment?.robbed.lpFeeVault ?? PLACEHOLDER,
+  v3Migrator: e2e?.v3Migrator ?? deployment?.robbed.v3Migrator ?? PLACEHOLDER,
+  treasury: e2e?.treasury ?? deployment?.robbed.treasury ?? PLACEHOLDER,
 } satisfies Record<string, Address>;
 
 /**

@@ -264,4 +264,15 @@ export async function makeTreasuryRevert(): Promise<void> {
   await testClient.setCode({ address: treasury, bytecode: "0x60006000fd" });
 }
 
+/**
+ * Restore the treasury to a plain EOA (empty code) after ERR-5 — otherwise the
+ * reverting bytecode persists and every later `createToken` (which pays the
+ * deploy fee to the treasury) reverts with EthTransferFailed. MUST run even if
+ * ERR-5 fails mid-test.
+ */
+export async function restoreTreasury(): Promise<void> {
+  const { treasury } = loadDeployedAddresses();
+  await testClient.setCode({ address: treasury, bytecode: "0x" });
+}
+
 export { parseEther };
