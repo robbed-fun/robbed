@@ -23,5 +23,16 @@
     // NEXT_INC_CACHE_R2_BUCKET (opennext.js.org/cloudflare/caching); it points at
     // the same bucket, isolated under the default `incremental-cache/` prefix.
     { "binding": "NEXT_INC_CACHE_R2_BUCKET", "bucket_name": "robbed-assets" }
-  ]
+  ],
+  // Observability: persist Worker logs (incl. auto invocation logs) to the
+  // Cloudflare dashboard for debugging. Free-tier compatible. head_sampling_rate
+  // 1 = keep 100% while volume is low; lower it if log volume grows.
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  }
 }
