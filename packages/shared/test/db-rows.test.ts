@@ -6,6 +6,8 @@
 import { describe, expect, it } from "bun:test";
 import type {
   AddressFlagsRow,
+  AddressPnlRow,
+  BalanceRow,
   CompetitorSnapshotRow,
   TokenFlowStatsRow,
   TransferRow,
@@ -30,6 +32,44 @@ describe("transfers row (X-5 — sixth event family, sole balance truth §12.16)
     };
     expect(row.id).toBe(`${TX}-4`);
     expect(row.confirmation_state).toBe("soft_confirmed");
+  });
+});
+
+describe("Portfolio rows (spec §5.4; balances = holding, address_pnl = roll-up)", () => {
+  it("BalanceRow IS the per-token holding (balance + cost-basis accumulators)", () => {
+    const row: BalanceRow = {
+      token_address: ADDR,
+      holder: ADDR,
+      balance: "1000000000000000000000",
+      total_bought_tokens: "1200000000000000000000",
+      total_sold_tokens: "200000000000000000000",
+      total_eth_in: "9000000000000000",
+      total_eth_out: "1500000000000000",
+      first_seen_at: 1767950000,
+      last_active_at: 1767960000,
+    };
+    // holdings DTO projects THIS row joined to tokens — no separate holdings table
+    expect(row.balance).toBe("1000000000000000000000");
+  });
+
+  it("AddressPnlRow is the per-address roll-up with a best-effort realized range", () => {
+    const row: AddressPnlRow = {
+      address: ADDR,
+      first_seen_at: 1767950000,
+      last_active_at: 1767960000,
+      trade_count: 12,
+      tokens_created: 2,
+      total_eth_in: "9000000000000000",
+      total_eth_out: "1500000000000000",
+      realized_pnl_low: "-2000000000000",
+      realized_pnl_high: "1500000000000",
+      pnl_confidence: "estimated",
+      updated_at: "2026-07-10T00:00:00Z",
+    };
+    expect(BigInt(row.realized_pnl_low)).toBeLessThanOrEqual(BigInt(row.realized_pnl_high));
+    // null confidence = no cost basis at all (pure transfer-in)
+    const noBasis: AddressPnlRow = { ...row, pnl_confidence: null };
+    expect(noBasis.pnl_confidence).toBeNull();
   });
 });
 

@@ -7,12 +7,19 @@ import {
   ERROR_CODE_VALUES,
   ERROR_CODES,
   errorCodeSchema,
+  ethPnlRangeSchema,
   ethUsdResponseSchema,
   holderRowSchema,
   metadataRequestSchema,
+  portfolioActivityResponseSchema,
+  portfolioCreatedResponseSchema,
+  portfolioHoldingSchema,
+  portfolioHoldingsResponseSchema,
+  portfolioSummarySchema,
   tokenCardSchema,
   tokenDetailSchema,
   tokenFilterSchema,
+  tokenRefSchema,
   tokenSortSchema,
   tradeRowSchema,
   usdValueSchema,
@@ -177,6 +184,81 @@ describe("TradeRow / Candle / HolderRow", () => {
     expect(
       holderRowSchema.safeParse({ address: ADDR, balance: "1", pct: 0.1, flags: [], botFlags: ["bot"] }).success,
     ).toBe(false);
+  });
+});
+
+describe("Portfolio (spec §5.4; ROBBED_ redesign page 4)", () => {
+  const holding = {
+    token: { address: ADDR, name: "Cash Cat", ticker: "CASHCAT", imageUrl: null, graduated: false, status: "curve" },
+    balance: "1000000000000000000000",
+    priceEth: 8.1e-9,
+    valueEth: "8100000000000",
+    value: usd,
+    unrealizedPnl: { low: "-2000000000000", high: "1500000000000", confidence: "estimated" },
+  };
+
+  it("tokenRef is the card `.pick` subset (single source, no extra keys)", () => {
+    expect(tokenRefSchema.safeParse(holding.token).success).toBe(true);
+    // fields outside the picked set are stripped, not an error (structural subset)
+    expect(tokenRefSchema.safeParse({ ...holding.token, priceEth: 1 }).success).toBe(true);
+    expect(tokenRefSchema.safeParse({ ...holding.token, status: "v2" }).success).toBe(false);
+  });
+
+  it("ethPnlRange enforces low ≤ high (bigint) and the confidence enum", () => {
+    expect(ethPnlRangeSchema.safeParse({ low: "-5", high: "5", confidence: "exact" }).success).toBe(true);
+    // equal bound = precisely-known point value
+    expect(ethPnlRangeSchema.safeParse({ low: "42", high: "42", confidence: "exact" }).success).toBe(true);
+    // low > high rejected — compared as bigint (beyond 2^53)
+    expect(
+      ethPnlRangeSchema.safeParse({ low: "10000000000000000000000", high: "9999999999999999999999", confidence: "estimated" }).success,
+    ).toBe(false);
+    expect(ethPnlRangeSchema.safeParse({ low: "-5", high: "5", confidence: "guess" }).success).toBe(false);
+    // non-integer / float strings rejected (signed decimal only)
+    expect(ethPnlRangeSchema.safeParse({ low: "1.5", high: "5", confidence: "exact" }).success).toBe(false);
+  });
+
+  it("summary carries LOOT/value/first-seen; no confirmationState (aggregate)", () => {
+    const summary = {
+      address: ADDR,
+      firstSeenAt: 1767950000,
+      tradeCount: 12,
+      tokensCreated: 2,
+      walletEthBalance: "500000000000000000",
+      totalValueEth: "8100000000000",
+      totalValue: usd,
+      pnlAllTime: { low: "-2000000000000", high: "1500000000000", confidence: "estimated" },
+    };
+    expect(portfolioSummarySchema.safeParse(summary).success).toBe(true);
+    // pnlAllTime nullable (no cost basis at all), firstSeenAt nullable (never seen)
+    expect(portfolioSummarySchema.safeParse({ ...summary, pnlAllTime: null, firstSeenAt: null }).success).toBe(true);
+    // key must be present even when null
+    const { pnlAllTime: _p, ...noPnl } = summary;
+    expect(portfolioSummarySchema.safeParse(noPnl).success).toBe(false);
+    // confirmationState is NOT part of the aggregate shape — extra key stripped, still valid
+    expect(portfolioSummarySchema.safeParse({ ...summary, confirmationState: "soft_confirmed" }).success).toBe(true);
+  });
+
+  it("holding: priceable row vs unpriceable (nulls, no false precision §5.2)", () => {
+    expect(portfolioHoldingSchema.safeParse(holding).success).toBe(true);
+    // never-traded token: price/value/pnl all null, balance still exact
+    const unpriceable = { ...holding, priceEth: null, valueEth: null, value: null, unrealizedPnl: null };
+    expect(portfolioHoldingSchema.safeParse(unpriceable).success).toBe(true);
+    // balance is required Transfer-truth
+    const { balance: _b, ...noBalance } = holding;
+    expect(portfolioHoldingSchema.safeParse(noBalance).success).toBe(false);
+  });
+
+  it("responses: holdings/activity(reuses TradeRow)/created(reuses TokenCard)", () => {
+    expect(portfolioHoldingsResponseSchema.safeParse({ holdings: [holding], nextCursor: null }).success).toBe(true);
+    const trade = {
+      id: `${"0x" + "12".repeat(32)}-1`,
+      token: ADDR, trader: ADDR, venue: "curve", isBuy: true,
+      ethAmount: "1000000000000000000", tokenAmount: "5", feeEth: "10000000000000000",
+      priceEth: 1.2e-8, blockNumber: 100, blockTimestamp: 1767950000,
+      txHash: "0x" + "12".repeat(32), logIndex: 1, confirmationState: "soft_confirmed",
+    };
+    expect(portfolioActivityResponseSchema.safeParse({ activity: [trade], nextCursor: "c1" }).success).toBe(true);
+    expect(portfolioCreatedResponseSchema.safeParse({ tokens: [card], nextCursor: null }).success).toBe(true);
   });
 });
 

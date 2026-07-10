@@ -26,6 +26,7 @@ import {
   addressSchema,
   decimalStringSchema,
   hex32Schema,
+  signedDecimalStringSchema,
   venueSchema,
 } from "./ws-messages";
 
@@ -306,6 +307,114 @@ export const holderRowSchema = z.object({
 });
 export type HolderRow = z.infer<typeof holderRowSchema>;
 
+// ── Portfolio (spec §5.4; ROBBED_ redesign page 4 — `/portfolio`) ───────────
+// Phase-2 page whose SCHEMA is ready day 1 (spec §5.4 / redesign-plan page-4
+// inventory). ETH-first (§2): value/PnL are wei decimal strings, USD mirrors
+// derive at request time from `eth_usd_snapshots` (usdValueSchema), never a
+// constant. Balances behind these DTOs are Transfer-derived truth (spec §12
+// disposition 16 / X-4/X-5), never trusted from an external source.
+
+/**
+ * Best-effort signed ETH-value range (wei) for PnL where the cost basis is
+ * imprecise. NO FALSE PRECISION (spec §5.2): the V3-leg cost basis is
+ * best-effort until the Phase-2 portfolio (spec §12 disposition 16), so PnL is
+ * expressed as a `low`..`high` range — mirroring the organic-flow low/high
+ * convention (organicFlowSchema) — never a point value it can't justify. A
+ * precisely-known value sets `low === high` with `confidence: "exact"`. The
+ * whole field is `.nullable()` at each DTO site: null when NO cost basis exists
+ * at all (e.g. tokens received purely by transfer-in, never bought).
+ * Refinement: `low ≤ high` (compared as bigint — values exceed 2^53).
+ */
+export const ethPnlRangeSchema = z
+  .object({
+    low: signedDecimalStringSchema, // wei, may be negative
+    high: signedDecimalStringSchema, // wei, may be negative
+    confidence: z.enum(["exact", "estimated"]),
+  })
+  .refine(
+    (r) => {
+      // Defer to the field-level regex when a bound isn't a valid integer
+      // string (Zod runs object refinements even after a field check fails).
+      try {
+        return BigInt(r.low) <= BigInt(r.high);
+      } catch {
+        return true;
+      }
+    },
+    { message: "ethPnlRange: low must be ≤ high" },
+  );
+export type EthPnlRange = z.infer<typeof ethPnlRangeSchema>;
+
+/**
+ * Compact token reference for portfolio lists (avatar + ticker + venue pill).
+ * DERIVED from `tokenCardSchema` via `.pick` — SINGLE SOURCE, so a card-field
+ * rename can't drift the ref. Holdings rows carry this; the CREATED tab reuses
+ * the full `TokenCard`.
+ */
+export const tokenRefSchema = tokenCardSchema.pick({
+  address: true,
+  name: true,
+  ticker: true,
+  imageUrl: true,
+  graduated: true,
+  status: true,
+});
+export type TokenRef = z.infer<typeof tokenRefSchema>;
+
+/**
+ * Per-address summary — `GET /v1/portfolio/:address` (Portfolio stat cells:
+ * TOTAL VALUE / LOOT ALL-TIME / WALLET ETH + first-seen · trades). The
+ * address-object convention (X-13): the subject address is the top-level
+ * `address`. This is an aggregate roll-up (not a single event-derived object),
+ * so — like `statsResponseSchema` / `holderRowSchema` — it carries NO
+ * `confirmationState`.
+ */
+export const portfolioSummarySchema = z.object({
+  address: addressSchema,
+  /** Earliest Transfer touching this address (unix sec); null if never seen. */
+  firstSeenAt: z.number().int().nonnegative().nullable(),
+  /** Curve+V3 trades made by this address. */
+  tradeCount: z.number().int().nonnegative(),
+  /** Tokens whose `creator` == this address (drives the CREATED tab count). */
+  tokensCreated: z.number().int().nonnegative(),
+  /** Live native ETH balance, wei — RPC read (chain truth, exact). */
+  walletEthBalance: decimalStringSchema,
+  /** Sum of priceable holdings' value, wei; "0" when nothing is priceable. */
+  totalValueEth: decimalStringSchema,
+  /** USD mirror of `totalValueEth` (derived at request time, §2). */
+  totalValue: usdValueSchema,
+  /**
+   * All-time PnL ("LOOT") = realized + unrealized, best-effort range; null when
+   * no cost basis exists at all (§5.2 / disposition 16).
+   */
+  pnlAllTime: ethPnlRangeSchema.nullable(),
+});
+export type PortfolioSummary = z.infer<typeof portfolioSummarySchema>;
+
+/**
+ * Holdings list item — `GET /v1/portfolio/:address/holdings` (HOLDINGS table:
+ * TOKEN / BALANCE / PRICE / VALUE / PNL). Backed by the EXISTING db-rows
+ * `BalanceRow` (per (token, holder): balance + cost-basis accumulators) joined
+ * to the token projection — NOT a new row (anti-drift: `BalanceRow` already is
+ * the holding). `balance` is Transfer-truth; `priceEth`/`valueEth`/`value` are
+ * null when the token has never traded (indexer can't price it — no false
+ * precision), and `unrealizedPnl` is null when there is no cost basis.
+ */
+export const portfolioHoldingSchema = z.object({
+  token: tokenRefSchema,
+  /** Current balance, wei — Transfer-truth (`BalanceRow.balance`). */
+  balance: decimalStringSchema,
+  /** Display price, ETH float; null before the token's first trade. */
+  priceEth: z.number().nullable(),
+  /** `balance × priceEth`, wei; null when unpriceable (`priceEth` null). */
+  valueEth: decimalStringSchema.nullable(),
+  /** USD mirror of `valueEth` (derived, §2); null when unpriceable. */
+  value: usdValueSchema.nullable(),
+  /** Unrealized PnL best-effort range, wei; null when no cost basis (§5.2). */
+  unrealizedPnl: ethPnlRangeSchema.nullable(),
+});
+export type PortfolioHolding = z.infer<typeof portfolioHoldingSchema>;
+
 // ── Response payloads (api.md §3.3-§3.5) ────────────────────────────────────
 
 export const tokensResponseSchema = z.object({
@@ -334,6 +443,29 @@ export const candlesResponseSchema = z.object({
 export const holdersResponseSchema = z.object({
   holders: z.array(holderRowSchema),
   holderCount: z.number().int().nonnegative(),
+});
+
+// ── Portfolio responses (spec §5.4; `/portfolio` HOLDINGS/ACTIVITY/CREATED) ──
+/** GET /v1/portfolio/:address/holdings — cursor-paginated HOLDINGS tab. */
+export const portfolioHoldingsResponseSchema = z.object({
+  holdings: z.array(portfolioHoldingSchema),
+  nextCursor: nextCursorSchema,
+});
+/**
+ * GET /v1/portfolio/:address/activity — ACTIVITY tab. REUSES the shared
+ * `tradeRowSchema` (per-address slice of the trade feed) — no parallel shape.
+ */
+export const portfolioActivityResponseSchema = z.object({
+  activity: z.array(tradeRowSchema),
+  nextCursor: nextCursorSchema,
+});
+/**
+ * GET /v1/portfolio/:address/created — CREATED tab. REUSES the `tokenCardSchema`
+ * projection (tokens whose `creator` == the address); same card as `/tokens`.
+ */
+export const portfolioCreatedResponseSchema = z.object({
+  tokens: z.array(tokenCardSchema),
+  nextCursor: nextCursorSchema,
 });
 
 /** GET /v1/tokens/:address/fees (api.md §3.4; per-collection rows from fee_collections). */

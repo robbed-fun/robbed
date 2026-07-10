@@ -135,7 +135,15 @@ export interface FeeCollectionRow {
   confirmation_state: ConfirmationState;
 }
 
-/** indexer.md §3.6 `balances` (Transfer-driven, portfolio-ready day 1). */
+/**
+ * indexer.md §3.6 `balances` (Transfer-driven, portfolio-ready day 1). This IS
+ * the per-(token, holder) holding row: `balance` (Transfer-truth) + the
+ * cost-basis accumulators (`total_eth_in/out`, `total_bought/sold_tokens`) that
+ * back the Portfolio HOLDINGS list (`api-types.ts` portfolioHoldingSchema) and
+ * its per-token unrealized-PnL range. Anti-drift: the portfolio holdings DTO is
+ * a projection of THIS row joined to `tokens` — there is deliberately no
+ * separate `address_holdings` table (it would be a structural duplicate).
+ */
 export interface BalanceRow {
   token_address: string;
   holder: string;
@@ -146,6 +154,40 @@ export interface BalanceRow {
   total_eth_out: string;
   first_seen_at: number;
   last_active_at: number;
+}
+
+/**
+ * `address_pnl` — per-ADDRESS portfolio roll-up backing GET /v1/portfolio/:address
+ * (`api-types.ts` portfolioSummarySchema; spec §5.4 Phase-2 schema surfaced day
+ * 1 by the ROBBED_ redesign). Aggregate across ALL of the address's tokens; the
+ * per-(token, holder) detail stays in `BalanceRow` — this is its address-level
+ * roll-up, NOT a duplicate. Cost-basis fields are best-effort: the V3-leg basis
+ * is approximate until the Phase-2 portfolio (spec §12 disposition 16), so
+ * REALIZED PnL is a RANGE (`_low`/`_high`, §5.2 forbids false precision), signed
+ * wei decimal strings. UNREALIZED / all-time PnL is NOT materialized here — it
+ * is computed at request time (live price × `BalanceRow.balance` − remaining
+ * basis), since price is live. `pnl_confidence` is null when no cost basis
+ * exists at all (pure transfer-in holdings). Every input balance derives from
+ * Transfer truth (X-4/X-5), never external.
+ */
+export interface AddressPnlRow {
+  address: string;
+  /** Earliest Transfer touching the address, unix seconds. */
+  first_seen_at: number;
+  last_active_at: number;
+  /** Curve+V3 trade count by the address. */
+  trade_count: number;
+  /** Tokens whose `creator` == address (CREATED tab count). */
+  tokens_created: number;
+  /** Aggregate ETH spent buying / received selling across all tokens, wei. */
+  total_eth_in: string;
+  total_eth_out: string;
+  /** Realized PnL (closed legs) best-effort range, signed wei. */
+  realized_pnl_low: string;
+  realized_pnl_high: string;
+  /** null when no cost basis exists at all; `estimated` when any V3-leg basis is involved. */
+  pnl_confidence: "exact" | "estimated" | null;
+  updated_at: string;
 }
 
 /** indexer.md §3.7 `candles` (derived, rebuildable). */
