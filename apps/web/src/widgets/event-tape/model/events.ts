@@ -33,15 +33,28 @@ import type {
 export type TapeFilter = "all" | "launches" | "trades" | "graduations";
 export type TapeKind = "buy" | "sell" | "launch" | "graduate";
 
+/**
+ * DEMO-ONLY per-event display overrides (task A). The live path NEVER sets these
+ * (a single trade can't justify a mcap/Δ% aggregate — §2); they exist so the
+ * gated mock tape can reproduce the mockup's per-row amount + Δ% exactly. When
+ * absent, the row resolves Δ% from the token registry as before.
+ */
+type DemoOverrides = {
+  /** Per-event Δ% shown in the last column (mock only). */
+  deltaPct?: number | null;
+  /** Amount shown for launch/graduate rows too (mock only). */
+  ethAmount?: string;
+};
+
 export type TapeEvent =
-  | {
+  | ({
       kind: "buy" | "sell";
       id: string;
       token: string; // lowercased address
       ethAmount: string; // wei decimal string — indexer-supplied
       ts: number; // unix seconds
-    }
-  | {
+    } & DemoOverrides)
+  | ({
       kind: "launch";
       id: string;
       token: string;
@@ -50,13 +63,13 @@ export type TapeEvent =
       imageUrl: string | null;
       creator: string;
       ts: number;
-    }
-  | {
+    } & DemoOverrides)
+  | ({
       kind: "graduate";
       id: string;
       token: string;
       ts: number;
-    };
+    } & DemoOverrides);
 
 /** Enrichment view of a token — the aggregates the tape reads by reference (§2). */
 export type TokenInfo = Pick<
@@ -102,6 +115,76 @@ export function seedLaunches(tokens: readonly TokenCard[], cap = 24): TapeEvent[
       creator: t.creator,
       ts: t.createdAt,
     }));
+}
+
+/**
+ * DEMO-ONLY (task A): build the mockup's mixed tape (BUY/LAUNCH/SELL/GRADUATE)
+ * from the gated `discover.eventTape` fixture. Each row carries its own amount +
+ * Δ% override so the demo reproduces docs/Robbed.html "2d" verbatim; the live
+ * tape never uses this path. `ageLabel` ("4s"/"1m") is converted to a `ts`
+ * relative to `nowSec` so the age column reads the mockup's values on first paint.
+ */
+export type MockTapeEntry = {
+  ageLabel: string;
+  kind: string; // "BUY" | "SELL" | "LAUNCH" | "GRADUATE"
+  ticker: string;
+  tokenAddress: string;
+  ethAmount: string;
+  changePct: number | null;
+};
+
+function parseAgeSeconds(label: string): number {
+  const m = /^(\d+)\s*([smhd])$/.exec(label.trim());
+  if (!m) return 0;
+  const n = Number(m[1]);
+  const unit = m[2];
+  return unit === "s" ? n : unit === "m" ? n * 60 : unit === "h" ? n * 3600 : n * 86400;
+}
+
+export function mockTapeEvents(
+  entries: readonly MockTapeEntry[],
+  tokens: readonly TokenCard[],
+  nowSec: number = Math.floor(Date.now() / 1000),
+): TapeEvent[] {
+  const byAddr = new Map(tokens.map((t) => [norm(t.address), t]));
+  return entries.map((e, i): TapeEvent => {
+    const token = norm(e.tokenAddress);
+    const ts = nowSec - parseAgeSeconds(e.ageLabel);
+    const kind = e.kind.toLowerCase();
+    if (kind === "launch") {
+      const t = byAddr.get(token);
+      return {
+        kind: "launch",
+        id: `mock-l-${token}-${i}`,
+        token,
+        name: t?.name ?? e.ticker,
+        ticker: t?.ticker ?? e.ticker,
+        imageUrl: t?.imageUrl ?? null,
+        creator: t?.creator ?? token,
+        ts,
+        ethAmount: e.ethAmount,
+        deltaPct: e.changePct,
+      };
+    }
+    if (kind === "graduate") {
+      return {
+        kind: "graduate",
+        id: `mock-g-${token}-${i}`,
+        token,
+        ts,
+        ethAmount: e.ethAmount,
+        deltaPct: e.changePct,
+      };
+    }
+    return {
+      kind: kind === "sell" ? "sell" : "buy",
+      id: `mock-t-${token}-${i}`,
+      token,
+      ethAmount: e.ethAmount,
+      ts,
+      deltaPct: e.changePct,
+    };
+  });
 }
 
 export function tradeToEvent(d: WsTradeData, seq: number): TapeEvent {

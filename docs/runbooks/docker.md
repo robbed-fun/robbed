@@ -150,5 +150,5 @@ Named volumes persist across `up`/`down`: `robbed_pgdata` / `robbed_redisdata` /
 
 ## Not in this file (deferred)
 
-- **Production images** — these are dev-mode containers (bind mount + watchers); prod build/deploy is Phase P.
+- **Production images** — these are dev-mode containers (bind mount + watchers). The prod build/deploy landed at **P-3**: `apps/indexer/Dockerfile` + `apps/api/Dockerfile` (multi-stage, non-root, pnpm-workspace-correct) and the Komodo backend Stack at `tools/deploy/komodo/` (see `deploy-komodo-cloudflare.md` A.6b). Those images reuse this file's `postgres:17` (+`pg_trgm` init) and `redis:7` choices; there is **no prod `web` image** (frontend → Cloudflare Workers, §12.45).
 - **anvil / seed data / one-command `dev:stack` wiring** — Phase I (I-1/I-3), reusing this compose file.

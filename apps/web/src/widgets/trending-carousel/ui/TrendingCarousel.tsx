@@ -44,7 +44,7 @@ function TrendingCard({ token, rank }: { token: TokenCard; rank: number }) {
     <Link
       href={`/t/${token.address}`}
       aria-label={`${token.name} (${token.ticker}) — rank ${rank}`}
-      className="group relative h-[150px] w-[248px] shrink-0 snap-start overflow-hidden border border-border bg-surface-2 transition-colors hover:border-border-strong md:w-[300px]"
+      className="group relative h-[168px] w-[248px] shrink-0 snap-start overflow-hidden bg-surface-2 md:w-[300px]"
     >
       {token.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- user-supplied R2 origins are env-gated for next/image (see TokenAvatar)
@@ -70,11 +70,11 @@ function TrendingCard({ token, rank }: { token: TokenCard; rank: number }) {
         className="absolute inset-0 bg-gradient-to-t from-bg via-bg/40 to-transparent"
       />
 
-      {/* rank chip */}
+      {/* rank chip — mockup: solid near-black bg, green text, no border */}
       <span
         className={cn(
-          "absolute left-2 top-2 border border-border-strong bg-bg/80 px-1.5 py-0.5",
-          "text-2xs tabular-nums text-text-secondary",
+          "absolute left-2.5 top-2.5 bg-bg px-2 py-0.5",
+          "text-2xs tracking-label tabular-nums text-green",
         )}
       >
         #{rank}

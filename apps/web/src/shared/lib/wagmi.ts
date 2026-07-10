@@ -3,7 +3,9 @@ import {
   injectedWallet,
   walletConnectWallet,
 } from "@rainbow-me/rainbowkit/wallets";
+import type { Address } from "viem";
 import { createConfig, http } from "wagmi";
+import { mock } from "wagmi/connectors";
 
 import { robinhoodChain } from "./chain";
 import { env } from "./env";
@@ -56,13 +58,46 @@ export function buildConnectors(projectId: string) {
 }
 
 /**
+ * E2E-only connectors (I-5a). The wagmi `mock` connector (wagmi.sh
+ * /react/api/connectors/mock, verified 2026-07-10) delegates signing and
+ * `eth_sendTransaction` to the config's transport — pointed at the anvil fork,
+ * whose dev accounts are unlocked — so tests get REAL txs + REAL signatures
+ * (incl. EIP-2612 typed-data for `sellWithPermit`) with NO browser-extension
+ * automation, the standard anti-flake pattern. Addresses come from
+ * `NEXT_PUBLIC_E2E_ACCOUNTS` (never an inline literal, §2 address-grep) and are
+ * anvil's public dev accounts. Guarded strictly behind `NEXT_PUBLIC_E2E`.
+ */
+function buildE2eConnectors() {
+  const accounts = env.e2eAccounts() as Address[];
+  if (accounts.length === 0) {
+    throw new Error(
+      "[robbed/web] NEXT_PUBLIC_E2E=true but NEXT_PUBLIC_E2E_ACCOUNTS is empty.",
+    );
+  }
+  // One mock connector PER account: wagmi's `switchAccount` action switches the
+  // active *connector*, so per-account connectors are how the harness models
+  // distinct signers (trader vs creator, wallet-switch-mid-flow) — each is
+  // `config.connectors[i]`.
+  return accounts.map((account) =>
+    mock({
+      accounts: [account] as [Address, ...Address[]],
+      features: { reconnect: true },
+    }),
+  );
+}
+
+/**
  * One wagmi config for the whole app. `ssr: true` (Next App Router server render,
- * wagmi.sh SSR guide). Transport is the env HTTP RPC — never inlined (§2).
+ * wagmi.sh SSR guide). Transport is the env HTTP RPC — never inlined (§2). In the
+ * e2e harness (`NEXT_PUBLIC_E2E=true`) the real connectors are replaced by the
+ * anvil-backed mock connector; production is untouched.
  */
 export function createWagmiConfig() {
   return createConfig({
     chains: [robinhoodChain],
-    connectors: buildConnectors(env.walletConnectProjectId()),
+    connectors: env.e2e()
+      ? buildE2eConnectors()
+      : buildConnectors(env.walletConnectProjectId()),
     transports: {
       [robinhoodChain.id]: http(env.rpcHttp()),
     },

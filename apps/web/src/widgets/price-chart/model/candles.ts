@@ -1,5 +1,21 @@
-import type { Candle, WsCandleData } from "@robbed/shared";
+import type { Candle, CandleInterval, WsCandleData } from "@robbed/shared";
+import { CANDLE_INTERVAL_SECONDS } from "@robbed/shared";
 import { formatEther } from "viem";
+
+/**
+ * Trailing REST backfill window for one interval (§5.2). PURE + server-safe: it
+ * lives here (not in the `"use client"` feed hook) so the server component
+ * TokenDetailView can compute the SSR candle window without importing a client
+ * module — invoking a client-marked export from the server is a hard error in
+ * the App Router (Next 16, verified 2026-07-10). The hook re-exports it.
+ */
+const BARS_PER_WINDOW = 400;
+
+export function candleWindow(interval: CandleInterval, now = Date.now()) {
+  const to = Math.floor(now / 1000);
+  const span = CANDLE_INTERVAL_SECONDS[interval] * BARS_PER_WINDOW;
+  return { from: to - span, to };
+}
 
 /**
  * Pure candle transforms for the venue-continuous chart (§5.2, web.md §3.2).

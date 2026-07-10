@@ -1,11 +1,12 @@
 "use client";
 
 import type { Candle, CandleInterval } from "@robbed/shared";
-import { CANDLE_INTERVAL_SECONDS } from "@robbed/shared";
 import { useQuery } from "@tanstack/react-query";
 
 import { getCandles } from "@/shared/api";
 import { qk } from "@/shared/lib/query-keys";
+
+import { candleWindow } from "./candles";
 
 /**
  * Historical candle backfill for one interval (§5.2). The endpoint takes
@@ -16,14 +17,11 @@ import { qk } from "@/shared/lib/query-keys";
  * channel and patches the series imperatively via `series.update()` (the pure
  * transform lives in ./candles). This hook only owns resumable REST truth, which
  * is also what a WS reconnect/seq-gap re-serves (web.md §2.5).
+ *
+ * `candleWindow` moved to ./candles (pure, server-safe) so the SSR view can call
+ * it without importing this client module; re-exported here for existing callers.
  */
-const BARS_PER_WINDOW = 400;
-
-export function candleWindow(interval: CandleInterval, now = Date.now()) {
-  const to = Math.floor(now / 1000);
-  const span = CANDLE_INTERVAL_SECONDS[interval] * BARS_PER_WINDOW;
-  return { from: to - span, to };
-}
+export { candleWindow } from "./candles";
 
 export function useCandleFeed(
   address: string,

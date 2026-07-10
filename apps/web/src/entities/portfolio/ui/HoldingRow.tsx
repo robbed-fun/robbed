@@ -39,7 +39,7 @@ function TokenCell({ token }: { token: PortfolioHolding["token"] }) {
         ticker={token.ticker}
         size={22}
       />
-      <span className="truncate text-text">{token.ticker}</span>
+      <span className="truncate text-text">{token.name}</span>
       {token.graduated && (
         <MonoLabel tone="purple" size="2xs" className="shrink-0">
           AMM

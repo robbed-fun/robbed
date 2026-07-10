@@ -12,6 +12,7 @@ import type { z } from "zod";
 
 import { ApiError } from "@/shared/api";
 import { env } from "@/shared/lib/env";
+import { resolveMock } from "@/shared/mock/mock-api";
 
 /**
  * Portfolio read client (api.md §3.4a) — the four `/v1/portfolio/*` endpoints.
@@ -35,6 +36,10 @@ async function apiGet<T>(
   schema: z.ZodType<T>,
   opts: FetchOpts = {},
 ): Promise<T> {
+  // DEMO MODE (task A) — same strictly-gated mock transport as `shared/api`.
+  if (env.mockData()) {
+    return schema.parse(resolveMock(path));
+  }
   const res = await fetch(`${env.apiBaseUrl()}${path}`, {
     headers: { accept: "application/json" },
     signal: opts.signal,

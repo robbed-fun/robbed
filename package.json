@@ -5,7 +5,9 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "prepare": "git config core.hooksPath .githooks",
-    "validate": "scripts/validate.sh"
+    "validate": "scripts/validate.sh",
+    "e2e": "pnpm --filter @robbed/web exec playwright test",
+    "e2e:coverage": "bun scripts/e2e-coverage.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

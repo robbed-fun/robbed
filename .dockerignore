@@ -1,0 +1,47 @@
+# Root .dockerignore — applies to every image whose build context is the repo
+# root (apps/indexer/Dockerfile, apps/api/Dockerfile; deploy-komodo-cloudflare.md
+# A.5). Keeps the context lean and reproducible: ship manifests + lockfile +
+# source; NEVER ship host node_modules (linux-native binaries are rebuilt inside
+# the image), build caches, secrets, or contract/frontend artifacts.
+
+# ── Dependencies (rebuilt in-image by pnpm; host copies are macOS-native) ─────
+**/node_modules
+
+# ── VCS / editor / OS cruft ───────────────────────────────────────────────────
+.git
+.gitignore
+.githooks
+.github
+.idea
+.vscode
+**/.DS_Store
+**/*.log
+
+# ── Secrets & local env (interpolated at deploy by Komodo, never baked in) ────
+**/.env
+**/.env.*
+!**/.env.example
+
+# ── Frontend build output (apps/web deploys to Cloudflare Workers, not here) ──
+**/.next
+apps/web/.open-next
+
+# ── Ponder local cache (regenerated; ponder-env.d.ts is (re)made by codegen) ──
+**/.ponder
+
+# ── Foundry / contract build artifacts (not needed by the off-chain images) ──
+contracts/out
+contracts/cache
+contracts/broadcast
+contracts/lib
+
+# ── Local dev stack scratch / object-store data ──────────────────────────────
+tools/localstack/out
+.docker-data
+
+# ── Test coverage & the non-authoritative bun lockfile (pnpm-lock.yaml wins) ─
+**/coverage
+bun.lock
+
+# ── Docs are not build inputs for the runtime images ─────────────────────────
+docs

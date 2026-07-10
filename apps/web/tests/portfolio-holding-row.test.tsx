@@ -31,9 +31,10 @@ const holding = (over: Partial<PortfolioHolding> = {}): PortfolioHolding => ({
 });
 
 describe("HoldingRow", () => {
-  it("renders ticker, grouped balance, price, ETH value and signed PnL", () => {
+  it("renders the token name, grouped balance, price, ETH value and signed PnL", () => {
     render(<HoldingRow holding={holding()} />);
-    expect(screen.getAllByText("HOODCAT").length).toBeGreaterThan(0);
+    // The mockup's TOKEN column shows the token NAME (docs/Robbed.html "2c").
+    expect(screen.getAllByText("Hoodcat").length).toBeGreaterThan(0);
     expect(screen.getAllByText("4,120,551").length).toBeGreaterThan(0);
     expect(screen.getAllByText("0.00034").length).toBeGreaterThan(0);
     expect(screen.getAllByText("1.4").length).toBeGreaterThan(0); // ETH value

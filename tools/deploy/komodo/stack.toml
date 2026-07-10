@@ -1,0 +1,137 @@
+# ROBBED_ backend — Komodo Stack resources (git-synced infra-as-code).
+# deploy-komodo-cloudflare.md A.2/A.3, environments.md §1/§5 (E-4), spec §12.45/§12.49.
+#
+# Komodo Core syncs this file from git and reconciles two Stacks (TESTNET + PRODUCTION),
+# each pointing at the SAME compose file (compose.yaml) on a periphery-registered server.
+# Docs-first (komo.do/docs/deploy/compose + configuration/variables): a Stack's
+# `environment` is written to a `.env` and passed to `docker compose --env-file`;
+# `[[NAME]]` triggers interpolation of a Komodo Variable/Secret (never committed here).
+#
+# ── SECRET HANDLING ───────────────────────────────────────────────────────────
+# `[[NAME]]` refs below resolve from the Komodo secret store (Core `[secrets]`
+# and/or the periphery agent's `[secrets]`, marked "secret" so values never appear
+# in logs/API). This file commits ZERO secret values. Non-secret CONFIG (bucket
+# name, public R2 account id per §12.45, ports) is inline. Populate every `[[NAME]]`
+# per env from docs/runbooks/env-inventory.md before deploy.
+#
+# ── BUILD MODEL ───────────────────────────────────────────────────────────────
+# build-on-Komodo (A.4): the periphery host clones this repo and builds the indexer
+# + api images from their Dockerfiles (compose `build.context = ../../..`). For M4,
+# switch to prebuilt registry images (A.4) by setting INDEXER_IMAGE/API_IMAGE to a
+# digest-pinned tag and dropping the compose `build:` blocks.
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TESTNET — Robinhood testnet (chain 46630), Phase A. Stubs allowed; no fees.
+# ══════════════════════════════════════════════════════════════════════════════
+[[stack]]
+name = "robbed-backend-testnet"
+description = "ROBBED_ off-chain backend (Ponder + Hono/Bun API + WS + Postgres + Redis) — TESTNET"
+tags = ["robbed", "backend", "testnet"]
+
+[stack.config]
+server = "[[TESTNET_SERVER]]"                 # periphery-registered target server (Komodo Variable)
+repo = "[[ROBBED_REPO]]"                       # owner/repo (Komodo Variable), e.g. your-org/launch
+git_provider = "github.com"
+git_account = "[[GIT_ACCOUNT]]"                # for a private repo; omit/blank if public
+branch = "main"
+run_directory = "/opt/stacks/robbed-backend-testnet"
+file_paths = ["tools/deploy/komodo/compose.yaml"]
+project_name = "robbed-backend-testnet"
+# apimigrations is a one-shot that exits 0 — exclude it from Stack health tracking.
+ignore_services = ["apimigrations"]
+poll_for_updates = true
+environment = """
+STACK_PROJECT = robbed-backend-testnet
+API_ENV = production
+MODERATION_ALLOW_STUBS = true
+
+# ── Postgres / Redis (in-Stack) ──
+POSTGRES_USER = robbed
+POSTGRES_DB = robbed
+POSTGRES_PASSWORD = [[TESTNET_POSTGRES_PASSWORD]]
+
+# ── Indexer: chain 4663-shape on testnet (assert-at-startup, fail closed) ──
+INDEXER_RPC_HTTP = [[TESTNET_INDEXER_RPC_HTTP]]
+INDEXER_RPC_WS = [[TESTNET_INDEXER_RPC_WS]]
+CURVE_FACTORY_ADDRESS = [[TESTNET_CURVE_FACTORY_ADDRESS]]
+ROUTER_ADDRESS = [[TESTNET_ROUTER_ADDRESS]]
+MIGRATOR_ADDRESS = [[TESTNET_MIGRATOR_ADDRESS]]
+V3_FACTORY_ADDRESS = [[TESTNET_V3_FACTORY_ADDRESS]]
+V3_NPM_ADDRESS = [[TESTNET_V3_NPM_ADDRESS]]
+START_BLOCK = [[TESTNET_START_BLOCK]]
+ETH_USD_SOURCE_URL = [[TESTNET_ETH_USD_SOURCE_URL]]
+TREASURY_ADDRESS = [[TESTNET_TREASURY_ADDRESS]]
+R2_METADATA_BASE_URL = [[TESTNET_R2_PUBLIC_BASE_URL]]
+
+# ── API + WS ──
+CORS_ALLOWED_ORIGINS = https://testnet.robbed.fun
+SESSION_SECRET = [[TESTNET_SESSION_SECRET]]
+ADMIN_ALLOWLIST = [[TESTNET_ADMIN_ALLOWLIST]]
+R2_ENDPOINT = [[R2_ENDPOINT]]
+R2_ACCOUNT_ID = 0b1b0b8753489a11d35ee922961f6b72
+R2_ACCESS_KEY_ID = [[TESTNET_R2_ACCESS_KEY_ID]]
+R2_SECRET_ACCESS_KEY = [[TESTNET_R2_SECRET_ACCESS_KEY]]
+R2_BUCKET = robbed-assets
+R2_PUBLIC_BASE_URL = [[TESTNET_R2_PUBLIC_BASE_URL]]
+"""
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PRODUCTION — Robinhood mainnet (chain 4663), Phase B. Gate-G-A-gated (§14).
+# NOTHING deploys here until Gate G-A passes; stubs FORBIDDEN (MODERATION_ALLOW_STUBS=false).
+# ══════════════════════════════════════════════════════════════════════════════
+[[stack]]
+name = "robbed-backend-production"
+description = "ROBBED_ off-chain backend — PRODUCTION (Gate-G-A-gated, §14)"
+tags = ["robbed", "backend", "production"]
+
+[stack.config]
+server = "[[PROD_SERVER]]"
+repo = "[[ROBBED_REPO]]"
+git_provider = "github.com"
+git_account = "[[GIT_ACCOUNT]]"
+branch = "main"
+run_directory = "/opt/stacks/robbed-backend-production"
+file_paths = ["tools/deploy/komodo/compose.yaml"]
+project_name = "robbed-backend-production"
+ignore_services = ["apimigrations"]
+# Prefer digest-pinned images in prod (A.4, auditable rollback). Leave false until
+# CI (Phase I) publishes images; build-on-Komodo works in the interim.
+poll_for_updates = false
+environment = """
+STACK_PROJECT = robbed-backend-production
+API_ENV = production
+MODERATION_ALLOW_STUBS = false
+
+# ── Postgres / Redis (in-Stack) ──
+POSTGRES_USER = robbed
+POSTGRES_DB = robbed
+POSTGRES_PASSWORD = [[PROD_POSTGRES_PASSWORD]]
+
+# ── Indexer: mainnet 4663; V3/WETH = §12.28 constants (still asserted at start) ──
+INDEXER_RPC_HTTP = [[PROD_INDEXER_RPC_HTTP]]
+INDEXER_RPC_WS = [[PROD_INDEXER_RPC_WS]]
+CURVE_FACTORY_ADDRESS = [[PROD_CURVE_FACTORY_ADDRESS]]
+ROUTER_ADDRESS = [[PROD_ROUTER_ADDRESS]]
+MIGRATOR_ADDRESS = [[PROD_MIGRATOR_ADDRESS]]
+V3_FACTORY_ADDRESS = 0x1f7d7550B1b028f7571E69A784071F0205FD2EfA
+V3_NPM_ADDRESS = 0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3
+START_BLOCK = [[PROD_START_BLOCK]]
+ETH_USD_SOURCE_URL = [[PROD_ETH_USD_SOURCE_URL]]
+TREASURY_ADDRESS = [[PROD_TREASURY_ADDRESS]]
+R2_METADATA_BASE_URL = [[PROD_R2_PUBLIC_BASE_URL]]
+
+# ── API + WS ──
+CORS_ALLOWED_ORIGINS = https://robbed.fun
+SESSION_SECRET = [[PROD_SESSION_SECRET]]
+ADMIN_ALLOWLIST = [[PROD_ADMIN_ALLOWLIST]]
+MODERATION_CSAM_VENDOR_URL = [[PROD_MODERATION_CSAM_VENDOR_URL]]
+MODERATION_CSAM_VENDOR_KEY = [[PROD_MODERATION_CSAM_VENDOR_KEY]]
+MODERATION_CLASSIFIER_VENDOR_URL = [[PROD_MODERATION_CLASSIFIER_VENDOR_URL]]
+MODERATION_CLASSIFIER_VENDOR_KEY = [[PROD_MODERATION_CLASSIFIER_VENDOR_KEY]]
+R2_ENDPOINT = [[R2_ENDPOINT]]
+R2_ACCOUNT_ID = 0b1b0b8753489a11d35ee922961f6b72
+R2_ACCESS_KEY_ID = [[PROD_R2_ACCESS_KEY_ID]]
+R2_SECRET_ACCESS_KEY = [[PROD_R2_SECRET_ACCESS_KEY]]
+R2_BUCKET = robbed-assets
+R2_PUBLIC_BASE_URL = [[PROD_R2_PUBLIC_BASE_URL]]
+"""

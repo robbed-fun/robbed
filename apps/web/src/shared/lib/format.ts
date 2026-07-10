@@ -80,6 +80,10 @@ export function formatUsd(value: UsdValue | null | undefined): {
     );
   }
   const usdNum = Number(value.usd);
+  // Full precision (not compact): the value is rendered VERBATIM from the indexer
+  // payload so the exact figure the user sees is the exact figure the indexer
+  // priced (§2 source-fidelity; asserted by tests/discover-card.test.tsx). The
+  // mockup's compact USD styling is a documented deviation (see report).
   const text = Number.isFinite(usdNum)
     ? new Intl.NumberFormat("en-US", {
         style: "currency",

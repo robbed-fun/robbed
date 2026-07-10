@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { WagmiProvider } from "wagmi";
 
+import { E2eWalletBridge } from "@/shared/lib/e2e-bridge";
 import { createWagmiConfig } from "@/shared/lib/wagmi";
 import { WsProvider } from "@/shared/lib/ws";
 
@@ -53,6 +54,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           modalSize="compact"
         >
           <WsProvider>{children}</WsProvider>
+          <E2eWalletBridge config={wagmiConfig} />
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

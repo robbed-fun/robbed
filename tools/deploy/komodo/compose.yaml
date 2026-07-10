@@ -1,0 +1,203 @@
+# ROBBED_ backend Stack — Komodo (deploy-komodo-cloudflare.md Part A, spec §12.45).
+# Four services: postgres (+pg_trgm), redis, indexer (Ponder/Node), api (Hono/Bun)
+# + a ws service (Bun WS fanout) from the SAME api image, co-located with Redis for
+# the §8 <500ms budget. NO `web` service — the frontend deploys to Cloudflare
+# Workers (Part B). NO top-level `version:` (obsolete under Compose v2+).
+#
+# SECRETS: this file commits ZERO secret values. Every credential is `${VAR}`,
+# resolved at deploy from the Komodo `.env` (Core/periphery secret store) that the
+# Stack resource's `environment` block writes (tools/deploy/komodo/stack.toml).
+# `${VAR:?...}` = required (compose config errors if unset — fail closed); `${VAR:-x}`
+# = non-secret default. Variable names track docs/runbooks/env-inventory.md.
+#
+# Build model: build-on-Komodo (A.4) — the periphery host builds both images from
+# their Dockerfiles with build context = repo root (`../../..` relative to THIS
+# compose file). Graduate to prebuilt/registry images for M4 (A.4) by swapping
+# each `build:` for `image:` + a digest-pinned tag.
+name: ${STACK_PROJECT:-robbed-backend}
+
+x-restart: &restart unless-stopped
+
+services:
+  # ── Postgres 17 (+ pg_trgm) — indexer store + API-owned moderation tables ────
+  postgres:
+    image: postgres:17
+    restart: *restart
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-robbed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required (Komodo secret)}
+      POSTGRES_DB: ${POSTGRES_DB:-robbed}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # pg_trgm at first init (empty data dir only; sorted-order *.sql). API-owned
+      # tables are applied by the `apimigrations` one-shot (mount below is ro).
+      - ../../../docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Redis 7 — pub/sub fanout + WS + rate-limit + moderation queue ────────────
+  redis:
+    image: redis:7-alpine
+    restart: *restart
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── one-shot: apply API-owned tables (moderation_status / audit / watchlist) ─
+  # Idempotent SQL; runs on every deploy after postgres is healthy, then exits 0.
+  # Excluded from Stack health via `ignore_services` in stack.toml.
+  apimigrations:
+    image: postgres:17
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required (Komodo secret)}
+    volumes:
+      - ../../../apps/api/migrations:/migrations:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        for f in /migrations/*.sql; do
+          echo "applying $$f"
+          psql -h postgres -U ${POSTGRES_USER:-robbed} -d ${POSTGRES_DB:-robbed} -v ON_ERROR_STOP=1 -f "$$f"
+        done
+        echo "api migrations applied"
+
+  # ── indexer — Ponder (Node). Entrypoint runs offchain migrate → ponder start. ─
+  indexer:
+    build:
+      context: ../../..
+      dockerfile: apps/indexer/Dockerfile
+    image: ${INDEXER_IMAGE:-robbed-indexer:latest}
+    restart: *restart
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # RPC (chain 4663) — SECRET (Alchemy WS/HTTP or Robinhood provider).
+      INDEXER_RPC_HTTP: ${INDEXER_RPC_HTTP:?INDEXER_RPC_HTTP required}
+      INDEXER_RPC_WS: ${INDEXER_RPC_WS:-}
+      # Contract sources — CONFIG from the per-env deploy artifact.
+      CURVE_FACTORY_ADDRESS: ${CURVE_FACTORY_ADDRESS:?CURVE_FACTORY_ADDRESS required}
+      ROUTER_ADDRESS: ${ROUTER_ADDRESS:-}
+      MIGRATOR_ADDRESS: ${MIGRATOR_ADDRESS:?MIGRATOR_ADDRESS required}
+      # V3 factory / NPM default to the §12.28 registry in @robbed/shared; override per env.
+      V3_FACTORY_ADDRESS: ${V3_FACTORY_ADDRESS:-}
+      V3_NPM_ADDRESS: ${V3_NPM_ADDRESS:-}
+      START_BLOCK: ${START_BLOCK:-0}
+      # Off-chain stack — internal service DNS; password is the only secret.
+      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}@postgres:5432/${POSTGRES_DB:-robbed}
+      DATABASE_SCHEMA: ${INDEXER_DB_SCHEMA:-public}
+      REDIS_URL: redis://redis:6379
+      R2_METADATA_BASE_URL: ${R2_METADATA_BASE_URL:?R2_METADATA_BASE_URL required}
+      ETH_USD_SOURCE_URL: ${ETH_USD_SOURCE_URL:-}
+      TREASURY_ADDRESS: ${TREASURY_ADDRESS:-}
+      METRICS_PORT: ${METRICS_PORT:-9464}
+      PONDER_PORT: ${PONDER_PORT:-42069}
+    healthcheck:
+      # Ponder /health = 200 once the process is up (liveness). /ready flips to 200
+      # only after backfill reaches realtime — use /health so a long backfill does
+      # not mark the container unhealthy (readiness is surfaced separately, README).
+      test: ["CMD-SHELL", "curl -sf http://localhost:${PONDER_PORT:-42069}/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ── api — Hono on Bun (HTTP). Default CMD = src/index.ts. ─────────────────────
+  api:
+    build:
+      context: ../../..
+      dockerfile: apps/api/Dockerfile
+    image: ${API_IMAGE:-robbed-api:latest}
+    restart: *restart
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      apimigrations:
+        condition: service_completed_successfully
+    environment: &api-env
+      API_ENV: ${API_ENV:-production}
+      API_PORT: ${API_PORT:-3001}
+      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}@postgres:5432/${POSTGRES_DB:-robbed}
+      # Optional Postgres role split (§7): distinct RO/RW roles in prod. Fall back
+      # to DATABASE_URL when unset (config.ts handles the fallback).
+      DATABASE_URL_RO: ${DATABASE_URL_RO:-}
+      DATABASE_URL_RW: ${DATABASE_URL_RW:-}
+      REDIS_URL: redis://redis:6379
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS required}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET required (Komodo secret)}
+      ADMIN_ALLOWLIST: ${ADMIN_ALLOWLIST:-}
+      TRUSTED_PROXY_HEADER: ${TRUSTED_PROXY_HEADER:-}
+      # Moderation (§4.3): prod refuses stubs unless MODERATION_ALLOW_STUBS=true.
+      MODERATION_ALLOW_STUBS: ${MODERATION_ALLOW_STUBS:-false}
+      MODERATION_CSAM_VENDOR_URL: ${MODERATION_CSAM_VENDOR_URL:-}
+      MODERATION_CSAM_VENDOR_KEY: ${MODERATION_CSAM_VENDOR_KEY:-}
+      MODERATION_CLASSIFIER_VENDOR_URL: ${MODERATION_CLASSIFIER_VENDOR_URL:-}
+      MODERATION_CLASSIFIER_VENDOR_KEY: ${MODERATION_CLASSIFIER_VENDOR_KEY:-}
+      # R2 write leg (API-mediated upload, §12.19). Endpoint = R2 S3 API URL.
+      R2_ENDPOINT: ${R2_ENDPOINT:?R2_ENDPOINT required}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID required (Komodo secret)}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY required (Komodo secret)}
+      R2_BUCKET: ${R2_BUCKET:-robbed-assets}
+      R2_PUBLIC_BASE_URL: ${R2_PUBLIC_BASE_URL:?R2_PUBLIC_BASE_URL required}
+      # Cold tokensOwed read on /fees (never hot path).
+      ROBINHOOD_RPC_URL: ${INDEXER_RPC_HTTP:-}
+    ports:
+      # Behind the Stack's TLS/CDN in prod (A.6 step 6). Host-map is overridable.
+      - "${API_HOST_PORT:-3001}:3001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:${API_PORT:-3001}/v1/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── ws — Bun WS fanout (src/ws.ts) from the SAME api image, Redis-only, zero DB.
+  # Co-located with Redis + the indexer publisher (spec §8 <500ms). `command`
+  # overrides the image's default CMD; no rebuild (same image tag).
+  ws:
+    image: ${API_IMAGE:-robbed-api:latest}
+    build:
+      context: ../../..
+      dockerfile: apps/api/Dockerfile
+    restart: *restart
+    command: ["bun", "run", "src/ws.ts"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      WS_PORT: ${WS_PORT:-3002}
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "${WS_HOST_PORT:-3002}:3002"
+    healthcheck:
+      # Plain GET answers 426 Upgrade Required — connectivity is the probe (no -f).
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://localhost:${WS_PORT:-3002} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  pgdata:
+  redisdata:

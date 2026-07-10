@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  type MockTapeEntry,
   type TapeEvent,
   type TapeFilter,
   type TokenInfo,
@@ -15,6 +16,7 @@ import {
   filterEvents,
   graduateToEvent,
   launchToEvent,
+  mockTapeEvents,
   prependCapped,
   seedLaunches,
   tradeToEvent,
@@ -52,9 +54,22 @@ import { useWsChannel } from "@/shared/lib/ws";
  * - Rows link to `/t/[address]`; unknown-token rows still link (address known)
  *   and show mcap/Δ% "—" rather than inventing aggregates.
  */
-export function EventTape({ tokens }: { tokens: TokenCard[] }) {
+export function EventTape({
+  tokens,
+  mockEntries,
+}: {
+  tokens: TokenCard[];
+  /**
+   * DEMO-ONLY (task A): the gated `discover.eventTape` fixture. Events (and their
+   * relative ages) are built on the CLIENT at mount so the age column stays
+   * correct regardless of prerender staleness; falls back to the real launch seed.
+   */
+  mockEntries?: MockTapeEntry[];
+}) {
   const registry = useMemo<Map<string, TokenInfo>>(() => buildRegistry(tokens), [tokens]);
-  const [events, setEvents] = useState<TapeEvent[]>(() => seedLaunches(tokens));
+  const [events, setEvents] = useState<TapeEvent[]>(() =>
+    mockEntries ? mockTapeEvents(mockEntries, tokens) : seedLaunches(tokens),
+  );
   const [filter, setFilter] = useState<TapeFilter>("all");
   const [now, setNow] = useState(() => Date.now());
 
@@ -134,12 +149,20 @@ function EventRow({
   const imageUrl =
     info?.imageUrl ?? (event.kind === "launch" ? event.imageUrl : null);
   const ticker = info?.ticker ?? (event.kind === "launch" ? event.ticker : "");
-  const delta = info?.change24hPct ?? null;
+  // Demo rows carry a per-event Δ% override (task A, §2-gated); live rows resolve
+  // the token's 24h Δ% from the registry.
+  const delta = event.deltaPct !== undefined ? event.deltaPct : info?.change24hPct ?? null;
+  const amountWei =
+    "ethAmount" in event && event.ethAmount !== undefined ? event.ethAmount : null;
 
   return (
     <Link
       href={`/t/${event.token}`}
-      className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface md:px-6"
+      className={cn(
+        "flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface md:px-6",
+        // mockup: LAUNCH rows carry a subtle raised surface background
+        event.kind === "launch" && "bg-surface",
+      )}
     >
       {/* age */}
       <MonoText tone="tertiary" size="xs" numeric className="w-9 shrink-0">
@@ -169,10 +192,10 @@ function EventRow({
         )}
       </span>
 
-      {/* amount ETH (trades only) */}
+      {/* amount ETH (present on every row that supplies one) */}
       <span className="hidden w-28 shrink-0 text-right text-text-secondary sm:block">
-        {event.kind === "buy" || event.kind === "sell" ? (
-          <EthAmount wei={event.ethAmount} unit="ETH" className="text-sm" />
+        {amountWei !== null ? (
+          <EthAmount wei={amountWei} unit="ETH" className="text-sm" />
         ) : null}
       </span>
 

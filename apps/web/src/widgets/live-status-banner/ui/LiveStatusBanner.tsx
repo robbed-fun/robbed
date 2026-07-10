@@ -1,5 +1,6 @@
 "use client";
 
+import { env } from "@/shared/lib/env";
 import { useWsStatus } from "@/shared/lib/ws";
 
 /**
@@ -9,6 +10,9 @@ import { useWsStatus } from "@/shared/lib/ws";
  */
 export function LiveStatusBanner() {
   const status = useWsStatus();
+  // DEMO MODE (task A): there is no live WS to reconnect to, so the degraded
+  // notice is both misleading and absent from the mockup — suppress it.
+  if (env.mockData()) return null;
   if (status === "open") return null;
   const label =
     status === "reconnecting"

@@ -62,6 +62,33 @@ export const env = {
     process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "",
   r2PublicBaseUrl: () => process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL ?? "",
   /**
+   * E2E harness flag (I-5a). When `"true"`, the wagmi config swaps its real
+   * RainbowKit connectors for the wagmi `mock` connector wired to anvil's
+   * unlocked dev accounts (real txs + real signatures, no browser-extension
+   * automation) and a `window.__ROBBED_E2E__` bridge is mounted so Playwright
+   * can connect/switch accounts. NEVER set in prod — injected/WC connectors are
+   * the only real-user path. Build-time inlined like every `NEXT_PUBLIC_*`.
+   */
+  e2e: () => process.env.NEXT_PUBLIC_E2E === "true",
+  /** Comma-separated anvil dev addresses for the e2e mock connector. */
+  e2eAccounts: () =>
+    (process.env.NEXT_PUBLIC_E2E_ACCOUNTS ?? "")
+      .split(",")
+      .map((a) => a.trim())
+      .filter((a) => a.length > 0),
+  /**
+   * DEMO MODE (task A). When truthy, the data layer serves the extracted mock
+   * fixture (`src/shared/mock/robbed-mock.json`) instead of hitting the API — for
+   * every REST read the four pages render. Strictly gated: flag off ⇒ untouched
+   * production path (real fetch + zod validation). Build-time inlined like every
+   * `NEXT_PUBLIC_*`. The mock's mcap/ethUsdMock figures are demo-only and NEVER
+   * reach the prod path (§2 hardcoded-metric rule holds behind the gate).
+   */
+  mockData: () => {
+    const v = process.env.NEXT_PUBLIC_MOCK_DATA;
+    return v === "true" || v === "1" || v === "yes";
+  },
+  /**
    * web-10 / M3-10: large-value disclosure threshold, ETH-denominated, as a
    * DECIMAL STRING (never a JS number literal in code, §2). Architect-owned
    * config; returns null until furnished so callers degrade gracefully.

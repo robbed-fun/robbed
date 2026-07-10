@@ -78,7 +78,7 @@ export function SearchBox({ initialQ = "" }: { initialQ?: string }) {
       <Input
         type="search"
         inputMode="search"
-        placeholder="Search name, ticker, contract, creator…"
+        placeholder="/ search tokens, addresses"
         value={raw}
         maxLength={SEARCH_QUERY_MAX}
         onChange={(e) => {

@@ -1,0 +1,68 @@
+/**
+ * ── centralized selectors (plan I-5a) ────────────────────────────────────────
+ * The app ships almost no `data-testid`s, so these are COPY/ROLE-derived from the
+ * real components (grepped 2026-07-10). Centralising them means that when the
+ * live stack is available, any selector that drifted from the DOM is fixed in
+ * ONE place. Prefer role + accessible-name; fall back to exact verified copy.
+ *
+ * Verified copy sources:
+ *   trade-widget/ui/TradeWidget.tsx  — role="tablist"/"tab" Buy/Sell; pause copy;
+ *     "Early-launch buy cap: max"; "Graduating to Uniswap V3…"; "Trading on Uniswap V3"
+ *   entities/trade/ui/ConfirmationBadge.tsx — "Soft-confirmed" / "Posted to L1"
+ *   trust-panel/ui/TrustPanel.tsx    — "Ownerless token"; "read from chain";
+ *     "1,000,000,000 fixed"; "on-chain read unavailable"
+ *   features/launch-token/ui/LaunchForm.tsx — "New launches are temporarily paused."
+ */
+import type { Page } from "@playwright/test";
+
+export const copy = {
+  buyPaused: "Buying is temporarily paused — selling remains open.",
+  createsPaused: "New launches are temporarily paused.",
+  earlyBuyCap: /Early-launch buy cap: max/i,
+  graduatingInterstitial: /Graduating to Uniswap V3/i,
+  tradingOnV3: /Trading on Uniswap V3/i,
+  softConfirmed: /Soft-confirmed/i,
+  postedToL1: /Posted to L1/i,
+  rpcUnavailable: /on-chain read unavailable/i,
+  ownerless: /Ownerless token/i,
+  readFromChain: /read from chain/i,
+  fixedSupply: /1,000,000,000 fixed/i,
+  metadataMismatch: /MISMATCH/i,
+  awaitingIndex: /awaiting index/i,
+  degradedBanner: /Live updates degraded/i,
+} as const;
+
+export const sel = {
+  buyTab: (page: Page) => page.getByRole("tab", { name: /^buy$/i }),
+  sellTab: (page: Page) => page.getByRole("tab", { name: /^sell$/i }),
+  tradeWidget: (page: Page) => page.getByRole("tablist").first(),
+  // Amount field is a text input with inputmode=decimal + placeholder "0.0".
+  amountInput: (page: Page) => page.getByPlaceholder("0.0").first(),
+  maxButton: (page: Page) => page.getByRole("button", { name: /^max$/i }),
+  // The trade submit is a <button> "Buy"/"Sell" (distinct from the Buy/Sell
+  // role=tab), or "Connect Wallet" pre-connect.
+  submitTrade: (page: Page) =>
+    page.getByRole("button", { name: /^(buy|sell|connect wallet)$/i }).last(),
+  tradeFeed: (page: Page) => page.getByRole("list", { name: /trades?/i }).first(),
+  trustPanel: (page: Page) => page.getByText(copy.ownerless).locator("xpath=ancestor::*[3]"),
+  tokenCard: (page: Page) => page.getByRole("link", { name: /\/t\// }),
+  searchBox: (page: Page) => page.getByRole("searchbox").first(),
+} as const;
+
+/** Launch form fields — the form uses PLACEHOLDERS, not labels (verified DOM). */
+export const launch = {
+  name: (page: Page) => page.getByPlaceholder("Moonmilk"),
+  ticker: (page: Page) => page.getByPlaceholder("MILK"),
+  description: (page: Page) => page.getByPlaceholder(/what is this token about/i),
+  initialBuy: (page: Page) => page.getByLabel(/initial buy/i),
+  fileInput: (page: Page) => page.locator('input[type="file"]').first(),
+  submit: (page: Page) => page.getByRole("button", { name: /launch token/i }),
+} as const;
+
+/** Discover / Token-Detail route builders. */
+export const routes = {
+  discover: "/",
+  token: (address: string) => `/t/${address}`,
+  create: "/create",
+  og: (address: string) => `/t/${address}/opengraph-image`,
+} as const;

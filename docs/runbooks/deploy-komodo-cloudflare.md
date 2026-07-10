@@ -81,6 +81,17 @@ Both service Dockerfiles are **multi-stage** and workspace-aware (build context 
 5. Verify: `/v1/healthz`+`/v1/readyz` green; indexer head advancing; WS handshake+sub/unsub; `/metrics` exposes gate-7 series (M2-12).
 6. Point the Workers frontend (Part B) `NEXT_PUBLIC_*` API/WS URLs at this Stack's public endpoints (behind TLS/CDN).
 
+### A.6b P-3 status — configs landed (2026-07-10)
+
+The buildable infra from this Part A is now committed (implementation-plan **P-3**, owner hoodpad-indexer):
+
+- `apps/indexer/Dockerfile` — multi-stage `node:22-bookworm-slim`; corepack `pnpm@10.33.0`; build context = repo root; `pnpm install --frozen-lockfile --filter @robbed/indexer...`; `ponder codegen` (build-only placeholder env, discarded); `pnpm deploy --legacy --prod` bundle; runtime stage runs offchain `migrate` → `ponder start` under **Node**, with a copied `bun` binary used **only** to run the two TypeScript side-scripts (`migrate`/`rebuild`). Non-root (`node`). `EXPOSE 9464 42069`.
+- `apps/api/Dockerfile` — build stage on `node:22-bookworm-slim` (pnpm install, strict node_modules) → runtime on **`oven/bun:1.3.14`** (Bun runtime, spec §8/§9). One image, two entrypoints: default `CMD` = HTTP (`src/index.ts`); the `ws` compose service overrides `command` to `src/ws.ts` (build-arg `APP_ENTRY` alternative documented). Non-root (`bun`). `EXPOSE 3001 3002`.
+- `.dockerignore` (repo root) — excludes `**/node_modules`, `.git`, `**/.next`, `apps/web/.open-next`, `**/.ponder`, contract artifacts, `**/.env*` (keeps `.env.example`), `bun.lock`, docs.
+- `tools/deploy/komodo/` — `compose.yaml` (postgres:17 +pg_trgm init, redis:7, indexer, api, ws, one-shot apimigrations; healthchecks + `depends_on` + named volumes; secrets via `${VAR}`/`${VAR:?}`, zero committed values), `stack.toml` (git-synced `robbed-backend-testnet` + `robbed-backend-production` Stacks, `[[VAR]]` secret interpolation, `ignore_services=["apimigrations"]`), and a `README.md` (periphery model, entrypoint strategy, GIN-index nuance, per-env).
+
+**Verification (2026-07-10):** `docker compose -f tools/deploy/komodo/compose.yaml config` exits 0 (build context resolves to repo root; ws `command` override, healthchecks, and `${VAR:?}` fail-closed guards all confirmed); `stack.toml` parses; the pnpm filter/context logic matches the workspace layout. **ENV-GATED / DEFERRED — no Docker daemon in the authoring environment:** `docker build` for both images and `docker compose up` (A.5 "`docker build` must exit 0" leg + A.6 live deploy) were **not** run; `hadolint` is not installed. Re-run these on a daemon-having host before first deploy.
+
 ### A.7 What this runbook does NOT decide
 
 - Beta cap values (O-10), Safe signers (O-6), moderation vendor (OI-A7) — §13, NEEDS-USER, out of Phase-A goal.

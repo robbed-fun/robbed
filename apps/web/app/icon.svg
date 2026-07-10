@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="ROBBED_">
+  <title>ROBBED_</title>
+  <rect width="32" height="32" rx="6" fill="#0B0D0B"/>
+  <g font-family="ui-monospace,'IBM Plex Mono',Menlo,Consolas,monospace" font-weight="700" font-size="21">
+    <text x="4.5" y="24" fill="#EDF3ED">R</text>
+    <text x="17" y="24" fill="#4ADE80">_<animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.49;0.5;1" dur="1.06s" repeatCount="indefinite"/></text>
+  </g>
+</svg>
