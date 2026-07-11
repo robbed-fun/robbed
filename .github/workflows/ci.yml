@@ -74,9 +74,13 @@ jobs:
         with:
           name: aderyn-report
           path: contracts/aderyn.report.json
-      # §6.7: whole workspace on the single pinned solc (foundry.toml)
+      # §6.7: whole workspace on the single pinned solc (foundry.toml).
+      # --sizes enforces EIP-3860/170 limits for DEPLOYABLES only: test/script sources are
+      # skipped because vm-deployed test harnesses (e.g. the gate-2 PoolGriefHandler, ~58KB
+      # initcode) legitimately exceed the limit foundry disables at test runtime. The full
+      # tree (tests included) still compiles in the `test` step below.
       - name: build
-        run: forge build --sizes
+        run: forge build --sizes --skip 'test/**' --skip 'script/**'
       # §10 gate 2: unit + fuzz + invariants
       - name: test
         run: forge test -vvv
@@ -96,7 +100,9 @@ jobs:
       # contracts/slither.db.json (triage DB, content-hash keyed — detectors stay LIVE so future
       # code re-triggers them). slither-version is PINNED to match the DB's finding IDs: a version
       # bump can shift IDs and forces re-triage. Any undispositioned Low+ finding fails the job.
-      - uses: crytic/slither-action@v0.4.0
+      # Action pinned ≥v0.4.2: slither-analyzer 0.11.5 requires Python ≥3.10, which v0.4.0's
+      # image lacks ("No matching distribution found").
+      - uses: crytic/slither-action@v0.4.2
         with:
           target: contracts
           fail-on: low
@@ -109,10 +115,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # §12.29: pnpm owns installs (one lockfile: pnpm-lock.yaml); Bun stays the runtime and
+      # test runner. pnpm/action-setup reads the pinned version from package.json#packageManager.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
       - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
-      - run: bun run --filter '*' typecheck || bun run typecheck
-      - run: bun test
+      - run: pnpm install --frozen-lockfile
+      # typecheck every package that defines it (mirrors scripts/validate.sh stage 5)
+      - run: pnpm -r --if-present run typecheck
+      # bun-test packages (shared/api/indexer discover *.test.ts like validate.sh stage 5) …
+      - run: |
+          set -e
+          for pkg in packages/* apps/*; do
+            [ -f "$pkg/package.json" ] || continue
+            if ls "$pkg"/test/*.test.ts "$pkg"/src/*.test.ts "$pkg"/src/**/*.test.ts >/dev/null 2>&1; then
+              echo "── bun test: $pkg"
+              (cd "$pkg" && bun test)
+            fi
+          done
+      # … plus apps/web's Vitest suite (tests/*.test.tsx — a different runner by design, web.md §8)
+      - run: bun run test
+        working-directory: apps/web
 
   docs:
     # Mechanical doc lint (scripts/doc-check.ts): relative links + anchors,
