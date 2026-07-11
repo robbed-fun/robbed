@@ -48,3 +48,6 @@ export * from "./Divider";
 export * from "./AddressChip";
 export * from "./LiveDot";
 export * from "./AmountInput";
+
+// reusable headless table (TanStack Table v8 wrapper — stable-ref contract)
+export * from "./DataTable";

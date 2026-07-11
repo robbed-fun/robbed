@@ -6,6 +6,16 @@
   "scripts": {
     "prepare": "git config core.hooksPath .githooks",
     "validate": "scripts/validate.sh",
+    "dev": "docker compose up",
+    "dev:real": "NEXT_PUBLIC_MOCK_DATA=false docker compose up",
+    "dev:d": "docker compose up -d",
+    "dev:down": "docker compose down",
+    "dev:reset": "docker compose down -v",
+    "dev:logs": "docker compose logs -f",
+    "dev:ps": "docker compose ps",
+    "dev:rebuild": "docker compose up --build",
+    "web": "pnpm --filter @robbed/web dev",
+    "web:build": "pnpm --filter @robbed/web build && pnpm --filter @robbed/web start",
     "e2e": "pnpm --filter @robbed/web exec playwright test",
     "e2e:coverage": "bun scripts/e2e-coverage.ts"
   },

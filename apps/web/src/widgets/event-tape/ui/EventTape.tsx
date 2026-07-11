@@ -2,14 +2,9 @@
 
 import type { TokenCard, WsMessage } from "@robbed/shared";
 import { GLOBAL_LAUNCHES, GLOBAL_TRADES } from "@robbed/shared";
-import {
-  type ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   type MockTapeEntry,
@@ -28,6 +23,7 @@ import {
   tradeToEvent,
 } from "../model/events";
 import {
+  DataTable,
   Delta,
   Divider,
   EthAmount,
@@ -50,27 +46,15 @@ import { useWsChannel } from "@/shared/lib/ws";
  * age · colored SIDE · token · amount ETH · mcap · Δ%. It merges a real
  * server-seeded LAUNCH snapshot with the live WS streams (`global:trades`,
  * `global:launches`) — see model/events.ts for the protocol-discipline notes
- * (mcap/Δ% are resolved from the registry, never fabricated from a trade; §2).
+ * (mcap/Δ% resolve from the registry, never fabricated from a trade; §2).
  *
- * The row grid is driven by a headless `@tanstack/react-table` model (v8,
- * docs-first tanstack.com/table 2026-07-10): typed `ColumnDef<TapeEvent>[]`
- * (age/side/token/amount ETH/mcap/Δ%) supply the cell renderers, and each visible
- * row iterates the table row model. The tape has no visible column header (the
- * filter tabs sit where a header would); the design's clickable flex `<Link>` row
- * + `Divider` separators are preserved verbatim, and cells reproduce the mockup
- * spans → byte-identical DOM. mcap/Δ% resolve from the token REGISTRY passed to
- * the columns (never invented; unknown tokens render "—").
- *
- * DECISIONS (hoodpad-frontend; basis recorded):
- * - Filter state is LOCAL, not URL: the tape is an ephemeral live view (unlike
- *   the retired grid's shareable sort/filter). A tab click never navigates.
- * - Age is recomputed on a 10s tick so "4s → 1m" stays honest without a per-row
- *   timer; the tick is a cheap `now` bump that rebuilds the column closures.
- * - Rows link to `/t/[address]`; unknown-token rows still link (address known)
- *   and show mcap/Δ% "—" rather than inventing aggregates.
- * - The tape is SEEDED server-side (the Discover view passes `tokens` from its
- *   SSR `/v1/tokens` read) and streamed over WS — it does no ad-hoc client fetch,
- *   so it stays on the App Router server-fetch pattern (no TanStack Query read).
+ * Rows are driven by the shared headless `DataTable` (TanStack Table v8): typed
+ * `ColumnDef<TapeEvent>[]` supply the cell renderers, and `renderRow` wraps each
+ * row's cells in the mockup's clickable `<Link>`. `data` (filtered events) and
+ * `columns` are BOTH memoized — a stable reference is REQUIRED (unstable `data`
+ * every render is what froze Discover: the table thrashes its row model → a
+ * silent CPU loop with no console error). The tape has no visible column header
+ * (the filter tabs sit where a header would).
  */
 export function EventTape({
   tokens,
@@ -91,6 +75,7 @@ export function EventTape({
   const [filter, setFilter] = useState<TapeFilter>("all");
   const [now, setNow] = useState(() => Date.now());
 
+  // Age recomputes on a 10s tick so "4s → 1m" stays honest without a per-row timer.
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 10_000);
     return () => clearInterval(id);
@@ -112,15 +97,9 @@ export function EventTape({
   useWsChannel(GLOBAL_TRADES, onTrade);
   useWsChannel(GLOBAL_LAUNCHES, onLaunches);
 
-  const visible = filterEvents(events, filter);
+  // STABLE references into DataTable — only rebuild when their inputs change.
+  const data = useMemo(() => filterEvents(events, filter), [events, filter]);
   const columns = useMemo(() => buildTapeColumns(registry, now), [registry, now]);
-
-  const table = useReactTable({
-    data: visible,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getRowId: (event) => event.id,
-  });
 
   return (
     <section aria-label="Live event tape">
@@ -142,35 +121,33 @@ export function EventTape({
       </div>
 
       {/* rows */}
-      {visible.length === 0 ? (
-        <div className="px-4 py-10 text-center md:px-6">
-          <MonoText tone="faint" size="xs">
-            watching for live activity…
-          </MonoText>
-        </div>
-      ) : (
-        <ul>
-          {table.getRowModel().rows.map((row, i) => (
-            <li key={row.id}>
-              {i > 0 && <Divider />}
-              <Link
-                href={`/t/${row.original.token}`}
-                className={cn(
-                  "flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface md:px-6",
-                  // mockup: LAUNCH rows carry a subtle raised surface background
-                  row.original.kind === "launch" && "bg-surface",
-                )}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <Fragment key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </Fragment>
-                ))}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <DataTable
+        data={data}
+        columns={columns}
+        getRowId={(event) => event.id}
+        empty={
+          <div className="px-4 py-10 text-center md:px-6">
+            <MonoText tone="faint" size="xs">
+              watching for live activity…
+            </MonoText>
+          </div>
+        }
+        renderRow={({ row, cells, index }) => (
+          <>
+            {index > 0 && <Divider />}
+            <Link
+              href={`/t/${row.original.token}`}
+              className={cn(
+                "flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface md:px-6",
+                // mockup: LAUNCH rows carry a subtle raised surface background
+                row.original.kind === "launch" && "bg-surface",
+              )}
+            >
+              {cells}
+            </Link>
+          </>
+        )}
+      />
     </section>
   );
 }
@@ -178,7 +155,7 @@ export function EventTape({
 /**
  * Column model for the tape row — cells close over the token `registry` and the
  * age `now` tick so mcap/Δ%/age resolve from live indexer aggregates by reference
- * (§2), never fabricated. Rebuilt on the 10s `now` tick.
+ * (§2), never fabricated. Rebuilt only on the 10s `now` tick or a registry change.
  */
 function buildTapeColumns(
   registry: Map<string, TokenInfo>,
