@@ -9,5 +9,5 @@ export * from "./anvil";
 export { api, holderFlags, tradeBy, tradeIsBuy, tradeIsSell, waitForIndexed } from "./api";
 export * from "./layers";
 export * from "./wallet";
-export { sel, copy, routes, launch } from "./selectors";
+export { sel, copy, routes, launch, portfolio, portfolioCopy } from "./selectors";
 export * from "./seed";

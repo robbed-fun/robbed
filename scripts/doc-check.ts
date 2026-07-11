@@ -51,10 +51,17 @@
  *                 is a pass — the mechanism exists for future M0-derived
  *                 numbers in docs.
  *  f. openapi   — apps/api/openapi.yaml, if present, parses as YAML.
+ *  g. env-sync  — `.env.example` ⇄ docs/runbooks/env-inventory.md, both
+ *                 directions, driven by the inventory's <!-- env-sync … -->
+ *                 markers (implementation-plan P-1 / G-9 env leg). Logic lives
+ *                 in scripts/env-sync-check.ts (also standalone-runnable and a
+ *                 named validate.sh stage); included here so CI's docs job
+ *                 enforces it on every push.
  */
 
 import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
 import { join, dirname, resolve, relative, basename } from "node:path";
+import { envSyncFindings } from "./env-sync-check";
 
 const ROOT = resolve(import.meta.dir, "..");
 
@@ -403,6 +410,10 @@ if (existsSync(OPENAPI_PATH)) {
     }
   } // older Bun without Bun.YAML: stay silent rather than guess
 }
+
+// ── check g: .env.example ⇄ env-inventory sync (scripts/env-sync-check.ts) ──
+
+for (const f of envSyncFindings(ROOT, (m) => console.log(m))) findings.push(f);
 
 // ── report ───────────────────────────────────────────────────────────────────
 

@@ -4,7 +4,7 @@
 
 > **Architect sign-off:** `RATIFIED-BY: robbed-architect  DATE: 2026-07-11` — 16 waiver rows cross-checked against the catalog: exactly the 16 flows declaring <3 `assertable-layers` are listed, each with a valid P-7 rationale; the 20 unlisted flows all declare three layers. ERR-4/ERR-5 correctly held at full three layers (the §6.5/§12.25 invariants are *proven at the indexed layer* — a waiver there would gut the point). COLLECT-1 rationale amended for the §12.50 Portfolio page (read-only, no collect surface — waiver stands).
 
-> **`PORT-*` addendum (catalog §3b):** `AUTHORED-BY: robbed-frontend  DATE: 2026-07-11` · `RATIFIED-BY: (pending robbed-architect)` — 8 `PORT-*` waiver rows appended below (table total now 24). Portfolio is a **read-only** page (§12.50a): no flow has an on-chain transaction surface, so every `PORT-*` flow declares <3 layers by nature and is waived here per P-7 so `e2e:coverage` can never livelock on an assertion that cannot exist.
+> **`PORT-*` addendum (catalog §3b):** `AUTHORED-BY: robbed-frontend  DATE: 2026-07-11` · `RATIFIED-BY: robbed-architect  DATE: 2026-07-11` — 8 `PORT-*` waiver rows appended below (table total now 24). Cross-checked at ratification: exactly the 8 `PORT-*` flows declaring <3 layers in the catalog are listed, each N/A layer matches its catalog declaration (PORT-1/2/3/5/6/7 = indexed·UI; PORT-4/PORT-8 = UI-only), and each rationale is a valid P-7 ground verified against the shipped implementation. Portfolio is a **read-only** page (§12.50a): no flow has an on-chain transaction surface, so every `PORT-*` flow declares <3 layers by nature and is waived here per P-7 so `e2e:coverage` can never livelock on an assertion that cannot exist.
 
 ## Purpose
 

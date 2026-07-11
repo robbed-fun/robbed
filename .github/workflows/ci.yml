@@ -126,19 +126,135 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # typecheck every package that defines it (mirrors scripts/validate.sh stage 5)
       - run: pnpm -r --if-present run typecheck
-      # bun-test packages (shared/api/indexer discover *.test.ts like validate.sh stage 5) …
+      # bun-test packages (shared/api/indexer discover *.test.ts like validate.sh stage 5).
+      # find-based: the previous `ls glob1 glob2 glob3` required ALL globs to match and
+      # silently skipped every package (review-workflow finding, 2026-07-11).
       - run: |
           set -e
+          ran=0
           for pkg in packages/* apps/*; do
             [ -f "$pkg/package.json" ] || continue
-            if ls "$pkg"/test/*.test.ts "$pkg"/src/*.test.ts "$pkg"/src/**/*.test.ts >/dev/null 2>&1; then
+            if find "$pkg/src" "$pkg/test" -name '*.test.ts' -type f 2>/dev/null | grep -q .; then
               echo "── bun test: $pkg"
               (cd "$pkg" && bun test)
+              ran=$((ran+1))
             fi
           done
+          # vacuity guard: this repo always has bun-test packages — zero discoveries = the
+          # discovery itself broke again, fail loud instead of passing green.
+          [ "$ran" -ge 3 ] || { echo "::error::bun-test discovery found only $ran package(s) — expected >=3"; exit 1; }
       # … plus apps/web's Vitest suite (tests/*.test.tsx — a different runner by design, web.md §8)
       - run: bun run test
         working-directory: apps/web
+
+  e2e:
+    # §9 / gate G-6 final leg (implementation-plan I-6): the full user-flow matrix
+    # (docs/user-flows.md ↔ apps/web/e2e, plan I-5) against the REAL local stack —
+    # docker compose (I-2: postgres/redis/minio + anvil FORK of Robinhood Chain 4663 +
+    # in-container contract deploy + api/ws/indexer/web), brought up readiness-gated via
+    # `dev:stack` (I-3/G-1), health-checked via `dev:health`, then Playwright (mirrors
+    # scripts/validate.sh stage 6) plus the static flow-coverage gate (G-5b).
+    # Compose v2 + buildx are preinstalled on ubuntu-latest (actions/runner-images,
+    # verified 2026-07-11).
+    #
+    # EGRESS / RATE-LIMIT NOTE: the anvil service forks the PUBLIC Robinhood RPC —
+    # every CI run hits rpc.mainnet.chain.robinhood.com (rate-limited). If e2e starts
+    # flaking on fork RPC errors, set the ROBINHOOD_RPC_URL repo secret (preferred) or
+    # repo variable to a private/Alchemy endpoint; it is honored below.
+    needs: [changes, apps]           # gate on the cheap unit/typecheck job before ~20 min of compose
+    if: needs.changes.outputs.has_apps == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Fork-RPC override — secret wins over variable; both unset ⇒ empty string ⇒
+      # compose's `${ROBINHOOD_RPC_URL:-<public RPC>}` default applies (`:-` covers empty).
+      ROBINHOOD_RPC_URL: ${{ secrets.ROBINHOOD_RPC_URL || vars.ROBINHOOD_RPC_URL }}
+      # Real-data run: e2e asserts live indexed state, never the mock fixture (compose default true).
+      NEXT_PUBLIC_MOCK_DATA: "false"
+      # E2E wallet mode (apps/web/e2e/README.md): wagmi mock connector + window.__ROBBED_E2E__
+      # bridge; anvil's well-known PUBLIC dev accounts 0..3 in role order
+      # (creator, treasury, trader, trader2 — apps/web/e2e/harness/config.ts). Not secrets.
+      NEXT_PUBLIC_E2E: "true"
+      NEXT_PUBLIC_E2E_ACCOUNTS: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266,0x70997970C51812dc3A010C7d01b50e0d17dc79C8,0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC,0x90F79bf6EB2c4f870365E785982E1f101E93b906"
+      # CI bring-up is always cold (in-container pnpm install into fresh named volumes,
+      # NOT cached across runs — accepted cost, several minutes) — generous deadline.
+      DEV_STACK_TIMEOUT_SECS: "1500"
+    steps:
+      # submodules: the deploychain one-shot runs Deploy.s.sol in-container against the
+      # bind-mounted repo — contracts/lib (forge deps) must be checked out.
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      # Mirror of the apps job: pnpm owns installs, Bun runs the tooling (§12.29).
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+      - run: pnpm install --frozen-lockfile
+      # robbed-dev image: build ONCE via buildx with a GHA layer cache and load it into the
+      # daemon. `cache-to type=gha` needs the buildx docker-container driver
+      # (docs.docker.com/build/cache/backends/gha), whose layer cache is SEPARATE from the
+      # daemon builder compose uses — so dev:stack must then run `up -d` WITHOUT `--build`
+      # (DEV_STACK_NO_BUILD=1, tools/localstack/stack.ts): an unconditional `--build` would
+      # silently rebuild cache-blind and waste this step.
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/dev.Dockerfile
+          tags: robbed-dev
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # Readiness-gated bring-up (I-3/G-1): waits until every long-running service is healthy
+      # (indexer = Ponder /ready, i.e. backfill complete) and every one-shot
+      # (deps/createbuckets/apimigrations/deploychain) exited 0; fails loud with log tails.
+      - name: bring up stack (dev:stack)
+        run: bun run dev:stack
+        env:
+          DEV_STACK_NO_BUILD: "1"
+      # G-1 checklist: DB, Redis, chain id 4663, indexer head advancing, API healthz/readyz,
+      # WS sub/unsub round-trip, web 200.
+      - name: health checklist (dev:health)
+        run: bun run dev:health
+      # Playwright browsers — cached on the exact @playwright/test version; on a cache hit
+      # `install --with-deps` skips the download and only apt-installs OS deps.
+      - name: resolve playwright version
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+        working-directory: apps/web
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - run: bunx playwright install --with-deps chromium
+        working-directory: apps/web
+      # The flow matrix itself — same invocation as scripts/validate.sh stage 6; the harness
+      # defaults (apps/web/e2e/harness/config.ts) already target the compose 4XXX host ports.
+      - name: playwright e2e
+        run: bunx playwright test
+        working-directory: apps/web
+      # G-5b static coverage gate: every catalog ID covered by exactly its declared
+      # assertable-layers (no stack needed; runs after so a red matrix still surfaces both).
+      - name: flow-coverage gate
+        run: bun run e2e:coverage
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+            apps/web/e2e/.report/
+          if-no-files-found: ignore
+      - name: stack logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=200
+      - name: tear down stack
+        if: always()
+        run: docker compose down -v
 
   docs:
     # Mechanical doc lint (scripts/doc-check.ts): relative links + anchors,

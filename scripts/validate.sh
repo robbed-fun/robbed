@@ -6,10 +6,21 @@
 # Stages skip gracefully when their service or tool doesn't exist yet, and say so —
 # a skip is reported, never silent (spec §10 "no silent caps" spirit).
 #
-# Usage: validate.sh [--staged]   (--staged limits the hard-rule scan to staged files)
+# Usage: validate.sh [--staged] [--full]
+#   --staged  limits the hard-rule scan to staged files (pre-commit mode)
+#   --full    additionally runs the slow stages (web production build) —
+#             `bun run validate:full` is the run-everything entrypoint
 
 set -u
 cd "$(git rev-parse --show-toplevel)"
+
+STAGED=0; FULL=0
+for arg in "$@"; do
+  case "$arg" in
+    --staged) STAGED=1 ;;
+    --full)   FULL=1 ;;
+  esac
+done
 
 RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[0;33m'; NC=$'\033[0m'
 fail=0
@@ -36,7 +47,7 @@ run_stage() { # run_stage <name> <command...>
 }
 
 # ── 1. Spec hard rules (CLAUDE.md) over committed files ─────────────────────
-if [ "${1:-}" = "--staged" ]; then
+if [ "$STAGED" = "1" ]; then
   files=$(git diff --cached --name-only --diff-filter=ACMR)
 else
   files=$(git ls-files)
@@ -61,6 +72,19 @@ if [ -f scripts/doc-check.ts ]; then
   fi
 else
   record SKIP "doc-check" "(no scripts/doc-check.ts yet)"
+fi
+
+# ── 2b. Env-sync: .env.example ⇄ docs/runbooks/env-inventory.md (P-1 / G-9 env
+#        leg). Also runs inside doc-check (check g) — the named stage exists so
+#        a drift failure is attributed clearly. Self-contained block. ─────────
+if [ -f scripts/env-sync-check.ts ]; then
+  if command -v bun >/dev/null 2>&1; then
+    run_stage "env-sync" bun scripts/env-sync-check.ts
+  else
+    record SKIP "env-sync" "(bun not on PATH — install Bun; CI still enforces it via doc-check)"
+  fi
+else
+  record SKIP "env-sync" "(no scripts/env-sync-check.ts yet)"
 fi
 
 # ── 3. Contracts: fmt / build / tests (unit+fuzz+invariant) — §10 gates 1–2 ──
@@ -109,7 +133,10 @@ if [ -f package.json ]; then
   has_tests=0
   for pkg in packages/* apps/*; do
     [ -f "$pkg/package.json" ] || continue
-    if ls "$pkg"/src/**/*.test.ts "$pkg"/test/*.test.ts "$pkg"/src/*.test.ts >/dev/null 2>&1; then
+    # find-based discovery: the previous `ls glob1 glob2 glob3` exited non-zero unless ALL
+    # globs matched, silently skipping every package (confirmed by the commit-review workflow
+    # 2026-07-11 — CI ran zero bun tests). find matches any *.test.ts at any depth.
+    if find "$pkg/src" "$pkg/test" -name '*.test.ts' -type f 2>/dev/null | grep -q .; then
       has_tests=1
       run_stage "test:$(basename "$pkg")" bash -c "cd '$pkg' && bun test"
     fi
@@ -117,6 +144,33 @@ if [ -f package.json ]; then
   [ $has_tests -eq 0 ] && record SKIP "unit tests" "(no *.test.ts files yet)"
 else
   record SKIP "workspace" "(no root package.json yet)"
+fi
+
+# ── 5b. Web unit suite (Vitest — tests/*.test.tsx, a different runner by design,
+#        web.md §8; the bun-test glob above cannot discover it) ────────────────
+if [ -f apps/web/vitest.config.ts ]; then
+  run_stage "vitest:web" bash -c 'cd apps/web && bun run test'
+else
+  record SKIP "vitest:web" "(no apps/web/vitest.config.ts yet)"
+fi
+
+# ── 5c. Flow-catalog coverage (G-5b) — static diff of docs/user-flows.md IDs vs
+#        @flow-tagged Playwright specs + declared assertable-layers; needs no stack ──
+if [ -f scripts/e2e-coverage.ts ]; then
+  run_stage "e2e:coverage" bun scripts/e2e-coverage.ts
+else
+  record SKIP "e2e:coverage" "(no scripts/e2e-coverage.ts yet — arrives with I-5a)"
+fi
+
+# ── 5d. Web production build (SLOW — --full / validate:full only) ────────────
+if [ "$FULL" = "1" ]; then
+  if [ -f apps/web/next.config.ts ]; then
+    run_stage "build:web" bash -c 'cd apps/web && bun run build'
+  else
+    record SKIP "build:web" "(no apps/web/next.config.ts yet)"
+  fi
+else
+  record SKIP "build:web" "(--full only — run \`bun run validate:full\`)"
 fi
 
 # ── 6. E2E: Playwright against the local stack — §9 ─────────────────────────

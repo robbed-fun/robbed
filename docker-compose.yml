@@ -332,6 +332,17 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
       REDIS_URL: redis://redis:6379
       METRICS_PORT: "9464"
+      # M2-7 metadata verifier (indexer.md §6.1): fallback base for tokens whose
+      # row carries no metadata_uri — container-internal minio service DNS
+      # (key layout metadata/{keccak-no-0x}.json, matching the API's writes).
+      R2_METADATA_BASE_URL: http://minio:9000/${R2_BUCKET:-robbed-assets}/metadata
+      # Dev-only fetch rewrite: on-chain metadataUri is the BROWSER-visible
+      # host-mapped URL (R2_PUBLIC_BASE_URL on the api service — localhost:4900),
+      # which inside this container is the container itself, NOT minio. The
+      # verifier rewrites that prefix to the service-DNS base at fetch time.
+      # FROM must mirror the api service's R2_PUBLIC_BASE_URL exactly.
+      METADATA_FETCH_REWRITE_FROM: http://localhost:${MINIO_PORT:-4900}/${R2_BUCKET:-robbed-assets}
+      METADATA_FETCH_REWRITE_TO: http://minio:9000/${R2_BUCKET:-robbed-assets}
     ports:
       - "${PONDER_PORT:-4269}:42069"
       - "${METRICS_HOST_PORT:-4964}:9464"
@@ -344,6 +355,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      # Ponder /ready returns 200 only once historical indexing is complete
+      # (ponder.sh/docs observability, verified 2026-07-11) — the honest readiness
+      # signal dev:stack (I-3/G-1) gates on. Local backfill is tiny (fresh fork,
+      # START_BLOCK = deploy block), so generous retries cover slow first boots.
+      test: ["CMD", "curl", "-sf", "http://localhost:42069/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 90s
     restart: "no"
 
   # ── web — Next.js 16 dev server (apps/web). Host :4000 ──
@@ -365,6 +386,13 @@ services:
       # robbed.fun). Override with NEXT_PUBLIC_MOCK_DATA=false for a real-data /
       # e2e run against the live stack.
       NEXT_PUBLIC_MOCK_DATA: ${NEXT_PUBLIC_MOCK_DATA:-true}
+      # E2E harness (plan I-5a; owner robbed-e2e): when NEXT_PUBLIC_E2E=true the
+      # wagmi mock connector (anvil dev accounts from NEXT_PUBLIC_E2E_ACCOUNTS)
+      # replaces the real connectors and window.__ROBBED_E2E__ mounts. Unset by
+      # default — pass e.g. `NEXT_PUBLIC_E2E=true NEXT_PUBLIC_MOCK_DATA=false
+      # NEXT_PUBLIC_E2E_ACCOUNTS=<addr0,..,addr3> docker compose up -d web`.
+      NEXT_PUBLIC_E2E: ${NEXT_PUBLIC_E2E:-}
+      NEXT_PUBLIC_E2E_ACCOUNTS: ${NEXT_PUBLIC_E2E_ACCOUNTS:-}
     volumes:
       - .:/workspace
       - robbed_pnpm_store:/pnpm-store

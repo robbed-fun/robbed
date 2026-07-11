@@ -53,7 +53,7 @@ overridable via env (`WEB_PORT`, `API_PORT`, `WS_PORT`, `PONDER_PORT`, `ANVIL_PO
 | `deps` | `robbed-dev` (built) | One-shot: `pnpm install --frozen-lockfile` for the workspace, then exits 0 | — |
 | `api` | `robbed-dev` | `bun run --hot src/index.ts` (apps/api); sources `local.env` best-effort | `curl /v1/healthz` |
 | `ws` | `robbed-dev` | `bun run --hot src/ws.ts` (apps/api, Redis-only fanout) | TCP connect |
-| `indexer` | `robbed-dev` | offchain `migrate` then `ponder dev` (apps/indexer); requires `local.env` from deploychain | — |
+| `indexer` | `robbed-dev` | offchain `migrate` then `ponder dev` (apps/indexer); requires `local.env` from deploychain | `curl /ready` (200 == backfill complete) |
 | `web` | `robbed-dev` | `next dev` (apps/web); browser RPC → `http://localhost:4545` | `curl /` |
 
 **Image-tag choices (docs-first, verified 2026-07-10):** Postgres 17 (fully-supported, Ponder-proven major;
@@ -62,6 +62,43 @@ API (the earlier `2025-09-06` pin did not exist), `mc ready local` is the offici
 probe (the server image has no curl/wget).
 
 ## Bring the stack up
+
+**One command (implementation-plan I-3, gate G-1):**
+
+```bash
+bun run dev:stack    # up -d --build, then waits (readiness-gated) until every service is ready
+bun run dev:health   # the G-1 checklist against the running stack; exits 0 only when ALL pass
+```
+
+`dev:stack` (`tools/localstack/stack.ts`) runs `docker compose up -d --build`, then polls
+`docker compose ps` until every long-running service is **healthy** and every one-shot
+(`deps`, `createbuckets`, `apimigrations`, `deploychain`) has **exited 0**, printing per-service
+progress. Bounded deadline (`DEV_STACK_TIMEOUT_SECS`, default 900s — first boot builds the image +
+full pnpm install); on failure or timeout it prints the offending service's last 40 log lines and
+exits 1. The `indexer` service carries a `curl /ready` healthcheck (Ponder answers 200 only once
+historical indexing completes), so "ready" means a caught-up indexer, not just a live process.
+
+`dev:health` (`tools/localstack/health.ts`) runs the G-1 checklist, one printed result per check:
+DB `select 1` · Redis PING · chain RPC `eth_chainId == 0x1237` (4663) · indexer head advancing
+(two Ponder `/status` samples must differ, or head == chain tip) · API `/v1/healthz` + `/v1/readyz`
+200 · WS handshake + subscribe/unsubscribe round-trip (shared `wsClientOpSchema`/`wsMessageSchema`
+shapes; a schema-valid frame is published on Redis to a reserved probe channel and must be delivered
+while subscribed and NOT after unsub) · web `/` 200. All ports honor the same `*_PORT` env vars the
+compose file uses.
+
+**In CI (`.github/workflows/ci.yml` `e2e` job — plan I-6, gate G-6 final leg):** the same two
+commands bring the stack up on `ubuntu-latest` (Docker + Compose v2 preinstalled) before the
+Playwright flow matrix. Two CI-specific knobs: the `robbed-dev` image is pre-built via
+`docker/build-push-action` with a GHA layer cache and loaded into the daemon, and `dev:stack` is
+run with **`DEV_STACK_NO_BUILD=1`** (`up -d` without `--build` — buildx's docker-container driver
+keeps a separate layer cache from the daemon builder, so an unconditional `--build` would rebuild
+cache-blind). The in-container `pnpm install` (deps one-shot, fresh named volumes every run) is
+NOT cached across CI runs — an accepted several-minute cost. The anvil fork hits the public
+Robinhood RPC from CI; set the `ROBINHOOD_RPC_URL` repo secret/variable to a private endpoint if
+rate limits bite. E2E web env (`NEXT_PUBLIC_E2E`, `NEXT_PUBLIC_E2E_ACCOUNTS`,
+`NEXT_PUBLIC_MOCK_DATA=false`) is passed through compose interpolation.
+
+**Raw compose (equivalent, no readiness gate):**
 
 ```bash
 docker compose up -d --build   # first run: builds robbed-dev + full pnpm install (several minutes)
@@ -150,6 +187,8 @@ Named volumes persist across `up`/`down`: `robbed_pgdata` / `robbed_redisdata` /
 
 ## Testnet stack (`docker-compose.testnet.yml`)
 
+> **End-to-end testnet guide (wallet, faucet, env, deploy, lifecycle): `docs/runbooks/testnet.md`.** This section covers only the compose mechanics.
+
 **Status (2026-07-11): Phase-T-ready infrastructure, currently blocked on Phase-T outputs.** The file
 is the same off-chain stack (postgres/redis/minio/api/ws/indexer/web + one-shots) pointed at the
 **remote Robinhood Chain testnet** — no `anvil`, no `deploychain` (the chain is remote; contracts
@@ -215,4 +254,6 @@ is the T-5 staging deploy's concern, not this compose file's.
 ## Not in this file (deferred)
 
 - **Production images** — these are dev-mode containers (bind mount + watchers). The prod build/deploy landed at **P-3**: `apps/indexer/Dockerfile` + `apps/api/Dockerfile` (multi-stage, non-root, pnpm-workspace-correct) and the Komodo backend Stack at `tools/deploy/komodo/` (see `deploy-komodo-cloudflare.md` A.6b). Those images reuse this file's `postgres:17` (+`pg_trgm` init) and `redis:7` choices; there is **no prod `web` image** (frontend → Cloudflare Workers, §12.45).
-- **anvil / seed data / one-command `dev:stack` wiring** — Phase I (I-1/I-3), reusing this compose file.
+- **Seed data** — deploychain deploys contracts (with the Deploy.s.sol canary create+buy) but no
+  richer demo dataset; `NEXT_PUBLIC_MOCK_DATA=true` covers demo needs today. (`dev:stack` /
+  `dev:health` wiring landed at I-3 — see "Bring the stack up".)

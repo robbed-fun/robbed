@@ -92,6 +92,8 @@ The buildable infra from this Part A is now committed (implementation-plan **P-3
 
 **Verification (2026-07-10):** `docker compose -f tools/deploy/komodo/compose.yaml config` exits 0 (build context resolves to repo root; ws `command` override, healthchecks, and `${VAR:?}` fail-closed guards all confirmed); `stack.toml` parses; the pnpm filter/context logic matches the workspace layout. **ENV-GATED / DEFERRED — no Docker daemon in the authoring environment:** `docker build` for both images and `docker compose up` (A.5 "`docker build` must exit 0" leg + A.6 live deploy) were **not** run; `hadolint` is not installed. Re-run these on a daemon-having host before first deploy.
 
+**Verification update (2026-07-11, daemon available):** the deferred `docker build` leg was executed — **both images build, exit 0** — after two build-stage fixes (node-gyp toolchain for the root `onlyBuiltDependencies` natives; git + `git init` for the root `prepare` hook) and exact base pins (`node:22.22.0-bookworm-slim` / `oven/bun:1.3.14`); image-level `HEALTHCHECK`s added. Gate-7 monitoring configs (Prometheus scrape + alert rules + Alertmanager placeholder + `tools/deploy/komodo/compose.monitoring.yaml` overlay) also landed. Full evidence, the no-web-container decision record, and an **open finding — the indexer's Bun-only Redis publish transport no-ops under the Node Ponder runtime** — in `docs/runbooks/prod-images.md`.
+
 ### A.7 What this runbook does NOT decide
 
 - Beta cap values (O-10), Safe signers (O-6), moderation vendor (OI-A7) — §13, NEEDS-USER, out of Phase-A goal.

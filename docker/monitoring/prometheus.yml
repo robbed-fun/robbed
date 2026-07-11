@@ -1,0 +1,46 @@
+# ROBBED_ gate-7 monitoring — Prometheus scrape config (spec §10 gate 7,
+# indexer.md §9.4; implementation-plan P-3).
+#
+# Scrapes the indexer's gate-7 `/metrics` server (M2-12, apps/indexer/src/
+# metricsServer.ts) on METRICS_PORT (default 9464). The exposition merges the
+# in-process registry (publish latency, confirmation lag, invariant counters,
+# cluster share) with the DB-derived snapshot at scrape time — so ONE scrape
+# target covers every §9.4 series that exists today.
+#
+# Host-agnostic: target names below assume the compose service DNS of the prod
+# Stack (tools/deploy/komodo/compose.yaml + compose.monitoring.yaml). On any
+# other host (k8s, plain VMs), swap `static_configs` for the inventory of that
+# host — nothing else in this file is compose-specific.
+#
+# Pinned runtime: prom/prometheus:v3.5.0 (LTS line; tag verified on the registry
+# 2026-07-11). Rule-file schema verified against prometheus.io docs 2026-07-11.
+
+global:
+  # 15s is comfortably inside every §9.4 alert window (fastest `for:` is 1m);
+  # the chain's ~100ms blocks do NOT require sub-second scraping — head lag and
+  # publish latency are already aggregated by the indexer's registry.
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.rules.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  # Gate-7 series (indexer.md §9.4). /metrics on METRICS_PORT (9464), NOT the
+  # Ponder web-server port (42069) — see apps/indexer/src/metricsServer.ts.
+  - job_name: robbed-indexer
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["indexer:9464"]
+        labels:
+          service: indexer
+
+  # Prometheus self-scrape (meta-monitoring; `up` feeds the ScrapeDown alert).
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

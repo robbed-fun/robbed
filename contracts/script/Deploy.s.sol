@@ -26,13 +26,24 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 ///         the six-contract topology in §7.2 order (1) LPFeeVault → (2) CurveFactory →
 ///         (3) V3Migrator → (4) Router → (5) one-time setters → (6) canary create+buy, writes a
 ///         self-describing deploy artifact (`deployments/<chainId>.json`) for the addresses codegen,
-///         and (live only) hands ownership to the treasury Safe (Ownable2Step step 7).
+///         and (public modes only) hands ownership to the treasury Safe (Ownable2Step step 7).
 ///
-/// @dev  ── Two modes, auto-selected by `block.chainid` (no env flag needed so the bare
+/// @dev  ── Three modes, auto-selected by `block.chainid` (no env flag needed so the bare
 ///          `forge script … --broadcast` verify command works out of the box):
 ///        - LIVE (`block.chainid == 4663`, real chain or fork): the four V3 addresses + WETH come
 ///          from `constants.json.external.*`; `require(weth == 0x0Bd7…AD73)` (F-2) and non-zero
 ///          treasury Safe (O-6 fail-closed) are enforced.
+///        - TESTNET (`block.chainid == 46630`, official Robinhood Chain testnet — chain id per
+///          docs.robinhood.com/chain/connecting, recorded in docs/runbooks/testnet.md §1): public-
+///          chain discipline, exactly like LIVE — a real `DEPLOYER_PRIVATE_KEY` is REQUIRED (the
+///          anvil account-0 fallback is local-only, never on ANY public chain), ALL external
+///          addresses (WETH, V3 factory/NPM/router/quoter, treasury Safe) come from the constants
+///          file's `external.*` (default `../tools/m0/out/constants.testnet.json`, the T-1 derive
+///          output — ZERO testnet addresses are hardcoded here), the §12.28 V3 runtime assertions
+///          + the O-6 `TreasurySafeUnset` guard run unchanged, and ownership is handed to the
+///          (dev-signer) treasury Safe. The ONLY live-mode check skipped is the F-2 canonical-WETH
+///          literal — `0x0Bd7…AD73` is a chain-4663 fact; testnet WETH is whatever the Phase-T
+///          inventory recorded in the constants file (wrong values still fail `assertV3Wiring`).
 ///        - LOCAL smoke (any other chain id, e.g. anvil 31337): the canonical §12.28 addresses have
 ///          NO code on a fresh anvil, so we deploy the REAL precompiled Uniswap V3 core+periphery
 ///          bytecode + a MockWETH9 locally (the M1-10 {V3Fixture} pattern) and point the stack at
@@ -51,17 +62,31 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 ///           (getfoundry.sh/cheatcodes — `serialize*`/`writeJson`).
 ///        2. `block.chainid`, not an env flag, selects mode — matches the exact task verify command
 ///           (`forge script … --rpc-url http://localhost:8545 --broadcast`, no extra flags). 4663 is
-///           the real chain AND the fork profile, so live/local split cleanly.
+///           the real chain AND the fork profile, so live/local split cleanly; 46630 is the official
+///           testnet id and gets the public-chain (testnet) branch — before this three-way split it
+///           would have wrongly taken the local mock-V3/dev-key branch (Phase-T prep).
 ///        3. Local-only signer fallback to the PUBLIC anvil account-0 key when `DEPLOYER_PRIVATE_KEY`
-///           is unset — never on a live chain (there we `revert MissingDeployerKey`). Keeps the bare
-///           smoke command keyless while never risking a real deploy without an explicit key.
+///           is unset — never on a public chain (live OR testnet: `revert MissingDeployerKey`).
+///           Keeps the bare smoke command keyless while never risking a real deploy without an
+///           explicit key.
+///        4. Public modes cross-check `constants.chainId == block.chainid` (`ConstantsChainIdMismatch`)
+///           so mainnet constants can never be broadcast to testnet or vice versa — the constants
+///           file is the single source of externals (§2/§6.4), so a chain/file mix-up must fail
+///           closed BEFORE any spend. Local mode skips it (the 31337 smoke legitimately reuses the
+///           4663-derived economics; a 4663 anvil FORK takes the live branch and still matches).
 contract Deploy is Script {
     /// @notice Canonical WETH9 on chain 4663 (CLAUDE.md / spec §12.28). The ONLY address literal
     ///         allowed in the codebase; asserted equal to `constants.json.external.weth` on live.
     address internal constant CANONICAL_WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
 
-    /// @notice The production chain id (spec §2). Live vs local-smoke discriminator.
+    /// @notice The production chain id (spec §2).
     uint256 internal constant LIVE_CHAIN_ID = 4663;
+
+    /// @notice The OFFICIAL Robinhood Chain testnet id — docs.robinhood.com/chain/connecting,
+    ///         recorded in docs/runbooks/testnet.md §1 (beware: some third-party lists print 46646).
+    ///         Selects TESTNET mode: public-chain discipline (real key, constants-file externals,
+    ///         fail-closed treasury), minus only the F-2 canonical-WETH literal (a 4663-only fact).
+    uint256 internal constant TESTNET_CHAIN_ID = 46_630;
 
     /// @notice The 1% V3 fee tier used for graduation pools (spec §12.1) — canary pool lookup.
     uint24 internal constant FEE_TIER = 10_000;
@@ -77,6 +102,7 @@ contract Deploy is Script {
     // ── deploy-tooling custom errors (never revert strings — spec §6.7) ──
     error MissingDeployerKey();
     error TreasurySafeUnset();
+    error ConstantsChainIdMismatch(uint256 chainId, uint256 declaredChainId);
     error WethMismatch(address expected, address actual);
     error SupplySplitMismatch(uint256 sum);
     error GraduationUnfundable();
@@ -85,8 +111,17 @@ contract Deploy is Script {
     error CanaryPriceMismatch(uint160 expected, uint160 actual);
     error CreateFailed();
 
+    /// @notice Deploy mode, auto-selected from `block.chainid` (decision #2). `Live` and `Testnet`
+    ///         are the PUBLIC modes (identical discipline except the F-2 canonical-WETH literal);
+    ///         `Local` is the keyless anvil smoke with a locally-deployed V3 + MockWETH9.
+    enum Mode {
+        Live,
+        Testnet,
+        Local
+    }
+
     // ── resolved environment (script contract state → keeps run() off the stack) ──
-    bool internal live;
+    Mode internal mode;
     address internal deployer;
     address internal treasury;
     address internal weth;
@@ -108,26 +143,24 @@ contract Deploy is Script {
 
     function run() external {
         // 0. Resolve signer + mode (pre-broadcast; no state writes on chain here).
-        live = block.chainid == LIVE_CHAIN_ID;
+        mode = _selectMode(block.chainid);
         uint256 pk = vm.envOr("DEPLOYER_PRIVATE_KEY", uint256(0));
         if (pk == 0) {
-            if (live) revert MissingDeployerKey();
+            if (mode != Mode.Local) revert MissingDeployerKey(); // any PUBLIC chain needs a real key
             pk = ANVIL_ACCOUNT0_PK; // local-only public fallback (decision #3)
         }
         deployer = vm.addr(pk);
 
         // 1. Load the M0 constants + resolve external addresses (WETH/V3/treasury) per mode.
-        string memory path = vm.envOr("ROBBED_CONSTANTS", string("../tools/m0/out/constants.json"));
-        cj = vm.readFile(path);
-        _consistencyChecks(); // fail-closed on a malformed/incoherent constants file BEFORE spend
+        _loadConstants(); // fail-closed on wrong-chain/malformed/incoherent constants BEFORE spend
 
         vm.startBroadcast(pk);
 
-        _resolveExternals(); // live: read+assert §12.28; local: deploy real V3 + MockWETH9
+        _resolveExternals(); // live/testnet: read `external.*`; local: deploy real V3 + MockWETH9
 
-        // 2. §12.28 V3 runtime sanity (both modes) + F-2 canonical-WETH (live only).
+        // 2. §12.28 V3 runtime sanity (all modes) + F-2 canonical-WETH (live only — 4663 fact).
         V3Assertions.assertV3Wiring(v3Factory, npm, weth);
-        if (live && weth != CANONICAL_WETH) revert WethMismatch(CANONICAL_WETH, weth);
+        if (mode == Mode.Live && weth != CANONICAL_WETH) revert WethMismatch(CANONICAL_WETH, weth);
 
         // 3. Deploy topology in contracts.md §7.2 order.
         _deployTopology();
@@ -135,8 +168,9 @@ contract Deploy is Script {
         // 4. Canary create + tiny buy — proves the wired stack works end-to-end (§7.2 step 6).
         _canary();
 
-        // 5. Ownership handoff (live only): Ownable2Step — not live until the Safe accepts (§7.2 #7).
-        if (live) {
+        // 5. Ownership handoff (public modes): Ownable2Step — not live until the Safe accepts
+        //    (§7.2 #7; testnet exercises the same handoff against the dev-signer Safe, T-2).
+        if (mode != Mode.Local) {
             factory.transferOwnership(treasury);
             console2.log("[deploy] ownership transfer initiated -> Safe (must acceptOwnership):", treasury);
         }
@@ -147,6 +181,41 @@ contract Deploy is Script {
         _writeArtifact();
 
         _logVerifyHints();
+    }
+
+    /// @dev Chain-id → mode (decision #2): 4663 live, 46630 testnet (official id — testnet.md §1),
+    ///      anything else local anvil smoke.
+    function _selectMode(uint256 chainId) internal pure returns (Mode) {
+        if (chainId == LIVE_CHAIN_ID) return Mode.Live;
+        if (chainId == TESTNET_CHAIN_ID) return Mode.Testnet;
+        return Mode.Local;
+    }
+
+    /// @dev Default constants file per mode (`ROBBED_CONSTANTS` env overrides). Testnet defaults to
+    ///      the T-1 derive output `constants.testnet.json` so the bare forge command deploys the
+    ///      right externals; that file only exists once the Phase-T inventory fixture is filled and
+    ///      `bun run derive --network=testnet` succeeds — until then the deploy stays blocked (the
+    ///      readFile fails loudly), by design.
+    function _defaultConstantsPath() internal view returns (string memory) {
+        return mode == Mode.Testnet ? "../tools/m0/out/constants.testnet.json" : "../tools/m0/out/constants.json";
+    }
+
+    /// @dev Load the constants blob + fail-closed pre-spend checks. Public modes additionally pin
+    ///      `constants.chainId == block.chainid` (decision #4) so a mainnet file can never drive a
+    ///      testnet broadcast (or vice versa).
+    function _loadConstants() internal {
+        _loadConstantsFrom(vm.envOr("ROBBED_CONSTANTS", _defaultConstantsPath()));
+    }
+
+    /// @dev Path-explicit body of {_loadConstants} — split out so the unit suite can exercise the
+    ///      exact production checks against fixtures without racing on process-global env vars.
+    function _loadConstantsFrom(string memory path) internal {
+        cj = vm.readFile(path);
+        if (mode != Mode.Local) {
+            uint256 declared = vm.parseJsonUint(cj, ".chainId");
+            if (declared != block.chainid) revert ConstantsChainIdMismatch(block.chainid, declared);
+        }
+        _consistencyChecks();
     }
 
     // ──────────────────────────── constants loader ─────────────────────────────
@@ -208,14 +277,17 @@ contract Deploy is Script {
 
     // ──────────────────────────── external addresses ───────────────────────────
 
-    /// @dev Resolve WETH + the four V3 externals + treasury. LIVE reads `constants.json.external.*`
-    ///      and enforces the O-6 non-zero-Safe guard; LOCAL deploys real V3 core+periphery bytecode
-    ///      + MockWETH9 and uses the deployer as the (dev EOA) treasury.
+    /// @dev Resolve WETH + the four V3 externals + treasury. PUBLIC modes (live AND testnet) read
+    ///      every one of them from the constants file's `external.*` — zero hardcoded per-chain
+    ///      addresses in Solidity (spec §2/§6.4; testnet values land there via the T-1
+    ///      `external.testnet.json` fixture → `derive --network=testnet`) — and enforce the O-6
+    ///      non-zero-Safe guard. LOCAL deploys real V3 core+periphery bytecode + MockWETH9 and uses
+    ///      the deployer as the (dev EOA) treasury.
     function _resolveExternals() internal {
         swapRouter02 = vm.parseJsonAddress(cj, ".external.swapRouter02");
         quoterV2 = vm.parseJsonAddress(cj, ".external.quoterV2");
 
-        if (live) {
+        if (mode != Mode.Local) {
             weth = vm.parseJsonAddress(cj, ".external.weth");
             v3Factory = vm.parseJsonAddress(cj, ".external.v3Factory");
             npm = vm.parseJsonAddress(cj, ".external.positionManager");
@@ -303,7 +375,7 @@ contract Deploy is Script {
     function _writeArtifact() internal {
         string memory k = "robbed-deploy";
         vm.serializeUint(k, "chainId", block.chainid);
-        vm.serializeString(k, "mode", live ? "live" : "local");
+        vm.serializeString(k, "mode", _modeString());
         vm.serializeUint(k, "deployedAt", block.timestamp);
         vm.serializeAddress(k, "curveFactory", address(factory));
         vm.serializeAddress(k, "router", address(router));
@@ -324,15 +396,34 @@ contract Deploy is Script {
         console2.log("[deploy] wrote artifact ->", outPath);
     }
 
+    /// @dev Artifact `mode` label (consumed by the addresses codegen + the testnet.env emitter).
+    function _modeString() internal view returns (string memory) {
+        if (mode == Mode.Live) return "live";
+        if (mode == Mode.Testnet) return "testnet";
+        return "local";
+    }
+
     /// @dev Blockscout verification is env-gated (M1-2 / Phase-T, O-5); print the exact command per
     ///      contracts.md §7.2 step 8 rather than run it here (verification needs a public repo +
-    ///      settled bytecode). Documented, not executed.
+    ///      settled bytecode). Documented, not executed. Testnet additionally points at the
+    ///      testnet.env emitter (docker-compose.testnet.yml contract — docs/runbooks/docker.md).
     function _logVerifyHints() internal view {
-        if (!live) return;
+        if (mode == Mode.Local) return;
         console2.log("[deploy] verify (contracts.md section 7.2 step 8):");
-        console2.log(
-            "  forge verify-contract <addr> <Contract> --verifier blockscout"
-            " --verifier-url https://robinhoodchain.blockscout.com/api --chain-id 4663"
-        );
+        if (mode == Mode.Live) {
+            console2.log(
+                "  forge verify-contract <addr> <Contract> --verifier blockscout"
+                " --verifier-url https://robinhoodchain.blockscout.com/api --chain-id 4663"
+            );
+        } else {
+            console2.log(
+                "  forge verify-contract <addr> <Contract> --verifier blockscout"
+                " --verifier-url $TESTNET_BLOCKSCOUT_URL/api --chain-id 46630"
+            );
+            console2.log(
+                "[deploy] next (Phase T-3): bun contracts/script/emit-testnet-env.ts"
+                " -> tools/deployments/testnet.json + tools/localstack/out/testnet.env"
+            );
+        }
     }
 }

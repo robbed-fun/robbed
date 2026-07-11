@@ -19,7 +19,8 @@
     "ponder": "^0.16.6",
     "hono": "catalog:",
     "viem": "catalog:",
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "redis": "6.1.0"
   },
   "devDependencies": {
     "@types/bun": "^1.2.0",

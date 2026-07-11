@@ -186,11 +186,14 @@ export async function createTokenOnChain(args: {
   return { token, curve, txHash };
 }
 
-/** Buy on the curve, server-side (state seeding). Returns the tx hash. */
+/** Buy on the curve, server-side (state seeding). Returns the tx hash.
+ * `nonce` lets bulk seeders (PORT-5 pagination) pipeline txs without a receipt
+ * wait per tx (viem wallet clients otherwise re-fetch the same pending nonce). */
 export async function buyOnChain(args: {
   buyer?: DevAccount;
   token: Address;
   ethWei: bigint;
+  nonce?: number;
 }): Promise<Hash> {
   const wallet = walletFor(args.buyer ?? ROLES.trader);
   const { router } = loadDeployedAddresses();
@@ -201,6 +204,7 @@ export async function buyOnChain(args: {
     functionName: "buy",
     args: [args.token, (args.buyer ?? ROLES.trader).address, 0n, deadline],
     value: args.ethWei,
+    ...(args.nonce !== undefined ? { nonce: args.nonce } : {}),
   });
 }
 

@@ -319,6 +319,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      # MIRROR of docker-compose.yml (anti-drift): Ponder /ready == historical indexing
+      # complete. TESTNET note: a long remote backfill can exhaust these retries and show
+      # `unhealthy` while Ponder still works through history — that is honest status
+      # (nothing kills the container; restart is "no"), not a failure of the stack file.
+      test: ["CMD", "curl", "-sf", "http://localhost:42069/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 90s
     restart: "no"
 
   # ── web — Next.js 16. TESTNET deltas: MOCK_DATA hard "false" (real-data stack), browser RPC →

@@ -26,7 +26,7 @@ const rawSchema = z.object({
   R2_REGION: z.string().default("auto"),
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),
-  R2_BUCKET: z.string().default("robbed"),
+  R2_BUCKET: z.string().default("robbed-assets"),
   /** Public CDN origin for objects; `imageUrl` in metadata MUST start with this (§6.4 SSRF/XSS). */
   R2_PUBLIC_BASE_URL: z.string().default("http://localhost:9000/robbed"),
 

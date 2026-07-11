@@ -1,0 +1,24 @@
+# ROBBED_ Alertmanager config — DELIVERY PLACEHOLDER (P-3).
+#
+# indexer.md §9.4: "delivery mechanism per infra choice at M4". This file exists
+# so the monitoring stack boots and groups/dedupes alerts correctly TODAY; the
+# default receiver has NO integrations (alerts visible in the Alertmanager UI /
+# API only). At M4, replace `m4-delivery-placeholder` with the ratified
+# pager/webhook receiver(s) and route `severity: page` vs `severity: warn`
+# appropriately (final thresholds tuned with robbed-security — constants.json
+# governance status).
+#
+# Pinned runtime: prom/alertmanager:v0.28.1 (tag verified on the registry
+# 2026-07-11).
+
+route:
+  receiver: m4-delivery-placeholder
+  # Keep per-scope cluster alerts distinct; group the rest by alertname.
+  group_by: ["alertname", "scope"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  # Intentionally integration-less until M4 ratifies delivery (§9.4).
+  - name: m4-delivery-placeholder

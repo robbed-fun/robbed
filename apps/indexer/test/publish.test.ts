@@ -123,12 +123,23 @@ describe("publish.ts — no DB in the hot path (§8.3)", () => {
   const text = readFileSync(join(import.meta.dir, "..", "src", "publish.ts"), "utf8");
 
   // Scan IMPORT SPECIFIERS (not prose — the docstring mentions DB module names
-  // precisely to say it does NOT import them). publish.ts may only import shared.
-  it("imports only from @robbed/shared (no ponder/pg/DB modules)", () => {
+  // precisely to say it does NOT import them). publish.ts may only import
+  // shared, node builtins, the Redis transport itself (`redis` — the ONE
+  // allowed external dep of the hot path, prod-images.md §5 fix), and the
+  // dependency-free in-process metric registry (`./metrics`).
+  it("imports only shared/node:/redis/./metrics (no ponder/pg/DB modules)", () => {
     const imports = [...text.matchAll(/from ["']([^"']+)["']/g)].map((m) => m[1]!);
+    expect(imports.length).toBeGreaterThan(0);
     for (const spec of imports) {
-      expect(spec.startsWith("@robbed/shared") || spec.startsWith("node:")).toBe(true);
+      expect(
+        spec.startsWith("@robbed/shared") || spec.startsWith("node:") || spec === "redis" || spec === "./metrics",
+      ).toBe(true);
     }
+  });
+
+  it("transitively safe: ./metrics is dependency-free (imports nothing)", () => {
+    const metricsText = readFileSync(join(import.meta.dir, "..", "src", "metrics.ts"), "utf8");
+    expect([...metricsText.matchAll(/from ["']([^"']+)["']/g)]).toHaveLength(0);
   });
 
   it("does not read the Ponder context db or a pg pool", () => {

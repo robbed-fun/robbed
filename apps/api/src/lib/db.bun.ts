@@ -47,12 +47,20 @@ const iso = (v: unknown): string =>
 // `confirmation_state` is DERIVED per row from the watermark sidecar (OI-11 /
 // §12.48c — no stored column on Ponder tables); the shared db-row shapes are
 // satisfied by the derived SELECT column.
+// Display fields (image/description/links) are READ-DERIVED from the verifier's
+// offchain sidecar (metadata_verifications 0008 columns), COALESCEd over the
+// tokens columns in the mapper — indexer.md §6.1 step 5 reworked per the §7.3
+// OI-11 verdict (no external writes into Ponder-managed `tokens`, so
+// tokens.image_url/description/links stay null and mv.* is the live source).
 const TOKEN_LIST_SELECT = `
   t.*, ${confirmationStateSql("t.block_number")} AS confirmation_state,
+  mv.image_url AS mv_image_url, mv.description AS mv_description, mv.links AS mv_links,
   m.visibility AS m_visibility, m.impersonation_flag AS m_impersonation_flag,
   m.impersonation_ticker AS m_impersonation_ticker`;
 const TOKEN_LIST_FROM = `
-  FROM tokens t LEFT JOIN moderation_status m ON m.token_address = t.address`;
+  FROM tokens t
+  LEFT JOIN moderation_status m ON m.token_address = t.address
+  LEFT JOIN metadata_verifications mv ON mv.token_address = t.address`;
 
 function mapTokenList(r: Record<string, unknown>): TokenListRow {
   return {
@@ -67,9 +75,11 @@ function mapTokenList(r: Record<string, unknown>): TokenListRow {
     ticker: String(r.ticker),
     metadata_hash: String(r.metadata_hash),
     metadata_uri: nstr(r.metadata_uri),
-    image_url: nstr(r.image_url),
-    description: nstr(r.description),
-    links: (r.links as Record<string, string> | null) ?? null,
+    // Verifier-extracted display fields win over the (never-written) Ponder
+    // columns — see TOKEN_LIST_SELECT note.
+    image_url: nstr(r.mv_image_url ?? r.image_url),
+    description: nstr(r.mv_description ?? r.description),
+    links: ((r.mv_links ?? r.links) as Record<string, string> | null) ?? null,
     total_supply: str(r.total_supply),
     virtual_eth: str(r.virtual_eth),
     virtual_token: str(r.virtual_token),
@@ -155,9 +165,11 @@ const TRADE_SELECT = `trades.*, ${confirmationStateSql("trades.block_number")} A
 
 const HOLDING_SELECT = `
   b.token_address, b.balance, b.total_eth_in, b.total_bought_tokens,
-  t.name, t.ticker, t.image_url, t.graduated, t.real_eth_reserves, t.graduation_eth,
+  t.name, t.ticker, COALESCE(mv.image_url, t.image_url) AS image_url,
+  t.graduated, t.real_eth_reserves, t.graduation_eth,
   t.virtual_eth, t.virtual_token, t.last_price_eth, t.trade_fee_bps`;
-const HOLDING_FROM = `FROM balances b JOIN tokens t ON t.address = b.token_address`;
+const HOLDING_FROM = `FROM balances b JOIN tokens t ON t.address = b.token_address
+  LEFT JOIN metadata_verifications mv ON mv.token_address = t.address`;
 
 function mapModeration(r: Record<string, unknown>): ModerationStatusRow {
   return {
@@ -227,7 +239,6 @@ export function createBunDb(config: Config): Db {
          ${TOKEN_LIST_FROM}
          LEFT JOIN balances bc ON bc.token_address = t.address AND bc.holder = t.curve_address
          LEFT JOIN balances bp ON bp.token_address = t.address AND bp.holder = t.v3_pool_address
-         LEFT JOIN metadata_verifications mv ON mv.token_address = t.address
          LEFT JOIN token_flow_stats fs ON fs.token_address = t.address
          WHERE t.address = $1`,
         [address],
@@ -587,6 +598,7 @@ export function createBunDb(config: Config): Db {
       params.push(input.limit);
       const text = `SELECT ${TOKEN_LIST_SELECT}, m.*
         FROM moderation_status m JOIN tokens t ON t.address = m.token_address
+        LEFT JOIN metadata_verifications mv ON mv.token_address = t.address
         WHERE ${where.join(" AND ")}
         ORDER BY t.address DESC LIMIT $${params.length}`;
       const rows = (await rw.unsafe(text, params)) as Record<string, unknown>[];

@@ -73,6 +73,16 @@ export interface IndexerConfig {
   databaseUrl: string | undefined;
   databaseSchema: string | undefined;
   r2MetadataBaseUrl: string | undefined;
+  /**
+   * Dev-only metadata fetch-URL prefix rewrite (METADATA_FETCH_REWRITE_FROM/_TO,
+   * both set or neither — fail-closed on a half pair): the on-chain
+   * `metadataUri` is the BROWSER-visible object URL (host-mapped minio port in
+   * dev), unreachable from inside the indexer container, so the verifier
+   * rewrites that prefix to the container-internal service-DNS base
+   * (`http://minio:9000/...`). Unset in production (the CDN base is reachable
+   * from everywhere). Fetch-time only — never changes stored/published URLs.
+   */
+  metadataFetchRewrite: { from: string; to: string } | undefined;
   /** Treasury (Gnosis Safe) — the ONLY valid V3 `Collect` recipient (§6.4/§6.6);
    *  a `Collect` to any other address pages gate-7 (§9.4). Config-sourced, never
    *  hardcoded; lowercased. Optional so the alert degrades to a warn if unset. */
@@ -103,8 +113,22 @@ export function loadConfig(): IndexerConfig {
     databaseUrl: process.env.DATABASE_URL || undefined,
     databaseSchema: process.env.DATABASE_SCHEMA || undefined,
     r2MetadataBaseUrl: process.env.R2_METADATA_BASE_URL || undefined,
+    metadataFetchRewrite: loadFetchRewrite(),
     treasury: process.env.TREASURY_ADDRESS ? process.env.TREASURY_ADDRESS.toLowerCase() : undefined,
   };
+}
+
+/** Both-or-neither pair; a half-configured rewrite is a config bug → throw. */
+function loadFetchRewrite(): { from: string; to: string } | undefined {
+  const from = process.env.METADATA_FETCH_REWRITE_FROM || undefined;
+  const to = process.env.METADATA_FETCH_REWRITE_TO || undefined;
+  if (!from && !to) return undefined;
+  if (!from || !to) {
+    throw new Error(
+      "[indexer config] METADATA_FETCH_REWRITE_FROM and METADATA_FETCH_REWRITE_TO must be set together",
+    );
+  }
+  return { from, to };
 }
 
 export { WETH_ADDRESS, ZERO_ADDRESS };

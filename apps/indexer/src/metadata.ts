@@ -24,6 +24,7 @@ import {
   MAX_METADATA_JSON_BYTES,
   controlReverifySchema,
   hashFetchedMetadataBytes,
+  tokenMetadataSchema,
   type MetadataVerificationStatus,
 } from "@robbed/shared";
 import { publishMetadataVerified, type RedisPublisher } from "./publish";
@@ -112,11 +113,60 @@ export function createHttpMetadataFetcher(
 
 // ── Pure verdict ────────────────────────────────────────────────────────────
 
+/**
+ * Display fields extracted from the fetched metadata JSON (indexer.md §6.1
+ * step 5, §3.1). Persisted on the OFFCHAIN `metadata_verifications` sidecar —
+ * NOT on the Ponder-managed `tokens` table, whose `image_url`/`description`/
+ * `links` columns cannot be legally written outside handlers (§7.3 OI-11
+ * verdict: external UPDATEs are silently reverted by ponder 0.16.8 cache
+ * flushes and forbidden by Ponder's docs). The API projections COALESCE these
+ * over the tokens columns at read time (same pattern as the §12.48c
+ * confirmation-state read-derivation).
+ */
+export interface DisplayFields {
+  imageUrl: string | null;
+  description: string | null;
+  links: Record<string, string> | null;
+}
+
 export interface VerificationOutcome {
   status: MetadataVerificationStatus;
   computedHash: string | null;
   bodySha256: string | null;
   error: string | null;
+  /**
+   * Non-null ONLY when the fetch succeeded and the bytes strict-parsed as the
+   * shared canonical doc (`tokenMetadataSchema`). Populated on match AND
+   * mismatch (content is still shown, badged by the Trust panel — §3.1/§6.1
+   * step 5); the store must never let a later FAILED fetch null out previously
+   * extracted fields.
+   */
+  display: DisplayFields | null;
+}
+
+/**
+ * Extract display fields from fetched bytes. Strict-schema gate: a doc that is
+ * valid JSON but not the canonical shape yields no display fields (defensive —
+ * we only surface strings the shared schema vetted, e.g. `imageUrl` must be a
+ * URL). Pure; returns null on any parse/validation failure.
+ */
+export function extractDisplayFields(bytes: Uint8Array): DisplayFields | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    return null;
+  }
+  const doc = tokenMetadataSchema.safeParse(parsed);
+  if (!doc.success) return null;
+  const links = doc.data.links
+    ? Object.fromEntries(Object.entries(doc.data.links).filter(([, v]) => v != null) as [string, string][])
+    : null;
+  return {
+    imageUrl: doc.data.imageUrl,
+    description: doc.data.description ?? null,
+    links: links && Object.keys(links).length > 0 ? links : null,
+  };
 }
 
 /**
@@ -127,14 +177,15 @@ export interface VerificationOutcome {
  */
 export function decideVerification(fetchResult: FetchResult, onchainHash: string): VerificationOutcome {
   if (!fetchResult.ok) {
-    return { status: "unfetched", computedHash: null, bodySha256: null, error: fetchResult.error };
+    return { status: "unfetched", computedHash: null, bodySha256: null, error: fetchResult.error, display: null };
   }
   const bodySha256 = sha256(fetchResult.bytes);
+  const display = extractDisplayFields(fetchResult.bytes);
   const computed = hashFetchedMetadataBytes(fetchResult.bytes); // canonicalize + keccak256 (shared)
   if (computed === null) {
     // Fetched bytes are not valid canonical JSON → they cannot equal the
     // commitment (which is keccak256 of canonical JSON). Genuine mismatch.
-    return { status: "mismatch", computedHash: null, bodySha256, error: "unparseable_json" };
+    return { status: "mismatch", computedHash: null, bodySha256, error: "unparseable_json", display };
   }
   // ── THE byte-level comparison — the sole gate to `match` (§6.1 step 4). ──
   const matches = computed.toLowerCase() === onchainHash.toLowerCase();
@@ -143,6 +194,7 @@ export function decideVerification(fetchResult: FetchResult, onchainHash: string
     computedHash: computed.toLowerCase(),
     bodySha256,
     error: null,
+    display,
   };
 }
 
@@ -176,14 +228,47 @@ export interface MetadataStore {
 }
 
 /**
+ * Dev-only fetch-URL rewrite (METADATA_FETCH_REWRITE_FROM/_TO). The on-chain
+ * `metadataUri` is the BROWSER-visible object URL (dev: the host-mapped minio
+ * port, `http://localhost:4900/...`) which is unreachable from inside the
+ * indexer container — `localhost` there is the container itself. The standard
+ * S3/minio split (public base URL for stored links, internal service-DNS
+ * endpoint for in-cluster fetches) is applied here as a prefix rewrite:
+ * `from` = the public base, `to` = the container-reachable base
+ * (`http://minio:9000/...`). Both unset in production (the CDN base is
+ * reachable from everywhere) → no-op. Never changes what is STORED or
+ * published — only where the verifier fetches from.
+ */
+export interface FetchUrlRewrite {
+  from: string;
+  to: string;
+}
+
+/**
  * Build the canonical fetch URL: prefer the event's `metadataUri`; fall back to
- * `{R2_METADATA_BASE_URL}/{hash}.json` when the event carried none (OI-1).
+ * `{R2_METADATA_BASE_URL}/{hash-without-0x}.json` when the event carried none
+ * (OI-1) — the `0x` prefix is stripped to match the API's content-addressed
+ * object layout (`metadata/{keccak-no-0x}.json`, apps/api/src/media/storage.ts).
  * Returns `null` when neither is available (row stays unfetched).
  */
-export function resolveMetadataUrl(due: DueVerification, r2BaseUrl: string | undefined): string | null {
-  if (due.metadataUri && due.metadataUri.length > 0) return due.metadataUri;
-  if (r2BaseUrl) return `${r2BaseUrl.replace(/\/$/, "")}/${due.onchainHash}.json`;
-  return null;
+export function resolveMetadataUrl(
+  due: DueVerification,
+  r2BaseUrl: string | undefined,
+  rewrite?: FetchUrlRewrite,
+): string | null {
+  let url: string | null = null;
+  if (due.metadataUri && due.metadataUri.length > 0) {
+    url = due.metadataUri;
+  } else if (r2BaseUrl) {
+    const key = due.onchainHash.startsWith("0x") ? due.onchainHash.slice(2) : due.onchainHash;
+    url = `${r2BaseUrl.replace(/\/$/, "")}/${key}.json`;
+  }
+  if (url && rewrite) {
+    const from = rewrite.from.replace(/\/$/, "");
+    const to = rewrite.to.replace(/\/$/, "");
+    if (url === from || url.startsWith(`${from}/`)) url = `${to}${url.slice(from.length)}`;
+  }
+  return url;
 }
 
 export interface VerifierDeps {
@@ -191,6 +276,8 @@ export interface VerifierDeps {
   fetcher: MetadataFetcher;
   publisher: RedisPublisher;
   r2BaseUrl?: string;
+  /** Dev-only public→internal fetch-URL prefix rewrite (see FetchUrlRewrite). */
+  urlRewrite?: FetchUrlRewrite;
   now?: () => number;
   logger?: Pick<Console, "error" | "warn">;
 }
@@ -198,7 +285,7 @@ export interface VerifierDeps {
 /** Verify one due row: fetch → decide → persist → publish. Never throws up. */
 export async function verifyOne(due: DueVerification, deps: VerifierDeps): Promise<VerificationOutcome> {
   const now = deps.now ?? (() => Date.now());
-  const url = resolveMetadataUrl(due, deps.r2BaseUrl);
+  const url = resolveMetadataUrl(due, deps.r2BaseUrl, deps.urlRewrite);
   const fetchResult: FetchResult = url
     ? await deps.fetcher.fetch(url)
     : { ok: false, error: "no_url" };

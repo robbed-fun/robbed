@@ -24,13 +24,27 @@
  *   REST heals) or a few slightly-late realtime events published (harmless).
  *   No false publish-storm to Redis is possible. Fully unit-tested.
  *
- * Transport note (flagged in report): the concrete publisher uses Bun's native
- * `RedisClient` (as the API does) when `globalThis.Bun` is present. Under a
- * pure-Node Ponder container it degrades to a logged no-op (publishes dropped,
- * clients REST-heal) — the indexer's runtime must therefore run these
- * side-processes under Bun, OR add a Node redis client. This is an infra
- * decision surfaced for hoodpad-architect, not silently worked around.
+ * Transport decision (prod-images.md §5 fix, 2026-07-11 — basis recorded):
+ *   Ponder runs under NODE in the prod container (spec §8), where
+ *   `globalThis.Bun` does not exist, so the former Bun-only transport silently
+ *   no-opped every realtime publish with `redis_publish_errors_total` stuck at
+ *   0. The transport is now selected BY RUNTIME in `createRuntimePublisher`:
+ *   Bun present → Bun's native `RedisClient` (dev/compose unchanged, matches
+ *   the API); otherwise → the official `redis` client (node-redis, pinned
+ *   6.1.0 — chosen over ioredis, which is in maintenance mode; verified
+ *   against current node-redis v6 docs: offline queue ON by default buffers
+ *   commands while the socket comes up, default per-command timeout 5000ms
+ *   bounds a dead-Redis publish, default reconnectStrategy = exponential
+ *   backoff capped at 2s). A silent no-op transport must NEVER exist again:
+ *   if no client can be constructed (REDIS_URL unset / ctor failure) we THROW,
+ *   and `startSidecars` (Ponder `:setup`, before indexing) preflights the
+ *   construction so the process fails LOUD at startup. Transport-level errors
+ *   feed the existing `redis_publish_errors_total` counter (`./metrics` is
+ *   dependency-free, so the no-DB hot-path invariant is preserved — asserted
+ *   structurally in the test).
  */
+import { createClient } from "redis";
+import { incRedisPublishError } from "./metrics";
 import {
   GLOBAL_CONFIRMATIONS,
   GLOBAL_LAUNCHES,
@@ -60,44 +74,47 @@ export const REALTIME_WINDOW_SEC = 120;
 
 /**
  * Minimal Redis publisher — the ONLY external dependency of the hot path.
- * Injected in tests (fake), Bun-native at runtime. `incr` returns the new
- * per-channel sequence; `publish` fans the message to Redis subscribers.
+ * Injected in tests (fake), runtime-selected otherwise (Bun native client
+ * under Bun, node-redis under Node). `incr` returns the new per-channel
+ * sequence; `publish` fans the message to Redis subscribers.
  */
 export interface RedisPublisher {
+  /** Which concrete transport backs this publisher (logged at selection). */
+  readonly kind?: "bun" | "node";
   incr(key: string): Promise<number>;
   publish(channel: string, message: string): Promise<void>;
+  /** Teardown for tests / graceful shutdown — never called on the hot path. */
+  close?(): void;
 }
 
 interface BunRedisClientLike {
   send(command: string, args: string[]): Promise<unknown>;
   publish(channel: string, message: string): Promise<number>;
+  close?(): void;
 }
 
-/** No-op publisher (transport unavailable) — drops messages, logs once. */
-function createNoopPublisher(reason: string): RedisPublisher {
-  let warned = false;
-  const warn = () => {
-    if (warned) return;
-    warned = true;
-    console.warn(`[indexer publish] Redis transport unavailable (${reason}) — WS publishes dropped; clients REST-heal.`);
-  };
-  return {
-    async incr() {
-      warn();
-      return 0;
-    },
-    async publish() {
-      warn();
-    },
-  };
+/** The subset of the `Bun` global the transport selection cares about. */
+export interface BunRedisNamespace {
+  RedisClient?: new (url: string) => BunRedisClientLike;
 }
 
-/** Bun-native publisher (used when `globalThis.Bun.RedisClient` exists). */
-export function createBunPublisher(url: string): RedisPublisher {
-  const Bun = (globalThis as unknown as { Bun?: { RedisClient?: new (u: string) => BunRedisClientLike } }).Bun;
-  if (!Bun?.RedisClient) return createNoopPublisher("no Bun.RedisClient");
-  const client = new Bun.RedisClient(url);
+/** Runtime detection seam (injectable in tests). */
+export function getBunRedisNamespace(): BunRedisNamespace | undefined {
+  return (globalThis as { Bun?: BunRedisNamespace }).Bun;
+}
+
+/**
+ * Bun-native publisher. THROWS when `Bun.RedisClient` is absent — a no-op
+ * transport must never exist (prod-images.md §5); callers wanting runtime
+ * selection use `createRuntimePublisher`.
+ */
+export function createBunPublisher(url: string, bun: BunRedisNamespace | null | undefined = getBunRedisNamespace()): RedisPublisher {
+  if (!bun?.RedisClient) {
+    throw new Error("[indexer publish] Bun.RedisClient unavailable — cannot construct the Bun Redis transport.");
+  }
+  const client = new bun.RedisClient(url);
   return {
+    kind: "bun",
     async incr(key) {
       const res = await client.send("INCR", [key]);
       return typeof res === "number" ? res : Number(res);
@@ -105,16 +122,137 @@ export function createBunPublisher(url: string): RedisPublisher {
     async publish(channel, message) {
       await client.publish(channel, message);
     },
+    close() {
+      client.close?.();
+    },
+  };
+}
+
+/**
+ * Node publisher (node-redis 6.x) — the prod-container path (Ponder under
+ * Node, spec §8). Connect is fire-and-forget: node-redis's offline queue
+ * (enabled by default) buffers INCR/PUBLISH until the socket is up, the 5s
+ * default per-command timeout bounds a dead-Redis publish (failure lands in
+ * `firePublish`'s catch → error counter), and the default reconnectStrategy
+ * (exponential backoff, ≤2s) retries forever. Client-level errors increment
+ * `redis_publish_errors_total` (log throttled to one line per 30s so a Redis
+ * outage cannot flood stdout while the counter keeps counting).
+ */
+export function createNodePublisher(url: string): RedisPublisher {
+  const client = createClient({ url });
+  let lastErrorLogMs = 0;
+  client.on("error", (err: unknown) => {
+    incRedisPublishError();
+    const now = Date.now();
+    if (now - lastErrorLogMs >= 30_000) {
+      lastErrorLogMs = now;
+      console.error("[indexer publish] node-redis client error (auto-reconnect continues):", err);
+    }
+  });
+  // Errors reach the "error" listener above; the catch only silences the
+  // duplicate rejection so it can't become an unhandled rejection.
+  void client.connect().catch(() => {});
+  return {
+    kind: "node",
+    async incr(key) {
+      return client.incr(key);
+    },
+    async publish(channel, message) {
+      await client.publish(channel, message);
+    },
+    close() {
+      try {
+        client.destroy();
+      } catch {
+        // already closed
+      }
+    },
+  };
+}
+
+/**
+ * Runtime transport selection (prod-images.md §5): Bun global with a
+ * RedisClient → Bun-native path (dev/compose, matches the API); otherwise the
+ * Node client (prod Ponder container). Never a no-op — both branches either
+ * return a real transport or throw.
+ */
+export function createRuntimePublisher(url: string, bun: BunRedisNamespace | null | undefined = getBunRedisNamespace()): RedisPublisher {
+  return bun?.RedisClient ? createBunPublisher(url, bun) : createNodePublisher(url);
+}
+
+// ── control:reverify subscriber transport (used by sidecar.ts) ──────────────
+
+interface BunSubscriberClientLike {
+  subscribe(channel: string, listener: (message: string, channel: string) => void): Promise<void>;
+}
+
+/** Injectable Bun-namespace shape for `createReverifySubscriber` (tests). */
+export interface BunSubscriberNamespace {
+  RedisClient?: new (url: string) => BunSubscriberClientLike;
+}
+
+/** Structurally identical to metadata.ts's `ReverifySubscriber` (no import —
+ * this module may only depend on shared/node:/redis/./metrics). */
+export interface ReverifySubscriberLike {
+  subscribe(channel: string, handler: (message: string) => void): Promise<void>;
+}
+
+/**
+ * Runtime-selected `control:reverify` subscriber (prod-images.md §5 fix):
+ * Bun's RedisClient under Bun, node-redis under Node. SUBSCRIBE takes over a
+ * connection, so both branches use a dedicated client — never the publisher's.
+ * THROWS when no client can be constructed (missing REDIS_URL) — an inert
+ * admin re-verify seam must never exist silently. Lives here (not sidecar.ts)
+ * so the transport is unit-testable without sidecar's eager env config.
+ */
+export function createReverifySubscriber(
+  url: string | undefined,
+  bun: BunSubscriberNamespace | null | undefined = (globalThis as unknown as { Bun?: BunSubscriberNamespace }).Bun,
+): ReverifySubscriberLike {
+  if (!url) {
+    throw new Error("[indexer sidecar] REDIS_URL unset — cannot construct the control:reverify subscriber (seam would be silently inert).");
+  }
+  if (bun?.RedisClient) {
+    const client = new bun.RedisClient(url);
+    return {
+      async subscribe(channel, handler) {
+        await client.subscribe(channel, (message) => handler(message));
+      },
+    };
+  }
+  // Node runtime (prod container): node-redis auto-resubscribes on reconnect;
+  // errors are logged (the loop labels/derives only — never gates chain state).
+  const client = createClient({ url });
+  client.on("error", (err: unknown) => {
+    console.error("[indexer sidecar] control:reverify node-redis error (auto-reconnect continues):", err);
+  });
+  return {
+    async subscribe(channel, handler) {
+      await client.connect();
+      await client.subscribe(channel, (message: string) => handler(message));
+    },
   };
 }
 
 let defaultPublisher: RedisPublisher | null = null;
 
-/** Lazily-constructed process publisher from `REDIS_URL` (or a no-op). */
+/**
+ * Lazily-constructed process publisher from `REDIS_URL`. THROWS when no
+ * transport can be constructed (REDIS_URL unset / client ctor failure) —
+ * `startSidecars` preflights this at startup so misconfiguration kills the
+ * process instead of silently dropping every realtime publish.
+ */
 export function getDefaultPublisher(): RedisPublisher {
   if (defaultPublisher) return defaultPublisher;
   const url = process.env.REDIS_URL;
-  defaultPublisher = url ? createBunPublisher(url) : createNoopPublisher("REDIS_URL unset");
+  if (!url) {
+    throw new Error(
+      "[indexer publish] REDIS_URL is unset — no Redis publish transport can be constructed. " +
+        "Refusing to run as a silent no-op (every realtime WS publish would drop; prod-images.md §5).",
+    );
+  }
+  defaultPublisher = createRuntimePublisher(url);
+  console.log(`[indexer publish] Redis transport selected: ${defaultPublisher.kind}`);
   return defaultPublisher;
 }
 
@@ -165,7 +303,8 @@ export interface WsEnvelope<T> {
 
 /**
  * INCR the channel seq and PUBLISH one enveloped message. Fire-and-forget:
- * errors are logged, never propagated into the caller (handler/tracker).
+ * errors are counted (`redis_publish_errors_total`, gate-7 §9.4) and logged,
+ * never propagated into the caller (handler/tracker).
  */
 export function firePublish<T>(
   publisher: RedisPublisher,
@@ -180,6 +319,7 @@ export function firePublish<T>(
       const envelope: WsEnvelope<T> = { v: 1, type, channel, seq, ts, data };
       await publisher.publish(channel, JSON.stringify(envelope));
     } catch (err) {
+      incRedisPublishError();
       console.error(`[indexer publish] failed on ${channel}:`, err);
     }
   })();

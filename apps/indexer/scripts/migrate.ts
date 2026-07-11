@@ -60,6 +60,7 @@ async function main(): Promise<void> {
       await runIn(client, "public", "0002_offchain_core.sql");
       await runIn(client, "public", "0004_flow_tables.sql");
       await runIn(client, "public", "0006_address_pnl.sql");
+      await runIn(client, "public", "0008_metadata_display.sql");
 
       // GIN indexes (0003) + §8.5 flow views (0005) + address_pnl views (0007)
       // reference the Ponder-managed tables — only creatable once Ponder has built

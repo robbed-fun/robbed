@@ -81,6 +81,55 @@ describe("decideVerification — the three verdicts", () => {
   });
 });
 
+// ── display-field extraction (§6.1 step 5 → offchain sidecar per §7.3 OI-11) ─
+
+describe("display fields extracted from fetched metadata JSON", () => {
+  it("match: display carries imageUrl (+ optional description/links)", () => {
+    const out = decideVerification({ ok: true, bytes: bytesOf(0) }, FIX.hash);
+    expect(out.display).toEqual({
+      imageUrl: "https://cdn.hoodpad.example/images/0xabc.webp",
+      description: null,
+      links: null,
+    });
+  });
+
+  it("full doc: description and links come through", () => {
+    const full = METADATA_GOLDEN_FIXTURES[1]!;
+    const out = decideVerification({ ok: true, bytes: bytesOf(1) }, full.hash);
+    expect(out.status).toBe("match");
+    expect(out.display?.imageUrl).toBe("https://cdn.hoodpad.example/images/0xdef.webp");
+    expect(out.display?.description).toBe("A token for the hood.");
+    expect(out.display?.links).toEqual({
+      x: "https://x.com/hoodpad",
+      website: "https://hoodpad.example",
+      telegram: "https://t.me/hoodpad",
+    });
+  });
+
+  it("mismatch STILL extracts display (content shown, badged — §3.1/§6.1 step 5)", () => {
+    const out = decideVerification({ ok: true, bytes: bytesOf(0) }, `0x${"00".repeat(32)}`);
+    expect(out.status).toBe("mismatch");
+    expect(out.display?.imageUrl).toBe("https://cdn.hoodpad.example/images/0xabc.webp");
+  });
+
+  it("failed fetch → display null (store must preserve previous values)", () => {
+    const out = decideVerification({ ok: false, error: "network" }, FIX.hash);
+    expect(out.display).toBeNull();
+  });
+
+  it("unparseable body → display null", () => {
+    const out = decideVerification({ ok: true, bytes: new TextEncoder().encode("{not json") }, FIX.hash);
+    expect(out.display).toBeNull();
+  });
+
+  it("valid JSON that is NOT the strict canonical doc → display null (schema gate)", () => {
+    const bytes = new TextEncoder().encode(JSON.stringify({ version: 99, foo: "bar" }));
+    const out = decideVerification({ ok: true, bytes }, FIX.hash);
+    expect(out.status).toBe("mismatch"); // verdict is independent of extraction
+    expect(out.display).toBeNull();
+  });
+});
+
 // ── schedule ────────────────────────────────────────────────────────────────
 
 describe("backoff + re-verify cadence", () => {
@@ -105,11 +154,47 @@ describe("resolveMetadataUrl", () => {
   it("prefers the event metadataUri", () => {
     expect(resolveMetadataUrl({ ...base, metadataUri: "https://cdn/x.json" }, "https://r2")).toBe("https://cdn/x.json");
   });
-  it("falls back to {R2_BASE}/{hash}.json (OI-1)", () => {
-    expect(resolveMetadataUrl({ ...base, metadataUri: null }, "https://r2/")).toBe("https://r2/0xhash.json");
+  it("falls back to {R2_BASE}/{hash-no-0x}.json (OI-1; API layout metadata/{keccak-no-0x}.json)", () => {
+    // 0x is stripped to match the API's content-addressed object keys
+    // (apps/api/src/media/storage.ts stripHashPrefix).
+    expect(resolveMetadataUrl({ ...base, metadataUri: null }, "https://r2/")).toBe("https://r2/hash.json");
   });
   it("null when neither available", () => {
     expect(resolveMetadataUrl({ ...base, metadataUri: null }, undefined)).toBeNull();
+  });
+
+  // ── dev-only public→internal prefix rewrite (METADATA_FETCH_REWRITE_*) ──
+  // The on-chain metadataUri is the BROWSER-visible object URL (host-mapped
+  // minio port); inside the indexer container `localhost` is the container
+  // itself, so the verifier rewrites the prefix to the minio service DNS.
+  const rewrite = { from: "http://localhost:4900/robbed-assets", to: "http://minio:9000/robbed-assets" };
+  it("rewrites a matching metadataUri prefix to the container-internal base", () => {
+    expect(
+      resolveMetadataUrl(
+        { ...base, metadataUri: "http://localhost:4900/robbed-assets/metadata/abc.json" },
+        undefined,
+        rewrite,
+      ),
+    ).toBe("http://minio:9000/robbed-assets/metadata/abc.json");
+  });
+  it("leaves non-matching URIs untouched (external hosts keep working)", () => {
+    expect(
+      resolveMetadataUrl({ ...base, metadataUri: "https://meta.robbed.example/metadata/0xdead.json" }, undefined, rewrite),
+    ).toBe("https://meta.robbed.example/metadata/0xdead.json");
+  });
+  it("does NOT rewrite on a partial path-segment match (prefix must end at a segment)", () => {
+    expect(
+      resolveMetadataUrl({ ...base, metadataUri: "http://localhost:4900/robbed-assets-evil/x.json" }, undefined, rewrite),
+    ).toBe("http://localhost:4900/robbed-assets-evil/x.json");
+  });
+  it("also rewrites the R2 base fallback and tolerates trailing slashes", () => {
+    expect(
+      resolveMetadataUrl(
+        { ...base, metadataUri: null },
+        "http://localhost:4900/robbed-assets/metadata",
+        { from: "http://localhost:4900/robbed-assets/", to: "http://minio:9000/robbed-assets/" },
+      ),
+    ).toBe("http://minio:9000/robbed-assets/metadata/hash.json");
   });
 });
 

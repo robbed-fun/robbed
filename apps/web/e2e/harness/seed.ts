@@ -48,6 +48,11 @@ export function graduationEthWei(): bigint {
   return BigInt(forkConstants().curve.graduationEthWei as string);
 }
 
+/** Anti-sniper early-window length (M0 notebook) — warp past it before bulk buys. */
+export function antiSniperWindowSeconds(): number {
+  return Number(forkConstants().antiSniper.windowSeconds);
+}
+
 /** A minimal valid PNG (1×1) for the API upload path (it re-encodes anyway). */
 const ONE_PX_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
@@ -245,8 +250,12 @@ export async function pushCurveTowardGraduation(
   }
 }
 
-/** Cross the threshold then execute the permissionless `graduate()`. */
-export async function graduateToken(token: Address, curve: Address): Promise<void> {
+/** Cross the threshold then execute the permissionless `graduate()`.
+ * Returns the graduation tx hash (its `Graduated` log carries the LP tokenId). */
+export async function graduateToken(
+  token: Address,
+  curve: Address,
+): Promise<`0x${string}`> {
   await pushCurveTowardGraduation(token, curve, { crossThreshold: true });
   const hash = await graduateOnChain(curve);
   await publicClient.waitForTransactionReceipt({ hash });
@@ -255,4 +264,5 @@ export async function graduateToken(token: Address, curve: Address): Promise<voi
     (t) => t?.status === "graduated",
     { label: `token ${token} graduated` },
   );
+  return hash;
 }

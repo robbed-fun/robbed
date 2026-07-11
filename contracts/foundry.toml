@@ -65,8 +65,11 @@ evm_version = "cancun"
 # `../tools/localstack` (read): the I-2 dev-fork constants fixture (constants.fork.json — canonical
 #   M0 constants with a LOCAL treasury stand-in) that Deploy.s.sol loads via ROBBED_CONSTANTS when
 #   deploying against the local anvil fork of chain 4663. Read-only, dev-only; never a real deploy input.
+# `./test/fixtures` (read): deploy-mode test fixtures (unit/DeployModes.t.sol) — sentinel-address
+#   constants files proving Deploy.s.sol testnet mode reads externals from the constants file.
 fs_permissions = [
     {access = "read", path = "./test/vendor"},
+    {access = "read", path = "./test/fixtures"},
     {access = "read", path = "../tools/m0/out"},
     {access = "read", path = "../tools/localstack"},
     {access = "read-write", path = "./deployments"},
@@ -88,3 +91,20 @@ number_underscore = "thousands"
 [rpc_endpoints]
 # Robinhood Chain (chain ID 4663) — used by fork tests (spec §10 gate 3).
 robinhood = "${ROBINHOOD_RPC_URL}"
+
+# ── Gate-3 fork profile (M1-12; contracts.md §6 "Gate 3 — fork tests") ─────────────────────────
+# Run: `FOUNDRY_PROFILE=fork ROBINHOOD_RPC_URL=https://rpc.mainnet.chain.robinhood.com forge test`
+# Inherits EVERYTHING from [profile.default] (solc 0.8.35 pin, evm_version, fs_permissions,
+# remappings — Foundry Book /config/profiles: "All profiles inherit from `default`"); overrides:
+#   test = "test/fork" — under this profile ONLY the gate-3 suite compiles/runs. The public 4663
+#     RPC is rate-limited; the unit/fuzz/invariant campaigns are the DEFAULT profile's job and
+#     re-running them here would only burn the shared rate budget without adding gate-3 evidence.
+#   fuzz.runs = 32 (default 256) — gate 3 is a lifecycle-CORRECTNESS gate, not a fuzz campaign
+#     (contracts.md §6: "fuzz-light trade sequence"); every fuzz run re-executes setUp() → fresh
+#     fork state fetches, so runs are kept minimal for the rate-limited public endpoint. The heavy
+#     fuzz/invariant load stays on the default (local) profile where it belongs.
+# Determinism: the fork tests pin a block (env-overridable ROBINHOOD_FORK_BLOCK) so repeated runs
+# hit Foundry's RPC cache instead of the live endpoint — see test/fork/Lifecycle.t.sol.
+[profile.fork]
+test = "test/fork"
+fuzz = {runs = 32}

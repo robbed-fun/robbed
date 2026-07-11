@@ -18,10 +18,21 @@
 # Multi-stage: base (pnpm) → build (install + codegen + deploy bundle) → runtime.
 
 # ── base: Node 22 + corepack-pinned pnpm (matches root packageManager) ────────
-FROM node:22-bookworm-slim AS base
+# Exact pin 22.22.0 = the recorded toolchain Node (docs/runbooks/toolchain.md);
+# tag existence verified against the registry 2026-07-11 (P-3 pinned-base rule).
+FROM node:22.22.0-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm/bin:$PATH
+# node-gyp toolchain for the root `pnpm.onlyBuiltDependencies` native modules
+# (bufferutil / utf-8-validate — ws accelerators used by viem/ponder websockets)
+# + git for the root `prepare` hook (`git config core.hooksPath .githooks` needs
+# a repo; `.git` is dockerignored, so an empty one is init'd in WORKDIR below).
+# BUILD stage only; the runtime stage never installs compilers or git.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ git \
+  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 WORKDIR /app
+RUN git init -q .
 
 # ── build: filtered workspace install → ponder codegen → prod deploy bundle ───
 FROM base AS build
@@ -65,7 +76,7 @@ RUN pnpm --filter @robbed/indexer --prod --legacy deploy /out
 # TypeScript offchain scripts (scripts/migrate.ts, scripts/rebuild.ts) — the same
 # `bun run` the package.json scripts + dev compose use. This does not change the
 # indexer's runtime (Ponder = Node); it avoids a fragile TS loader for two scripts.
-FROM node:22-bookworm-slim AS runtime
+FROM node:22.22.0-bookworm-slim AS runtime
 COPY --from=oven/bun:1.3.14 /usr/local/bin/bun /usr/local/bin/bun
 # curl for the compose /health probe; ca-certificates for TLS (Alchemy WS/HTTP,
 # R2 metadata fetch, ETH/USD source).
@@ -79,6 +90,13 @@ COPY --from=build --chown=node:node /out /app
 # Gate-7 metrics (9464, M2-12) + Ponder web server (/health,/ready,GraphQL, 42069).
 EXPOSE 9464 42069
 USER node
+
+# Image-level default (host-agnostic — works without compose). Probes Ponder
+# /health (200 once the process is up; /ready is deliberately NOT used so a long
+# backfill never marks the container unhealthy — readiness is surfaced via the
+# gate-7 metrics instead). Compose/orchestrator healthchecks override this.
+HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=40s \
+  CMD curl -sf "http://localhost:${PONDER_PORT:-42069}/health" || exit 1
 
 # Startup = idempotent offchain `migrate` (creates the watermarks / eth_usd /
 # metadata_verifications sidecar tables, applies the pg_trgm GIN indexes once the

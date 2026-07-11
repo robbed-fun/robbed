@@ -25,6 +25,8 @@ const TOUCHED = [
   "V3_FACTORY_ADDRESS",
   "V3_NPM_ADDRESS",
   "START_BLOCK",
+  "METADATA_FETCH_REWRITE_FROM",
+  "METADATA_FETCH_REWRITE_TO",
   ...CURVE_ENV,
 ] as const;
 
@@ -69,5 +71,28 @@ describe("loadConfig — no curve-constant env vars (§12.40d)", () => {
   it("ignores curve-constant env vars even when present (no longer read)", () => {
     process.env.CURVE_SUPPLY_WEI = "0"; // would have been rejected by the old interim
     expect(() => assertStaticConfig(loadConfig())).not.toThrow();
+  });
+});
+
+describe("loadConfig — METADATA_FETCH_REWRITE_* pair (dev fetch seam)", () => {
+  it("unset pair → undefined (prod default: no rewrite)", () => {
+    delete process.env.METADATA_FETCH_REWRITE_FROM;
+    delete process.env.METADATA_FETCH_REWRITE_TO;
+    expect(loadConfig().metadataFetchRewrite).toBeUndefined();
+  });
+
+  it("full pair → {from,to}", () => {
+    process.env.METADATA_FETCH_REWRITE_FROM = "http://localhost:4900/robbed-assets";
+    process.env.METADATA_FETCH_REWRITE_TO = "http://minio:9000/robbed-assets";
+    expect(loadConfig().metadataFetchRewrite).toEqual({
+      from: "http://localhost:4900/robbed-assets",
+      to: "http://minio:9000/robbed-assets",
+    });
+  });
+
+  it("half pair → throws (fail-closed config bug)", () => {
+    process.env.METADATA_FETCH_REWRITE_FROM = "http://localhost:4900/robbed-assets";
+    delete process.env.METADATA_FETCH_REWRITE_TO;
+    expect(() => loadConfig()).toThrow(/must be set together/);
   });
 });

@@ -25,15 +25,19 @@ export type SearchMode = "address" | "similarity";
 /**
  * All four card-projection columns + moderation join, shared by both modes.
  * `confirmation_state` is read-derived from the watermark sidecar (OI-11 /
- * §12.48c — no stored column on Ponder tables).
+ * §12.48c — no stored column on Ponder tables). Display fields (image/
+ * description/links) are read-derived the same way, from the verifier's
+ * `metadata_verifications` sidecar columns (0008) — see db.bun.ts.
  */
 const SELECT_COLS = `
   t.*, ${confirmationStateSql("t.block_number")} AS confirmation_state,
+  mv.image_url AS mv_image_url, mv.description AS mv_description, mv.links AS mv_links,
   m.visibility AS m_visibility, m.impersonation_flag AS m_impersonation_flag,
   m.impersonation_ticker AS m_impersonation_ticker`;
 const FROM_JOIN = `
   FROM tokens t
-  LEFT JOIN moderation_status m ON m.token_address = t.address`;
+  LEFT JOIN moderation_status m ON m.token_address = t.address
+  LEFT JOIN metadata_verifications mv ON mv.token_address = t.address`;
 const NOT_HIDDEN = `(m.visibility IS DISTINCT FROM 'hidden')`;
 
 const ADDRESS_RE = /^0x[0-9a-fA-F]{6,40}$/;

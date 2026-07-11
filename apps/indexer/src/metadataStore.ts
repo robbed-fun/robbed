@@ -64,11 +64,19 @@ export function createPgMetadataStore(pool: Pool, schema: string): MetadataStore
     async writeVerification(write: VerificationWrite): Promise<void> {
       const { outcome } = write;
       const verifiedAt = outcome.status === "unfetched" ? null : write.nowIso;
+      // Display fields (0008; §6.1 step 5 reworked onto this offchain sidecar
+      // per the §7.3 OI-11 verdict — see migrations/0008_metadata_display.sql):
+      // overwritten ONLY when this attempt yielded a strict-parsed doc
+      // ($10 = true). A later failed fetch (or unparseable body) must never
+      // null out previously extracted fields — the last-good content keeps
+      // rendering, badged by the verdict.
+      const hasDisplay = outcome.display !== null;
       await pool.query(
         `INSERT INTO metadata_verifications
            (token_address, onchain_hash, computed_hash, status, fetched_body_sha256,
-            attempts, last_attempt_at, last_error, verified_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7::timestamptz,$8,$9::timestamptz)
+            attempts, last_attempt_at, last_error, verified_at,
+            image_url, description, links)
+         VALUES ($1,$2,$3,$4,$5,$6,$7::timestamptz,$8,$9::timestamptz,$11,$12,$13::jsonb)
          ON CONFLICT (token_address) DO UPDATE SET
            onchain_hash = EXCLUDED.onchain_hash,
            computed_hash = EXCLUDED.computed_hash,
@@ -77,7 +85,10 @@ export function createPgMetadataStore(pool: Pool, schema: string): MetadataStore
            attempts = EXCLUDED.attempts,
            last_attempt_at = EXCLUDED.last_attempt_at,
            last_error = EXCLUDED.last_error,
-           verified_at = EXCLUDED.verified_at`,
+           verified_at = EXCLUDED.verified_at,
+           image_url   = CASE WHEN $10::boolean THEN EXCLUDED.image_url   ELSE metadata_verifications.image_url   END,
+           description = CASE WHEN $10::boolean THEN EXCLUDED.description ELSE metadata_verifications.description END,
+           links       = CASE WHEN $10::boolean THEN EXCLUDED.links       ELSE metadata_verifications.links       END`,
         [
           write.tokenAddress,
           write.onchainHash.toLowerCase(),
@@ -88,6 +99,10 @@ export function createPgMetadataStore(pool: Pool, schema: string): MetadataStore
           write.nowIso,
           outcome.error,
           verifiedAt,
+          hasDisplay,
+          outcome.display?.imageUrl ?? null,
+          outcome.display?.description ?? null,
+          outcome.display?.links ? JSON.stringify(outcome.display.links) : null,
         ],
       );
     },

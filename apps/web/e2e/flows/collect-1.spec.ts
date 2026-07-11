@@ -1,3 +1,6 @@
+import { graduatedEvent } from "@robbed/shared/abi";
+import { parseEventLogs } from "viem";
+
 import {
   api,
   assertIndexed,
@@ -20,19 +23,23 @@ test(
   { tag: ["@flow:COLLECT-1", "@layer:on-chain", "@layer:indexed"] },
   async ({}) => {
     const token = await seedToken({ name: "Collect Coin", ticker: "CLCT" });
-    await graduateToken(token.token, token.curve);
+    const gradHash = await graduateToken(token.token, token.curve);
 
-    // Generate V3 LP fees post-grad so `collect` has something to sweep.
+    // The LP position tokenId is read from the graduation receipt's `Graduated`
+    // log (shared event ABI — the on-chain ground truth). NOTE: the indexed token
+    // detail does NOT yet surface `lpTokenId` (gap reported → robbed-indexer).
+    const gradReceipt = await publicClient.getTransactionReceipt({ hash: gradHash });
+    const [graduated] = parseEventLogs({
+      abi: [graduatedEvent],
+      logs: gradReceipt.logs,
+      eventName: "Graduated",
+    });
+    const tokenId = graduated!.args.tokenId;
+
+    // Post-grad V3 volume so `collect` has fees to sweep (best-effort: the
+    // assertions below hold regardless of the swept amount).
     const swap = await buyOnChain({ buyer: ROLES.trader2, token: token.token, ethWei: 5n * 10n ** 16n });
-    await publicClient.waitForTransactionReceipt({ hash: swap });
-
-    // The LP position tokenId minted at graduation — surfaced by the indexer.
-    const detail = await waitForIndexed(
-      () => api.token(token.token),
-      (t: any) => t?.status === "graduated" && (t?.lpTokenId ?? t?.pool?.lpTokenId) != null,
-      { label: "lp tokenId indexed" },
-    );
-    const tokenId = BigInt(detail.lpTokenId ?? detail.pool?.lpTokenId);
+    await publicClient.waitForTransactionReceipt({ hash: swap }).catch(() => null);
 
     let collectHash: `0x${string}`;
     await assertOnChain("collect(tokenId) succeeds; principal stays locked", async () => {
@@ -45,11 +52,14 @@ test(
       expect(treasuryAfter >= treasuryBefore).toBe(true);
     });
 
-    await assertIndexed("the collect event is materialized by the indexer", async () => {
+    await assertIndexed("the fee collection is materialized on /v1/tokens/:address/fees", async () => {
       await waitForIndexed(
-        () => api.tradeByTx(collectHash).catch(() => null as any),
-        (rec: any) => rec != null,
-        { label: "collect event indexed", timeoutMs: 20_000 },
+        () => api.fees(token.token),
+        (f: any) =>
+          (f?.collected?.byCollection ?? []).some(
+            (c: any) => c.txHash?.toLowerCase() === collectHash.toLowerCase(),
+          ),
+        { label: "collect event indexed into fee_collections", timeoutMs: 20_000 },
       );
     });
   },

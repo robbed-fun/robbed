@@ -1,0 +1,61 @@
+# ROBBED_ gate-7 monitoring overlay — Prometheus + Alertmanager (P-3; spec §10
+# gate 7, indexer.md §9.4). Host-agnostic per architecture.md §6: plain Compose
+# services + bind-mounted config files under docker/monitoring/ — portable to
+# any compose host; on k8s, reuse the same three config files in ConfigMaps.
+#
+# Usage — MERGE with the backend Stack so `indexer:9464` resolves on the same
+# project network (relative paths in an overlay resolve against the FIRST -f
+# file's directory, which is also this directory — hence this file lives next
+# to compose.yaml and reaches the configs via ../../../docker/monitoring):
+#
+#   docker compose -f tools/deploy/komodo/compose.yaml \
+#                  -f tools/deploy/komodo/compose.monitoring.yaml up -d
+#
+# In Komodo: add both files to the Stack resource's compose file list.
+#
+# Alert DELIVERY is an M4 decision (§9.4) — alertmanager routes to a
+# no-integration placeholder receiver until then (docker/monitoring/
+# alertmanager.yml). Neither service is exposed on the host by default;
+# opt in via PROMETHEUS_HOST_PORT / ALERTMANAGER_HOST_PORT (bind them to
+# localhost/VPN only — there is no auth in front of either UI).
+
+services:
+  prometheus:
+    # LTS line; tag verified on the registry 2026-07-11. Runs as non-root
+    # (nobody) by default per the upstream image.
+    image: prom/prometheus:v3.5.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+    volumes:
+      - ../../../docker/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../../../docker/monitoring/rules:/etc/prometheus/rules:ro
+      - promdata:/prometheus
+    ports:
+      - "${PROMETHEUS_HOST_PORT:-127.0.0.1:9090}:9090"
+    healthcheck:
+      test: ["CMD", "promtool", "check", "healthy", "--url=http://localhost:9090"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    restart: unless-stopped
+    volumes:
+      - ../../../docker/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertdata:/alertmanager
+    ports:
+      - "${ALERTMANAGER_HOST_PORT:-127.0.0.1:9093}:9093"
+    healthcheck:
+      test: ["CMD", "amtool", "check-config", "/etc/alertmanager/alertmanager.yml"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  promdata:
+  alertdata:

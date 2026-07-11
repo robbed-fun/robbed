@@ -66,3 +66,37 @@ export const routes = {
   create: "/create",
   og: (address: string) => `/t/${address}/opengraph-image`,
 } as const;
+
+/**
+ * Portfolio `/portfolio` (§12.50a) — PORT-* selectors, copy/role-derived from
+ * views/portfolio/* + shared atoms (EmptyState/ErrorState/TabBar, verified DOM
+ * 2026-07-11). Tabs render role="tab" with the UPPERCASE labels in the DOM.
+ */
+export const portfolio = {
+  route: (address?: string) => (address ? `/portfolio?address=${address}` : "/portfolio"),
+  holdingsTab: (page: Page) => page.getByRole("tab", { name: /^holdings$/i }),
+  activityTab: (page: Page) => page.getByRole("tab", { name: /^activity$/i }),
+  createdTab: (page: Page) => page.getByRole("tab", { name: /^created$/i }),
+  loadMore: (page: Page) => page.getByRole("button", { name: /load more|loading…/i }),
+  retry: (page: Page) => page.getByRole("button", { name: /^retry$/i }),
+  /** AddressChip carries `title={fullAddress}` (subject is lowercased upstream). */
+  addressChip: (page: Page, address: string) =>
+    page.getByTitle(address.toLowerCase()).first(),
+  youSuffix: (page: Page) => page.getByText("· you"),
+  /** Activity/token-cell rows link to /t/<address> (portfolio has no other /t/ links). */
+  tokenLinks: (page: Page) => page.locator('a[href^="/t/"]'),
+  sideBadges: (page: Page) => page.getByText(/^(BUY|SELL)$/),
+} as const;
+
+/** Portfolio copy (verified against views/portfolio/* sources, 2026-07-11). */
+export const portfolioCopy = {
+  connectPrompt: "Connect a wallet",
+  noHoldings: "No holdings yet",
+  noTrades: "No trades yet",
+  noCreated: "No tokens created",
+  summaryError: "Couldn't load summary",
+  holdingsError: "Couldn't load holdings",
+  activityError: "Couldn't load activity",
+  createdError: "Couldn't load created tokens",
+  statLabels: [/total value/i, /loot all-time/i, /wallet eth/i],
+} as const;

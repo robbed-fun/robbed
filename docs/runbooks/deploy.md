@@ -1,6 +1,6 @@
 # Runbook — Mainnet-Prep Deploy (contracts + Safe handover + hosting)
 
-**Status:** v1.0, 2026-07-10. Authored by hoodpad-architect + hoodpad-contracts (implementation-plan **P-2**; the M4/M5 handoff register at the bottom is **P-4**). This is a **prepared, not executed** runbook — the Goal is "production-ready, not production-launched" (spec §14 Phase A). Nothing here runs until Gate G-A passes and the user directs a mainnet launch (Phase B / M4).
+**Status:** v1.1, 2026-07-11. Authored by hoodpad-architect + hoodpad-contracts (implementation-plan **P-2**; the M4/M5 handoff register at the bottom is **P-4**). v1.1: §3.1 updated for the §12.49 domain decision; handoff register re-derived against spec §13 as of 2026-07-11 (OI-6/OI-8/OI-11/web-10 closed) and extended with the H.6 caps-lift residuals from the M1 close-out. This is a **prepared, not executed** runbook — the Goal is "production-ready, not production-launched" (spec §14 Phase A). Nothing here runs until Gate G-A passes and the user directs a mainnet launch (Phase B / M4).
 
 > **This runbook does not decide human/policy items.** Every step marked **NEEDS-USER** is a placeholder for a decision outside the Goal (§13). The runbook makes the *choreography* executable; the *values* are furnished by the user/ops/security before Phase B.
 
@@ -102,11 +102,14 @@ Hosting is fully specified in **`docs/runbooks/deploy-komodo-cloudflare.md`** (s
 ### 3.1 DNS / CDN / R2
 
 - [ ] R2 bucket `robbed-assets` (account `0b1b0b8753489a11d35ee922961f6b72`, §12.45) — pre-created; confirm the API write credentials and the public CDN base (`R2_PUBLIC_BASE_URL` / `NEXT_PUBLIC_R2_PUBLIC_BASE_URL`, env-inventory §2/§3).
+- [ ] Domains are **DECIDED (§12.49):** `robbed.fun` (mainnet) / `testnet.robbed.fun` (testnet). **DNS prerequisite (§13, still open):** `robbed.fun` is registered but not yet on Cloudflare DNS — point its nameservers at account `0b1b0b8753489a11d35ee922961f6b72` before Worker custom domains can attach (`*.workers.dev` interim until then).
 - [ ] Custom domain for the Workers frontend (`robbed-web`) + TLS/CDN route (deploy-komodo-cloudflare.md B.7 step 5).
 - [ ] Public TLS endpoints for the Komodo API + WS (`NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_WS_URL`) behind a reverse proxy/CDN; wire the Workers build vars to these (A.6 step 6).
-- [ ] `CORS_ALLOWED_ORIGINS` (API) set to the Workers web origin (env-inventory §2).
+- [ ] `CORS_ALLOWED_ORIGINS` (API) set to the Workers web origin (env-inventory §2). **Gap noted 2026-07-11:** the API does not read this key yet (no CORS middleware in `apps/api/src` — wiring routed to robbed-indexer); until that lands, enforce CORS at the reverse-proxy/CDN in front of the API.
 
 ### 3.2 Monitoring bring-up (indexer.md §9.4, gate 7)
+
+Configs landed at P-3: `docker/monitoring/prometheus.yml` + `docker/monitoring/rules/gate7.rules.yml` + `docker/monitoring/alertmanager.yml`, deployed via the `tools/deploy/komodo/compose.monitoring.yaml` overlay — see `docs/runbooks/prod-images.md` §4 (threshold provenance + placeholders).
 
 - [ ] Scrape the indexer `METRICS_PORT 9464` (in-Stack); wire alert rules for: `indexer_head_lag_seconds > 10s`, `ws_publish_to_head_ms p95 > 300ms`, `confirmation_safe_lag_blocks`/`finalized_lag_blocks` stall, `metadata_mismatch_total > 0`, invariant pagers (second `Graduated` for a token; `fee_collections.recipient != treasury`; trade `fee_eth > 2%` of leg), `eth_usd_snapshot_age_seconds > 5m`, `redis_publish_errors_total`.
 - [ ] Gate-7 cluster-alert thresholds (§12.36): `perTokenPct 25` / `platformPct 10` / `windowHours 24` — advisory only; final tuning by hoodpad-security before beta.
@@ -153,7 +156,11 @@ Contracts are **immutable, no proxies** (§6) — there is no contract "rollback
 
 **All 10 gates required before caps lift (M5).** Capped beta is mandatory, not optional.
 
-## H.2 §13 human decisions still open at launch (NEEDS-USER)
+## H.2 §13 open items still pending at launch (re-derived from spec §13 as of 2026-07-11)
+
+**Closed since register v1.0 (removed from the table):** OI-6 ETH/USD source — Chainlink CONFIRMED on 4663, proxy `0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9` with fail-closed startup assertions (§12.51); OI-8 `safe`/`finalized` tags — SUPPORTED on the official RPC, M2-3b L1-watermark fallback stays dormant/not funded (§12.48b); OI-11 confirmation materialization — sidecar `event_confirmations` table MANDATORY on ponder 0.16.8, direct-UPDATE rework in flight at robbed-indexer (§12.48c); web-10 large-value threshold = 1.0 ETH config (§12.47); testnet chain params — id 46630/RPC/WS/explorer (§12.49); **O-8 WETH-leg arb budget *definition* — formally CLOSED by architect ratification (spec §12.33 update, 2026-07-11):** the M1-10 Part-1 symmetric per-leg rule (`wethArbBudget = wethForMint × MIGRATION_SLIPPAGE_BPS / 10_000`; token leg mirrors it) IS the demanded definition, proven in gate-2 invariant 6 — the gate-6 griefing-cost quantification + UM-2 Part-2 residual remain caps-lift (M4) items, tracked via threat-model §8.1 / gate 6, not this row (decisions.md §13).
+
+Human decisions (NEEDS-USER):
 
 | Item | §13 / §12 ref | Blocks | Owner |
 |---|---|---|---|
@@ -163,10 +170,16 @@ Contracts are **immutable, no proxies** (§6) — there is no contract "rollback
 | Bug bounty terms | §13 | gate 8 | architect + USER |
 | Legal wrapper / ToS jurisdiction (MiCA/JDG) — **BLOCKING at Gate G-A** | §13 / §14 | Phase B entry | USER (legal) |
 | WalletConnect projectId | web-6 | WC/Robinhood Wallet connectors | USER |
-| Domain + final logo/brand-mark (name RESOLVED `ROBBED_`/`robbed`, §12.46) | §13 | branding | architect + USER |
-| Organic-volume floor magnitude (`N` graduations-equiv/7d, Gate G-A.1) | §12.36 / §14 | Gate G-A market call | architect + USER; recalibrate at M2 |
-| ETH/USD Chainlink-vs-fallback selection (verification env-gated, needs live 4663 RPC) | OI-6 / §12.48a | prod price source | hoodpad-indexer |
-| `safe`/`finalized` RPC tag support (verification env-gated, needs live 4663 RPC) | OI-8 / §12.48b | confirmation source vs L1-watermark fallback | hoodpad-indexer |
+| Branding: name RESOLVED (`ROBBED_`/`robbed`, §12.46), domains DECIDED (`robbed.fun`/`testnet.robbed.fun`, §12.49); **still open:** `robbed.fun` nameserver cutover to Cloudflare DNS (deploy §3.1 prerequisite) + OG brand mark + header wordmark styling | §13 / §12.49 | Worker custom domains; OG images | architect + USER |
+| Organic-volume floor magnitude (`N` graduations-equiv/7d, Gate G-A.1; M0 default `N = 5`) | §12.36 / §14 | Gate G-A market call | architect + USER; recalibrate at M2 |
+
+Mechanical §13 items still open (not human decisions, still pending at launch):
+
+| Item | Ref | When | Owner |
+|---|---|---|---|
+| Compiler pin `0.8.35` + `cancun` target verified against the Blockscout verifier (throwaway-contract check; §0 precondition above) | O-5 / §12.44 | before first deploy (testnet Phase T covers it) | hoodpad-contracts |
+| ~~Robinhood testnet **faucet URL**~~ — **CLOSED 2026-07-11 (§12.52):** `faucet.testnet.chain.robinhood.com` (0.05 ETH + 5 of each stock token / 24h; Chainlink + QuickNode fallbacks) — see `docs/runbooks/testnet.md` §3 | §13 → §12.52 | closed | hoodpad-contracts |
+| Weekly hood.fun traction snapshot (tokens/day, graduations, visible volume) — Gate G-A input; indexer job M2-14 exists, needs a configured source (`COMPETITOR_SNAPSHOT_INTERVAL_MS`, env-inventory §1) or manual/Dune | §13 / §8.5.3 | ongoing until G-A | hoodpad-indexer + architect |
 
 ## H.3 Beta-cap process (gate 7)
 
@@ -194,4 +207,14 @@ Each is a standalone ops runbook to author before the capped beta. Sources liste
 | 5 | **graduate/collect cron + stuck-graduation alert** | `graduate()` and `LPFeeVault.collect()` are permissionless; a keeper cron calls them when a curve hits `ReadyToGraduate` / when fees accrue. Alert when a curve is `ReadyToGraduate` beyond a threshold (stuck graduation — ties to the UM-2 grief-lock residual, M1-10 Part-2). The keeper is convenience, not required for correctness (anyone can call). | contracts.md §3.4/§3.5; §12.12; §12.34 caller reward; threat-model §8.1 (UM-2) |
 | 6 | **Incident runbook** | On-call flow for the invariant pagers (H.1 gate-7 metrics): second `Graduated`, `fee_collections.recipient != treasury`, `fee_eth > 2%`, solvency spot-check breach, batch-poster/finality stall. Decision tree → kill-switch (`pauseCreates`/`pauseBuys` only, never sells) → comms. | indexer.md §9.4; threat-model §4; spec §6.5 |
 
-**Verify (P-4 leg):** this register enumerates gates 5–10, the §13 human decisions, the beta-cap process, the §12.27 anti-sniper redesign, and each of the six Bucket-6 runbooks; `/spec-check` clean on the final tree (G-10).
+## H.6 Caps-lift residuals from the M1 close-out (recorded 2026-07-11, M1-15 register)
+
+Folded in so nothing recorded this week is rediscovered at M4:
+
+| Residual | What | Trigger / owner |
+|---|---|---|
+| **14 fork-gated mutation survivors** (M1-13 → M1-12) | The amount-min-floor survivors of the V3Migrator arb-back mutation campaign ride the env-gated gate-3 fork run (`FOUNDRY_PROFILE=fork forge test` with `ROBINHOOD_RPC_URL`). Local half closed: adequacy 0.585 → 0.800, all 40 remaining survivors dispositioned (16 equivalent / 5 DID / 5 UG / 14 fork-gated). Sign-off completes when the fork run kills or dispositions the 14. | M1-12 fork run (pre-M4); robbed-contracts |
+| **UM-2 Part-2 hatch decision** | Extreme grief beyond the ~1% recoverable arb range leaves `graduate()` reverting→retriable (non-permanent, third-party-correctable, zero attacker profit — attacker locks ≳0.08 ETH to freeze 8.08 ETH). Three dispositions on file: (a) gate-6 economic proof only; (b) non-§12.12-touching hatch — timeout → permissionlessly widen arb tolerance/iterations or corrector-assisted retry (likely-preferred; leaves the two-way `ReadyToGraduate` lock intact); (c) §12.12-touching hatch that reopens sells — **(c) is NEEDS-USER**. | gate 6 / M4; robbed-contracts + robbed-security (+ USER only if (c)) |
+| **`PORT-*` flow ratification** | Portfolio flows PORT-1..5 authored (user-flows.md §3b addendum + waiver rows, 2026-07-11); architect ratification pending. Due **before the I-5a `e2e:coverage` baseline freezes** — a Phase-A obligation, tracked here only so the register is the single consolidated pending-list. | robbed-architect; pre-I-5a (NOT a launch item) |
+
+**Verify (P-4 leg):** this register enumerates gates 5–10, the §13 open set re-derived as of 2026-07-11 (human + mechanical), the beta-cap process, the §12.27 anti-sniper redesign, each of the six Bucket-6 runbooks, and the H.6 caps-lift residuals; `/spec-check` clean on the final tree (G-10 — runs at Goal exit once Phase P fully lands).

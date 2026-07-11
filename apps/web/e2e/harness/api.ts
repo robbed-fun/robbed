@@ -35,6 +35,22 @@ export const api = {
     ),
   holders: (address: string, limit = 20) =>
     get<{ holders: any[] }>(`/v1/tokens/${address.toLowerCase()}/holders?limit=${limit}`),
+  // LP fee collections (api.md §3.4) — COLLECT-1's indexed surface.
+  fees: (address: string) => get<any>(`/v1/tokens/${address.toLowerCase()}/fees`),
+  // ── portfolio reads (api.md §3.4a) — the PORT-* indexed layer ───────────────
+  portfolioSummary: (address: string) => get<any>(`/v1/portfolio/${address.toLowerCase()}`),
+  portfolioHoldings: (address: string, q = "") =>
+    get<{ holdings: any[]; nextCursor: string | null }>(
+      `/v1/portfolio/${address.toLowerCase()}/holdings${q}`,
+    ),
+  portfolioActivity: (address: string, q = "") =>
+    get<{ activity: any[]; nextCursor: string | null }>(
+      `/v1/portfolio/${address.toLowerCase()}/activity${q}`,
+    ),
+  portfolioCreated: (address: string, q = "") =>
+    get<{ tokens: any[]; nextCursor: string | null }>(
+      `/v1/portfolio/${address.toLowerCase()}/created${q}`,
+    ),
 };
 
 // ── trade-shape adapters (api.md §3.4: `isBuy`, `trader`, `txHash`, `venue`) ──

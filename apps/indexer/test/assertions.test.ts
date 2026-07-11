@@ -21,6 +21,7 @@ function validConfig(): IndexerConfig {
     databaseUrl: undefined,
     databaseSchema: undefined,
     r2MetadataBaseUrl: undefined,
+    metadataFetchRewrite: undefined,
     treasury: undefined,
   };
 }

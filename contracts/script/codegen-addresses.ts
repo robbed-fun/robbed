@@ -53,7 +53,7 @@ const webAddrFile = join(repoRoot, "apps", "web", "src", "shared", "config", "ad
 /** Flat artifact shape written by `Deploy.s.sol._writeArtifact`. */
 type Artifact = {
   chainId: number;
-  mode: "local" | "live";
+  mode: "local" | "testnet" | "live";
   deployedAt: number;
   curveFactory: string;
   router: string;
@@ -152,13 +152,13 @@ const sharedBanner = `/**
  *  Deploy-time codegen (needs a broadcast) — the addresses seam of architecture.md
  *  §4: contracts-pipeline-owned, lives in packages/shared, consumed by the indexer
  *  config and web \`shared/config/addresses.ts\`. Every consumer selects ITS OWN
- *  chain via \`getDeployment(chainId)\`; local (31337 smoke) and live (4663) entries
- *  coexist here.
+ *  chain via \`getDeployment(chainId)\`; local (31337 smoke), testnet (46630) and
+ *  live (4663) entries coexist here.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import type { Address } from "viem";
 
-export type DeploymentMode = "local" | "live";
+export type DeploymentMode = "local" | "testnet" | "live";
 
 /** The six-contract robbed topology + treasury for one chain (spec §6, §6.6). */
 export interface Deployment {

@@ -6,21 +6,22 @@
  * failure is logged, NEVER thrown into the indexing pipeline (these loops label
  * and derive — they never gate chain state, §8.4).
  *
- * Transport note (flagged for hoodpad-architect): the Redis publisher + the
- * `control:reverify` subscriber use Bun's native `RedisClient` when
- * `globalThis.Bun` is present (as the API does). Under a pure-Node Ponder
- * runtime they degrade to no-ops (publishes dropped → clients REST-heal; the
- * admin re-verify seam is inert). The container must therefore run these
- * side-processes under Bun, or a Node redis client must be added to
- * `apps/indexer`. This is an infra decision, not silently absorbed.
+ * Transport note (RESOLVED — prod-images.md §5 fix, 2026-07-11): the Redis
+ * publisher and the `control:reverify` subscriber are RUNTIME-SELECTED — Bun's
+ * native `RedisClient` when `globalThis.Bun` is present (dev/compose, matches
+ * the API), node-redis 6.x otherwise (the prod Ponder container runs under
+ * Node, spec §8). No-op fallbacks are gone: `startSidecars` preflights the
+ * publish transport BEFORE anything else and exits the process if none can be
+ * constructed, so a misconfigured container fails loud at startup instead of
+ * silently dropping every realtime publish with the error counter stuck at 0.
  */
 import { Pool } from "pg";
 import { CONTROL_REVERIFY } from "@robbed/shared";
 import { config } from "./runtime";
-import { getDefaultPublisher } from "./publish";
+import { createReverifySubscriber, getDefaultPublisher } from "./publish";
 import { startConfirmationTracker } from "./confirmation";
 import { createPgConfirmationStore, createRpcTagFetcher } from "./confirmationStore";
-import { startMetadataVerifier, createHttpMetadataFetcher, type ReverifySubscriber } from "./metadata";
+import { startMetadataVerifier, createHttpMetadataFetcher } from "./metadata";
 import { createPgMetadataStore } from "./metadataStore";
 import { loadFlowThresholds } from "./flags/heuristics";
 import { buildOwnContractWhitelist, createPgFlowStore } from "./flags/store";
@@ -40,28 +41,6 @@ import { createEthUsdRpc, createPgEthUsdStore, loadEthUsdEnv, startEthUsdPoller 
 
 let started = false;
 
-interface BunSubscriberClient {
-  subscribe(channel: string, listener: (message: string, channel: string) => void): Promise<void>;
-}
-
-/** Bun-native `control:reverify` subscriber (or an inert no-op under Node). */
-function createReverifySubscriber(url: string | undefined): ReverifySubscriber {
-  const Bun = (globalThis as unknown as { Bun?: { RedisClient?: new (u: string) => BunSubscriberClient } }).Bun;
-  if (!url || !Bun?.RedisClient) {
-    return {
-      async subscribe() {
-        console.warn("[indexer sidecar] control:reverify subscriber unavailable (no Bun.RedisClient/REDIS_URL) — admin re-verify seam inert.");
-      },
-    };
-  }
-  const client = new Bun.RedisClient(url);
-  return {
-    async subscribe(channel, handler) {
-      await client.subscribe(channel, (message) => handler(message));
-    },
-  };
-}
-
 /**
  * Start both side-processes exactly once. Safe to call from multiple setup
  * hooks (idempotent) and safe to skip when DB/Redis are unconfigured (dev).
@@ -69,6 +48,21 @@ function createReverifySubscriber(url: string | undefined): ReverifySubscriber {
 export async function startSidecars(): Promise<void> {
   if (started) return;
   started = true;
+
+  // Transport preflight (prod-images.md §5): construct the publish transport
+  // NOW — this hook runs before indexing, so REDIS_URL unset / an
+  // unconstructible client kills the process at startup instead of dropping
+  // every realtime publish invisibly (`redis_publish_errors_total` stuck at 0,
+  // unalertable). Runs BEFORE the INDEXER_SIDECARS gate: handler publishes
+  // happen even with the tracker/verifier loops off, so the transport is
+  // required regardless. env-inventory.md: REDIS_URL is required in every env.
+  let publisher: ReturnType<typeof getDefaultPublisher>;
+  try {
+    publisher = getDefaultPublisher();
+  } catch (err) {
+    console.error("[indexer sidecar] FATAL: no Redis publish transport constructible — refusing to run as a silent no-op:", err);
+    process.exit(1);
+  }
 
   if (process.env.INDEXER_SIDECARS === "off") {
     console.log("[indexer sidecar] disabled via INDEXER_SIDECARS=off");
@@ -81,7 +75,6 @@ export async function startSidecars(): Promise<void> {
 
   const schema = config.databaseSchema ?? "public";
   const pool = new Pool({ connectionString: config.databaseUrl });
-  const publisher = getDefaultPublisher();
 
   try {
     // M2-6 confirmation tracker (watermark sidecar only — no writes into
@@ -100,6 +93,9 @@ export async function startSidecars(): Promise<void> {
         fetcher: createHttpMetadataFetcher(),
         publisher,
         r2BaseUrl: config.r2MetadataBaseUrl,
+        // Dev seam: rewrite the browser-visible object-URL prefix to the
+        // container-internal minio service DNS (config.ts, METADATA_FETCH_REWRITE_*).
+        urlRewrite: config.metadataFetchRewrite,
       },
       { channel: CONTROL_REVERIFY, subscriber: createReverifySubscriber(config.redisUrl) },
     );
