@@ -12,6 +12,7 @@ export function EthAmount({
   eth,
   className,
   unit = "ETH",
+  decimals,
 }: {
   /** wei decimal string. Provide either `wei` or `eth`. */
   wei?: string | bigint;
@@ -19,17 +20,21 @@ export function EthAmount({
   eth?: number;
   className?: string;
   unit?: string | null;
+  /** Fixed, zero-padded decimal places (default 4 — mockup "0.4200 ETH"; portfolio values pass 2). */
+  decimals?: number;
 }) {
   const text =
     wei !== undefined
-      ? formatEthFromWei(wei)
+      ? formatEthFromWei(wei, { decimals })
       : eth !== undefined
-        ? formatEthNumber(eth)
+        ? formatEthNumber(eth, { decimals })
         : "—";
   return (
     <span className={cn("tabular-nums", className)}>
       {text}
-      {unit ? <span className="ml-1 text-muted-foreground">{unit}</span> : null}
+      {/* Unit inherits the number's color — mockup renders "0.4200 ETH" as ONE
+          color in tape/table rows (docs/Robbed.html line 281). */}
+      {unit ? <span className="ml-1">{unit}</span> : null}
     </span>
   );
 }

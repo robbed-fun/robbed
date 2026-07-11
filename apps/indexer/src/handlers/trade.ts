@@ -60,7 +60,6 @@ ponder.on("BondingCurve:Trade", async ({ event, context }) => {
     blockTimestamp: ts,
     txHash: event.transaction.hash,
     logIndex: event.log.logIndex,
-    confirmationState: "soft_confirmed",
   });
 
   // Live curve state + X-4 real_token_reserves delta (−tokenAmount on buy).

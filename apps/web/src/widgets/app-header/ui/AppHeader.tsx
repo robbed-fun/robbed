@@ -31,14 +31,21 @@ function isActive(pathname: string, href: string): boolean {
 
 export function AppHeader() {
   const pathname = usePathname() ?? "/";
+  // Mockup line 443 (2b Create): on /create the + CREATE control renders FILLED
+  // (active fill, primary text, no green border); everywhere else it is the
+  // green outline (line 182 et al.).
+  const onCreate = pathname === "/create" || pathname.startsWith("/create/");
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-bg/95 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-2.5">
+    // Solid bg (mockup header sits on the flat page bg — no translucency/blur).
+    <header className="sticky top-0 z-40 border-b border-border bg-bg">
+      {/* Mockup header row: padding 14px 24px, gap 24px (docs/Robbed.html line 178). */}
+      <div className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3.5">
         <Link href="/" aria-label="ROBBED_ home" className="shrink-0">
           <Wordmark />
         </Link>
 
-        <nav aria-label="Primary" className="hidden items-center gap-4 md:flex">
+        {/* Mockup nav gap: 18px (line 180). */}
+        <nav aria-label="Primary" className="hidden items-center gap-[18px] md:flex">
           {NAV.map((item) => (
             <Link
               key={item.href}
@@ -54,11 +61,22 @@ export function AppHeader() {
           ))}
         </nav>
 
-        <div className="ml-auto hidden w-full max-w-xs md:block">
-          <SearchBox />
+        {/* Mockup search: max-width 340px, 12px text (line 181). The text-sm
+            override is per-instance — the kit Input default (13px) is untouched. */}
+        <div className="ml-auto hidden w-full max-w-[340px] md:block">
+          <SearchBox className="sm:max-w-none" inputClassName="text-sm" />
         </div>
 
-        <Button asChild variant="outline" size="sm" className="hidden md:inline-flex">
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className={cn(
+            "hidden md:inline-flex",
+            onCreate &&
+              "border-transparent bg-active text-text hover:bg-active hover:text-text",
+          )}
+        >
           <Link href="/create">+ CREATE</Link>
         </Button>
 

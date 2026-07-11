@@ -41,8 +41,9 @@ test(
 
     await assertUi("chart renders and interval buttons switch", async () => {
       await page.goto(routes.token(token.token));
-      await expect(page.getByRole("button", { name: /1m/ }).first()).toBeVisible();
-      await page.getByRole("button", { name: /5m/ }).first().click();
+      // Interval tabs are role="tab" with UPPERCASE labels (1M, 5M, …).
+      await expect(page.getByRole("tab", { name: /1m/i }).first()).toBeVisible();
+      await page.getByRole("tab", { name: /5m/i }).first().click();
       await expect(page.locator("canvas, table.tv-lightweight-charts").first()).toBeVisible();
     });
   },

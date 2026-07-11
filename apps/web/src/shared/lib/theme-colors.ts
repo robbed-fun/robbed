@@ -24,10 +24,17 @@ function cssVar(name: string, fallback: string): string {
   return v || fallback;
 }
 
-/** Resolve the chart palette from theme tokens (client-only; SSR uses fallbacks). */
+/**
+ * Resolve the chart palette from theme tokens (client-only; SSR uses fallbacks).
+ *
+ * CANDLES use the DIM tokens (mockup docs/Robbed.html "2a", template chart bars:
+ * up `--color-green-soft` / down `--color-red-dim`) — NOT the bright
+ * `--color-buy`/`--color-sell`, which remain the badge/side-label accents
+ * elsewhere. Separate reads so the two roles can never drift into one token.
+ */
 export function readChartPalette(): ChartPalette {
-  const up = cssVar("--color-buy", "#16a34a");
-  const down = cssVar("--color-sell", "#dc2626");
+  const up = cssVar("--color-green-soft", "#2e4a34");
+  const down = cssVar("--color-red-dim", "#4a2e2e");
   return {
     up,
     down,

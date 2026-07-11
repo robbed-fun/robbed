@@ -11,6 +11,15 @@
  * property (camelCase), so EVERY column passes an explicit snake_case DB name;
  * handlers still use the camelCase JS keys.
  *
+ * ONE deliberate exception (OI-11 / spec §12.48c): the shared db-row types'
+ * `confirmation_state` field is NOT a stored column here. Per-row storage on
+ * Ponder tables cannot be maintained (the indexing-store cache silently
+ * reverts external UPDATEs on handler-mutated rows — decisions.md §11), so the
+ * tier is DERIVED at read time from `block_number` vs the offchain
+ * `confirmation_watermarks` sidecar singleton (§3.8): the API's SELECTs emit a
+ * derived `confirmation_state` column (`apps/api/src/lib/confirmation.ts`),
+ * satisfying the shared row shapes without any write-back.
+ *
  * Type mapping (Ponder 0.16, verified against ponder.sh docs):
  * - uint256 amounts        → t.bigint()          (NUMERIC(78,0), JS bigint)
  * - L2 block/ts (bigint)   → t.bigint()          (NUMERIC — avoids int4 overflow
@@ -68,18 +77,17 @@ export const tokens = onchainTable(
     volumeEth24h: t.bigint("volume_eth_24h").notNull().default(0n),
     tradeCount: t.bigint("trade_count").notNull().default(0n),
     holderCount: t.integer("holder_count").notNull().default(0),
-    // provenance / confirmation
+    // provenance (confirmation tier derived at read time — see header, OI-11)
     createdAt: t.bigint("created_at").notNull(),
     blockNumber: t.bigint("block_number").notNull(),
     txHash: t.text("tx_hash").notNull(),
     logIndex: t.integer("log_index").notNull(),
-    confirmationState: t.text("confirmation_state").notNull().default("soft_confirmed"),
   }),
   (table) => ({
     createdAtIdx: index().on(table.createdAt),
     volume24hIdx: index().on(table.volumeEth24h),
     progressIdx: index().on(table.graduated, table.realEthReserves),
-    blockNumberIdx: index().on(table.blockNumber), // confirmation watermark updates
+    blockNumberIdx: index().on(table.blockNumber), // provenance / range reads
     txLogIdx: index().on(table.txHash, table.logIndex), // (tx,log) dedup lookup
   }),
 );
@@ -101,7 +109,6 @@ export const trades = onchainTable(
     blockTimestamp: t.bigint("block_timestamp").notNull(),
     txHash: t.text("tx_hash").notNull(),
     logIndex: t.integer("log_index").notNull(),
-    confirmationState: t.text("confirmation_state").notNull().default("soft_confirmed"),
   }),
   (table) => ({
     tokenTimeIdx: index().on(table.tokenAddress, table.blockTimestamp),
@@ -123,7 +130,6 @@ export const transfers = onchainTable(
     blockTimestamp: t.bigint("block_timestamp").notNull(),
     txHash: t.text("tx_hash").notNull(),
     logIndex: t.integer("log_index").notNull(),
-    confirmationState: t.text("confirmation_state").notNull().default("soft_confirmed"),
   }),
   (table) => ({
     tokenTimeIdx: index().on(table.tokenAddress, table.blockTimestamp),
@@ -147,7 +153,6 @@ export const graduations = onchainTable(
     blockTimestamp: t.bigint("block_timestamp").notNull(),
     txHash: t.text("tx_hash").notNull(),
     logIndex: t.integer("log_index").notNull(),
-    confirmationState: t.text("confirmation_state").notNull().default("soft_confirmed"),
   }),
   (table) => ({
     blockNumberIdx: index().on(table.blockNumber),
@@ -170,7 +175,6 @@ export const feeCollections = onchainTable(
     blockTimestamp: t.bigint("block_timestamp").notNull(),
     txHash: t.text("tx_hash").notNull(),
     logIndex: t.integer("log_index").notNull(),
-    confirmationState: t.text("confirmation_state").notNull().default("soft_confirmed"),
   }),
   (table) => ({
     tokenIdx: index().on(table.tokenAddress, table.blockTimestamp),

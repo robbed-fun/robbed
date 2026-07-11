@@ -147,7 +147,7 @@ Manual mainnet tx analysis (2026-07-09, re-verify at M2 with own indexer §8.5) 
 - **Gas-funder farm** — an EOA (`0x1887FA…`, ~1084 ETH) drip-funds ~0.0004 ETH to fresh wallets every 1–2 min → **empirically confirms the multi-wallet-bypass** of the per-tx anti-sniper cap acknowledged in spec §6.5 (the guard blunts single-tx sweeps only; per-actor evasion via wallet rotation is real).
 - **Programmatic majority** — >50% of sampled swaps have `sender ≠ recipient` → chain-level activity metrics are inflated (the binding organic-flow discount, spec §2.2).
 
-**Gate-6 red-team scenarios are parameterized against these three (spec §10 gate 6):** (a) **multi-wallet sniping from a shared gas-funder** — simulate a funder fanning out to K wallets each buying `MAX_EARLY_BUY` in the early window, and **quantify the total cost and fair-launch distortion** (the multi-wallet bypass is now a measured cost, not an assumption); (b) **same-second multi-pool exits** — an arb executor draining WETH from ≥3 graduated pools in one block, verifying no curve invariant breaks and the indexer's `arb/exit` labeling (§8.5) is correct; (c) **wash-loop volume** — self-trading clusters inflating `vol24h`, verifying the ~2% round-trip fee brake (spec §4.7 R10) and that §8.5 excludes wash volume from organic metrics. Gate 6 reports the attacker's minimum spend for each.
+**Gate-6 red-team scenarios are parameterized against these three (spec §10 gate 6):** (a) **multi-wallet sniping from a shared gas-funder** — simulate a funder fanning out to K wallets each buying `MAX_EARLY_BUY` in the early window, and **quantify the total cost and fair-launch distortion** (the multi-wallet bypass is now a measured cost, not an assumption); (b) **same-second multi-pool exits** — an arb executor draining WETH from ≥3 graduated pools in one block, verifying no curve invariant breaks and the indexer's `arb/exit` labeling (§8.5) is correct; (c) **wash-loop volume** — self-trading clusters inflating `vol24h`, verifying the ~2% round-trip fee brake (Section 6, R10) and that §8.5 excludes wash volume from organic metrics. Gate 6 reports the attacker's minimum spend for each.
 
 ---
 
@@ -163,16 +163,16 @@ Legend: **M** = mitigated (spec ref given); **UM-n** = unmitigated / under-mitig
 | T | Reentrancy via ETH `call` to trader/treasury/refundTo | **M**: `nonReentrant` on all state-mutating externals + CEI; reentry hits guard or terminal phase (§5.4). *Gate-2 invariant: no-ETH-extraction-beyond-fair-value.* |
 | R (repudiation) | — | events on curve/factory; indexer records |
 | I (info) | — | all data public |
-| D (DoS) | `sellWithPermit` griefed by front-run permit consumption | **M**: try/catch proceeds if allowance suffices (§5.7) |
+| D (DoS) | `sellWithPermit` griefed by front-run permit consumption | **M**: try/catch proceeds if allowance suffices (contracts.md §5.7) |
 | D | **`sellWithPermit` trade-deadline not enforced** (signature lists `nonReentrant` only, not `checkDeadline`) | **UM-8** (Low): confirm at impl the *trade* deadline is enforced, not just the permit deadline |
-| E (elevation) | Router holds/strands ETH an attacker reclaims | **M**: Router has no `receive()`, never custodies ETH; curve pays recipients directly (§2.4) |
+| E (elevation) | Router holds/strands ETH an attacker reclaims | **M**: Router has no `receive()`, never custodies ETH; curve pays recipients directly (contracts.md §2.4) |
 
 ### 4.2 BondingCurve
 | STRIDE | Threat | Disposition |
 |---|---|---|
 | T | Rounding-direction extraction (buy/sell math skims value) | **M**: buy `ceilDiv` favors protocol, sell rounds ethOut down (§6.2). *Gate-2 invariants: k non-decreasing; no-extraction-beyond-fair-value.* |
 | T | Fee off-by-one / drift vs treasury receipts | **M**: single fee site per leg; *gate-2 exact-fee-accounting invariant (== to the wei)*. |
-| T | Insolvency — pay out ETH the curve doesn't hold | **M**: *gate-2 solvency invariant `balance ≥ realEthReserves`*; donations swept not credited (§5.7). |
+| T | Insolvency — pay out ETH the curve doesn't hold | **M**: *gate-2 solvency invariant `balance ≥ realEthReserves`*; donations swept not credited (contracts.md §5.7). |
 | T | Hostile-ratio value creation at graduation boundary | **M**: graduation clamp lands exactly on `GRADUATION_ETH`, excess refunded, `minTokensOut` still honored (§6.2). *Gate-2: graduation single-fire & reachable.* |
 | S | Trade functions called by non-Router | **M**: `onlyRouter`; `graduate()` intentionally permissionless + `nonReentrant`. |
 | T | `block.number`-based logic (L1 estimate on Orbit) | **M**: banned; anti-sniper uses `block.timestamp`; CI grep (§5.1, hard rule). |
@@ -186,11 +186,11 @@ Legend: **M** = mitigated (spec ref given); **UM-n** = unmitigated / under-mitig
 | STRIDE | Threat | Disposition |
 |---|---|---|
 | T | Pre-seeded pool at hostile price → hostile-ratio mint | **M**: `initializePool` at creation; `migrate` never trusts `slot0`, arbs back or reverts (§6.3.2). *Gate-2: donation + sync-style + swap griefing fuzzed → corrected-or-revert, never hostile mint.* |
-| T | Reentrancy via `uniswapV3SwapCallback` from a fake pool | **M**: callback reverts `NotPool` unless `msg.sender == _activePool` for the in-flight migration (§2.5). |
+| T | Reentrancy via `uniswapV3SwapCallback` from a fake pool | **M**: callback reverts `NotPool` unless `msg.sender == _activePool` for the in-flight migration (contracts.md §2.5). |
 | D | Arb-back exceeds budget/iterations → `PoolPriceUnrecoverable` revert | **M for the mint** (never hostile), **but** feeds **UM-2**: the revert leaves the curve locked; the "economically self-healing" retry assumes external arbers who have no incentive on a near-empty pre-grad pool. |
 | S | Wrong V3 Factory/NPM address (invented, not registry) | **M**: addresses from official registry only (§13/O-4); startup + fork tests fail if wrong. |
 | T | Mis-ported vendored `TickMath`/`FullMath` skews graduation price/ratio | **UM-10** (Info/supply-chain): gate-4 mutation targets `CurveMath` + migrate logic; the vendored libs are graduation-critical but not explicitly in the mutation/differential scope. |
-| E | Migrate callable by non-curve | **M**: `onlyCurve` via `factory.isCurve` (§2.5). |
+| E | Migrate callable by non-curve | **M**: `onlyCurve` via `factory.isCurve` (contracts.md §2.5). |
 
 ### 4.4 LPFeeVault
 | STRIDE | Threat | Disposition |
@@ -202,7 +202,7 @@ Legend: **M** = mitigated (spec ref given); **UM-n** = unmitigated / under-mitig
 ### 4.5 CurveFactory (admin surface)
 | STRIDE | Threat | Disposition |
 |---|---|---|
-| E | Owner reaches into live-curve economics | **M**: economics snapshotted per curve at creation; owner setters affect future curves only; unit-tested negative property (§7.3). |
+| E | Owner reaches into live-curve economics | **M**: economics snapshotted per curve at creation; owner setters affect future curves only; unit-tested negative property (contracts.md §7.3). |
 | E | Owner pauses sells | **M**: no `pauseSells` flag exists, **and** the treasury-pointer backdoor (former UM-1) is closed by §12.25 — the sell path never calls the treasury (pull-payment), so pointing `treasury` at a reverter cannot block sells. |
 | T | Owner raises fee above cap | **M**: `tradeFeeBps ≤ MAX_TRADE_FEE_BPS(200)` hard cap; fee setters bounded by immutable ceilings. |
 | S | Non-owner calls setters / non-Router calls `createToken` | **M**: `onlyOwner` / `onlyRouter` / `onlyCurve`; Ownable2Step handover. |

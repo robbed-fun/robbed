@@ -7,6 +7,7 @@
  * `moderation_status` / audit / `impersonation_watchlist` tables only. Both
  * fall back to `DATABASE_URL` in local/dev where one role is used.
  */
+import { parseEther } from "viem";
 import { z } from "zod";
 
 const rawSchema = z.object({
@@ -66,6 +67,16 @@ const rawSchema = z.object({
   /** Optional vault/treasury addresses → holder `vault` flag (api.md §3.4). */
   TREASURY_ADDRESS: z.string().optional(),
   LP_FEE_VAULT_ADDRESS: z.string().optional(),
+
+  /**
+   * Large-value confirmation-disclosure threshold (§2.1, decided §12.47 /
+   * web-10): ETH notional (decimal string, e.g. "1.0") at/above which trade
+   * DTOs and clients surface the stronger posted-to-L1 / finalized disclosure.
+   * Mirrors web `NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD` — same semantics, same
+   * default. Config, never a code literal in consumers; retunable in the
+   * capped beta (§12.47).
+   */
+  LARGE_VALUE_ETH_THRESHOLD: z.string().default("1.0"),
 });
 
 export type RawConfig = z.infer<typeof rawSchema>;
@@ -74,6 +85,8 @@ export interface Config extends RawConfig {
   databaseUrlRo: string;
   databaseUrlRw: string;
   adminAllowlist: Set<string>; // lowercased addresses
+  /** §12.47 threshold parsed to wei; falls back to the 1.0 ETH default on a malformed value. */
+  largeValueEthThresholdWei: bigint;
 }
 
 let cached: Config | null = null;
@@ -90,6 +103,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       );
     }
   }
+  let largeValueEthThresholdWei: bigint;
+  try {
+    largeValueEthThresholdWei = parseEther(raw.LARGE_VALUE_ETH_THRESHOLD);
+    if (largeValueEthThresholdWei <= 0n) throw new Error("non-positive");
+  } catch {
+    // Malformed config value ⇒ fall back to the §12.47 default rather than
+    // silently disabling the §2.1 disclosure (fail-safe, same as web).
+    largeValueEthThresholdWei = parseEther("1.0");
+  }
   return {
     ...raw,
     databaseUrlRo: ro ?? "",
@@ -99,6 +121,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         .map((a) => a.trim().toLowerCase())
         .filter((a) => a.length > 0),
     ),
+    largeValueEthThresholdWei,
   };
 }
 

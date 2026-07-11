@@ -19,7 +19,7 @@ import {
 } from "lightweight-charts";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Card, MonoLabel, Tab, TabBar } from "@/shared/ui";
+import { Tab, TabBar } from "@/shared/ui";
 import { useWsChannel } from "@/shared/lib/ws";
 import { readChartPalette } from "@/shared/lib/theme-colors";
 
@@ -170,9 +170,11 @@ export function PriceChart({
     // DECISION (hoodpad-frontend): the mockup shows 1H/4H/1D/ALL, but the data
     // contract is INTERVAL-based (`CANDLE_INTERVALS` from @robbed/shared / the
     // candles API), not range-based — the buttons switch candle granularity. We
-    // keep the real intervals (never redeclare the shared contract) styled as the
-    // terminal tab strip; the mockup labels were illustrative.
-    <Card className="flex flex-col gap-3 p-4">
+    // keep the real intervals (never redeclare the shared contract) rendered
+    // UPPERCASE mockup-style (1H, 4H, 1D…) in the terminal tab strip.
+    // FLAT region (fidelity audit fix 1): no Card border/fill — the page column
+    // supplies padding; the mockup panel sits directly on the page background.
+    <div className="flex flex-col gap-3.5">
       <div className="flex items-center justify-between gap-2">
         <TabBar>
           {CANDLE_INTERVALS.map((iv) => (
@@ -180,15 +182,17 @@ export function PriceChart({
               key={iv}
               active={iv === interval}
               onClick={() => setInterval(iv)}
-              className="tabular-nums"
+              className="px-2 py-1 tabular-nums"
             >
-              {iv}
+              {iv.toUpperCase()}
             </Tab>
           ))}
         </TabBar>
-        <MonoLabel size="2xs">price / ETH</MonoLabel>
+        {/* Mockup (template 2a): lowercase `price / ETH`, 11px, faint — NOT the
+            uppercased MonoLabel micro-label. */}
+        <span className="text-xs text-faint">price / ETH</span>
       </div>
-      <div className="relative h-[280px] w-full sm:h-[340px]">
+      <div className="relative h-[210px] w-full">
         <div ref={containerRef} className="h-full w-full" />
         {empty && (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-muted">
@@ -196,6 +200,6 @@ export function PriceChart({
           </div>
         )}
       </div>
-    </Card>
+    </div>
   );
 }

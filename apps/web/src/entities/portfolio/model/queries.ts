@@ -10,8 +10,8 @@ import {
 } from "../api/portfolio";
 
 /**
- * Portfolio TanStack Query hooks (v5; pattern mirrors `widgets/token-grid` and
- * `shared/lib/query-keys`, verified 2026-07-10). Keys are portfolio-local (the
+ * Portfolio TanStack Query hooks (v5; pattern mirrors the app's other TanStack
+ * Query slices + `shared/lib/query-keys`, verified 2026-07-10). Keys are portfolio-local (the
  * shared `qk` factory is a fenced data-layer module) and namespaced by address
  * so switching wallets / viewing another address swaps caches cleanly.
  *

@@ -11,6 +11,13 @@ import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 ///      `is IERC721` because the LP NFT custody flow (mint recipient = LPFeeVault, spec §6.3)
 ///      and the fork lifecycle test need ownerOf/safeTransferFrom semantics.
 interface INonfungiblePositionManager is IERC721 {
+    /// @notice Canonical NPM Collect event — transcribed VERBATIM from upstream v3-periphery
+    ///         `INonfungiblePositionManager.sol` (github.com/Uniswap/v3-periphery, main).
+    /// @dev Declared locally so the M1-3 `events.json` codegen extracts the fragment from a
+    ///      forge artifact instead of hand-writing it (spec §12.15-16; indexer.md §3.5 —
+    ///      filtered to LPFeeVault-held tokenIds; feeds the treasury fee-accrual dashboard).
+    event Collect(uint256 indexed tokenId, address recipient, uint256 amount0, uint256 amount1);
+
     struct MintParams {
         address token0;
         address token1;

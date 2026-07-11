@@ -37,9 +37,10 @@ import { PnlRange } from "./PnlRange";
  * present, is surfaced via `UsdAmount` (live source + timestamp, §2).
  */
 
-/** Shared grid template so the row and the table header stay column-aligned. */
+/** Shared grid template so the row and the table header stay column-aligned.
+ * Mockup "2c" (template.html:517): `1fr 150px 130px 130px 120px`, gap 16px. */
 export const HOLDINGS_GRID =
-  "grid grid-cols-[minmax(0,1fr)_96px_88px_120px_92px] items-center gap-3 sm:gap-4";
+  "grid grid-cols-[minmax(0,1fr)_150px_130px_130px_120px] items-center gap-4";
 
 function TokenCell({ token }: { token: PortfolioHolding["token"] }) {
   return (
@@ -78,7 +79,8 @@ function ValueCell({
   if (valueEth === null) return <span className="text-faint">—</span>;
   return (
     <span className={cn("flex flex-col", align === "right" ? "items-end" : "items-start")}>
-      <EthAmount wei={valueEth} unit="ETH" className="text-text" />
+      {/* Portfolio values are 2-dec per the mockup ("1.40 ETH", "0.93 ETH"). */}
+      <EthAmount wei={valueEth} unit="ETH" decimals={2} className="text-text" />
       {value ? <UsdAmount value={value} className="text-2xs text-muted" /> : null}
     </span>
   );

@@ -1,23 +1,27 @@
 /**
- * EXTERNAL Uniswap v3-periphery ABIs — pinned to the periphery deployed on
- * Robinhood Chain (chain 4663). NOT codegen'd from our contracts/out: these are
- * the standard, published Uniswap artifacts (QuoterV2 @uniswap/v3-periphery,
- * SwapRouter02 @uniswap/swap-router-contracts), transcribed VERBATIM from the
- * official artifact JSON (src/abi/QuoterV2.json / SwapRouter02.json — the pinned
- * source, kept alongside as the drift anchor). The deployed addresses these bind
- * to live in constants.ts UNISWAP_V3 (spec §12.28). Unblocks the post-grad venue
- * switch (M3-5): the frontend previews swaps via QuoterV2 (quoteExactInputSingle
+ * EXTERNAL third-party ABIs pinned to what is deployed on Robinhood Chain
+ * (chain 4663). NOT codegen'd from our contracts/out: these are the standard,
+ * published artifacts (QuoterV2 @uniswap/v3-periphery, SwapRouter02
+ * @uniswap/swap-router-contracts, AggregatorV3Interface @chainlink/contracts),
+ * transcribed VERBATIM from the official artifact JSON (src/abi/QuoterV2.json /
+ * SwapRouter02.json / AggregatorV3Interface.json — the pinned sources, kept
+ * alongside as the drift anchors). The deployed addresses these bind to live in
+ * constants.ts (UNISWAP_V3, spec §12.28; CHAINLINK_ETH_USD_PROXY_4663, §12.51).
+ *
+ * Consumers: the frontend previews swaps via QuoterV2 (quoteExactInputSingle
  * /quoteExactOutputSingle) and executes them via SwapRouter02 (exactInputSingle
- * /exactOutputSingle, + multicall/unwrapWETH9/refundETH for the native-ETH leg).
+ * /exactOutputSingle, + multicall/unwrapWETH9/refundETH for the native-ETH leg)
+ * — the M3-5 post-grad venue switch; the indexer's §3.9 ETH/USD poller reads
+ * the Chainlink feed via aggregatorV3Abi (§12.51).
  *
  * `as const` is mandatory: viem/wagmi infer literal arg/return types only from
  * const ABIs, never from a plain JSON import which widens to `string`
- * (viem.sh/docs/typescript). abi/external.test.ts freezes const === JSON so the
- * TS copy can never drift from the pinned artifact.
+ * (viem.sh/docs/typescript). test/abi.external.test.ts freezes const === JSON so
+ * the TS copy can never drift from the pinned artifact.
  *
- * Scope: exactly the read/quote + swap surface the frontend needs — NOT the full
- * periphery ABI. Extend here (re-extract from the same pinned artifact) if the
- * ETH-unwrap path grows; never hand-edit a fragment.
+ * Scope: exactly the surface the services need — NOT the full third-party ABIs.
+ * Extend here (re-extract from the same pinned artifact) if a path grows; never
+ * hand-edit a fragment.
  */
 
 export const quoterV2Abi = [
@@ -337,6 +341,47 @@ export const swapRouter02Abi = [
     "name": "refundETH",
     "outputs": [],
     "stateMutability": "payable",
+    "type": "function"
+  }
+] as const;
+
+/**
+ * Minimal Chainlink AggregatorV3Interface fragment — exactly the three views
+ * the §12.51 ETH/USD poller needs (`description`/`decimals` for the mandatory
+ * fail-closed startup assertions, `latestRoundData` for the staleness-checked
+ * read). Transcribed VERBATIM from the published @chainlink/contracts
+ * AggregatorV3Interface artifact (pinned drift anchor:
+ * src/abi/AggregatorV3Interface.json; shape re-verified against
+ * docs.chain.link/data-feeds/api-reference, 2026-07-11). Adopted from the
+ * indexer's local copy per the anti-drift rule (indexer.md §3.9 flag) — the
+ * feed address is constants.ts CHAINLINK_ETH_USD_PROXY_4663.
+ */
+export const aggregatorV3Abi = [
+  {
+    "inputs": [],
+    "name": "decimals",
+    "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "description",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "latestRoundData",
+    "outputs": [
+      { "internalType": "uint80", "name": "roundId", "type": "uint80" },
+      { "internalType": "int256", "name": "answer", "type": "int256" },
+      { "internalType": "uint256", "name": "startedAt", "type": "uint256" },
+      { "internalType": "uint256", "name": "updatedAt", "type": "uint256" },
+      { "internalType": "uint80", "name": "answeredInRound", "type": "uint80" }
+    ],
+    "stateMutability": "view",
     "type": "function"
   }
 ] as const;

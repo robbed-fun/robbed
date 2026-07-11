@@ -73,7 +73,7 @@ Note: M1-9 (Router) depends on M1-8 (curve) only; M1-10 (Migrator) depends on M1
 
 Per spec §11 (v1.2) — **pre-made decision, do not re-litigate.** If M1-10's gate-2 **invariant 6** (arb-back vs pool griefing) is **not green by end of week 1 of M1**, switch to **V2 + LP burn (spec §6.3) the same day.** Eyes-open cost of the fallback:
 
-- **(a)** flips LP copy from the canonical §12.14 sentence to **"LP burned forever"** across CLAUDE.md / `packages/shared` `constants.ts` / web copy-lint (the *only* sanctioned flip — `/spec-check` rule 5);
+- **(a)** flips LP copy from the canonical §12.14 sentence to **"LP burned forever"** across CLAUDE.md / `packages/shared` `constants.ts` / web copy-lint (the *only* sanctioned flip — the explicitly-adopted V2 **fallback** per CLAUDE.md's carve-out; `/spec-check` rule 5);
 - **(b)** removes post-grad fee revenue — **`LPFeeVault` + `collect` + V3 `Collect` indexing + the `/fees` dashboard are descoped**;
 - **(c)** **§12.28 (V3 confirmed on 4663) means V3 availability is NOT a trigger — only migrator gate-failure is**;
 - **(d)** the **§12.25 curve-fee escrow is unaffected** (curve-side), so day-1 fee capture under bot-dominant flow survives either path.

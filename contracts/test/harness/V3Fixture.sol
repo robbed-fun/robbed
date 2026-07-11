@@ -45,17 +45,36 @@ abstract contract V3Fixture is CommonBase, StdCheats, StdUtils {
     /// @dev Deploy the whole stack. `treasury` + `owner` are supplied so a test can point `treasury`
     ///      at a reverting contract (the TM-T1 proof) or an EOA (wei-exact accounting).
     function _deployV3FullStack(address treasury, address owner) internal {
+        _deployV3FullStack(treasury, owner, address(0), TestConstants.MIGRATION_SLIPPAGE_BPS);
+    }
+
+    /// @dev Full-stack deploy with two M1-13 kill-test hooks:
+    ///      `wethAt` — if non-zero, the {MockWETH9} RUNTIME code is `vm.etch`ed at that address
+    ///      instead of a fresh CREATE, FORCING the token/WETH sort order (`vm.etch` sets runtime
+    ///      bytecode only — safe here because MockWETH9 has no constructor-initialised storage:
+    ///      name/symbol/decimals are constants, balances start empty). Etching at
+    ///      `type(uint160).max` makes every CREATE2 subject token sort as token0; etching at a tiny
+    ///      address makes it token1 — the mirror ordering the arb-back mutation campaign showed the
+    ///      suite never exercised (survivors 6/7/19/97/99/100).
+    ///      `migrationSlippageBps` — per-leg arb budget knob; `0` reproduces the PRE-M-10-A token-leg
+    ///      floor (`tokenArbFloor == LP_TOKEN_TRANCHE`) for the freeze-regression suite.
+    function _deployV3FullStack(address treasury, address owner, address wethAt, uint16 migrationSlippageBps) internal {
         // ArbSys stand-in (anti-sniper is timestamp-based; parity-only here).
         vm.etch(address(0x64), address(new MockArbSys()).code);
 
-        weth = new MockWETH9();
+        if (wethAt == address(0)) {
+            weth = new MockWETH9();
+        } else {
+            vm.etch(wethAt, address(new MockWETH9()).code);
+            weth = MockWETH9(payable(wethAt));
+        }
         (v3Factory, npm) = _deployRealV3(address(weth));
 
         factory = new CurveFactory(TestConstants.factoryInit(treasury, owner, address(weth)));
         vault = new LPFeeVault(address(npm), treasury);
         migrator = new V3Migrator(
             TestConstants.migratorInit(
-                address(factory), address(v3Factory), address(npm), address(weth), address(vault)
+                address(factory), address(v3Factory), address(npm), address(weth), address(vault), migrationSlippageBps
             )
         );
         router = new TestRouter(ICurveFactory(address(factory)));

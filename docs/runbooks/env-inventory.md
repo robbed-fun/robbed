@@ -34,7 +34,10 @@ Source: indexer.md §2. Runs in the Komodo Stack (deploy-komodo-cloudflare.md Pa
 | `REDIS_URL` | Pub/sub + WS fanout + rate-limit + moderation queue | SECRET | Komodo Redis service | hoodpad-indexer | `redis://localhost:6379` | Stack internal | Stack internal (`redis://redis:6379`) |
 | `DATABASE_URL` | Postgres (`pg_trgm` required; migration asserts) | SECRET | Komodo Postgres service | hoodpad-indexer | `postgres://…@localhost:5432/robbed` | Stack internal | Stack internal, indexer-owner role |
 | `R2_METADATA_BASE_URL` | CDN base for canonical metadata JSON (metadata-fetch worker) | CONFIG | Cloudflare R2 public base (`robbed-assets`) | hoodpad-indexer | minio public URL | R2 public base | R2 public base |
-| `ETH_USD_SOURCE_URL` | Price source for `eth_usd_snapshots` poller (§3.9) | CONFIG | **§12.48a (OI-6)** — config-driven; Chainlink on-chain feed if it exists on 4663 (env-gated verify), else DefiLlama/Coinbase HTTP | hoodpad-indexer | coingecko/DefiLlama HTTP | same, config-driven | Chainlink feed addr **or** DefiLlama/Coinbase URL (§12.48a) |
+| `ETH_USD_SOURCE_URL` | HTTP **fallback** price source for the `eth_usd_snapshots` poller (indexer.md §3.9) — primary source on LOCAL/TESTNET; resilience fallback behind Chainlink on mainnet (§12.51) | CONFIG | **§12.51 (OI-6 closed)** — DefiLlama (`coins.llama.fi/prices/current/coingecko:ethereum`) or Coinbase (`api.coinbase.com/v2/prices/ETH-USD/spot`) | hoodpad-indexer | DefiLlama/Coinbase HTTP | same | same (fallback behind the Chainlink feed) |
+| `CHAINLINK_ETH_USD_FEED` | Chainlink ETH/USD proxy for the indexer.md §3.9 poller's mainnet branch; `off` disables the branch entirely (required on a fresh local chain launched as id 4663) | CONFIG | **§12.51** — recorded default `0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9` (env override allowed, mirrors the §12.28 V3 pattern); branch also auto-skipped when RPC chain id ≠ 4663; fail-closed startup assertions `description()=="ETH / USD"`, `decimals()==8` | hoodpad-indexer | `off` (fresh chain) / unset (4663 fork — feed exists in fork state) | unset (46630 auto-skips) | unset (§12.51 default) |
+| `ETH_USD_POLL_INTERVAL_MS` | indexer.md §3.9 poller cadence (spec band 30–60s) | CONFIG | fixed default `30000` | hoodpad-indexer | `30000` | `30000` | `30000` |
+| `ETH_USD_CHAINLINK_STALENESS_SECONDS` | Reject Chainlink answers whose `updatedAt` is older than this (→ HTTP fallback); never a price literal (§2) | CONFIG | default `3600` (standard ETH/USD heartbeat; threshold ≥ heartbeat per Chainlink docs) | hoodpad-indexer | `3600` | `3600` | `3600` |
 | `START_BLOCK` | Factory deploy block (backfill floor) | CONFIG | M1/testnet/mainnet deploy tx block | hoodpad-contracts | 0 | testnet deploy block | mainnet deploy block |
 | `METRICS_PORT` | Prometheus-style gate-7 metrics port (indexer.md §9.4, M2-12) | CONFIG | fixed default `9464` | hoodpad-indexer | `9464` | `9464` | `9464` (scraped in-Stack) |
 
@@ -71,6 +74,7 @@ Source: api.md §4.3/§5/§6, deploy-komodo-cloudflare.md A.1/A.3. Two processes
 | `R2_SECRET_ACCESS_KEY` | R2 write secret | SECRET | Cloudflare R2 API token | ops | minio secret | R2 secret | R2 secret |
 | `R2_BUCKET` | Target bucket for images + metadata | CONFIG | `robbed-assets` (§12.45) | hoodpad-indexer | `robbed-assets` (minio) | `robbed-assets` | `robbed-assets` |
 | `R2_PUBLIC_BASE_URL` | Public CDN base returned to clients / stored `imageUrl` origin | CONFIG | R2 public/CDN domain | hoodpad-indexer | minio public URL | R2 CDN | R2 CDN base |
+| `LARGE_VALUE_ETH_THRESHOLD` | API mirror of the §2.1 large-value confirmation-disclosure threshold (decimal ETH string) | CONFIG | **§12.47 (web-10) — DECIDED:** `1.0` ETH default; mirrors web `NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD` (key added to `apps/api/src/config.ts` 2026-07-11, M3-10) | architect (value) / hoodpad-indexer (wire) | `1.0` | `1.0` | `1.0` (config, never a literal) |
 
 Note: the API's R2 credentials are the **write** leg (uploads, §12.19) and are distinct from the Workers R2 *binding* (read leg, §3 below).
 
@@ -110,6 +114,6 @@ Set in `apps/web/wrangler.jsonc` (deploy-komodo-cloudflare.md B.2), not `.env`:
 | `ADMIN_ALLOWLIST` | O-6 / OI-A8 (Safe signer set) | prod admin auth | dev signer addresses (testnet OK) |
 | `MODERATION_CSAM_VENDOR_*`, `MODERATION_CLASSIFIER_VENDOR_*` | OI-A7 (moderation vendor + mandated-reporting flow) | prod moderation | stub vendors + `MODERATION_ALLOW_STUBS=true` (dev/testnet) |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | web-6 | WC/Robinhood Wallet connectors | unset (injected wallets work) |
-| `ETH_USD_SOURCE_URL` (Chainlink vs fallback selection) | OI-6 (§12.48a) — **verification env-gated (needs live 4663 RPC)** | prod price source choice | DefiLlama/Coinbase HTTP (works everywhere) |
+| ~~`ETH_USD_SOURCE_URL` (Chainlink vs fallback selection)~~ | OI-6 — **RESOLVED (§12.51, 2026-07-11):** Chainlink confirmed on 4663; `CHAINLINK_ETH_USD_FEED` default recorded, `ETH_USD_SOURCE_URL` is the HTTP fallback (§1 above) | ~~prod price source choice~~ resolved | DefiLlama/Coinbase HTTP stays the LOCAL/TESTNET source |
 | `L1_RPC_URL` + rollup addresses | OI-8 (§12.48b) — **conditional, env-gated (needs live 4663 RPC)** | only if `safe`/`finalized` tags unsupported | N/A unless the RPC check fails |
 | testnet RPC/explorer/faucet endpoints | §13 Robinhood testnet params (Phase T) | testnet deploy | pull from official Robinhood docs; deploy fails if unset |

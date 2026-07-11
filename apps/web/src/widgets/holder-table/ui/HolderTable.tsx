@@ -18,7 +18,7 @@ import {
   HOLDER_FLAG_LABELS,
   groupHoldersByCluster,
 } from "@/entities/holder";
-import { AddressLink, Badge, Card, ProgressBar } from "@/shared/ui";
+import { AddressLink, Badge, ProgressBar } from "@/shared/ui";
 import { getHolders } from "@/shared/api";
 import { qk } from "@/shared/lib/query-keys";
 import { useWsChannel } from "@/shared/lib/ws";
@@ -141,7 +141,9 @@ export function HolderTable({
   let rank = 0;
 
   return (
-    <Card className="flex flex-col p-3">
+    // FLAT region (fidelity audit fix 1): no Card border/fill — the token-detail
+    // left column supplies padding; sections separate by their headings.
+    <div className="flex flex-col">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Top holders</h3>
         {query.data?.holderCount !== undefined && (
@@ -181,7 +183,7 @@ export function HolderTable({
           )}
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 

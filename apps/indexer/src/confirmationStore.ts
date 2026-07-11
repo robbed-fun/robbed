@@ -1,22 +1,24 @@
 /**
- * Postgres + RPC concretes for the confirmation tracker (M2-6). Kept OUT of
- * `confirmation.ts` so that module stays DB-free and fully unit-testable; here
- * live the two side-effecting boundaries: the `confirmation_watermarks`
- * read/write + ranged materialization (own `pg.Pool`, the §7.3-sanctioned single
- * external write into Ponder-managed tables), and the L2 block-tag poll (viem).
+ * Postgres + RPC concretes for the confirmation tracker (M2-6; reworked at M2-3
+ * per OI-11/§12.48c). Kept OUT of `confirmation.ts` so that module stays DB-free
+ * and fully unit-testable; here live the two side-effecting boundaries: the
+ * `confirmation_watermarks` SIDECAR singleton read/write (own `pg.Pool`; plain
+ * `public`-schema table from migrations/0002 — the tracker touches NOTHING in
+ * Ponder's schema, per the OI-11 verdict + Ponder's "direct SQL queries should
+ * not insert, update, or delete rows from Ponder tables"), and the L2 block-tag
+ * poll (viem).
  */
 import { Pool } from "pg";
 import { createPublicClient, http, type PublicClient } from "viem";
-import {
-  materializationStatements,
-  type ConfirmationStore,
-  type ObservedTags,
-  type TagFetcher,
-  type WatermarkState,
+import type {
+  ConfirmationStore,
+  ObservedTags,
+  TagFetcher,
+  WatermarkState,
 } from "./confirmation";
 
-/** Pg-backed `ConfirmationStore` — ranged `UPDATE`s + the watermark singleton. */
-export function createPgConfirmationStore(pool: Pool, schema: string): ConfirmationStore {
+/** Pg-backed `ConfirmationStore` — the watermark sidecar singleton only. */
+export function createPgConfirmationStore(pool: Pool): ConfirmationStore {
   return {
     async loadWatermarks(): Promise<WatermarkState | null> {
       const r = await pool.query(
@@ -42,23 +44,6 @@ export function createPgConfirmationStore(pool: Pool, schema: string): Confirmat
                updated_at = now()`,
         [wm.latest, wm.safe, wm.finalized],
       );
-    },
-
-    async materialize(wm: Pick<WatermarkState, "safe" | "finalized">): Promise<void> {
-      // Ranged, monotonic, one indexed pass on block_number per statement.
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        for (const stmt of materializationStatements(schema, wm)) {
-          await client.query(stmt.text, stmt.params);
-        }
-        await client.query("COMMIT");
-      } catch (err) {
-        await client.query("ROLLBACK");
-        throw err;
-      } finally {
-        client.release();
-      }
     },
   };
 }

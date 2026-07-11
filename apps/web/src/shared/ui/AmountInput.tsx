@@ -52,9 +52,11 @@ export function AmountInput({
           <label htmlFor={id}>{label}</label>
         </MonoLabel>
       ) : null}
+      {/* Baseline-aligned box, unit in the muted token — mockup YOU PAY block
+          (docs/Robbed.html line 406: baseline alignment, muted unit color). */}
       <div
         className={cn(
-          "flex items-center gap-2 border border-border bg-transparent px-3 py-2.5 transition-colors focus-within:border-green",
+          "flex items-baseline gap-2 border border-border bg-transparent px-3 py-2.5 transition-colors focus-within:border-green",
           disabled && "opacity-50",
         )}
       >
@@ -74,7 +76,7 @@ export function AmountInput({
             inputClassName,
           )}
         />
-        {unit ? <span className="shrink-0 text-xs text-faint">{unit}</span> : null}
+        {unit ? <span className="shrink-0 text-xs text-muted">{unit}</span> : null}
       </div>
       {quick && quick.length > 0 ? (
         <div className="flex items-center gap-1.5">

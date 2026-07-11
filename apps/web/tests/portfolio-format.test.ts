@@ -27,16 +27,18 @@ describe("formatBalance — grouped integer (mockup rows)", () => {
   });
 });
 
-describe("signedEth — leading + only for gains", () => {
-  it("signs positives, keeps native minus, and zero is unsigned", () => {
+describe("signedEth — leading + only for gains, 2-dec portfolio contract", () => {
+  it("signs positives, uses true minus U+2212, and zero-pads to 2 decimals", () => {
     expect(signedEth(0.62)).toBe("+0.62");
-    expect(signedEth(-0.07)).toBe("-0.07");
-    expect(signedEth(0)).toBe("0");
+    expect(signedEth(1.94)).toBe("+1.94"); // mockup LOOT "+1.94 ETH"
+    expect(signedEth(-0.07)).toBe("−0.07"); // U+2212, never hyphen-minus
+    expect(signedEth(-0.07)).not.toContain("-");
+    expect(signedEth(0)).toBe("0.00");
   });
 
   it("reads wei bounds (PnL is wei)", () => {
     expect(signedEthFromWei("620000000000000000")).toBe("+0.62");
-    expect(signedEthFromWei("-70000000000000000")).toBe("-0.07");
+    expect(signedEthFromWei("-70000000000000000")).toBe("−0.07");
   });
 });
 

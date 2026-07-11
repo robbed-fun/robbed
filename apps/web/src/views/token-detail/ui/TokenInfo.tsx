@@ -1,6 +1,6 @@
 import type { TokenDetail } from "@robbed/shared";
 
-import { AddressLink, Card, Divider, MonoLabel, MonoText } from "@/shared/ui";
+import { AddressLink, Divider, MonoLabel, MonoText } from "@/shared/ui";
 import { shortAddress } from "@/shared/lib/format";
 
 /**
@@ -15,7 +15,9 @@ export function TokenInfo({ token }: { token: TokenDetail }) {
   const links = token.links;
   const hasLinks = links && (links.website || links.x || links.telegram);
   return (
-    <Card className="flex flex-col gap-3 p-4">
+    // FLAT region (fidelity audit fix 1): no Card — the left column supplies
+    // padding; the mockup's token-detail regions carry no panel borders/fills.
+    <div className="flex flex-col gap-3">
       <MonoLabel size="2xs" className="text-text-tertiary">
         Token info
       </MonoLabel>
@@ -55,7 +57,7 @@ export function TokenInfo({ token }: { token: TokenDetail }) {
           </MonoText>
         </Row>
       </dl>
-    </Card>
+    </div>
   );
 }
 

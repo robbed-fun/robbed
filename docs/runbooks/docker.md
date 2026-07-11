@@ -148,6 +148,70 @@ Named volumes persist across `up`/`down`: `robbed_pgdata` / `robbed_redisdata` /
 `docker compose down -v` wipes everything — clean-slate reset (next `up` re-runs Postgres init and a full
 `pnpm install`).
 
+## Testnet stack (`docker-compose.testnet.yml`)
+
+**Status (2026-07-11): Phase-T-ready infrastructure, currently blocked on Phase-T outputs.** The file
+is the same off-chain stack (postgres/redis/minio/api/ws/indexer/web + one-shots) pointed at the
+**remote Robinhood Chain testnet** — no `anvil`, no `deploychain` (the chain is remote; contracts
+deploy via the Phase-T `forge script` run T-3, never via compose). It is a deliberate
+**self-contained mirror** of `docker-compose.yml`: Compose override merging cannot delete whole
+services or `depends_on` edges from an untouched base (`!reset` is per-attribute only —
+docs.docker.com/reference/compose-file/merge), so a standalone file is the only shape that keeps the
+local file untouched. **Anti-drift discipline:** any change to a shared service goes to BOTH files;
+review with `diff docker-compose.yml docker-compose.testnet.yml` (services are annotated `MIRROR` vs
+`TESTNET`). Distinct project name `robbed-testnet` → distinct volumes/network; host ports reuse the
+4XXX convention, so don't run both stacks simultaneously without overriding `*_PORT`.
+
+### Prerequisites (§13 / Phase-T artifacts — the stack fails closed without them)
+
+| Artifact | Produced by | Consumed as |
+|---|---|---|
+| Official testnet chain ID / RPC URL / WS URL | §13 item, pulled from official Robinhood docs at Phase-T start — **never invented** | `TESTNET_CHAIN_ID`, `TESTNET_RPC_URL`, `TESTNET_RPC_WS_URL` env (no defaults; `${VAR:?}` aborts `config`/`up` when unset or empty) |
+| Official testnet Blockscout URL | same §13 item | **Not consumed by compose** — used by the T-3 `forge` verification step and the T-4 lifecycle runbook |
+
+**Official values (docs.robinhood.com/chain/connecting/, retrieved 2026-07-11 — re-verify at Phase-T start):** chain ID **46630**; public RPC `https://rpc.testnet.chain.robinhood.com` (rate-limited; Alchemy `https://robinhood-testnet.g.alchemy.com/v2/{API_KEY}` + `wss://…` recommended for sustained use); explorer `https://explorer.testnet.chain.robinhood.com`; sequencer feed `wss://feed.testnet.chain.robinhood.com`; faucet `https://faucet.testnet.chain.robinhood.com`. Native gas token ETH. Beware: some third-party RPC lists print chain ID 46646 — the official docs say 46630; the `chaincheck` one-shot settles it against the live RPC.
+| Testnet constants in `@robbed/shared` | **T-1** (via robbed-shared, architect-ratified) | Unblocks the indexer + web chain gates (see limitation below) |
+| Contract addresses + deploy block | **T-3** deploy (`tools/deployments/testnet.json`) | `tools/localstack/out/testnet.env` — same keys as the local `local.env` (`CURVE_FACTORY_ADDRESS`, `ROUTER_ADDRESS`, `MIGRATOR_ADDRESS`, `TREASURY_ADDRESS`, `LP_FEE_VAULT_ADDRESS`, `START_BLOCK`), emitted/derived from the T-3 artifact. `api` and `indexer` refuse to start without it, with an error pointing here — there is no best-effort mode (no local deploy one-shot can fill the gap) |
+
+### Env contract
+
+Export in the shell or a root `.env` (compose auto-loads it). All three are required; missing/empty
+values abort with the interpolation error message (verified: `docker compose -f
+docker-compose.testnet.yml config` exits 1 with a message naming the variable and this section —
+never a silent default).
+
+| Variable | Required | Meaning |
+|---|---|---|
+| `TESTNET_RPC_URL` | yes | Official testnet JSON-RPC → indexer `INDEXER_RPC_HTTP`, api `ROBINHOOD_RPC_URL`, web `NEXT_PUBLIC_RPC_HTTP`, `chaincheck` preflight |
+| `TESTNET_RPC_WS_URL` | yes | Official testnet WS RPC → indexer `INDEXER_RPC_WS`, web `NEXT_PUBLIC_RPC_WS` |
+| `TESTNET_CHAIN_ID` | yes | Official testnet chain id — asserted by the `chaincheck` one-shot (`cast chain-id` against `TESTNET_RPC_URL` must match; api/indexer gate on it via `depends_on`) |
+
+Everything else (`POSTGRES_*`, `MINIO_*`, `R2_BUCKET`, `*_PORT`, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`,
+`NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD`) keeps the same dev defaults as the local stack. `web` runs with
+`NEXT_PUBLIC_MOCK_DATA=false` hardcoded — this stack exists to exercise real testnet data.
+
+### Bring-up
+
+```bash
+export TESTNET_RPC_URL=…   TESTNET_RPC_WS_URL=…   TESTNET_CHAIN_ID=…   # from official docs (§13)
+# tools/localstack/out/testnet.env must exist (T-3 output — see prerequisites)
+pnpm dev:testnet          # or dev:testnet:d / :down / :reset / :logs / :ps
+docker compose -f docker-compose.testnet.yml config   # static validation (fails loud on missing env)
+```
+
+### Known limitation — indexer/web chain gates are MAINNET constants (honest status)
+
+The indexer's fail-closed startup assertions (`apps/indexer/src/assertions.ts` +
+`apps/indexer/src/config.ts`) pin `chainId === 4663` via the shared `CHAIN_ID` constant (statically
+AND against the live RPC) and canonical WETH from `@robbed/shared`; **neither is env-overridable**
+(only `V3_FACTORY_ADDRESS` / `V3_NPM_ADDRESS` accept env overrides). The web wallet config derives
+from the same shared `CHAIN_ID`. If the official testnet chain id ≠ 4663, the indexer will
+correctly refuse to start until **T-1** lands testnet constants through robbed-shared
+(architect-ratified). This is fail-closed behavior working as designed — the compose file is
+delivered ahead of the testnet deploy as ready infrastructure; **do not weaken the assertions** to
+make the stack boot. Also note: minio still stands in for R2 here; verification against **real R2**
+is the T-5 staging deploy's concern, not this compose file's.
+
 ## Not in this file (deferred)
 
 - **Production images** — these are dev-mode containers (bind mount + watchers). The prod build/deploy landed at **P-3**: `apps/indexer/Dockerfile` + `apps/api/Dockerfile` (multi-stage, non-root, pnpm-workspace-correct) and the Komodo backend Stack at `tools/deploy/komodo/` (see `deploy-komodo-cloudflare.md` A.6b). Those images reuse this file's `postgres:17` (+`pg_trgm` init) and `redis:7` choices; there is **no prod `web` image** (frontend → Cloudflare Workers, §12.45).

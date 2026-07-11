@@ -1,8 +1,13 @@
 /**
  * Confirmation-state enum + helpers (spec §2.1, §12.20; indexer.md §3.8, §5).
  *
- * Wire values are snake_case and are the same strings stored in the DB
- * `confirmation_state` columns and sent in WS/REST payloads.
+ * Wire values are snake_case and are the same strings sent in WS/REST
+ * payloads and surfaced as the `confirmation_state` field on DB row shapes.
+ * NOTE (OI-11 rework, 2026-07-11 — spec §12.48c; indexer.md §3.8/§5): these
+ * are NOT physical columns on Ponder tables; the API derives the value at
+ * read time from the `confirmation_watermarks` sidecar via
+ * `confirmationStateSql(blockCol)` (apps/api/src/lib/confirmation.ts). See
+ * the read-derivation constraint in `db-rows.ts`.
  *
  * Three explicit states, strictly ordered and monotonic (never downgraded):
  *   soft_confirmed → posted_to_l1 → finalized
@@ -63,9 +68,10 @@ export interface ConfirmationWatermarks {
 /**
  * Authoritative rule (indexer.md §3.8): an event's state is `finalized` if
  * `blockNumber <= finalizedBlock`, else `posted_to_l1` if `<= safeBlock`,
- * else `soft_confirmed`. Used by the indexer's materializer and by WS clients
- * upgrading held events from `global:confirmations` watermark broadcasts
- * (spec §12.20).
+ * else `soft_confirmed`. This is the TS mirror of the API's read-time SQL
+ * derivation (`confirmationStateSql`, apps/api/src/lib/confirmation.ts —
+ * spec §12.48c read-derivation); also used by WS clients upgrading held
+ * events from `global:confirmations` watermark broadcasts (spec §12.20).
  */
 export function stateForBlock(
   blockNumber: number | bigint,

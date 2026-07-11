@@ -26,7 +26,6 @@ import { WalletConnectButton } from "@/features/connect-wallet";
 import {
   AddressLink,
   AmountInput,
-  Card,
   Chip,
   CursorTag,
   MonoLabel,
@@ -39,6 +38,7 @@ import { cn } from "@/shared/lib/utils";
 
 import { useTradeSubmit } from "../model/use-trade-submit";
 import { isLargeValueWei, largeValueThresholdWei } from "../model/large-value";
+import { formatReceiveTokenAmount } from "../lib/format-receive";
 
 /**
  * Buy/Sell widget with the INVISIBLE VENUE SWITCH (§5.2) — ROBBED_ terminal skin
@@ -135,7 +135,9 @@ function CurveVenue({
   };
 
   return (
-    <Card className="flex flex-col gap-3.5 p-4">
+    // FLAT trade panel (fidelity audit fix 1): no Card border/fill; mockup panel
+    // padding 18px 20px (template 2a line 398).
+    <div className="flex flex-col gap-3.5 p-[18px] px-5">
       <SideTabs side={side} onChange={setSide} disabled={graduatingLock} />
 
       {graduatingLock && <GraduatingInterstitial />}
@@ -183,9 +185,9 @@ function CurveVenue({
           minOut={minOut}
           impact={impact}
           refund={quote?.refund}
+          slippageBps={slippageBps}
+          onSlippageChange={setSlippageBps}
         />
-
-        <SlippageControl bps={slippageBps} onChange={setSlippageBps} />
 
         <LargeValueDisclosure ethWei={ethNotionalWei} side={side} />
 
@@ -194,6 +196,7 @@ function CurveVenue({
         <ActionButton
           isConnected={isConnected}
           side={side}
+          ticker={token.ticker}
           disabled={!canSubmit || isSubmitting}
           isSubmitting={isSubmitting}
           onSubmit={onSubmit}
@@ -201,7 +204,7 @@ function CurveVenue({
 
         <Tagline />
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -217,8 +220,10 @@ function SideTabs({
   disabled: boolean;
 }) {
   return (
-    // Mockup: 2-col bordered toggle; active BUY = green-dim fill/green text,
-    // active SELL = red-dim fill/red text. role="tab" preserved for a11y + tests.
+    // Mockup (template 2a lines 399-402): 2-col bordered toggle, UPPERCASE 12px
+    // labels, 9px vertical padding; active BUY = green-dim fill/green text
+    // (weight 600), active SELL = red-dim fill/red text. role="tab" preserved
+    // for a11y + tests (textContent stays "buy"/"sell"; CSS uppercases).
     <div role="tablist" className="grid grid-cols-2 border border-border">
       {(["buy", "sell"] as const).map((s) => {
         const active = side === s;
@@ -231,11 +236,11 @@ function SideTabs({
             disabled={disabled}
             onClick={() => onChange(s)}
             className={cn(
-              "py-2.5 text-center text-xs font-semibold capitalize transition-colors disabled:opacity-50",
+              "py-[9px] text-center text-sm uppercase transition-colors disabled:opacity-50",
               active
                 ? s === "buy"
-                  ? "bg-green-dim text-green"
-                  : "bg-red-dim text-red"
+                  ? "bg-green-dim font-semibold text-green"
+                  : "bg-red-dim font-semibold text-red"
                 : "text-muted hover:text-text",
             )}
           >
@@ -333,10 +338,13 @@ function ReceiveBox({
   isFetching: boolean;
 }) {
   const unit = side === "buy" ? token.ticker : "ETH";
+  // Receive preview (fidelity fix 13): token amounts render GROUPED with 1
+  // decimal ("1,462.8", mockup line 418) — never compact "1.46K". The ETH leg
+  // (sell side) keeps the app-wide 4-dec zero-padded ETH contract ("0.4200").
   const text =
     out !== null
       ? side === "buy"
-        ? formatTokenFromWei(out)
+        ? formatReceiveTokenAmount(out)
         : formatEthFromWei(out)
       : isFetching
         ? "quoting…"
@@ -359,30 +367,63 @@ function ReceiveBox({
   );
 }
 
+/**
+ * Details rows (fidelity audit fix 14; mockup template 2a lines 421-425):
+ * `Price impact` / `Fee` (plain "1%") / `Max slippage` — 11.5px muted rows,
+ * 7px gap, hairline top border, 12px top padding. The slippage row IS the
+ * interactive control (spec: configurable slippage + a deadline on every trade
+ * §5.2), visually integrated as the third mockup row rather than a separate
+ * block. `Min received` stays as a fourth row — the spec requires the
+ * minTokensOut floor to be communicated.
+ */
 function InfoRows({
   side,
   feeLabel,
   minOut,
   impact,
   refund,
+  slippageBps,
+  onSlippageChange,
 }: {
   side: TradeSide;
   feeLabel: string;
   minOut: bigint | null;
   impact: number | null;
   refund?: bigint;
+  slippageBps: number;
+  onSlippageChange: (bps: number) => void;
 }) {
   const fmtOut = (v: bigint) =>
     side === "buy" ? `${formatTokenFromWei(v)}` : `${formatEthFromWei(v)} ETH`;
+  const slippageWarn = slippageBps > SLIPPAGE_WARN_BPS;
   return (
-    <div className="flex flex-col gap-2 border-t border-border-soft pt-3 text-xs text-muted">
+    <div className="flex flex-col gap-[7px] border-t border-border-soft pt-3 text-xs-plus text-muted">
       <Row label="Price impact">
         <span className={cn("tabular-nums", impact !== null && impact > 5 && "text-soft-confirmed")}>
           {impact === null ? "—" : `${impact.toFixed(2)}%`}
         </span>
       </Row>
       <Row label="Fee">
-        <span className="tabular-nums">{feeLabel} → treasury</span>
+        <span className="tabular-nums">{feeLabel}</span>
+      </Row>
+      <Row label="Max slippage">
+        <span className="flex items-center gap-1.5">
+          {[50, 100, 200].map((preset) => (
+            <Chip
+              key={preset}
+              variant="outline"
+              active={slippageBps === preset}
+              onClick={() => onSlippageChange(preset)}
+            >
+              {preset / 100}%
+            </Chip>
+          ))}
+          <span className={cn("tabular-nums", slippageWarn && "text-soft-confirmed")}>
+            {(slippageBps / 100).toFixed(1)}%
+          </span>
+          {/* §5.2: the deadline on every trade stays disclosed. */}
+          <span className="text-faint">· deadline 10m</span>
+        </span>
       </Row>
       <Row label="Min received">
         <span className="tabular-nums text-text-secondary">
@@ -403,37 +444,6 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     <div className="flex items-center justify-between">
       <span>{label}</span>
       {children}
-    </div>
-  );
-}
-
-function SlippageControl({
-  bps,
-  onChange,
-}: {
-  bps: number;
-  onChange: (bps: number) => void;
-}) {
-  const pct = bps / 100;
-  const warn = bps > SLIPPAGE_WARN_BPS;
-  return (
-    <div className="flex items-center justify-between text-xs text-muted">
-      <span>Max slippage · deadline 10m</span>
-      <div className="flex items-center gap-1.5">
-        {[50, 100, 200].map((preset) => (
-          <Chip
-            key={preset}
-            variant="outline"
-            active={bps === preset}
-            onClick={() => onChange(preset)}
-          >
-            {preset / 100}%
-          </Chip>
-        ))}
-        <span className={cn("tabular-nums", warn && "text-soft-confirmed")}>
-          {pct}%
-        </span>
-      </div>
     </div>
   );
 }
@@ -476,12 +486,14 @@ function LargeValueDisclosure({
 function ActionButton({
   isConnected,
   side,
+  ticker,
   disabled,
   isSubmitting,
   onSubmit,
 }: {
   isConnected: boolean;
   side: TradeSide;
+  ticker: string;
   disabled: boolean;
   isSubmitting: boolean;
   onSubmit: () => void;
@@ -493,12 +505,14 @@ function ActionButton({
       onClick={onSubmit}
       disabled={disabled}
       className={cn(
-        "w-full py-3 text-center text-sm font-semibold text-accent-foreground transition-colors disabled:opacity-40",
+        // Mockup (template 2a line 426): "BUY HCAT" — 13px, 13px vertical padding.
+        "w-full py-[13px] text-center text-base font-semibold uppercase text-accent-foreground transition-colors disabled:opacity-40",
         side === "buy" ? "bg-green hover:bg-green/90" : "bg-red hover:bg-red/90",
       )}
     >
-      {/* Accessible name stays exactly "Buy"/"Sell" (test contract). */}
-      {isSubmitting ? "Confirming…" : side === "buy" ? "Buy" : "Sell"}
+      {/* Accessible name is "BUY {TICKER}"/"SELL {TICKER}" (mockup copy; the
+          gating tests + e2e selectors assert this shape). */}
+      {isSubmitting ? "Confirming…" : `${side === "buy" ? "BUY" : "SELL"} ${ticker}`}
     </button>
   );
 }
@@ -568,7 +582,7 @@ function V3Venue({ token }: { token: TokenDetail }) {
   };
 
   return (
-    <Card className="flex flex-col gap-3.5 p-4">
+    <div className="flex flex-col gap-3.5 p-[18px] px-5">
       <div className="flex items-center justify-between">
         <SideBadge side="graduate" label="GRADUATED" />
         <MonoText tone="muted" size="xs">
@@ -584,12 +598,12 @@ function V3Venue({ token }: { token: TokenDetail }) {
 
       <InfoRows
         side={side}
-        feeLabel={`Uniswap V3 pool ${V3_FEE_TIER / 10000}%`}
+        feeLabel={`${V3_FEE_TIER / 10000}%`}
         minOut={minOut}
         impact={null}
+        slippageBps={slippageBps}
+        onSlippageChange={setSlippageBps}
       />
-
-      <SlippageControl bps={slippageBps} onChange={setSlippageBps} />
 
       <LargeValueDisclosure ethWei={ethNotionalWei} side={side} />
 
@@ -598,6 +612,7 @@ function V3Venue({ token }: { token: TokenDetail }) {
       <ActionButton
         isConnected={isConnected}
         side={side}
+        ticker={token.ticker}
         disabled={!canSubmit || isSubmitting}
         isSubmitting={isSubmitting}
         onSubmit={onSubmit}
@@ -615,7 +630,7 @@ function V3Venue({ token }: { token: TokenDetail }) {
       ) : null}
 
       <Tagline />
-    </Card>
+    </div>
   );
 }
 
@@ -630,13 +645,14 @@ function parseAmount(side: TradeSide, raw: string): bigint | null {
   }
 }
 
-/** bps → "1%" / "1.5%" fee label, rendered from the on-chain value (never a copy
- *  literal, §2). `null` (read pending) degrades to "curve fee". */
+/** bps → plain "1%" / "1.5%" fee value (mockup row `Fee  1%` — no suffix; the
+ *  Trust panel carries the "curve fee → treasury" sourcing detail). Rendered from
+ *  the on-chain value, never a copy literal (§2); `null` (read pending) → "—". */
 function feeLabelFromBps(bps: number | null): string {
-  if (bps === null) return "curve fee";
+  if (bps === null) return "—";
   const pct = bps / 100;
   const s = Number.isInteger(pct) ? pct.toString() : pct.toFixed(2).replace(/0+$/, "");
-  return `${s}% curve fee`;
+  return `${s}%`;
 }
 
 function computeImpact(

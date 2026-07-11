@@ -6,6 +6,7 @@
 // ABIs, never from plain JSON imports (viem.sh/docs/typescript).
 
 export * from "./events";
+
 // External Uniswap v3-periphery ABIs (quoterV2Abi / swapRouter02Abi) — pinned to
 // the §12.28 deployed periphery, NOT generated from contracts/out. See external.ts.
 export * from "./external";

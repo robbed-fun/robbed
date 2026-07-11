@@ -10,6 +10,17 @@
  *   number or these arrive as strings — normative type here is number);
  * - `numeric` display-only floats (prices): `number`;
  * - `timestamptz`: ISO-8601 `string`.
+ *
+ * READ-DERIVATION CONSTRAINT (OI-11 rework, 2026-07-11 — spec §12.48c;
+ * indexer.md §3.8/§5): `confirmation_state` is NOT a physical column on any
+ * Ponder-managed table. The API derives it per row at read time via a SELECT
+ * expression over the `confirmation_watermarks` sidecar —
+ * `confirmationStateSql(blockCol)` in `apps/api/src/lib/confirmation.ts`.
+ * These row shapes remain correct for API consumers, but any FUTURE direct
+ * `SELECT *` against the underlying tables MUST include that derived
+ * expression or the field will be absent at runtime (the shape here will not
+ * catch it — interfaces don't validate). Highest risk: `transfers` and
+ * `graduations`, which no API query selects today.
  */
 import type { BotFlag } from "./api-types";
 import type { ConfirmationState } from "./confirmation";
@@ -57,6 +68,7 @@ export interface TokenRow {
   block_number: number;
   tx_hash: string;
   log_index: number;
+  /** Read-derived, never stored (§12.48c) — see file-header constraint. */
   confirmation_state: ConfirmationState;
 }
 
@@ -77,6 +89,7 @@ export interface TradeRowDb {
   block_timestamp: number;
   tx_hash: string;
   log_index: number;
+  /** Read-derived, never stored (§12.48c) — see file-header constraint. */
   confirmation_state: ConfirmationState;
 }
 
@@ -99,6 +112,15 @@ export interface TransferRow {
   block_timestamp: number;
   tx_hash: string;
   log_index: number;
+  /**
+   * NOT a physical column on `transfers` (OI-11 rework — spec §12.48c;
+   * indexer.md §3.8/§5): derived at read time from the
+   * `confirmation_watermarks` sidecar via
+   * `confirmationStateSql("block_number")` (apps/api/src/lib/confirmation.ts).
+   * No API query selects from `transfers` today — the FIRST direct
+   * `SELECT *` against it MUST add that derived expression or this field
+   * will be absent at runtime. See the file-header constraint.
+   */
   confirmation_state: ConfirmationState;
 }
 
@@ -116,6 +138,15 @@ export interface GraduationRow {
   block_timestamp: number;
   tx_hash: string;
   log_index: number;
+  /**
+   * NOT a physical column on `graduations` (OI-11 rework — spec §12.48c;
+   * indexer.md §3.8/§5): derived at read time from the
+   * `confirmation_watermarks` sidecar via
+   * `confirmationStateSql("block_number")` (apps/api/src/lib/confirmation.ts).
+   * No API query selects from `graduations` today — the FIRST direct
+   * `SELECT *` against it MUST add that derived expression or this field
+   * will be absent at runtime. See the file-header constraint.
+   */
   confirmation_state: ConfirmationState;
 }
 
@@ -132,6 +163,7 @@ export interface FeeCollectionRow {
   block_timestamp: number;
   tx_hash: string;
   log_index: number;
+  /** Read-derived, never stored (§12.48c) — see file-header constraint. */
   confirmation_state: ConfirmationState;
 }
 

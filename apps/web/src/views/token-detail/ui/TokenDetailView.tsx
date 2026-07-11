@@ -53,7 +53,10 @@ export default async function TokenDetailView({ address }: { address: string }) 
     <>
       <LiveStatusBanner />
       <AppHeader />
-      <main className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 pb-24 md:pb-4">
+      {/* FLAT full-bleed regions (fidelity fix 1/2): the identity row's border-b
+          and the columns' border-r run edge-to-edge — no container padding/gap;
+          each region pads itself per the mockup. */}
+      <main className="mx-auto flex max-w-6xl flex-col pb-24 md:pb-0">
         <TokenHeader token={token} holderCount={initialHolders?.holderCount} />
         <TokenDetailClient
           token={token}

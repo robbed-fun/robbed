@@ -118,17 +118,18 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5">
-      {/* Logo slot beside NAME / TICKER (mockup top block). */}
-      <div className="flex gap-4">
+      {/* Logo slot beside NAME / TICKER (mockup top block, template 451-453:
+          96px slot, 18px row gap, 14px field gap in the right column). */}
+      <div className="flex gap-[18px]">
         <ImageUpload
           image={launcher.image}
           onSelect={launcher.uploadImage}
           onClear={launcher.clearImage}
           disabled={disabledForm}
-          className="w-28 shrink-0 sm:w-36"
+          className="w-24 shrink-0"
         />
 
-        <div className="flex flex-1 flex-col gap-4">
+        <div className="flex flex-1 flex-col gap-3.5">
           <Field label="Name" error={errors.name}>
             <Input
               value={name}
@@ -148,6 +149,8 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
                 className="h-11 pr-14"
               />
+              {/* Counter is n/10, not the mockup's /8 — §12.30 fixes the ticker
+                  limit at 10 BYTES; the spec wins over the mockup. */}
               <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-2xs tabular-nums text-faint">
                 {byteCounter(ticker, METADATA_TICKER_MAX)}
               </span>
@@ -163,7 +166,9 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
           maxLength={METADATA_DESCRIPTION_MAX}
           placeholder="what is this token about"
           onChange={(e) => setDescription(e.target.value)}
-          className="min-h-24"
+          // Mockup 2b (template 466): 56px min-height, muted-token placeholder
+          // — per-instance override, the kit default stays faint.
+          className="min-h-[56px] placeholder:text-muted"
         />
       </Field>
 
@@ -171,7 +176,8 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
         <AmountInput
           label={
             <>
-              Initial buy <span className="text-faint">— optional, be first in</span>
+              {/* Optional suffix in the border-strong token (template 469). */}
+              Initial buy <span className="text-border-strong">— optional, be first in</span>
             </>
           }
           value={initialBuy}
@@ -180,6 +186,10 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
           }}
           unit="ETH"
           disabled={disabledForm}
+          // Mockup 2b (template 470): the INITIAL BUY value is ~13px like the
+          // other create-form inputs — per-instance override; the atom's 17px
+          // default is the trade-widget size and must not change.
+          inputClassName="text-base"
         />
         {errors.initialBuy && (
           <MonoText tone="red" size="xs">
@@ -219,8 +229,10 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
         type="submit"
         variant="buy"
         size="lg"
+        // Mockup 2b (template 477): 13px/600 label, 13px vertical padding, NO
+        // letter-spacing (size="lg" already renders text-base = 13px).
         disabled={submitDisabled || !isConnected}
-        className="w-full uppercase tracking-label"
+        className="h-auto w-full py-[13px] uppercase"
       >
         {submitLabel(launcher.step)}
       </Button>
@@ -260,9 +272,11 @@ function Field({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between">
-        <MonoLabel tone="muted" size="2xs">
+        {/* Mockup 2b: faint-token micro-labels; the optional suffix sits a
+            step darker in the border-strong token (template 465/469). */}
+        <MonoLabel tone="faint" size="2xs">
           {label}
-          {optional && <span className="text-faint"> — {optional}</span>}
+          {optional && <span className="text-border-strong"> — {optional}</span>}
         </MonoLabel>
         {counter && (
           <span className="text-2xs tabular-nums text-faint">{counter}</span>

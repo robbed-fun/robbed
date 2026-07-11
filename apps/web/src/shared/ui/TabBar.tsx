@@ -16,7 +16,7 @@ export function TabBar({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       role="tablist"
-      className={cn("flex items-center gap-1 overflow-x-auto", className)}
+      className={cn("flex items-center gap-2 overflow-x-auto", className)}
       {...props}
     />
   );

@@ -39,7 +39,6 @@ ponder.on("LaunchToken:Transfer", async ({ event, context }) => {
     blockTimestamp: ts,
     txHash: event.transaction.hash,
     logIndex: event.log.logIndex,
-    confirmationState: "soft_confirmed",
   });
 
   let holderDelta = 0;

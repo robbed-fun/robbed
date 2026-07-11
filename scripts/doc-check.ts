@@ -21,8 +21,13 @@
  *                 spec OR the containing file OR any doc mentioned (by
  *                 basename, with or without .md) earlier in the same line. A
  *                 reference immediately preceded by "<name>.md" is resolved
- *                 strictly against that named doc; one immediately preceded
- *                 by the word "spec" strictly against launchpad-spec.md.
+ *                 strictly against that named doc; when the bare basename
+ *                 matches more than one known location (e.g. "api.md" inside
+ *                 docs/plans/api.md, whose driving doc is
+ *                 docs/services/api.md), the ref is accepted if it resolves
+ *                 in ANY candidate — basename collisions must not manufacture
+ *                 false positives. One immediately preceded by the word
+ *                 "spec" resolves strictly against launchpad-spec.md.
  *                 Limitation (deliberate, to keep false positives near
  *                 zero): a bare ref that is broken as a spec ref but happens
  *                 to exist under a doc name mentioned anywhere on the line —
@@ -155,20 +160,31 @@ function parseMd(path: string): MdFile {
   const taken = new Map<string, number>();
   const sections = new Set<string>();
   let currentNum: string | null = null;
+  let currentNumLevel = 0; // heading depth (# count) that set currentNum
   for (let i = 0; i < lines.length; i++) {
     if (inFence[i]) continue;
-    const h = lines[i].match(/^#{1,6}\s+(.*)$/);
+    const h = lines[i].match(/^(#{1,6})\s+(.*)$/);
     if (h) {
-      const slug = slugify(h[1], taken);
+      const level = h[1].length;
+      const slug = slugify(h[2], taken);
       slugs.add(slug);
       looseSlugs.add(slug.replace(/-/g, ""));
-      const num = h[1].match(/^(\d+(?:\.\d+)*)[.)]?(?:\s|$)/);
-      currentNum = num ? num[1].replace(/\.$/, "") : null;
-      if (currentNum) {
+      const num = h[2].match(/^(\d+(?:\.\d+)*)[.)]?(?:\s|$)/);
+      if (num) {
+        currentNum = num[1].replace(/\.$/, "");
+        currentNumLevel = level;
         sections.add(currentNum);
         // "## 6.3 ..." also implies "6" is referable territory
         const parts = currentNum.split(".");
         for (let k = 1; k < parts.length; k++) sections.add(parts.slice(0, k).join("."));
+      } else if (level <= currentNumLevel) {
+        // unnumbered heading at the same or shallower depth ends the numbered
+        // scope; a DEEPER unnumbered heading (e.g. spec §12's "### Integration-
+        // seam reconciliation sweep" inside "## 12. Resolved Decisions") is a
+        // visual grouping — numbered list items after it still belong to the
+        // enclosing numbered section (§12.38–§12.50).
+        currentNum = null;
+        currentNumLevel = 0;
       }
       continue;
     }
@@ -238,18 +254,23 @@ for (const f of mdFiles.values()) {
 
 const SECREF_RE = /§\s?(\d+(?:\.\d+)*)/g;
 
-function findNamedDoc(name: string, fromDir: string): MdFile | null {
-  const candidates = [
+// All docs a name could denote. A bare basename ("api.md") can collide across
+// directories (docs/plans/api.md vs docs/services/api.md); the caller accepts
+// a ref that resolves in ANY candidate so collisions don't manufacture false
+// positives (same near-zero-FP stance as the bare-ref limitation above).
+function findNamedDocs(name: string, fromDir: string): MdFile[] {
+  const candidates = new Set([
     resolve(fromDir, name),
     join(ROOT, name),
     join(ROOT, "docs", name),
     join(ROOT, "docs", "services", name),
-  ];
+  ]);
+  const out: MdFile[] = [];
   for (const c of candidates) {
-    if (mdFiles.has(c)) return mdFiles.get(c)!;
-    if (existsSync(c) && c.endsWith(".md")) return parseMd(c);
+    if (mdFiles.has(c)) out.push(mdFiles.get(c)!);
+    else if (existsSync(c) && c.endsWith(".md")) out.push(parseMd(c));
   }
-  return null; // named doc we can't locate: stay silent
+  return out; // empty: named doc we can't locate — stay silent
 }
 
 // doc tokens ("contracts.md", "contracts", "development-flow", ...) -> files,
@@ -280,9 +301,9 @@ for (const f of mdFiles.values()) {
       let ok: boolean;
       let where: string;
       if (named && basename(named[1]) !== "launchpad-spec.md") {
-        const doc = findNamedDoc(named[1], dirname(f.path));
-        if (!doc) continue;
-        ok = doc.sections.has(ref);
+        const docs = findNamedDocs(named[1], dirname(f.path));
+        if (docs.length === 0) continue;
+        ok = docs.some((d) => d.sections.has(ref));
         where = named[1];
       } else if (named || /\bspec['’s]*[\s:(]*$/i.test(before)) {
         ok = spec?.sections.has(ref) ?? true;

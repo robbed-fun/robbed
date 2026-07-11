@@ -1,3 +1,4 @@
 target	valid_mutants	killed	survivors	score	tool
 CurveMath.sol	64	58	6	0.906	universalmutator-1.14.1
 V3Migrator.sol(arb-back)	200	117	83	0.585	universalmutator-1.14.1
+V3Migrator.sol(arb-back)+M113-followup-killtests	200	160	40	0.800	universalmutator-1.14.1+survivor-rerun-2026-07-11

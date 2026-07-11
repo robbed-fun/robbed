@@ -7,6 +7,22 @@ pragma solidity 0.8.35;
 /// @dev Minimal local interface, no upstream npm dependency (contracts.md §2 inventory).
 ///      token0/token1/fee are included for token-ordering checks in the migrator and tests.
 interface IUniswapV3Pool {
+    /// @notice Canonical Uniswap V3 pool Swap event — transcribed VERBATIM from upstream
+    ///         v3-core `IUniswapV3PoolEvents.sol` (github.com/Uniswap/v3-core, main).
+    /// @dev Declared locally so the M1-3 `events.json` codegen extracts the fragment from a
+    ///      forge artifact instead of hand-writing it (spec §12.15-16; indexer.md §3.4 —
+    ///      indexed on graduated pools only). Shape is frozen by the shared abi.test.ts
+    ///      topic0 pin (0xc42079f9…); any divergence is an escalation, not an edit.
+    event Swap(
+        address indexed sender,
+        address indexed recipient,
+        int256 amount0,
+        int256 amount1,
+        uint160 sqrtPriceX96,
+        uint128 liquidity,
+        int24 tick
+    );
+
     /// @notice The pool's current price/tick state. Read by migrate() before the arb-back loop
     ///         (contracts.md §3.4 step 4).
     function slot0()

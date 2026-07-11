@@ -1,15 +1,15 @@
 # ROBBED_ — User-Flow Catalog (`apps/web`)
 
-**Owner:** hoodpad-frontend (author) · **Ratifier:** hoodpad-architect · **Status:** DRAFT — awaiting architect sign-off (M3-11)
-**Spec:** `launchpad-spec.md` v1.1 §5.1–5.3, §2.1, §6.5, §12.12/§12.14/§12.19/§12.20/§12.25 · **Driving doc:** `docs/services/web.md` §3/§4/§8 · **Plan row:** `docs/plans/web.md` M3-11
+**Owner:** hoodpad-frontend (author) · **Ratifier:** hoodpad-architect · **Status:** **RATIFIED** (M3-11) — with the §8 redesign-reconciliation addendum (PORT-\* flows **authored** in §3b, 2026-07-11 — architect ratification pending)
+**Spec:** `launchpad-spec.md` v1.1 §5.1–5.3, §2.1, §6.5, §12.12/§12.14/§12.19/§12.20/§12.25/§12.50 · **Driving doc:** `docs/services/web.md` §3/§4/§8 · **Plan row:** `docs/plans/web.md` M3-11
 
-> **Architect sign-off:** _pending_ — `RATIFIED-BY: __________  DATE: __________`
+> **Architect sign-off:** `RATIFIED-BY: robbed-architect  DATE: 2026-07-11` — all 36 flows verified against spec §5.1 (5/5) / §5.2 (8/8) / §5.3 (5/5), the 9 transaction types, the 15 error paths (ERR-5 §12.25 confirmed full three-layer), and P-7 waiver completeness (every <3-layer flow has a waiver row). Ratified **as amended** for the §12.50 four-page redesign: route strings `/launch`→`/create` updated, `LAUNCH-*` IDs retained (stable-ID rule), and §8 records the required `PORT-*` addendum. Stable-ID rule is now in force.
 
 ## Purpose & conventions
 
-This is the authoritative catalog of every user flow across the three pages plus every on-chain transaction type and every error path the product must handle. It is the coverage target for the **I-5 e2e harness** (env-gated, built later): each Playwright spec carries a `@flow:<ID>` tag, and `bun run e2e:coverage` diffs catalog IDs against tagged tests **and** checks each tagged test asserts its declared `assertable-layers` (honoring `docs/user-flows-waivers.md`). This document is the deliverable now; the tests come with I-5a/I-5b.
+This is the authoritative catalog of every user flow across the app's pages (three at authoring time; **four since the §12.50 redesign** — see §8) plus every on-chain transaction type and every error path the product must handle. It is the coverage target for the **I-5 e2e harness** (env-gated, built later): each Playwright spec carries a `@flow:<ID>` tag, and `bun run e2e:coverage` diffs catalog IDs against tagged tests **and** checks each tagged test asserts its declared `assertable-layers` (honoring `docs/user-flows-waivers.md`). This document is the deliverable now; the tests come with I-5a/I-5b.
 
-**Stable IDs** never change once ratified (renaming = new ID + tombstone). Groups: `DISC-*` (Discover §5.1), `TD-*` (Token Detail §5.2), `LAUNCH-*` (Launch §5.3), `TX-*`/`COLLECT-*` (transaction types with no dedicated page surface), `ERR-*` (error/edge paths).
+**Stable IDs** never change once ratified (renaming = new ID + tombstone; IDs never encode routes). Groups: `DISC-*` (Discover §5.1), `TD-*` (Token Detail §5.2), `LAUNCH-*` (Launch §5.3), `PORT-*` (Portfolio §12.50a — addendum §3b, ratification pending), `TX-*`/`COLLECT-*` (transaction types with no dedicated page surface), `ERR-*` (error/edge paths).
 
 **`assertable-layers`** — which of the three truth layers a flow can be asserted at (P-7: error paths that produce no indexer record declare fewer):
 - **on-chain** — a state change / revert observable via `eth_call` or receipt status on the fork.
@@ -132,7 +132,7 @@ Flows declaring fewer than three layers have a rationale row in `docs/user-flows
 
 ---
 
-## 3. Launch — `/launch` (§5.3)
+## 3. Launch — `/create` (§5.3; route renamed from `/launch`, §12.50 — `LAUNCH-*` IDs retained per the stable-ID rule)
 
 ### `@flow:LAUNCH-1` — Create token, no initial buy  ·  tx type `createToken`
 - **Actors:** Creator (wallet connected).
@@ -154,12 +154,68 @@ Flows declaring fewer than three layers have a rationale row in `docs/user-flows
 
 ---
 
+## 3b. Portfolio — `/portfolio` (§12.50a; catalog addendum, 2026-07-11)
+
+> **Addendum provenance:** authored per the §8 reconciliation record — `AUTHORED-BY: robbed-frontend  DATE: 2026-07-11` · **architect ratification pending** (the §8 owner line stands). Portfolio is **read-only** (§12.50a): it adds **no transaction types** (the 9-type table in §6 stays exhaustive) and **no `collect()` surface** (COLLECT-1 waiver unchanged). Every `PORT-*` flow is therefore <3-layer by nature — there is no on-chain transaction to assert — and each has a P-7 waiver row in `docs/user-flows-waivers.md`.
+>
+> **Data-freshness note (flagged for the ratifier, see §8):** portfolio reads are advisory (`api.md` §3.4a) — TanStack Query with ~15s staleTime + refetch; **no WS channel patches them**. The "live-patch behavior" flow the §8 addendum anticipated is deliberately **not** authored: `e2e:coverage` must never demand an assertion the product cannot produce.
+
+### `@flow:PORT-1` — Connected-wallet portfolio: summary header + holdings (default tab)
+- **Actors:** Holder (wallet connected).
+- **Preconditions:** `GET /v1/portfolio/:address` (summary roll-up) and `GET /v1/portfolio/:address/holdings` reachable; the address holds ≥1 token.
+- **Steps:** (1) Connect wallet → subject resolves to the connected address; the header renders avatar · address chip with the "· you" suffix · "first seen … · N trades" from the summary. (2) Stat cells render TOTAL VALUE (ETH-first with a `UsdAmount` mirror — live source + timestamp, never a USD literal, §2) · LOOT ALL-TIME (the honest **nullable PnL range**, never a fabricated point value) · WALLET ETH — all from the `/v1/portfolio/:address` roll-up, never client price math. (3) Default HOLDINGS tab renders TOKEN / BALANCE / PRICE / VALUE / PNL rows from the holdings payload only; VALUE is client-sortable, default order stays the API's balance-DESC cursor. (4) Mobile: identity block + stat cells stack, the md+ column header hides, rows render as self-labelled cards. (5) Freshness is staleTime + refetch (advisory reads, `api.md` §3.4a) — no WS patch.
+- **assertable-layers:** indexed · UI. _(Read-only page — no transaction; see waivers.)_
+
+### `@flow:PORT-2` — Tab switch: ACTIVITY (historical per-address trade slice)
+- **Actors:** Holder / Visitor with a resolved subject address.
+- **Preconditions:** `GET /v1/portfolio/:address/activity` returns the **shared `TradeRow` shape** (no parallel model).
+- **Steps:** (1) Click ACTIVITY — tab state is view-local, not URL (the address is the shareable unit). (2) Rows render AGE · SIDE · TOKEN · AMOUNT · PRICE. (3) Each row carries a `ConfirmationBadge` from the indexed `confirmationState` — a not-yet-finalized trade is never shown unqualified-final (§2.1/§12.20). This is a **historical read**, already reconciled to indexed truth — not the optimistic feed. (4) The token cell links to `/t/[address]`.
+- **assertable-layers:** indexed · UI. _(The trades' on-chain legs are asserted in TD-2/TD-3/TD-4/TD-5; see waivers.)_
+
+### `@flow:PORT-3` — Tab switch: CREATED (tokens created by this address)
+- **Actors:** Holder / Visitor with a resolved subject address.
+- **Preconditions:** `GET /v1/portfolio/:address/created` returns the **same `TokenCard` projection as `/v1/tokens`** (anti-drift — the `entities/token` card is reused verbatim); listing-gated server-side (§8.4).
+- **Steps:** (1) Click CREATED → grid of TokenCards (responsive 1/2/3 columns). (2) The client renders whatever the API lists — no client-side moderation logic. (3) Empty → "No tokens created" + CTA to `/create`. (4) Card click → `/t/[address]`.
+- **assertable-layers:** indexed · UI. _(Creation's on-chain leg is asserted in LAUNCH-1/LAUNCH-2; see waivers.)_
+
+### `@flow:PORT-4` — Disconnected: connect-wallet empty state
+- **Actors:** Visitor (no wallet, no explicit subject).
+- **Preconditions:** no wallet connected and no `?address=` query param.
+- **Steps:** (1) `/portfolio` renders the "Connect a wallet" empty state with the connect button — **no portfolio request is issued** (queries stay disabled until a subject exists). (2) Connecting a wallet transitions to PORT-1 in place, no reload.
+- **assertable-layers:** UI. _(No subject → no request → nothing on-chain or indexed exists to assert; see waivers.)_
+
+### `@flow:PORT-5` — Cursor pagination (load-more) on the list tabs
+- **Actors:** Holder / Visitor with a resolved subject address.
+- **Preconditions:** a list endpoint (`/holdings`, `/activity`, or `/created`) returns a non-null `nextCursor` (page size 50).
+- **Steps:** (1) The "Load more" button renders only while `nextCursor` is non-null. (2) Click → the next cursor page is fetched and **appended** (infinite query — prior rows keep identity, no re-order jump). (3) While fetching, the button shows "Loading…" and is disabled. (4) On the final page (`nextCursor: null`) the button disappears. Applies uniformly to HOLDINGS, ACTIVITY, and CREATED.
+- **assertable-layers:** indexed · UI. _(Pure indexer-read paging; see waivers.)_
+
+### `@flow:PORT-6` — Address-subject variant: viewing an arbitrary wallet (`?address=`)
+- **Actors:** Visitor (wallet optional).
+- **Preconditions:** `/portfolio?address=0x…` with a well-formed 40-hex address (validated in the server shell; malformed values are ignored and the subject falls back to the connected wallet).
+- **Steps:** (1) The explicit `?address=` takes precedence over the connected wallet as the subject. (2) The header omits the "· you" suffix unless the subject equals the connected wallet. (3) The surface is identical and **read-only** — no trade or collect affordance appears for a foreign address. (4) Switching subjects swaps caches cleanly (query keys are namespaced by lowercased address — no cross-address bleed).
+- **assertable-layers:** indexed · UI. _(Same read-only indexer reads with a different subject; see waivers.)_
+
+### `@flow:PORT-7` — Empty portfolio (never-traded address; never a 404)
+- **Actors:** Holder with a fresh wallet / Visitor viewing an unknown address.
+- **Preconditions:** the subject address has no trades, holdings, or created tokens; `api.md` §3.4a guarantees any address resolves to at worst an **empty** portfolio, never a 404.
+- **Steps:** (1) Summary renders honestly-empty values (zero/none — no fabricated numbers). (2) HOLDINGS → "No holdings yet" + Discover CTA (`/`). (3) ACTIVITY → "No trades yet". (4) CREATED → "No tokens created" + `/create` CTA. (5) Emptiness never gets error treatment.
+- **assertable-layers:** indexed · UI. _(The empty payload is itself an indexer response; see waivers.)_
+
+### `@flow:PORT-8` — Portfolio read failure → per-region error state + retry
+- **Actors:** Holder / Visitor with a resolved subject address.
+- **Preconditions:** a `/v1/portfolio/*` read fails (API unreachable, non-JSON, or error envelope).
+- **Steps:** (1) The failing region renders its `ErrorState` ("Couldn't load summary / holdings / activity / created") with a retry action → refetch. (2) Regions degrade **independently** — a failing summary does not blank the tabs and vice versa. (3) No cached or fabricated substitute values are rendered (§2).
+- **assertable-layers:** UI. _(The failure produces no indexed payload and touches no chain state; the successful-read legs are PORT-1/2/3; see waivers.)_
+
+---
+
 ## 4. Transaction types without a dedicated page surface
 
 ### `@flow:COLLECT-1` — LP fee sweep  ·  tx type `collect(tokenId)`
 - **Actors:** Anyone (permissionless); proceeds go only to the fixed treasury.
 - **Preconditions:** graduated token with accrued V3 LP fees; `LPFeeVault.collect(tokenId)` (no owner, no withdraw, sole external fn).
-- **Steps:** (1) `collect(tokenId)` called. (2) Fees route to the Gnosis Safe treasury; LP principal stays permanently locked. **No v1 UI surface** triggers this (treasury-facing, out of the three pages).
+- **Steps:** (1) `collect(tokenId)` called. (2) Fees route to the Gnosis Safe treasury; LP principal stays permanently locked. **No v1 UI surface** triggers this (treasury-facing; the §12.50 Portfolio page is read-only and exposes no collect surface).
 - **assertable-layers:** on-chain · indexed. _(UI = N/A in v1 — no page surface; see waivers.)_
 
 ---
@@ -290,6 +346,20 @@ Flows declaring fewer than three layers have a rationale row in `docs/user-flows
 | One tx: `Router.createToken{value: deployFee + initialBuy}`; tradeable <1s soft-confirmed | LAUNCH-1, LAUNCH-2 |
 | Economics displayed plainly + exact LP copy (never "burned") | LAUNCH-3 |
 
+### §12.50a Portfolio (addendum §3b — ratification pending)
+| Surface bullet (§12.50a / implemented page) | Flow ID(s) |
+|---|---|
+| Address header (avatar · address · "· you" · first-seen / trade count) | PORT-1, PORT-6 |
+| Stat cells TOTAL VALUE / LOOT ALL-TIME / WALLET ETH (ETH-first, live USD mirror, nullable PnL range) | PORT-1 |
+| HOLDINGS tab (table; mobile card layout) | PORT-1 |
+| ACTIVITY tab (per-address `TradeRow` slice, confirmation badges) | PORT-2 |
+| CREATED tab (`TokenCard` grid, listing-gated) | PORT-3 |
+| Disconnected-wallet connect prompt | PORT-4 |
+| Cursor pagination / load-more (all three list tabs) | PORT-5 |
+| Arbitrary-address subject (`?address=`) | PORT-6 |
+| Empty portfolio (never a 404) | PORT-7 |
+| Read-failure states + retry | PORT-8 |
+
 ### Transaction-type coverage (task-required)
 | Transaction type | Flow ID |
 |---|---|
@@ -322,15 +392,25 @@ Flows declaring fewer than three layers have a rationale row in `docs/user-flows
 | Trust-panel RPC read failure | ERR-13 |
 | WS silence on optimistic trade | ERR-14 |
 
-**Coverage:** all §5.1 (5/5), §5.2 (8/8), §5.3 (5/5) bullets and all 9 transaction types + 15 error paths map to a flow ID. No gaps.
+**Coverage:** all §5.1 (5/5), §5.2 (8/8), §5.3 (5/5) bullets and all 9 transaction types + 15 error paths map to a flow ID. No gaps. The §12.50a Portfolio surface maps to `PORT-1`–`PORT-8` (addendum §3b, ratification pending) — read-only, so the transaction-type and error-path tables above are unchanged.
 
 ## 7. Flow inventory
 
 - Discover: DISC-1..4 (4)
 - Token Detail: TD-1, TD-2, TD-3, TD-3b, TD-4, TD-5, TD-6, TD-7, TD-8, TD-9, TD-10, TD-11, TD-12 (13)
 - Launch: LAUNCH-1, LAUNCH-2, LAUNCH-3 (3)
+- Portfolio (addendum §3b, 2026-07-11 — ratification pending): PORT-1..8 (8)
 - Transaction-only: COLLECT-1 (1)
 - Errors/edges: ERR-1..ERR-14 with ERR-6 split a/b → 15 flows
-- **Total: 36 flows.**
+- **Total: 44 flows** (36 ratified M3-11 + 8 `PORT-*` addendum flows pending ratification).
 
 See `docs/user-flows-waivers.md` for every flow declaring fewer than three assertable layers.
+
+## 8. Redesign reconciliation — ratification addendum (robbed-architect, 2026-07-11)
+
+The ratified four-page redesign (**spec §12.50**, `docs/design/robbed-redesign-plan.md`) landed after this catalog was authored against the three-page §5 baseline. Reconciliation record:
+
+- **`/launch` → `/create` rename (§12.50b):** applied throughout this catalog (§3 heading). `LAUNCH-*` flow IDs are **retained** — the stable-ID rule means IDs never encode routes; re-IDing to `CREATE-*` would churn every `@flow:` tag for zero information. New Create-page-specific flows (if any) may use either prefix; extend `LAUNCH-*` for continuity.
+- **Portfolio `/portfolio` (§12.50a) — COVERAGE GAP, explicitly open:** this catalog contains **no `PORT-*` flows**. Required addendum, **owner: robbed-frontend (author) → robbed-architect (ratify)**, due **before the I-5a `e2e:coverage` baseline is frozen** (the coverage script must not treat the 36-flow total as complete once `/portfolio` ships). Minimum expected flows: header stats render (TOTAL VALUE / LOOT ALL-TIME / WALLET ETH — indexer/API-sourced, never client price math, no USD literals per §2), HOLDINGS / ACTIVITY / CREATED tabs, disconnected-wallet + empty states, and live-patch behavior. Portfolio is **read-only**: it adds **no transaction types** (the 9-type table above stays exhaustive) and **no `collect()` surface** (COLLECT-1 waiver unchanged).
+  - **GAP CLOSED — `PORT-*` addendum authored (§3b):** `AUTHORED-BY: robbed-frontend  DATE: 2026-07-11` · `RATIFIED-BY: (pending robbed-architect)`. Eight flows `PORT-1`–`PORT-8` land in §3b with a §6 traceability table, the §7 inventory update (36 → 44), and matching P-7 waiver rows in `docs/user-flows-waivers.md` (every `PORT-*` flow is <3-layer — Portfolio has no on-chain transaction surface). Coverage of the "minimum expected" list: header stats → PORT-1; tabs → PORT-1/2/3; disconnected + empty states → PORT-4/PORT-7; pagination → PORT-5; arbitrary-address subject (`?address=`, implemented in the route shell) → PORT-6; read-failure → PORT-8. **Ratifier attention — one deliberate deviation from the expectation list:** no **live-patch** flow was authored, because the shipped implementation (and `api.md` §3.4a) makes portfolio reads **advisory** — no WS channel patches them; freshness is ~15s staleTime + refetch (recorded in the flows). Authoring a live-patch flow would make `e2e:coverage` demand an assertion that can never exist (P-7's livelock rule). Architect disposition requested: either ratify the advisory-read semantics as-is, or route a portfolio WS-channel requirement to robbed-indexer and add a `PORT-*` flow then.
+- **Everything else:** re-skin only — the DISC-\*/TD-\* flows, all protocol/copy constraints (§2, §6.5, §12.14, §12.19, §12.20, §12.25), and the waiver set are unaffected by §12.50.

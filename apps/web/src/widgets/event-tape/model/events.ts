@@ -19,8 +19,9 @@ import type {
  *   It NEVER carries mcap / Δ% — those are per-token AGGREGATES. The row's
  *   mcap/Δ% are resolved at render time from the token REGISTRY (a snapshot of
  *   indexer `TokenCard`s), so we display live indexer aggregates by reference and
- *   never fabricate them from a single trade (mirrors token-grid's priceEth-only
- *   patch rule). Unknown tokens render mcap/Δ% as "—", never invented.
+ *   never fabricate them from a single trade — a WS trade may patch ONLY the
+ *   indexer-supplied `priceEth`, never derived aggregates. Unknown tokens render
+ *   mcap/Δ% as "—", never invented.
  *
  * GAP (reported to hoodpad-indexer via the orchestrator): there is no global
  * recent-activity REST endpoint (only per-token `/v1/tokens/:address/trades`), so

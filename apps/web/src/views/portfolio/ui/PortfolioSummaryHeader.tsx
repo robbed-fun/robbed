@@ -33,17 +33,20 @@ export function PortfolioSummaryHeader({
   const { data, isLoading, isError, refetch } = usePortfolioSummary(address);
 
   return (
-    <section className="flex flex-col gap-5 border-b border-border px-4 py-5 md:flex-row md:items-center md:gap-6 md:px-6">
-      <div className="flex items-center gap-3">
+    // Mockup 2c (template.html:497): 18px vertical padding, 14px identity gap.
+    <section className="flex flex-col gap-5 border-b border-border px-4 py-[18px] md:flex-row md:items-center md:gap-6 md:px-6">
+      <div className="flex items-center gap-3.5">
         <span
           aria-hidden
-          className="h-[34px] w-[34px] shrink-0 rounded-full bg-surface-2"
+          className="h-[34px] w-[34px] shrink-0 rounded-full bg-active"
         />
         <div className="flex flex-col gap-0.5">
+          {/* Per-instance: 15px address with an 11px "· you" suffix
+              (template.html:500) — the AddressChip atom default stays 12px. */}
           <AddressChip
             address={address}
             suffix={isSelf ? "you" : undefined}
-            className="text-text"
+            className="text-lg text-text [&>span]:text-xs"
           />
           <MonoText tone="faint" size="xs">
             {isLoading ? (
@@ -85,7 +88,8 @@ export function PortfolioSummaryHeader({
             {isLoading || !data ? (
               <Skeleton className="h-5 w-20" />
             ) : (
-              <PnlRange range={data.pnlAllTime} className="text-lg" />
+              // Mockup "+1.94 ETH" — unit shown, same color (template.html:505).
+              <PnlRange range={data.pnlAllTime} unit="ETH" className="text-lg" />
             )}
           </StatCell>
 
@@ -93,7 +97,14 @@ export function PortfolioSummaryHeader({
             {isLoading || !data ? (
               <Skeleton className="h-5 w-16" />
             ) : (
-              <EthAmount wei={data.walletEthBalance} unit={null} />
+              // Mockup leaves WALLET ETH on the inherited body color — the
+              // text-secondary token (template.html:506) — while TOTAL VALUE is
+              // explicitly the bright text token; override per-instance.
+              <EthAmount
+                wei={data.walletEthBalance}
+                unit={null}
+                className="text-text-secondary"
+              />
             )}
           </StatCell>
         </div>

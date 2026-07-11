@@ -12,7 +12,7 @@ The indexer is the single source of derived truth for ROBBED_:
 
 1. Indexes the six event families (§8, §12.15–16): `TokenCreated`, `Trade`, `Graduated`, LaunchToken `Transfer`, V3 `Swap`, V3 `Collect`.
 2. Maintains **venue-continuous** price/candle series per token across graduation (§5.2, §8) — one unbroken series from curve trades into V3 swaps.
-3. Tracks **confirmation state** per indexed event: `soft_confirmed` → `posted_to_l1` → `finalized` (§2.1) as a first-class column.
+3. Tracks **confirmation state** per indexed event: `soft_confirmed` → `posted_to_l1` → `finalized` (§2.1) — derived at read time from the `confirmation_watermarks` sidecar (§3.8/§5, spec §12.48c; per-row storage on Ponder tables is impossible, OI-11).
 4. Verifies metadata integrity: R2 JSON vs on-chain `metadataHash` commitment (§8.3) — feeds the Trust panel (§5.2).
 5. Maintains holder balances (portfolio-ready from day 1, §5.4) and `creator` / `creatorFeeBps` per token from day 1 (§7).
 6. Publishes every indexed event to Redis for the Bun WS fanout with a <500ms event-to-browser target (§8).
@@ -35,7 +35,10 @@ WETH_ADDRESS              0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73 (asserted a
 REDIS_URL                 pub/sub
 DATABASE_URL              Postgres (pg_trgm extension required; migration asserts it)
 R2_METADATA_BASE_URL      CDN base for canonical metadata JSON
-ETH_USD_SOURCE_URL        price source for snapshots (see §3.9)
+ETH_USD_SOURCE_URL        HTTP fallback price source for snapshots (DefiLlama/Coinbase; see §3.9)
+CHAINLINK_ETH_USD_FEED    §12.51 Chainlink ETH/USD proxy; default 0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9; 'off' disables (LOCAL/TESTNET)
+ETH_USD_POLL_INTERVAL_MS  poller cadence, default 30000 (§3.9 band 30–60s)
+ETH_USD_CHAINLINK_STALENESS_SECONDS  reject feed answers older than this, default 3600 (§3.9)
 START_BLOCK               factory deploy block (backfill floor)
 ```
 
@@ -106,8 +109,8 @@ CREATE TABLE tokens (
   block_number         bigint NOT NULL,            -- L2 block from log
   tx_hash              text NOT NULL,
   log_index            integer NOT NULL,
-  confirmation_state   text NOT NULL DEFAULT 'soft_confirmed'
-                       CHECK (confirmation_state IN ('soft_confirmed','posted_to_l1','finalized')),
+  -- confirmation tier: NOT stored (OI-11/§12.48c) — derived at read time from
+  -- block_number vs the confirmation_watermarks sidecar (§3.8, §5)
   UNIQUE (tx_hash, log_index)
 );
 
@@ -120,7 +123,7 @@ CREATE INDEX tokens_creator_trgm_idx ON tokens USING gin (creator gin_trgm_ops);
 CREATE INDEX tokens_created_at_idx   ON tokens (created_at DESC);
 CREATE INDEX tokens_volume_24h_idx   ON tokens (volume_eth_24h DESC);
 CREATE INDEX tokens_progress_idx     ON tokens (graduated, real_eth_reserves DESC);  -- King of the Hill / progress sort
-CREATE INDEX tokens_block_number_idx ON tokens (block_number);                        -- confirmation watermark updates
+CREATE INDEX tokens_block_number_idx ON tokens (block_number);                        -- provenance / range reads
 ```
 
 Notes:
@@ -166,13 +169,13 @@ CREATE TABLE trades (
   block_timestamp      bigint NOT NULL,
   tx_hash              text NOT NULL,
   log_index            integer NOT NULL,
-  confirmation_state   text NOT NULL DEFAULT 'soft_confirmed'
-                       CHECK (confirmation_state IN ('soft_confirmed','posted_to_l1','finalized')),
+  -- confirmation tier: NOT stored (OI-11/§12.48c) — derived at read time from
+  -- block_number vs the confirmation_watermarks sidecar (§3.8, §5)
   UNIQUE (tx_hash, log_index)
 );
 CREATE INDEX trades_token_time_idx   ON trades (token_address, block_timestamp DESC);
 CREATE INDEX trades_trader_idx       ON trades (trader, block_timestamp DESC);   -- Phase-2 portfolio ready (§5.4)
-CREATE INDEX trades_block_number_idx ON trades (block_number);                    -- watermark updates
+CREATE INDEX trades_block_number_idx ON trades (block_number);                    -- `since` backfill / range reads
 ```
 
 **Design decision — unified trades table:** curve `Trade` and V3 `Swap` both insert into `trades` with a `venue` discriminator. This is what makes venue continuity (§5.2) structurally trivial: the candle pipeline and trade feed read one table ordered by `(block_number, log_index)` and never special-case graduation. *Interpretation, recommended default* — the spec says "one series" but not one table; a two-table union view would also satisfy it at higher complexity for zero benefit.
@@ -217,8 +220,8 @@ CREATE TABLE graduations (
   block_timestamp      bigint NOT NULL,
   tx_hash              text NOT NULL,
   log_index            integer NOT NULL,
-  confirmation_state   text NOT NULL DEFAULT 'soft_confirmed'
-                       CHECK (confirmation_state IN ('soft_confirmed','posted_to_l1','finalized')),
+  -- confirmation tier: NOT stored (OI-11/§12.48c) — derived at read time from
+  -- block_number vs the confirmation_watermarks sidecar (§3.8, §5)
   UNIQUE (tx_hash, log_index)
 );
 CREATE INDEX graduations_block_number_idx ON graduations (block_number);
@@ -258,8 +261,8 @@ CREATE TABLE fee_collections (
   block_timestamp      bigint NOT NULL,
   tx_hash              text NOT NULL,
   log_index            integer NOT NULL,
-  confirmation_state   text NOT NULL DEFAULT 'soft_confirmed'
-                       CHECK (confirmation_state IN ('soft_confirmed','posted_to_l1','finalized')),
+  -- confirmation tier: NOT stored (OI-11/§12.48c) — derived at read time from
+  -- block_number vs the confirmation_watermarks sidecar (§3.8, §5)
   UNIQUE (tx_hash, log_index)
 );
 CREATE INDEX fee_collections_token_idx ON fee_collections (token_address, block_timestamp DESC);
@@ -285,8 +288,8 @@ CREATE TABLE transfers (
   block_timestamp      bigint NOT NULL,
   tx_hash              text NOT NULL,
   log_index            integer NOT NULL,
-  confirmation_state   text NOT NULL DEFAULT 'soft_confirmed'
-                       CHECK (confirmation_state IN ('soft_confirmed','posted_to_l1','finalized')),
+  -- confirmation tier: NOT stored (OI-11/§12.48c) — derived at read time from
+  -- block_number vs the confirmation_watermarks sidecar (§3.8, §5)
   UNIQUE (tx_hash, log_index)
 );
 CREATE INDEX transfers_token_time_idx ON transfers (token_address, block_timestamp DESC);
@@ -347,7 +350,7 @@ CREATE TABLE confirmation_watermarks (
 );
 ```
 
-Authoritative rule: an event's state is `finalized` if `block_number <= finalized_block`, else `posted_to_l1` if `<= safe_block`, else `soft_confirmed`. The per-row `confirmation_state` columns are a **materialization** of this rule (spec requires a first-class column) maintained by ranged batch updates (§5 below). Consumers may trust either; they can never disagree for longer than one tracker tick.
+Authoritative rule: an event's state is `finalized` if `block_number <= finalized_block`, else `posted_to_l1` if `<= safe_block`, else `soft_confirmed`. This singleton IS the §12.48c sidecar: per-row `confirmation_state` is **not stored anywhere** — it is **derived at read time** from `block_number` vs these watermarks (OI-11 verdict, §7.3: external per-row writes into Ponder tables are silently reverted by the indexing-store cache and forbidden by Ponder's docs). The API emits the derived value as a `confirmation_state` SELECT column (`apps/api/src/lib/confirmation.ts` `confirmationStateSql`) so the shared db-row shapes are unchanged; DTO projections use the same shared `stateForBlock` rule. One rule, one storage location — the two derivation surfaces can never disagree.
 
 ### 3.9 ETH/USD snapshots **[offchain]** (§2 hard rule)
 
@@ -359,6 +362,8 @@ CREATE TABLE eth_usd_snapshots (
 );
 ```
 A small poller (inside the indexer container) writes a snapshot every 30–60s. Every USD figure anywhere in the product is `eth_value × latest snapshot`, rendered with the snapshot timestamp available. Source priority: Chainlink ETH/USD feed on 4663 if one exists (check at implementation time), else an HTTPS source (DefiLlama/Coinbase) — configured, never inline (OI-6).
+
+**Status: IMPLEMENTED (2026-07-11, basis spec §12.51)** — `apps/indexer/src/jobs/ethUsd.ts`, started from the sidecar (§7). Chainlink branch per §12.51: proxy default `0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9` (env override `CHAINLINK_ETH_USD_FEED`; `off` disables), source label `chainlink:4663`, **mandatory fail-closed startup assertions** (`description() == "ETH / USD"`, `decimals() == 8`) — an assertion failure disables the poller entirely (the HTTP fallback never masks a misconfigured feed; `eth_usd_snapshot_age_seconds` pages instead). 4663-mainnet-only gate = runtime RPC `eth_chainId` (testnet 46630 / fresh local chains skip the branch automatically; a 4663 fork works because the feed exists in fork state; a fresh chain launched as 4663 sets `off`). Runtime staleness check on `latestRoundData().updatedAt` (`ETH_USD_CHAINLINK_STALENESS_SECONDS`, default 3600s) → rejected answers fall back to the documented HTTP chain (`ETH_USD_SOURCE_URL`, DefiLlama/Coinbase, labeled `defillama`/`coinbase`); all-source failure records NOTHING (§2 — never fabricated; age gauge is the staleness surface). Cadence `ETH_USD_POLL_INTERVAL_MS` (default 30s). Minimal AggregatorV3Interface ABI (`aggregatorV3Abi`) and the feed address const (`CHAINLINK_ETH_USD_PROXY_4663`) are imported from `@robbed/shared` (adopted 2026-07-11; single-source per the anti-drift rule).
 
 ### 3.10 Metadata verification **[offchain]** (§8.3 — see §6)
 
@@ -450,9 +455,8 @@ change24hPct = (lastPrice − anchorPrice) / anchorPrice
 Arbitrum Orbit L2 RPCs expose the `safe` and `finalized` block tags on the child chain: `safe` = included in a batch posted to L1; `finalized` = that batch's L1 block is finalized. A **confirmation tracker** loop (in the indexer container, independent of Ponder's sync):
 
 1. Every ~5s (posting cadence is minutes; finality ~13min+challenge context — 5s polling is more than sufficient), fetch `eth_getBlockByNumber("safe")` and `("finalized")` from the RPC.
-2. Update the `confirmation_watermarks` singleton if either advanced.
-3. Materialize per-row states with ranged updates, per event table:
-   `UPDATE t SET confirmation_state='posted_to_l1' WHERE block_number <= $safe AND confirmation_state='soft_confirmed'` (and analogously for `finalized`). Index on `block_number` makes these cheap; states are monotonic so updates never flip backwards.
+2. Advance the `confirmation_watermarks` sidecar singleton MONOTONICALLY (`safe`/`finalized` only ever move forward; a transient lower reading is ignored) if either advanced.
+3. **No per-row writes** (OI-11 / spec §12.48c, implemented 2026-07-11): per-row `confirmation_state` is derived at READ time as a pure function of `block_number` vs the watermark singleton. The originally-designed ranged `UPDATE`s on Ponder tables were disproven by the OI-11 verification (§7.3, decisions §11 — ponder 0.16.8's indexing-store cache silently reverts external column updates on handler-mutated rows, flapping states backwards) and are gone; monotonicity now holds structurally, because the derivation rule (`stateForBlock`, `@robbed/shared`) is monotone in the watermark and the watermark never regresses. Read surfaces: the API's SQL derivation (`confirmationStateSql`) inside every SELECT returning shared db-row shapes, and the TS DTO projection (`projectConfirmation`) — both from the one shared rule.
 4. Publish one message to Redis channel `global:confirmations`: `{ type:'confirmations', safeBlock, finalizedBlock, ts }`.
 
 Verification of the tag support against the actual Robinhood RPC is an implementation-start task; **fallback if tags are unsupported:** read the Rollup/SequencerInbox contracts on L1 (batch-posted watermark from `SequencerBatchDelivered`, finalized from node confirmations) via an L1 RPC — more moving parts, only if needed (OI-8).
@@ -461,7 +465,7 @@ Verification of the tag support against the actual Robinhood RPC is an implement
 
 - Every WS event message carries `confirmationState` (always `soft_confirmed` at publish time — publish happens in the handler, at head).
 - Clients upgrade states **locally** from `global:confirmations` watermark messages: any held event with `blockNumber <= safeBlock` becomes `posted_to_l1`, etc. This satisfies "WS update messages" (§2.1/§8) with O(1) messages per watermark advance instead of O(rows) — no per-row fanout, no DB reads in the hot path. *Ratified (spec §12.20).*
-- REST reads return the materialized column.
+- REST reads return the read-derived `confirmation_state` (SQL derivation against the watermark sidecar — never staler than the watermark; there is no lagging materialized column).
 
 ### 5.3 Reorg interaction
 
@@ -501,7 +505,7 @@ Publish happens at the end of each handler, after the DB write, fire-and-forget 
 
 ### 7.3 Table ownership
 
-Ponder-managed (schema in `ponder.schema.ts`): `tokens`, `trades`, `transfers`, `graduations`, `fee_collections`, `balances`, `candles`. Side-process-managed (plain migrations in `apps/indexer/migrations/`): the four **[offchain]** tables. The confirmation tracker's ranged `UPDATE` on Ponder tables' `confirmation_state` is the one sanctioned external write into Ponder-managed tables; it is monotonic and reorg-compatible (§5.3). If the Ponder version in use forbids external writes to its live views, the fallback is a separate `event_confirmations` sidecar table joined at read time — decide at implementation against the pinned Ponder version (OI-11).
+Ponder-managed (schema in `ponder.schema.ts`): `tokens`, `trades`, `transfers`, `graduations`, `fee_collections`, `balances`, `candles`. Side-process-managed (plain migrations in `apps/indexer/migrations/`): the four **[offchain]** tables. **There are NO external writes into Ponder-managed tables — none.** VERDICT (2026-07-11, OI-11 verified — see §10 row + decisions §11): on the pinned ponder 0.16.8 a direct external `UPDATE` is NOT safe for `tokens` (indexing-store cache full-row flushes silently revert external column updates on rows the handlers keep mutating), and Ponder's docs forbid external writes outright ("Direct SQL queries should not insert, update, or delete rows from Ponder tables"). **REWORKED (2026-07-11): the §12.48c sidecar is implemented as pure READ-DERIVATION** — the `confirmation_watermarks` singleton is the sidecar, the per-row `confirmation_state` columns were removed from `ponder.schema.ts`, the tracker (`src/confirmation.ts`/`confirmationStore.ts`) writes only the watermark singleton, and readers derive the tier per row (§3.8/§5). A per-row `event_confirmations` join table was weighed and rejected: the tier is fully determined by `(block_number, watermarks)`, so per-row rows would re-introduce O(rows) writes for zero information.
 
 ### 7.4 Dynamic sources
 
@@ -510,6 +514,20 @@ Ponder-managed (schema in `ponder.schema.ts`): `tokens`, `trades`, `transfers`, 
 - `Collect`: single source on the NPM address, handler filters by known `lp_token_id`s (kept in an in-memory set loaded at startup + updated on `Graduated` — no per-event DB read).
 
 **Same-tx factory-child capture — M2-0b spike + pre-sanctioned fallback (§12.41, E-3).** A curve's atomic initial buy emits `Trade` in the **same tx** as the `TokenCreated` that registers that curve as a Ponder `factory()` child. The **M2-0b spike** (runs at Phase-I/M2 start once the local stack is up — anvil+Ponder+Postgres, using the I-2 same-tx create+buy fixture) verifies Ponder captures such same-tx child events; it is BLOCKING before M2-5 handler work relies on native same-tx capture. **Pre-sanctioned fallback if Ponder cannot:** the `TokenCreated` handler derives the creator's initial buy by parsing the first `Trade` log from the `createToken` transaction **receipt** (via the §12.15 event ABI), instead of relying on child-source firing for the same-tx `Trade`. This fallback is pre-approved (spec §12.41), so a failing spike does **not** re-escalate — implement the receipt path and record the Ponder-version finding here. Record the spike outcome (native-capture vs receipt-fallback) in this section at M2.
+
+**SPIKE OUTCOME (M2-0b, 2026-07-11): NATIVE CAPTURE — Ponder DOES index same-tx child events. The receipt fallback (§12.41) is NOT needed.** Verified two ways against the pinned version — **ponder 0.16.8** (lockfile resolution of the `^0.16.6` range in `apps/indexer/package.json`; mechanism verified in the installed package's shipped source, `apps/indexer/node_modules/ponder/src/`):
+
+1. **Source-level mechanism (authoritative — the ponder.sh factory docs are silent on same-block behavior, checked 2026-07-11).** Child-address registration is **block-granular and inclusive of the registration block**, and address resolution happens **before** log filtering in both sync paths:
+   - *Matcher:* `isAddressMatched` (`src/runtime/filter.ts:74-92`) matches a child's log iff `childAddresses.get(address) <= log.blockNumber` — `<=`, so events in the registration block itself match.
+   - *Realtime:* `fetchBlockEventData` (`src/sync-realtime/index.ts`) fetches **all** logs of each new block via `eth_getLogs({ blockHash })` with **no address filter** (line ~314), scans them for factory matches to build `blockChildAddresses` (lines 470-509), then `filterBlockEventData` merges those children into the known set **before** filtering event logs against filters (lines 707-752). A child registered at block N therefore has its block-N logs (same tx included) already in hand and matched.
+   - *Historical:* `syncBlockRangeData` (`src/sync-historical/index.ts:434-599`) first awaits `syncAddressFactory` for the chunk's factory intervals — populating the shared child-address record (lines 361-431, registration block recorded from the factory log, min-wins on re-discovery) — and only **then** builds the child `eth_getLogs` queries from that record over the **same interval** (lines 482-599), which spans the registration block; per-block filtering re-applies `isAddressMatched` with `<=` (line ~726).
+2. **Runnable spike (no Docker: anvil + `ponder dev` on its embedded PGlite — no Postgres daemon needed).** Minimal `SpikeFactory.createChildAndTrade()` emits `ChildCreated` (factory registration event) then calls the fresh child, which emits `Trade` — same tx, logIndex 0/1. Result: all four events captured, in `(block, logIndex)` order, with **zero** handler errors, on **both** paths:
+   - *Historical* (tx sent before Ponder started): `ChildCreated` block 2 logIndex 0 + same-tx child `Trade` block 2 logIndex 1 (tx `0x1fda3550…3665f32`) — both delivered.
+   - *Realtime* (tx sent while live): `ChildCreated` block 3 logIndex 0 + same-tx child `Trade` block 3 logIndex 1 (tx `0x9282a0ab…13b33c`) — both delivered.
+
+   Spike artifacts were scratchpad-only (throwaway contracts + minimal Ponder app); nothing checked in.
+
+   **Ordering guarantee the handlers may rely on (and one contract-side assumption to keep true):** capture is block-granular, and Ponder delivers same-block events to handlers in `logIndex` order — so the `TokenCreated` handler runs before the same-tx `Trade` handler **iff `TokenCreated`'s logIndex is lower**, which the §12.15 emission order guarantees (factory emits `TokenCreated` before the initial buy executes on the curve). If M1 artifacts ever inverted that emission order, the `Trade` handler would fire before the token row exists — that would be an event-shape/ordering divergence to escalate per §3, not to work around. M2-5 handlers should keep the cheap guard of upserting/asserting token existence in the `Trade` handler.
 
 ## 8. Redis pub/sub → Bun WS fanout (§8)
 
@@ -625,12 +643,12 @@ Emitted as Prometheus-style metrics + alert rules (delivery mechanism per infra 
 | OI-3 | Indexing LaunchToken `Transfer` (6th event family) for exact balances | — | **RESOLVED — spec §12.16:** adopted; sole source of balance truth |
 | OI-4 | Pre-graduation V3 pool activity: index or ignore? | — | **RESOLVED — spec §12.16:** not indexed; curve is sole venue until `Graduated`; gate-7 alerting covers pool griefing |
 | OI-5 | V3 `Swap.recipient` is often a router, so per-EOA `total_eth_in/out` for v3 legs is approximate | — | **RESOLVED — spec §12.16:** accepted; balances exact via Transfer, v3 cost basis best-effort until Phase 2 |
-| OI-6 | ETH/USD source on 4663 (Chainlink feed existence unverified) | Chainlink if deployed on 4663, else DefiLlama with timestamp; config-driven | **OPEN — spec §13**; check at M2 start |
+| OI-6 | ETH/USD source on 4663 (Chainlink feed existence unverified) | Chainlink if deployed on 4663, else DefiLlama with timestamp; config-driven | **VERIFIED 2026-07-11 (decisions §11): Chainlink ETH/USD feed EXISTS on 4663** — proxy `0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9` (aggregator `0x6091E64eb7138EEF066a80FD3A0d7427B91f2721`, 8 decimals, `description()` = "ETH / USD", confirmed via `eth_call` on the public 4663 RPC). Poller (M2) reads the feed, source label `chainlink:4663` (§3.9), staleness-checked; DefiLlama/Coinbase HTTP stays the configured fallback + the LOCAL/TESTNET source. Address recorded in spec **§12.51**, §13 OI-6 closed. **Poller IMPLEMENTED 2026-07-11** with the §12.51 fail-closed assertions — see §3.9 status |
 | OI-7 | Candle interval set `1s/15s/1m/5m/15m/1h` | — | **RESOLVED — spec §12.17:** as proposed |
-| OI-8 | `safe`/`finalized` block-tag support on Robinhood RPC | Verify day 1 of M2; fallback = L1 rollup-contract watermarks | **OPEN — spec §13**; implementation-time check |
+| OI-8 | `safe`/`finalized` block-tag support on Robinhood RPC | Verify day 1 of M2; fallback = L1 rollup-contract watermarks | **VERIFIED 2026-07-11 (decisions §11): both tags SUPPORTED** on `https://rpc.mainnet.chain.robinhood.com` — `eth_getBlockByNumber["safe"/"finalized",false]` return full Arbitrum block objects (incl. `l1BlockNumber`); observed safe 7,082,802 > finalized 7,078,967, `eth_chainId` = 4663. §5.1 tag path is live; M2-3b L1-watermark reader NOT funded — dormant pre-sanctioned fallback only |
 | OI-9 | Confirmation propagation via watermark broadcast (O(1)) vs per-event WS updates | — | **RESOLVED — spec §12.20:** watermark broadcast |
 | OI-10 | Server-side verification of `imageHash` inside metadata JSON | — | **RESOLVED — spec §12.23:** deferred post-v1; carried in JSON, client-verifiable |
-| OI-11 | External `UPDATE` of `confirmation_state` on Ponder-managed tables vs sidecar table | Direct update if the pinned Ponder version tolerates it; else sidecar `event_confirmations` join | **OPEN — spec §13**; check against pinned Ponder version at M2 |
+| OI-11 | External `UPDATE` of `confirmation_state` on Ponder-managed tables vs sidecar table | Direct update if the pinned Ponder version tolerates it; else sidecar `event_confirmations` join | **VERIFIED 2026-07-11 (decisions §11): direct UPDATE NOT tolerated by ponder 0.16.8 for hot rows** — the indexing-store cache retains rows in memory across realtime blocks (cached keys are never re-read from the DB) and flushes ALL columns from the cached copy, so an external `confirmation_state` upgrade on `tokens` (mutated on every Trade) is silently reverted by that token's next flush → §5.1 monotonicity violated. **§12.48c sidecar is REQUIRED**. **Rework LANDED 2026-07-11 (robbed-indexer):** implemented as pure read-derivation — per-row columns removed from `ponder.schema.ts`, tracker writes only the `confirmation_watermarks` sidecar singleton, tiers derived at read time (§3.8/§5/§7.3) |
 | OI-12 | WS replay buffer vs REST-heal on reconnect | — | **RESOLVED — spec §12.23:** REST-heal only in v1 |
 | OI-13 | V3 Factory / NPM addresses on 4663 | From official registry at implementation time; startup fails if unset (never guessed) | **OPEN — spec §13** |
 
@@ -640,7 +658,7 @@ Emitted as Prometheus-style metrics + alert rules (delivery mechanism per infra 
 - [ ] Schema materialized exactly as §3 (Ponder tables + offchain migrations), `pg_trgm` GIN indexes present, startup assertions in place
 - [ ] `creator` + `creatorFeeBps` on every token row from first indexed event (§7)
 - [ ] Candle series proven continuous across a simulated graduation in tests; all six intervals; rebuild script produces identical output from raw events
-- [ ] Confirmation tracker live: watermarks, ranged materialization, `global:confirmations` broadcast; transitions unit-tested incl. monotonicity and reorg
+- [ ] Confirmation tracker live: watermark sidecar + read-time tier derivation (OI-11/§12.48c — no per-row writes), `global:confirmations` broadcast; transitions unit-tested incl. monotonicity and reorg
 - [ ] Metadata verification: match / mismatch / unfetched all tested; canonicalization shared with frontend via `packages/shared` with shared fixtures; re-verify schedule implemented
 - [ ] Redis publish from every handler with zero DB reads in the publish path; message schemas exported from `packages/shared`
 - [ ] Backfill suppresses publishes; crash-resume verified

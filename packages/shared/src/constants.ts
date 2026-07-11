@@ -39,6 +39,24 @@ export const UNISWAP_V3 = {
 } as const;
 
 /**
+ * Chainlink ETH/USD PROXY on Robinhood Chain 4663 — MAINNET-4663 ONLY.
+ * Recorded in spec §12.51 (2026-07-11, closes §13 OI-6; live-verified via
+ * `eth_call`: `description() == "ETH / USD"`, `decimals() == 8`). Transcribed
+ * VERBATIM from §12.51, casing preserved as recorded; the aggregator behind
+ * the proxy is 0x6091E64eb7138EEF066a80FD3A0d7427B91f2721 (informational).
+ * The ONLY hex literal for this feed in the repo. This is a feed ADDRESS, not
+ * a market metric — the §2 no-hardcoded-metrics rule is untouched: prices are
+ * always read live from the feed. LOCAL/TESTNET (non-4663 chains) never use
+ * it — they take the documented HTTP fallback (indexer.md §3.9), and the
+ * poller's `CHAINLINK_ETH_USD_FEED` env override (`off` disables) remains the
+ * runtime switch. The consuming poller MUST keep the §12.51 fail-closed
+ * startup assertions (description + decimals) — mirroring the §12.28
+ * deploy-time assertion discipline above. ABI: abi/external.ts aggregatorV3Abi.
+ */
+export const CHAINLINK_ETH_USD_PROXY_4663 =
+  "0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9" as const;
+
+/**
  * The canonical LP sentence — single string constant everywhere, including the
  * §5.2 Trust panel (spec §12.14; CLAUDE.md hard rule). Never "burned".
  */

@@ -70,7 +70,6 @@ ponder.on("UniswapV3Pool:Swap", async ({ event, context }) => {
     blockTimestamp: ts,
     txHash: event.transaction.hash,
     logIndex: event.log.logIndex,
-    confirmationState: "soft_confirmed",
   });
 
   await context.db.update(tokens, { address: grad.tokenAddress }).set((row) => ({

@@ -100,14 +100,14 @@ describe("sells are never gated by pauseBuys (§6.5/§12.25)", () => {
     // Buy tab (default): the exact pause copy shows, the Buy button is disabled.
     typeAmount("0.5");
     expect(screen.getByText(PAUSE_COPY)).toBeTruthy();
-    const buyBtn = screen.getByRole("button", { name: "Buy" });
+    const buyBtn = screen.getByRole("button", { name: "BUY HOODIE" });
     expect((buyBtn as HTMLButtonElement).disabled).toBe(true);
 
     // Switch to Sell — the pause copy disappears and Sell is enabled.
     fireEvent.click(screen.getByRole("tab", { name: /sell/i }));
     act(() => vi.advanceTimersByTime(300));
     expect(screen.queryByText(PAUSE_COPY)).toBeNull();
-    const sellBtn = screen.getByRole("button", { name: "Sell" });
+    const sellBtn = screen.getByRole("button", { name: "SELL HOODIE" });
     expect((sellBtn as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -116,7 +116,7 @@ describe("sells are never gated by pauseBuys (§6.5/§12.25)", () => {
     render(<TradeWidget token={tokenDetail({ status: "curve" })} />);
     typeAmount("0.5");
     expect(screen.queryByText(PAUSE_COPY)).toBeNull();
-    expect((screen.getByRole("button", { name: "Buy" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "BUY HOODIE" }) as HTMLButtonElement).disabled).toBe(false);
   });
 });
 
@@ -142,7 +142,7 @@ describe("invisible venue switch — status selects the engine (§5.2)", () => {
     render(<TradeWidget token={tokenDetail({ status: "graduated", graduated: true })} />);
     typeAmount("0.5");
     // The V3 quote drives the expected-out + enables Buy — inline routing, no deep link.
-    expect((screen.getByRole("button", { name: "Buy" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "BUY HOODIE" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("post-grad Sell is never gated (no pause authority post-graduation §6.5)", () => {
@@ -152,7 +152,7 @@ describe("invisible venue switch — status selects the engine (§5.2)", () => {
     fireEvent.click(screen.getByRole("tab", { name: /sell/i }));
     typeAmount("100");
     // …the V3 venue never consults it; Sell stays live and submittable.
-    expect((screen.getByRole("button", { name: "Sell" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "SELL HOODIE" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("graduating status → both sides locked with interstitial (not 'paused')", () => {

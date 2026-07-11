@@ -35,6 +35,7 @@ import type {
   TokenDetailRow,
   TokenListRow,
 } from "./db";
+import { confirmationStateSql } from "./confirmation";
 import { sortDef } from "../search/sort";
 
 const num = (v: unknown): number => (v == null ? 0 : Number(v));
@@ -43,8 +44,12 @@ const nstr = (v: unknown): string | null => (v == null ? null : String(v));
 const iso = (v: unknown): string =>
   v instanceof Date ? v.toISOString() : String(v ?? new Date(0).toISOString());
 
+// `confirmation_state` is DERIVED per row from the watermark sidecar (OI-11 /
+// §12.48c — no stored column on Ponder tables); the shared db-row shapes are
+// satisfied by the derived SELECT column.
 const TOKEN_LIST_SELECT = `
-  t.*, m.visibility AS m_visibility, m.impersonation_flag AS m_impersonation_flag,
+  t.*, ${confirmationStateSql("t.block_number")} AS confirmation_state,
+  m.visibility AS m_visibility, m.impersonation_flag AS m_impersonation_flag,
   m.impersonation_ticker AS m_impersonation_ticker`;
 const TOKEN_LIST_FROM = `
   FROM tokens t LEFT JOIN moderation_status m ON m.token_address = t.address`;
@@ -144,6 +149,9 @@ function mapHolding(r: Record<string, unknown>): PortfolioHoldingRow {
     trade_fee_bps: num(r.trade_fee_bps),
   };
 }
+
+/** trades rows + the read-derived tier (OI-11 — no stored column). */
+const TRADE_SELECT = `trades.*, ${confirmationStateSql("trades.block_number")} AS confirmation_state`;
 
 const HOLDING_SELECT = `
   b.token_address, b.balance, b.total_eth_in, b.total_bought_tokens,
@@ -355,7 +363,7 @@ export function createBunDb(config: Config): Db {
         where.push(`(block_timestamp, id) < ($${params.length - 1}, $${params.length})`);
       }
       params.push(input.limit);
-      const text = `SELECT * FROM trades WHERE ${where.join(" AND ")}
+      const text = `SELECT ${TRADE_SELECT} FROM trades WHERE ${where.join(" AND ")}
         ORDER BY block_timestamp DESC, id DESC LIMIT $${params.length}`;
       const rows = (await ro.unsafe(text, params)) as Record<string, unknown>[];
       return rows.map(mapTrade);
@@ -363,7 +371,7 @@ export function createBunDb(config: Config): Db {
 
     async getTradesByTx(txHash) {
       const rows = (await ro.unsafe(
-        "SELECT * FROM trades WHERE tx_hash = $1 ORDER BY log_index ASC",
+        `SELECT ${TRADE_SELECT} FROM trades WHERE tx_hash = $1 ORDER BY log_index ASC`,
         [txHash],
       )) as Record<string, unknown>[];
       return rows.map(mapTrade);
@@ -422,7 +430,9 @@ export function createBunDb(config: Config): Db {
 
     async getFeeCollections(token) {
       const rows = (await ro.unsafe(
-        "SELECT * FROM fee_collections WHERE token_address = $1 ORDER BY block_timestamp DESC",
+        `SELECT fee_collections.*,
+           ${confirmationStateSql("fee_collections.block_number")} AS confirmation_state
+         FROM fee_collections WHERE token_address = $1 ORDER BY block_timestamp DESC`,
         [token],
       )) as Record<string, unknown>[];
       return rows.map(mapFee);
@@ -489,7 +499,7 @@ export function createBunDb(config: Config): Db {
         where.push(`(block_timestamp, id) < ($${params.length - 1}, $${params.length})`);
       }
       params.push(input.limit);
-      const text = `SELECT * FROM trades WHERE ${where.join(" AND ")}
+      const text = `SELECT ${TRADE_SELECT} FROM trades WHERE ${where.join(" AND ")}
         ORDER BY block_timestamp DESC, id DESC LIMIT $${params.length}`;
       const rows = (await ro.unsafe(text, params)) as Record<string, unknown>[];
       return rows.map(mapTrade);

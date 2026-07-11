@@ -46,8 +46,8 @@ describe("TrustPanel sourcing", () => {
     readContractsMock.mockReturnValue(liveReads());
     render(<TrustPanel token={tokenDetail()} />);
 
-    // On-chain realEth 3.5 renders; the API's cached 9.999 does NOT.
-    expect(screen.getByText(/3\.5 ETH/)).toBeTruthy();
+    // On-chain realEth 3.5 renders (zero-padded to 4 dec); the cached 9.999 does NOT.
+    expect(screen.getByText(/3\.5000 ETH/)).toBeTruthy();
     expect(screen.queryByText(/9\.999/)).toBeNull();
     expect(screen.getByText(/read from chain/)).toBeTruthy();
   });

@@ -52,7 +52,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`dark ${plexMono.variable}`} suppressHydrationWarning>
-      <body className="min-h-dvh bg-bg font-mono text-text antialiased">
+      {/* Base text = the secondary token (mockup page-wrapper color); bright text is opt-in. */}
+      <body className="min-h-dvh bg-bg font-mono text-text-secondary antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>

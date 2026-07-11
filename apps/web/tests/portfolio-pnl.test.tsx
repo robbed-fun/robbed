@@ -45,18 +45,33 @@ describe("PnlRange", () => {
         })}
       />,
     );
-    const el = screen.getByText("+0.5…+0.7");
+    const el = screen.getByText("+0.50…+0.70");
     expect(el.className).toContain("text-green");
     expect(el.getAttribute("title")).toContain("estimated");
   });
 
-  it("all-loss range → red", () => {
+  it("all-loss range → red, with true minus U+2212", () => {
     render(
       <PnlRange
         range={range({ low: "-70000000000000000", high: "-70000000000000000" })}
       />,
     );
-    expect(screen.getByText("-0.07").className).toContain("text-red");
+    expect(screen.getByText("−0.07").className).toContain("text-red");
+  });
+
+  it("unit='ETH' → LOOT ALL-TIME shape '+0.62 ETH', unit inside the toned span", () => {
+    render(<PnlRange range={range({})} unit="ETH" />);
+    // Unit is a child span so it inherits the number's color (mockup one-color cell).
+    const unitEl = screen.getByText("ETH");
+    const el = unitEl.parentElement!;
+    expect(el.textContent).toBe("+0.62ETH"); // visual gap is ml-1, not a text space
+    expect(el.className).toContain("text-green");
+  });
+
+  it("unit is suppressed for the null placeholder (no '— ETH')", () => {
+    render(<PnlRange range={null} unit="ETH" />);
+    expect(screen.getByText("—").textContent).toBe("—");
+    expect(screen.queryByText("ETH")).toBeNull();
   });
 
   it("a range straddling zero stays muted (no false win/loss)", () => {
@@ -69,6 +84,6 @@ describe("PnlRange", () => {
         })}
       />,
     );
-    expect(screen.getByText("-0.1…+0.3").className).toContain("text-muted");
+    expect(screen.getByText("−0.10…+0.30").className).toContain("text-muted");
   });
 });

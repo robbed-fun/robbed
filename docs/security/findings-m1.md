@@ -47,11 +47,11 @@ Status legend: **FIXED** (change verified in current tree) · **DEFERRED** (to c
 | **M1-5 F4** LaunchToken constructor doesn't guard `metadataHash != 0` | M1-5 gate | Info | **DISPOSITIONED (by-construction)** | LaunchToken, CurveFactory | LaunchToken stores verbatim/immutably; the non-zero guard is LOAD-BEARING at the factory (`ZeroMetadataHash`, CurveFactory.sol:281, sole create path via `onlyRouter`). No direct-deploy path exists (token deployed only inside `createToken`). Guard placement acceptable + verified present. | spec §8.3 |
 | **M1-7 F-5** FactoryConfig struct shape → architect ratification | M1-7 gate | Info | **DISPOSITIONED** | CurveFactory | View-only aggregation struct (`config()`); no economic effect. Ratified by architect. | contracts.md §2.2 |
 | **M1-8 F-1** frozen IBondingCurve NatSpec stale ("fee→treasury") | M1-8 gate | Info (docs) | **FIXED** | interfaces/IBondingCurve | Interface NatSpec now documents pull-payment escrow + `sweepFees()` explicitly (IBondingCurve.sol:6–15). Applied at M1-9. | spec §12.25 |
-| **M1-8/M1-11 F-2** pin `evm_version` | M1-8,M1-11 gate | Info (toolchain) | **RESOLVED** | foundry.toml | Pinned `cancun` (OZ v5.5 `Bytes.sol` uses `mcopy` via mandatory ERC20Permit→ECDSA→Strings→Bytes chain → pre-Cancun fails to compile). ArbOS ≥32 supports MCOPY; Blockscout lists cancun. §7.1 "do not assume Cancun" amendment → architect. | spec §6.7, §7.1 |
+| **M1-8/M1-11 F-2** pin `evm_version` | M1-8,M1-11 gate | Info (toolchain) | **RESOLVED** | foundry.toml | Pinned `cancun` (OZ v5.5 `Bytes.sol` uses `mcopy` via mandatory ERC20Permit→ECDSA→Strings→Bytes chain → pre-Cancun fails to compile). ArbOS ≥32 supports MCOPY; Blockscout lists cancun. contracts.md §7.1 "do not assume Cancun" amendment → architect. | spec §6.7, contracts.md §7.1 |
 | **M1-1 F-1** MockV3Factory.feeAmountTickSpacing fee-arg-sensitive | M1-1 gate | Info (test-infra) | **DISPOSITIONED (routed)** | test infra | Harden mock so a `V3_FEE_TIER` mutation cannot survive. Test-infra only; deploy-time real assertion `factory.feeAmountTickSpacing(10000)==200` present. Routed hoodpad-contracts. | spec §12.28 |
 | **M1-1 F-2** Deploy.s.sol keep absolute WETH `require` | M1-1 gate | Low | **FIXED (M1-14)** | script/Deploy.s.sol | Absolute `require(weth == 0x0Bd7…AD73)` retained (V3Assertions binds WETH only relatively). Verified landed at M1-14. | CLAUDE.md chain facts |
 | **M1-9 I-1** validate curve before `permit()` in sellWithPermit | M1-9 gate | Info | **DISPOSITIONED (acknowledged, optional)** | Router | `permit()` is best-effort try/catch; `_sell` → `_curveOf` reverts `UnknownToken` for an unregistered token regardless, so a bad token cannot reach a fund path. Optional hardening; no fund impact. | contracts.md §2.4 |
-| **M1-13 migrator arb-back mutation adequacy** (0.585; 83 survivors dispositioned) | M1-13 gate | Medium (assurance gap) | **DISPOSITIONED → pre-caps-lift follow-up** | V3Migrator | On-chain logic proven correct (M1-10 gate + gate-2 inv 6). Gap is TEST coverage of arb-back internals. 5 enumerated adversarial kill-tests owed pre-caps-lift: (1) budget-boundary, (2) token>WETH ordering, (3) 2-iter WETH spend, (4) exact-tolerance-tick, (5) amount-min floors via env-gated gate-3 fork (M1-12). Route hoodpad-security/contracts. Not a demonstrated bug. | contracts.md §6 gate 4 |
+| **M1-13 migrator arb-back mutation adequacy** (0.585; 83 survivors dispositioned) | M1-13 gate | Medium (assurance gap) | **CLOSED (local half, 2026-07-11) → residual rides M1-12** | V3Migrator | On-chain logic proven correct (M1-10 gate + gate-2 inv 6). Local kill-tests landed (`test/unit/MigratorArbBackKill.t.sol`: budget-boundary, both token orderings, 2-iter WETH spend, exact-tolerance-tick, M-10-A floor freeze-regression); 83-survivor rerun → 43 killed, **adequacy 0.800**, remaining 40 dispositioned (16 E / 5 DID / 5 UG / 14 fork-gated). Evidence: `contracts/reports/mutation/README.md`, `scores.tsv`, rerun logs. Residual: 14 amount-min-floor survivors on the env-gated gate-3 fork run (M1-12). Not a demonstrated bug. | contracts.md §6 gate 4 |
 
 ---
 
@@ -101,3 +101,65 @@ Every lens below was executed against the current tree. **All refuted.** No new 
 - Uniswap v3-core `IUniswapV3PoolActions` natspec (raw GitHub): `sqrtPriceLimitX96` bounds price (cannot cross after swap); positive `amountSpecified` = exact input; caller pays owed input in callback — validates V3Migrator arb-back "never overshoot" + callback design.
 - OpenZeppelin Contracts v5.x (docs.openzeppelin.com/context7): `ReentrancyGuard` = single per-contract storage lock; re-entry of any `nonReentrant` fn reverts (distinct from `ReentrancyGuardTransient`) — validates cross-entrypoint reentrancy resolution.
 - spec §6.5, §12.11–§12.13, §12.25, §12.28; `docs/threat-model.md` (UM-1/UM-2/UM-9, TM-T1/TM-T2, §8.1); `docs/implementation-plan.md` M1-1..M1-14 gate evidence.
+
+---
+
+## M1-15 independent re-verification (2026-07-11, robbed-security)
+
+A second, from-scratch adversarial pass re-derived every claim above against the *current* tree (no reliance on the 2026-07-10 evidence). **Result: register CONFIRMED — no new Critical/High/Medium/Low findings; nothing downgraded. Open High+ = 0.** All six contracts + `libs/CurveMath.sol` + `errors/Errors.sol` + interfaces were re-read line-by-line.
+
+### Static + dynamic gate evidence (verbatim, this run)
+
+| Check | Command | Result |
+|---|---|---|
+| Hard rule: no `block.number` | `grep -rn "block.number" src/` | 0 hits |
+| Hard rule: single pin | `grep -rhn "pragma solidity" src/ \| sort -u` | one line: `pragma solidity 0.8.35;` |
+| Hard rule: no proxy/delegatecall/initializer/Pausable | grep | 0 (only doc word "Proxy to curve.quoteBuy") |
+| Hard rule: `tx.origin` | grep | 1 site, `V3Migrator.sol:441`, event-only provenance (not auth) |
+| Hard rule: treasury off trade path | `grep treasury src/BondingCurve.sol` | read only in `sweepFees()` (l.268); buy/sell make no treasury call |
+| Hard rule: no sell pause | grep | only `pauseCreates`/`pauseBuys`; no `pauseSells` anywhere |
+| `forge fmt --check` | `forge fmt --check` | clean (no diff) |
+| solhint | `solhint 'src/**/*.sol'` | 0 errors, 285 warnings — all NatSpec/import-path on vendored `interfaces/external/**` (dispositioned M1-11) |
+| Slither | `slither contracts --config-file contracts/slither.config.json` | **exit 0**; all surfaced findings within the 40 content-hash-triaged entries in `slither.db.json` (dispositions in `slither.triage.json`); detectors kept live |
+| Foundry full suite | `forge test` | **130 passed, 0 failed, 2 skipped** |
+| Gate-2 invariant: k non-decreasing | `KNonDecreasingInvariant` | PASS — 256 runs, 128000 calls, 0 reverts |
+| Gate-2 invariant: curve solvency | `CurveSolvencyInvariant` | PASS — 128000 calls, 0 reverts |
+| Gate-2 invariant: exact fee accounting | `FeeExactnessInvariant` | PASS — 128000 calls, 0 reverts |
+| Gate-2 invariant: graduation single-fire + reachable | `GraduationSingleFireInvariant` | PASS — 128000 calls, 0 reverts |
+| Gate-2 invariant: post-grad zero value | `PostGraduationZeroValueInvariant` | PASS — 128000 calls, 0 reverts |
+| Gate-2 invariant: no extraction beyond fair value | `NoValueExtractionInvariant` | PASS — 128000 calls, 0 reverts |
+| Gate-2 invariant: no hostile-ratio V3 mint | `PoolGriefingNoHostileMintInvariant` | PASS — 48 runs, 384 calls, 0 reverts |
+| Targeted: hostile-treasury solvency | `test_solvencyHolds_underHostileTreasury` | PASS |
+| Targeted: reverting-treasury graduate (TM-T1) | `test_TMT1_revertingTreasury_graduateSucceeds` | PASS |
+| Targeted: pause-matrix sells w/ reverting treasury | `test_pauseMatrix_sellsSucceed_withRevertingTreasury` | PASS |
+| Gate-3 fork lifecycle + ArbSys smoke | `test_fork_fullLifecycle`, `test_fork_arbSysSmoke` | **SKIPPED** (env-gated on `ROBINHOOD_RPC_URL`; M1-12, blocks caps-lift not M1-15) |
+
+Tool availability recorded honestly: `forge`/`slither`/`aderyn`/`solhint` on PATH; **`gambit` NOT on PATH** — gate-4 mutation was executed with `universalmutator 1.14.1` (reports under `contracts/reports/mutation/`), which is the sanctioned equivalent; not an M1-15 dependency.
+
+### Adversarial re-derivations performed this pass (independent, not quoted)
+
+- **Solvency (sell can never pay > held).** Re-derived that `_virtualEthReserves − _realEthReserves == VIRTUAL_ETH_0` is invariant (both move by identical deltas on every buy/sell/graduate), so `ethOutGross = _virtualEthReserves − ceil(k/(vT+tIn)) ≤ _realEthReserves` iff `ceil(k/(vT+tIn)) ≥ VIRTUAL_ETH_0`, which holds because `k` is non-decreasing and full unwind returns `vT+tIn → VIRTUAL_TOKEN_0` giving `ceil(k/VIRTUAL_TOKEN_0) ≥ k0/VIRTUAL_TOKEN_0 = VIRTUAL_ETH_0`. No underflow path. Confirms UM-1 / gate-2 inv 2.
+- **Graduation-clamp fee (refund ≥ 0, fee ≥ 0).** Re-proved the integer inequality `ceilDiv(remaining·1e4, 1e4−bps) ≤ grossIn`: from `net_orig > remaining` (both integers) ⇒ `remaining ≤ net_orig−1`, and `net_orig < grossIn·(1e4−bps)/1e4 + 1` (floor-fee gap < 1) ⇒ `remaining < grossIn·(1e4−bps)/1e4` ⇒ `remaining·1e4 ≤ grossIn·(1e4−bps)`. Rounding always favors the curve; `BondingCurve.sol:183-185`.
+- **Cross-entrypoint reentrancy.** OZ v5 storage `ReentrancyGuard` is one shared per-contract lock; `buy`/`sell`/`sweepFees`/`graduate` all `nonReentrant` with strict CEI. The Slither `reentrancy-no-eth` on `buy` (the `recordEthDelta` call at l.194 preceding the effects block) is trusted-callee-only (factory accumulator, no callback to the curve or any untrusted party) — verified safe, matches the committed disposition; not a new finding.
+- **Shared `_activePool` in `V3Migrator`.** Re-checked reentrancy into `migrate` via the arb-swap callback path: `pool.swap` → `uniswapV3SwapCallback` pays with hook-free WETH/`LaunchToken` `safeTransfer`; `migrate` is `onlyCurve` and only invoked inside a curve's `nonReentrant graduate`, so no concurrent migration can clobber `_activePool`. Verified safe.
+- **Owner (Ownable2Step) reach.** Re-confirmed no setter touches a live curve's immutables; caps/pauses/treasury are buy-side/fee-side only and cannot gate a sell (`recordEthDelta` negative branch is `>=`-floored, never reverts — `CurveFactory.sol:330-336`). `LPFeeVault` has no owner and one state-mutating fn `collect(tokenId)` → immutable treasury.
+
+### Tracked-open items — formal dispositions carried at M1-15
+
+| Item | Disposition |
+|---|---|
+| M1-5 F4 (LaunchToken `metadataHash != 0` guard placement) | **FIXED (by-construction).** Guard is load-bearing at the factory (`ZeroMetadataHash`, `CurveFactory.sol:281`), sole create path `onlyRouter`; no direct-deploy path. Verified present. |
+| M1-7 F-3 (constructor graduation-fundability assert) | **FIXED.** `GraduationUnfundable` at `CurveFactory.sol:193`; test `test_constructor_revertsWhenGraduationUnfundable` PASS. |
+| M1-7 F-4 (distinct `InvalidMetadataUri` error) | **FIXED.** `Errors.sol:50`, used `CurveFactory.sol:285`. |
+| M1-7 F-5 (FactoryConfig view struct) | **DISPOSITIONED.** View-only aggregation, no economic effect; architect-ratified. |
+| M1-8 F-1 (IBondingCurve NatSpec pull-payment) | **FIXED.** Interface documents `sweepFees()` escrow. |
+| M1-9 I-1 (validate curve before `permit()`) | **DISPOSITIONED (optional).** `permit` is best-effort try/catch; `_sell → _curveOf` reverts `UnknownToken` regardless; no fund path. |
+| M1-10 Part-2 / UM-2 residual (grief beyond slippage band) | **DEFERRED → caps-lift (M4).** Reverts→`ReadyToGraduate`→permissionlessly retriable; never a hostile mint (inv 6). Escalated to architect; not an M1 blocker. |
+| M1-13 migrator arb-back mutation adequacy (0.585, 83 dispositioned survivors) | **DISPOSITIONED → pre-caps-lift follow-up.** Test-coverage gap, not a demonstrated bug; on-chain logic proven by M1-10 gate + inv 6. |
+| M1-14 §13 gaps (O-6 treasury Safe, testnet constants, `deployments/` gitignore) | **OPEN — owner: hoodpad-architect/ops, milestone M4/T.** Fails-closed `TreasurySafeUnset` until O-6 filled; not a contract fund-loss bug. |
+
+### Overall verdict
+
+**M1-15: PASS — OPEN HIGH+: 0.** The 6-contract tree is unfreezable-sells-by-construction, solvent under any fill sequence, single-fire/reachable at graduation, hostile-mint-proof at all fuzzed fills, and extracts no value beyond fair curve value; all hard rules hold. Nothing routes back to hoodpad-contracts as a blocking M1 fix. Caps-lift remains gated (independently of M1-15) on: gate-3 fork run (M1-12, env), migrator arb-back mutation follow-up (M1-13, pre-caps-lift), and the UM-2 Part-2 architect decision — all recorded, none an M1-exit blocker.
+
+*Note: the register above was authored under the "hoodpad-" agent aliases; CLAUDE.md standardizes on "robbed-". Cosmetic naming drift only — no material effect on dispositions. Flagged to hoodpad-architect for a docs sweep.*

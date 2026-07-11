@@ -80,7 +80,12 @@ fi
 # ── 4. Slither — §10 gate 1 (zero unexplained findings) ─────────────────────
 if [ -f contracts/foundry.toml ] && ls contracts/src/*.sol >/dev/null 2>&1; then
   if command -v slither >/dev/null 2>&1; then
-    run_stage "slither" bash -c 'cd contracts && slither . --config-file slither.config.json'
+    # MUST match CI (crytic/slither-action: target=contracts, fail-on: low) byte-for-byte:
+    # run from REPO ROOT with the same target so (a) the config's triage_database/filter_paths
+    # resolve (they are repo-root-relative — from contracts/ the triage DB silently fails to
+    # load and every dispositioned finding resurfaces) and (b) finding IDs match the DB.
+    # `--fail-low` is the CLI spelling of the action's `fail-on: low` input.
+    run_stage "slither" slither contracts --config-file contracts/slither.config.json --fail-low
   else
     record SKIP "slither" "(not installed — pip3 install slither-analyzer; CI still enforces it)"
   fi
@@ -115,8 +120,17 @@ else
 fi
 
 # ── 6. E2E: Playwright against the local stack — §9 ─────────────────────────
+# The flow matrix needs the running local stack (anvil :4545 via docker compose).
+# Same skip-gracefully-never-silently rule as every other stage: a down stack is
+# the "service doesn't exist" case, and CI's e2e job (I-6) enforces it in full.
 if [ -f apps/web/playwright.config.ts ]; then
-  run_stage "e2e (playwright)" bash -c 'cd apps/web && bunx playwright test'
+  if curl -sf -m 2 -X POST -H 'Content-Type: application/json' \
+       --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
+       "http://localhost:${ANVIL_PORT:-4545}" >/dev/null 2>&1; then
+    run_stage "e2e (playwright)" bash -c 'cd apps/web && bunx playwright test'
+  else
+    record SKIP "e2e" "(local stack not running — anvil :${ANVIL_PORT:-4545} unreachable; start it with \`bun run dev:d\`. CI e2e job still enforces the matrix)"
+  fi
 else
   record SKIP "e2e" "(no apps/web/playwright.config.ts yet — arrives in M3)"
 fi

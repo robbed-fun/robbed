@@ -34,15 +34,18 @@ export function TokenHeader({
   holderCount?: number;
 }) {
   return (
-    <div className="flex flex-col gap-4 border border-border bg-bg p-4 md:flex-row md:items-center md:gap-6">
+    // Full-bleed identity row (fidelity audit fix 2; template 2a line 351):
+    // border-bottom ONLY — no side/top border, no fill — padding 16px 24px,
+    // gap 14px.
+    <div className="flex flex-col gap-3.5 border-b border-border px-4 py-4 md:flex-row md:items-center md:gap-6 sm:px-6">
       {/* ── Identity: avatar · NAME TICKER · addr·created·creator ─────────── */}
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3.5">
         <TokenAvatar
           imageUrl={token.imageUrl}
           name={token.name}
           ticker={token.ticker}
-          size={40}
-          className="h-10 w-10"
+          size={34}
+          className="h-[34px] w-[34px]"
         />
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex flex-wrap items-baseline gap-2">
@@ -62,25 +65,25 @@ export function TokenHeader({
         </div>
       </div>
 
-      {/* ── Stat cells — wrap on mobile, right-aligned row on desktop ─────── */}
+      {/* ── Stat cells — wrap on mobile; mockup container is text-align:right ── */}
       <div className="grid grid-cols-3 gap-x-6 gap-y-3 sm:grid-cols-6 md:ml-auto md:flex md:flex-wrap md:items-start md:justify-end md:gap-x-7">
-        <StatCell label="Price">
+        <StatCell label="Price" align="right">
           {token.priceEth === null ? (
             <MonoText tone="muted">—</MonoText>
           ) : (
             <EthAmount eth={token.priceEth} />
           )}
         </StatCell>
-        <StatCell label="Vol 24H">
+        <StatCell label="Vol 24H" align="right">
           <EthAmount wei={token.volume24h} />
         </StatCell>
-        <StatCell label="24H">
+        <StatCell label="24H" align="right">
           <Delta value={token.change24hPct} className="text-sm" />
         </StatCell>
-        <StatCell label="Mcap">
+        <StatCell label="Mcap" align="right">
           <UsdAmount value={token.mcap} />
         </StatCell>
-        <StatCell label="Holders">
+        <StatCell label="Holders" align="right">
           {holderCount === undefined ? (
             <MonoText tone="muted">—</MonoText>
           ) : (
@@ -102,14 +105,15 @@ function BondingCell({ token }: { token: TokenDetail }) {
   const graduated = token.graduated || token.status === "graduated";
   const pct = Math.max(0, Math.min(100, token.graduation.progressPct));
   return (
-    <div className="flex min-w-0 flex-col gap-0.5">
+    // Right-aligned like the StatCells (mockup line 363: justify-content:flex-end).
+    <div className="flex min-w-0 flex-col gap-0.5 md:items-end md:text-right">
       <MonoLabel>Bonding</MonoLabel>
       {graduated ? (
         <MonoText tone="green" size="sm">
           Graduated
         </MonoText>
       ) : (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
           <span className="h-1 w-14 bg-active" aria-hidden>
             <span className="block h-1 bg-green" style={{ width: `${pct}%` }} />
           </span>

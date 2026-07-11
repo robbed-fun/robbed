@@ -39,10 +39,10 @@ export const sel = {
   // Amount field is a text input with inputmode=decimal + placeholder "0.0".
   amountInput: (page: Page) => page.getByPlaceholder("0.0").first(),
   maxButton: (page: Page) => page.getByRole("button", { name: /^max$/i }),
-  // The trade submit is a <button> "Buy"/"Sell" (distinct from the Buy/Sell
-  // role=tab), or "Connect Wallet" pre-connect.
+  // The trade submit is a <button> "BUY {TICKER}"/"SELL {TICKER}" (mockup copy;
+  // distinct from the Buy/Sell role=tab), or "Connect Wallet" pre-connect.
   submitTrade: (page: Page) =>
-    page.getByRole("button", { name: /^(buy|sell|connect wallet)$/i }).last(),
+    page.getByRole("button", { name: /^(buy|sell)\s|^connect wallet$/i }).last(),
   tradeFeed: (page: Page) => page.getByRole("list", { name: /trades?/i }).first(),
   trustPanel: (page: Page) => page.getByText(copy.ownerless).locator("xpath=ancestor::*[3]"),
   tokenCard: (page: Page) => page.getByRole("link", { name: /\/t\// }),

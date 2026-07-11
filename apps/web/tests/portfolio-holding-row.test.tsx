@@ -51,7 +51,7 @@ describe("HoldingRow", () => {
     expect(screen.getAllByText("Hoodcat").length).toBeGreaterThan(0);
     expect(screen.getAllByText("4,120,551").length).toBeGreaterThan(0);
     expect(screen.getAllByText("0.00034").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("1.4").length).toBeGreaterThan(0); // ETH value
+    expect(screen.getAllByText("1.40").length).toBeGreaterThan(0); // ETH value, 2-dec mockup contract
     expect(screen.getAllByText("+0.62").length).toBeGreaterThan(0); // green gain
   });
 

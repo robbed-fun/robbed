@@ -19,12 +19,15 @@ export default function CreateView() {
     <>
       <LiveStatusBanner />
       <AppHeader />
-      <main className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-6 pb-20 md:pb-8">
+      {/* Mockup 2b (template 446-449): 560px column, 40/24/48 padding, 22px gap;
+          16px title WITHOUT letter-spacing; 11.5px faint subtitle. Mobile keeps a
+          taller bottom pad for the bottom nav (md: restores the mockup's 48px). */}
+      <main className="mx-auto flex w-full max-w-[560px] flex-col gap-[22px] px-6 pb-20 pt-10 md:pb-12">
         <header className="flex flex-col gap-1.5">
-          <h1 className="text-xl font-semibold uppercase tracking-label text-text">
+          <h1 className="text-lg-plus font-semibold uppercase text-text">
             Launch a token
           </h1>
-          <p className="text-sm text-muted">
+          <p className="text-xs-plus text-faint">
             Deploys on Robinhood Chain · bonding curve launch
           </p>
         </header>

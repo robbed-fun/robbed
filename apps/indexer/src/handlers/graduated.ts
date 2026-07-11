@@ -43,7 +43,6 @@ ponder.on("V3Migrator:Graduated", async ({ event, context }) => {
     blockTimestamp: event.block.timestamp,
     txHash: event.transaction.hash,
     logIndex: event.log.logIndex,
-    confirmationState: "soft_confirmed",
   });
 
   await context.db.update(tokens, { address: tokenAddress }).set({

@@ -71,7 +71,6 @@ ponder.on("CurveFactory:TokenCreated", async ({ event, context }) => {
     blockNumber: event.block.number,
     txHash: event.transaction.hash,
     logIndex: event.log.logIndex,
-    confirmationState: "soft_confirmed",
   });
 
   // Redis publish → Discover launches ticker (§5.1). imageUrl is null until the

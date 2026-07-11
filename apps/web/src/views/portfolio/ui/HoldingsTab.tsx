@@ -86,7 +86,8 @@ export function HoldingsTab({ address }: { address: string }) {
   const headerCells = table.getHeaderGroups()[0]?.headers ?? [];
 
   return (
-    <div className="px-4 pb-6 md:px-6">
+    // Mockup container padding `4px 24px 24px` (template.html:516).
+    <div className="px-4 pt-1 pb-6 md:px-6">
       {/* Column header — md+ only (mobile rows are self-labelled cards). */}
       <div
         className={cn(

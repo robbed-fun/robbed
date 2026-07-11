@@ -21,10 +21,14 @@ export function formatBalance(wei: string): string {
   }).format(n);
 }
 
-/** Signed ETH float → `+0.62` / `-0.07` / `0` (leading `+` only for positives). */
+/**
+ * Signed ETH float → `+0.62` / `−0.07` / `0.00` (leading `+` only for positives;
+ * negatives carry the true minus U+2212 from the shared formatter). Portfolio
+ * values render with 2 decimals per the mockup ("1.40 ETH", LOOT "+1.94 ETH").
+ */
 export function signedEth(eth: number): string {
   if (!Number.isFinite(eth)) return "—";
-  const base = formatEthNumber(eth); // already carries the sign for negatives
+  const base = formatEthNumber(eth, { decimals: 2 }); // carries U+2212 for negatives
   return eth > 0 ? `+${base}` : base;
 }
 

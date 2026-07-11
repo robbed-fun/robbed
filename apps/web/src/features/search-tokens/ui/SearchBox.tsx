@@ -8,6 +8,7 @@ import { TokenAvatar } from "@/shared/ui";
 import { Input } from "@/shared/ui";
 import { searchTokens } from "@/shared/api";
 import { shortAddress } from "@/shared/lib/format";
+import { cn } from "@/shared/lib/utils";
 import { qk } from "@/shared/lib/query-keys";
 import { SEARCH_QUERY_MAX, SEARCH_QUERY_MIN } from "@robbed/shared";
 
@@ -26,7 +27,17 @@ import { SEARCH_QUERY_MAX, SEARCH_QUERY_MIN } from "@robbed/shared";
  * - `initialQ` seeds the box from the URL `?q=` (creator-click deep links,
  *   shareable); the effect re-syncs when the deep link changes.
  */
-export function SearchBox({ initialQ = "" }: { initialQ?: string }) {
+export function SearchBox({
+  initialQ = "",
+  className,
+  inputClassName,
+}: {
+  initialQ?: string;
+  /** Root override (e.g. the app header drops the sm:max-w-xs cap — mockup 340px). */
+  className?: string;
+  /** Per-instance Input override (header uses 12px text; kit default untouched). */
+  inputClassName?: string;
+}) {
   const router = useRouter();
   const [raw, setRaw] = useState(initialQ);
   const [debounced, setDebounced] = useState(initialQ.trim());
@@ -74,9 +85,10 @@ export function SearchBox({ initialQ = "" }: { initialQ?: string }) {
   }
 
   return (
-    <div ref={containerRef} className="relative w-full sm:max-w-xs">
+    <div ref={containerRef} className={cn("relative w-full sm:max-w-xs", className)}>
       <Input
         type="search"
+        className={inputClassName}
         inputMode="search"
         placeholder="/ search tokens, addresses"
         value={raw}

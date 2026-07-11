@@ -1,18 +1,20 @@
 /**
- * Confirmation tracker transition suite (indexer.md §5, spec §2.1/§12.20; M2-6).
- * Exercises the PURE decisions + the injectable `runTrackerTick` driver — the
- * same code the sidecar runs in production. Properties: monotonicity (never
- * downgrade), boundary-block correctness (event AT the watermark), reorg notice.
+ * Confirmation tracker transition suite (indexer.md §5, spec §2.1/§12.20/§12.48c;
+ * M2-6, reworked to the OI-11 sidecar READ-DERIVATION design). Exercises the PURE
+ * decisions + the injectable `runTrackerTick` driver — the same code the sidecar
+ * runs in production. Properties: monotonicity (a derived tier can never regress
+ * because the watermark never regresses — the ONLY anchor now that no per-row
+ * state is stored), boundary-block correctness (event AT the watermark), reorg
+ * notice, OI-8 null tags, and the OI-11 invariant itself: the tracker performs
+ * NO writes besides the watermark singleton.
  */
 import { describe, expect, it } from "bun:test";
+import { stateForBlock, upgradeConfirmationState, type ConfirmationState } from "@robbed/shared";
 import {
+  deriveConfirmationStates,
   detectReorg,
-  materializationStatements,
-  materializationStatementsForTable,
-  materializeRows,
   nextWatermark,
   runTrackerTick,
-  CONFIRMATION_EVENT_TABLES,
   type ConfirmationStore,
   type ObservedTags,
   type WatermarkState,
@@ -38,7 +40,7 @@ function capturingPublisher() {
 }
 
 function fakeStore(initial: WatermarkState | null) {
-  const calls = { materialize: [] as Array<{ safe: number; finalized: number }>, save: [] as WatermarkState[] };
+  const calls = { save: [] as WatermarkState[] };
   let current = initial;
   const store: ConfirmationStore = {
     async loadWatermarks() {
@@ -47,9 +49,6 @@ function fakeStore(initial: WatermarkState | null) {
     async saveWatermarks(wm) {
       current = wm;
       calls.save.push(wm);
-    },
-    async materialize(wm) {
-      calls.materialize.push({ safe: wm.safe, finalized: wm.finalized });
     },
   };
   return { store, calls, get current() { return current; } };
@@ -89,16 +88,16 @@ describe("detectReorg — head regress", () => {
   });
 });
 
-describe("materializeRows — boundary + monotonicity", () => {
+describe("deriveConfirmationStates — read-derivation boundary correctness", () => {
   const wm = { safe: 100, finalized: 50 };
 
   it("event AT safe block → posted_to_l1; AT finalized → finalized", () => {
-    const rows = materializeRows(
+    const rows = deriveConfirmationStates(
       [
-        { blockNumber: 50, confirmationState: "soft_confirmed" as const }, // == finalized
-        { blockNumber: 51, confirmationState: "soft_confirmed" as const }, // > finalized, <= safe
-        { blockNumber: 100, confirmationState: "soft_confirmed" as const }, // == safe
-        { blockNumber: 101, confirmationState: "soft_confirmed" as const }, // > safe
+        { blockNumber: 50 }, // == finalized
+        { blockNumber: 51 }, // > finalized, <= safe
+        { blockNumber: 100 }, // == safe
+        { blockNumber: 101 }, // > safe
       ],
       wm,
     );
@@ -110,41 +109,64 @@ describe("materializeRows — boundary + monotonicity", () => {
     ]);
   });
 
-  it("never downgrades an already-finalized row", () => {
-    const rows = materializeRows(
-      [{ blockNumber: 999, confirmationState: "finalized" as const }],
-      { safe: 0, finalized: 0 },
-    );
-    expect(rows[0]!.confirmationState).toBe("finalized");
+  it("agrees with the shared stateForBlock rule (single source, anti-drift)", () => {
+    for (const block of [0, 49, 50, 51, 99, 100, 101, 10_000]) {
+      const [row] = deriveConfirmationStates([{ blockNumber: block }], wm);
+      expect(row!.confirmationState).toBe(
+        stateForBlock(block, { safeBlock: wm.safe, finalizedBlock: wm.finalized }),
+      );
+    }
   });
 });
 
-describe("materializationStatements — SQL shape encodes the boundaries", () => {
-  it("finalized runs before posted, both use <= and the right params", () => {
-    const stmts = materializationStatementsForTable("myschema", "trades", { safe: 100, finalized: 50 });
-    expect(stmts).toHaveLength(2);
-    expect(stmts[0]!.text).toContain("'finalized'");
-    expect(stmts[0]!.text).toContain("block_number <= $1");
-    expect(stmts[0]!.params).toEqual([50]);
-    expect(stmts[1]!.text).toContain("'posted_to_l1'");
-    expect(stmts[1]!.params).toEqual([100]);
-    // posted pass only touches still-soft rows (finalized already excluded).
-    expect(stmts[1]!.text).toContain("confirmation_state = 'soft_confirmed'");
-    expect(stmts[0]!.text).toContain('"myschema"."trades"');
+describe("monotonicity — derived tiers never regress under watermark advance", () => {
+  it("for any block, each monotone watermark step only ever upgrades the tier", () => {
+    // Simulated tracker lifetime: watermark sequence produced by nextWatermark
+    // over observed readings that include transient LOWER readings (the exact
+    // OI-11 failure mode when it was a stored column).
+    const observations: ObservedTags[] = [
+      { latest: 100, safe: 40, finalized: 20 },
+      { latest: 120, safe: 60, finalized: 30 },
+      { latest: 118, safe: 55, finalized: 25 }, // transient regress reading
+      { latest: 130, safe: 80, finalized: 60 },
+      { latest: 140, safe: 100, finalized: 90 },
+    ];
+    const blocks = [0, 10, 25, 30, 55, 60, 80, 95, 100, 101, 500];
+    let wm: WatermarkState = { latest: 0, safe: 0, finalized: 0 };
+    const previous = new Map<number, ConfirmationState>();
+    for (const obs of observations) {
+      wm = nextWatermark(wm, obs).next;
+      for (const block of blocks) {
+        const [row] = deriveConfirmationStates([{ blockNumber: block }], wm);
+        const prev = previous.get(block) ?? "soft_confirmed";
+        // upgrade(prev, next) === next ⟺ next never ranks below prev.
+        expect(upgradeConfirmationState(prev, row!.confirmationState)).toBe(row!.confirmationState);
+        previous.set(block, row!.confirmationState);
+      }
+    }
   });
 
-  it("covers every event table carrying confirmation_state", () => {
-    const stmts = materializationStatements("s", { safe: 1, finalized: 1 });
-    expect(stmts).toHaveLength(CONFIRMATION_EVENT_TABLES.length * 2);
+  it("boundary block upgrades exactly once per tier and sticks at finalized", () => {
+    const block = 50;
+    const steps = [
+      { safe: 0, finalized: 0, expected: "soft_confirmed" },
+      { safe: 50, finalized: 0, expected: "posted_to_l1" }, // block == safe
+      { safe: 80, finalized: 50, expected: "finalized" }, // block == finalized
+      { safe: 90, finalized: 70, expected: "finalized" }, // stays finalized
+    ] as const;
+    for (const s of steps) {
+      const [row] = deriveConfirmationStates([{ blockNumber: block }], s);
+      expect(row!.confirmationState).toBe(s.expected);
+    }
   });
 });
 
 // ── driver integration ──────────────────────────────────────────────────────
 
-describe("runTrackerTick — end-to-end transitions", () => {
+describe("runTrackerTick — end-to-end transitions (sidecar: watermark-only writes)", () => {
   const now = () => 1_700_000_000_000;
 
-  it("advance → materialize + persist + O(1) confirmations broadcast", async () => {
+  it("advance → persist watermark + O(1) confirmations broadcast (no row writes)", async () => {
     const store = fakeStore({ latest: 100, safe: 50, finalized: 30 });
     const { publisher, messages } = capturingPublisher();
     const observed: ObservedTags = { latest: 110, safe: 60, finalized: 35 };
@@ -158,8 +180,9 @@ describe("runTrackerTick — end-to-end transitions", () => {
     await flush();
 
     expect(next).toEqual({ latest: 110, safe: 60, finalized: 35 });
-    expect(store.calls.materialize).toEqual([{ safe: 60, finalized: 35 }]);
-    expect(store.calls.save).toHaveLength(1);
+    // OI-11: the ONLY persistence surface is the watermark singleton.
+    expect(Object.keys(store.store)).toEqual(["loadWatermarks", "saveWatermarks"]);
+    expect(store.calls.save).toEqual([{ latest: 110, safe: 60, finalized: 35 }]);
     // exactly ONE confirmations message (O(1), not per-row).
     const conf = messages.filter((m) => m.msg.type === "confirmations");
     expect(conf).toHaveLength(1);
@@ -167,7 +190,7 @@ describe("runTrackerTick — end-to-end transitions", () => {
     expect(conf[0]!.msg.data).toEqual({ safeBlock: 60, finalizedBlock: 35 });
   });
 
-  it("no advance → no materialize, no broadcast", async () => {
+  it("no advance → no persist, no broadcast", async () => {
     const store = fakeStore({ latest: 110, safe: 60, finalized: 35 });
     const { publisher, messages } = capturingPublisher();
     await runTrackerTick({ latest: 110, safe: 60, finalized: 35 }, {
@@ -177,8 +200,21 @@ describe("runTrackerTick — end-to-end transitions", () => {
       now,
     });
     await flush();
-    expect(store.calls.materialize).toHaveLength(0);
+    expect(store.calls.save).toHaveLength(0);
     expect(messages).toHaveLength(0);
+  });
+
+  it("lower safe/finalized reading → watermark holds, no broadcast (no regression)", async () => {
+    const store = fakeStore({ latest: 110, safe: 60, finalized: 35 });
+    const next = await runTrackerTick({ latest: 110, safe: 60, finalized: 35 }, {
+      store: store.store,
+      fetchTags: async () => ({ latest: 110, safe: 55, finalized: 30 }),
+      publisher: capturingPublisher().publisher,
+      now,
+    });
+    await flush();
+    expect(next).toEqual({ latest: 110, safe: 60, finalized: 35 });
+    expect(store.calls.save).toHaveLength(0);
   });
 
   it("head regress → reorg notice with orphan floor; safe/finalized hold", async () => {
@@ -211,7 +247,7 @@ describe("runTrackerTick — end-to-end transitions", () => {
     });
     await flush();
     expect(next).toEqual({ latest: 100, safe: 50, finalized: 30 });
-    expect(store.calls.materialize).toHaveLength(0);
+    expect(store.calls.save).toHaveLength(0);
     expect(messages).toHaveLength(0);
   });
 });

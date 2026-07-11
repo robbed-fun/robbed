@@ -89,6 +89,21 @@ library TestConstants {
         pure
         returns (V3Migrator.MigratorInit memory)
     {
+        return migratorInit(factory_, v3Factory_, npm_, weth_, vault_, MIGRATION_SLIPPAGE_BPS);
+    }
+
+    /// @notice Migrator init with a `migrationSlippageBps` override — used ONLY by the M-10-A
+    ///         freeze-regression suite (M1-13 kill-test 5): `slippageBps = 0` makes
+    ///         `tokenArbFloor == LP_TOKEN_TRANCHE`, byte-for-byte the PRE-FIX token-leg budget rule,
+    ///         so reverting the symmetric floor demonstrably reproduces the §12.12 freeze.
+    function migratorInit(
+        address factory_,
+        address v3Factory_,
+        address npm_,
+        address weth_,
+        address vault_,
+        uint16 migrationSlippageBps
+    ) internal pure returns (V3Migrator.MigratorInit memory) {
         return V3Migrator.MigratorInit({
             factory: factory_,
             v3Factory: v3Factory_,
@@ -101,7 +116,7 @@ library TestConstants {
             targetTickToken1: TARGET_TICK_TOKEN1,
             toleranceTicks: TOLERANCE_TICKS,
             maxArbIterations: MAX_ARB_ITERATIONS,
-            migrationSlippageBps: MIGRATION_SLIPPAGE_BPS
+            migrationSlippageBps: migrationSlippageBps
         });
     }
 }

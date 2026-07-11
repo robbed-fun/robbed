@@ -10,6 +10,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./abi": "./src/abi/index.ts",
+    "./events.json": "./events.json",
     "./addresses": "./src/addresses.ts",
     "./metadata": "./src/metadata.ts",
     "./channels": "./src/channels.ts",

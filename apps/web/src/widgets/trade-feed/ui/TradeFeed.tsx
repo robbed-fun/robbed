@@ -18,7 +18,7 @@ import { Fragment, useMemo } from "react";
 import { ConfirmationBadge, useOptimisticTradesContext } from "@/entities/trade";
 import {
   AddressLink,
-  Card,
+  EthAmount,
   MonoLabel,
   MonoText,
   RelativeTime,
@@ -27,7 +27,7 @@ import {
 import { getTrades } from "@/shared/api";
 import { qk } from "@/shared/lib/query-keys";
 import { useWsChannel } from "@/shared/lib/ws";
-import { formatEthFromWei, shortAddress } from "@/shared/lib/format";
+import { shortAddress } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 import { type FeedRow, buildFeedRows, prependTrade } from "../model/merge";
@@ -143,9 +143,12 @@ export function TradeFeed({
   const headerCells = table.getHeaderGroups()[0]?.headers ?? [];
 
   return (
-    <Card className="flex flex-col p-4">
-      {/* Column header — mockup grid: AGE 70 · SIDE 70 · TRADER 1fr · AMOUNT · PRICE */}
-      <div className="grid grid-cols-[52px_52px_1fr_auto] items-center gap-3 border-b border-border-soft pb-2 sm:grid-cols-[64px_64px_1fr_110px_96px]">
+    // FLAT region (fidelity audit fix 1): no Card — the mockup tape sits under
+    // the chart inside the same column, delimited by a single `border-t` and
+    // 12px top padding (template 2a line 382).
+    <div className="flex flex-col border-t border-border pt-3">
+      {/* Column header — mockup grid: 70px 70px 1fr 130px 140px, gap 14px */}
+      <div className="grid grid-cols-[52px_52px_1fr_auto] items-center gap-3.5 border-b border-border-soft pb-2 sm:grid-cols-[70px_70px_minmax(0,1fr)_130px_140px]">
         {headerCells.map((header) => (
           <Fragment key={header.id}>
             {flexRender(header.column.columnDef.header, header.getContext())}
@@ -161,7 +164,8 @@ export function TradeFeed({
             <div
               key={row.id}
               className={cn(
-                "grid grid-cols-[52px_52px_1fr_auto] items-center gap-3 border-b border-border-soft py-[7px] text-xs last:border-b-0 sm:grid-cols-[64px_64px_1fr_110px_96px]",
+                // Data rows: 12px (`text-sm`), mockup grid 70/70/1fr/130/140 gap 14px.
+                "grid grid-cols-[52px_52px_1fr_auto] items-center gap-3.5 border-b border-border-soft py-[7px] text-sm last:border-b-0 sm:grid-cols-[70px_70px_minmax(0,1fr)_130px_140px]",
                 row.original.isOptimistic && "opacity-90",
                 row.original.justUpdated && "animate-pulse",
               )}
@@ -175,7 +179,7 @@ export function TradeFeed({
           ))}
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -216,10 +220,11 @@ function TraderCell({ row }: { row: FeedRow }) {
 }
 
 function AmountCell({ row }: { row: FeedRow }) {
+  // Shared EthAmount: 4-dec zero-padded and the unit INHERITS the row color
+  // (mockup "0.4200 ETH" is one color) — no local unit-color override.
   return (
-    <span className="text-right tabular-nums text-text-secondary">
-      {formatEthFromWei(row.ethAmount)}
-      <span className="ml-1 text-faint">ETH</span>
+    <span className="text-right text-text-secondary">
+      <EthAmount wei={row.ethAmount} />
     </span>
   );
 }

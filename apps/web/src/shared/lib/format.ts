@@ -1,4 +1,4 @@
-import { formatEther, formatUnits } from "viem";
+import { formatEther, formatUnits, getAddress } from "viem";
 import type { UsdValue } from "@robbed/shared";
 
 import { env } from "@/shared/lib/env";
@@ -8,22 +8,56 @@ import { env } from "@/shared/lib/env";
  * these are pure formatters over live values. USD is renderable ONLY with a live
  * `{ usd, ethUsd, asOf }` object — `formatUsd` throws otherwise, so a bare USD
  * figure can never reach the DOM (proven by tests/format.test.ts).
+ *
+ * WAVE-1 fidelity contract (basis: docs/Robbed.html, sampled 2026-07-11):
+ * - ETH amounts are ZERO-PADDED to a fixed decimal count, never trimmed —
+ *   the mockup tape reads "0.4200 ETH" / "1.2000 ETH", the portfolio reads
+ *   "1.40 ETH" (2 dec). Callers pick the count via `decimals` (default 4).
+ * - Sub-0.0001 values render with 2 significant digits RETAINING a trailing
+ *   zero, exactly like the mockup's starting price "0.0000010 ETH".
+ * - Negative figures use the true minus U+2212 ("−1.8%"), never hyphen-minus.
  */
 
-/** ETH amount from a wei decimal string → up to 4 significant fractional digits. */
-export function formatEthFromWei(wei: string | bigint): string {
+/** True minus sign (U+2212) — the mockup never renders ASCII "-" for negatives. */
+const MINUS_SIGN = "−";
+
+/** ETH amount from a wei decimal string → fixed, zero-padded decimals (default 4). */
+export function formatEthFromWei(
+  wei: string | bigint,
+  opts?: { decimals?: number },
+): string {
   const eth = Number(formatEther(BigInt(wei)));
-  return formatEthNumber(eth);
+  return formatEthNumber(eth, opts);
 }
 
-/** Format an ETH float to 4 significant decimals, trimming trailing zeros. */
-export function formatEthNumber(eth: number): string {
+/**
+ * Format an ETH float to a FIXED number of decimals, zero-padded, never trimmed
+ * (mockup: "0.4200 ETH"). `decimals` defaults to 4 (trade amounts / tape);
+ * portfolio-value callers pass 2 ("1.40 ETH", "+1.94 ETH").
+ *
+ * Tiny-value rule (DECISION, derived from ALL mockup samples — "0.0005",
+ * "0.00034", "0.0000010" cannot share a naive threshold):
+ * - abs < 10^-decimals (would render all zeros): 2 significant digits with the
+ *   trailing zero retained — "0.0000010" (starting price).
+ * - the 1-sig-digit zone (10^-decimals ≤ abs < 10^(1-decimals)): keep the fixed
+ *   form when it round-trips EXACTLY ("0.0005" deploy cost, "+0.08" PnL at
+ *   2 dec), else extend to 2 significant digits ("0.00034" portfolio price) —
+ *   never display a rounded figure that silently loses the only precision it has.
+ * - everything else: plain zero-padded toFixed ("0.0310", "0.0012").
+ */
+export function formatEthNumber(eth: number, opts?: { decimals?: number }): string {
   if (!Number.isFinite(eth)) return "—";
-  if (eth === 0) return "0";
+  const decimals = opts?.decimals ?? 4;
   const abs = Math.abs(eth);
-  // 4 significant digits; more precision for sub-1 amounts, compact for large.
-  const digits = abs >= 1 ? 4 : Math.min(8, 4 + Math.ceil(-Math.log10(abs)));
-  return trimZeros(eth.toFixed(digits));
+  const sign = eth < 0 ? MINUS_SIGN : "";
+  const fixed = abs.toFixed(decimals);
+  if (abs !== 0 && abs < 10 ** (1 - decimals) && Number(fixed) !== abs) {
+    // 2 significant digits, zero-padded via toFixed (never trimmed):
+    // 0.000001 → places 7 → "0.0000010"; 0.00034 → places 5 → "0.00034".
+    const places = Math.min(100, Math.max(decimals, 1 - Math.floor(Math.log10(abs))));
+    return `${sign}${abs.toFixed(places)}`;
+  }
+  return `${sign}${fixed}`;
 }
 
 /** Token amount from a wei decimal string (18 decimals) → compact (1.24M). */
@@ -41,10 +75,14 @@ export function formatCompact(n: number): string {
   }).format(n);
 }
 
-/** Percentage with 1 decimal + explicit sign for deltas. */
+/**
+ * Percentage with 1 decimal + explicit sign for deltas. Negatives render with
+ * the true minus U+2212 (mockup "−1.8%"), never ASCII hyphen-minus.
+ */
 export function formatPercent(pct: number | null, opts?: { signed?: boolean }): string {
   if (pct === null || !Number.isFinite(pct)) return "—";
-  const s = pct.toFixed(1);
+  const s = Math.abs(pct).toFixed(1);
+  if (pct < 0) return `${MINUS_SIGN}${s}%`;
   return opts?.signed && pct > 0 ? `+${s}%` : `${s}%`;
 }
 
@@ -57,10 +95,22 @@ export function formatAge(unixSeconds: number, now = Date.now()): string {
   return `${Math.floor(deltaSec / 86400)}d`;
 }
 
-/** Truncate an address to `0x1234…abcd`. */
+/**
+ * Truncate an address to `0x7fA3…c92E` — EIP-55 checksummed BEFORE slicing
+ * (mockup wallet chip shows mixed-case; viem `getAddress`, verified 2026-07-11).
+ * Pure/safe: non-address strings pass through untouched; the lowercase
+ * normalization means `getAddress` cannot throw on a regex-valid input, but the
+ * catch keeps the function total regardless.
+ */
 export function shortAddress(address: string): string {
   if (!/^0x[0-9a-fA-F]{40}$/.test(address)) return address;
-  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+  let checksummed = address;
+  try {
+    checksummed = getAddress(address.toLowerCase());
+  } catch {
+    // keep the caller's casing — never throw from a display formatter
+  }
+  return `${checksummed.slice(0, 6)}…${checksummed.slice(-4)}`;
 }
 
 /**
@@ -104,8 +154,4 @@ export function formatUsd(value: UsdValue | null | undefined): {
     ethUsd: value.ethUsd,
     stale: value.stale === true,
   };
-}
-
-function trimZeros(s: string): string {
-  return s.includes(".") ? s.replace(/\.?0+$/, "") : s;
 }

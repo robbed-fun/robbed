@@ -18,12 +18,18 @@
  */
 import type { RankingConfig } from "../config/ranking";
 import type { RawQuery } from "../lib/db";
+import { confirmationStateSql } from "../lib/confirmation";
 
 export type SearchMode = "address" | "similarity";
 
-/** All four card-projection columns + moderation join, shared by both modes. */
+/**
+ * All four card-projection columns + moderation join, shared by both modes.
+ * `confirmation_state` is read-derived from the watermark sidecar (OI-11 /
+ * §12.48c — no stored column on Ponder tables).
+ */
 const SELECT_COLS = `
-  t.*, m.visibility AS m_visibility, m.impersonation_flag AS m_impersonation_flag,
+  t.*, ${confirmationStateSql("t.block_number")} AS confirmation_state,
+  m.visibility AS m_visibility, m.impersonation_flag AS m_impersonation_flag,
   m.impersonation_ticker AS m_impersonation_ticker`;
 const FROM_JOIN = `
   FROM tokens t

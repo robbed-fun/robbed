@@ -60,7 +60,6 @@ ponder.on("V3PositionManager:Collect", async ({ event, context }) => {
     blockTimestamp: event.block.timestamp,
     txHash: event.transaction.hash,
     logIndex: event.log.logIndex,
-    confirmationState: "soft_confirmed",
   });
 
   // Gate-7: a Collect to any non-treasury recipient pages immediately (§9.4).

@@ -111,7 +111,8 @@ describe("Delta", () => {
     const { rerender } = render(<Delta value={41.2} />);
     expect(screen.getByText("+41.2%").className).toContain("text-green");
     rerender(<Delta value={-1.8} />);
-    expect(screen.getByText("-1.8%").className).toContain("text-red");
+    // True minus U+2212 (mockup "−1.8%"), never ASCII hyphen-minus.
+    expect(screen.getByText("−1.8%").className).toContain("text-red");
     rerender(<Delta value={0} />);
     expect(screen.getByText("0.0%").className).toContain("text-muted");
   });
@@ -162,8 +163,9 @@ describe("Divider / AddressChip / LiveDot", () => {
     expect(screen.getByRole("separator").className).toContain("bg-border");
   });
 
-  it("AddressChip shortens, titles the full address, and renders the suffix", () => {
-    const addr = "0x7fA30000000000000000000000000000000Ac92E";
+  it("AddressChip shortens (EIP-55 checksummed), titles the full address, and renders the suffix", () => {
+    // Lowercase in → checksummed mixed-case out (mockup "0x7fA3…c92E").
+    const addr = "0x7fa300000000000000000000000000000010c92e";
     render(<AddressChip address={addr} suffix="you" />);
     const el = screen.getByTitle(addr);
     expect(el.textContent).toContain("0x7fA3…c92E");

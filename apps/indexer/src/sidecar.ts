@@ -36,6 +36,7 @@ import {
   unconfiguredCompetitorSource,
   COMPETITOR_SNAPSHOT_INTERVAL_MS,
 } from "./jobs/competitor";
+import { createEthUsdRpc, createPgEthUsdStore, loadEthUsdEnv, startEthUsdPoller } from "./jobs/ethUsd";
 
 let started = false;
 
@@ -83,9 +84,10 @@ export async function startSidecars(): Promise<void> {
   const publisher = getDefaultPublisher();
 
   try {
-    // M2-6 confirmation tracker.
+    // M2-6 confirmation tracker (watermark sidecar only — no writes into
+    // Ponder-managed tables; tiers derived at read time, OI-11/§12.48c).
     await startConfirmationTracker({
-      store: createPgConfirmationStore(pool, schema),
+      store: createPgConfirmationStore(pool),
       fetchTags: createRpcTagFetcher(config.rpcHttp),
       publisher,
     });
@@ -123,6 +125,27 @@ export async function startSidecars(): Promise<void> {
     const pnlIntervalMs = Number(process.env.PNL_JOB_INTERVAL_MS) || PNL_JOB_INTERVAL_MS;
     startPnlJob({ store: createPgPnlStore(pool, schema) }, pnlIntervalMs);
     console.log("[indexer sidecar] address_pnl roll-up job started.");
+
+    // §3.9 ETH/USD snapshot poller (spec §2 hard rule; §12.51 Chainlink branch).
+    // Own try/catch: a §12.51 assertion failure is FAIL-CLOSED for the poller —
+    // NO poller starts (the HTTP fallback must not mask a misconfigured feed
+    // address) and eth_usd_snapshot_age_seconds pages (>5m alert, §9.4) — but
+    // indexing itself continues (sidecar principle: label, never gate).
+    try {
+      const ethUsdEnv = loadEthUsdEnv();
+      const rpc = createEthUsdRpc(config.rpcHttp);
+      const poller = await startEthUsdPoller({
+        store: createPgEthUsdStore(pool),
+        getChainId: rpc.getChainId,
+        chainlinkClient: rpc.reader,
+        env: ethUsdEnv,
+      });
+      console.log(
+        `[indexer sidecar] eth/usd poller started (branch: ${poller.usingChainlink ? "chainlink:4663" : "http fallback"}, interval ${ethUsdEnv.pollIntervalMs}ms).`,
+      );
+    } catch (err) {
+      console.error("[indexer sidecar] eth/usd poller FAIL-CLOSED (§12.51) — no snapshots will be written; age alert will page:", err);
+    }
 
     // M2-14 weekly hood.fun competitor snapshot (source unconfigured → no-op writes).
     const competitorIntervalMs = Number(process.env.COMPETITOR_SNAPSHOT_INTERVAL_MS) || COMPETITOR_SNAPSHOT_INTERVAL_MS;

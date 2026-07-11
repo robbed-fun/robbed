@@ -25,10 +25,14 @@ const TONE_CLASS: Record<"green" | "red" | "muted", string> = {
 export function PnlRange({
   range,
   placeholder = "—",
+  unit = null,
   className,
 }: {
   range: EthPnlRange | null;
   placeholder?: string;
+  /** Optional unit suffix — LOOT ALL-TIME renders "+1.94 ETH" (template.html:505),
+   * same color as the number; the holdings PNL column passes none. */
+  unit?: string | null;
   className?: string;
 }) {
   if (!range) {
@@ -54,6 +58,8 @@ export function PnlRange({
       title={title}
     >
       {text}
+      {/* Unit inherits the number's tone — one color, like EthAmount. */}
+      {unit ? <span className="ml-1">{unit}</span> : null}
     </span>
   );
 }

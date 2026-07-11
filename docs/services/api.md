@@ -204,7 +204,7 @@ GET /v1/portfolio/:address/created?cursor=&limit=             (§5.4 CREATED tab
   200 → { tokens: TokenCard[], nextCursor }
 ```
 
-**Materialization (indexer `address_pnl`, db-rows.ts `AddressPnlRow`).** The per-address roll-up (`first_seen_at`/`last_active_at`/`trade_count`/`tokens_created`/`total_eth_in`/`total_eth_out`/realized-PnL range `realized_pnl_low/high` + `pnl_confidence`) is a **scheduled recompute-from-raw job** over `trades`+`transfers`+`tokens` (indexer.md §5.4 / SQL views `pnl_*` + TRUNCATE+re-insert, rebuildable §4.4). Balances stay Transfer-truth (existing `BalanceRow`, X-4/X-5). **Wallet ETH** = RPC balance read at the API layer; **all-time/unrealized PnL** is computed at request time (live price × balance − remaining basis), NOT materialized.
+**Materialization (indexer `address_pnl`, db-rows.ts `AddressPnlRow`).** The per-address roll-up (`first_seen_at`/`last_active_at`/`trade_count`/`tokens_created`/`total_eth_in`/`total_eth_out`/realized-PnL range `realized_pnl_low/high` + `pnl_confidence`) is a **scheduled recompute-from-raw job** over `trades`+`transfers`+`tokens` (indexer.md §8.6 / SQL views `pnl_*` + TRUNCATE+re-insert, rebuildable §4.4). Balances stay Transfer-truth (existing `BalanceRow`, X-4/X-5). **Wallet ETH** = RPC balance read at the API layer; **all-time/unrealized PnL** is computed at request time (live price × balance − remaining basis), NOT materialized.
 
 ### 3.5 Confirmation & meta
 

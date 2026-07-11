@@ -1,27 +1,43 @@
 /**
- * Confirmation-state tracker (indexer.md §5, spec §2.1/§12.20; M2-6).
+ * Confirmation-state tracker (indexer.md §5, spec §2.1/§12.20/§12.48c; M2-6,
+ * reworked at M2-3 per the OI-11 verdict).
  *
  * A side-process loop (independent of Ponder's sync, §5.1) that:
  *  1. every ~5s polls the L2 `safe` / `finalized` block tags (§5.1 step 1);
  *  2. advances the `confirmation_watermarks` singleton MONOTONICALLY (§5.1 s2);
- *  3. materializes per-row `confirmation_state` with ranged `UPDATE`s (§5.1 s3);
- *  4. broadcasts ONE `global:confirmations` message per advance (§12.20 — O(1),
+ *  3. broadcasts ONE `global:confirmations` message per advance (§12.20 — O(1),
  *     NOT O(rows); clients upgrade held events locally from the watermark, §5.2);
- *  5. emits a `reorg` notice when the observed head regresses (§5.3).
+ *  4. emits a `reorg` notice when the observed head regresses (§5.3).
  *
- * The rule that maps a block to a state lives ONCE in `@robbed/shared`
- * (`stateForBlock`); both the pure `materializeRows` (used by the transition
- * suite) and the ranged SQL predicates below derive from the SAME boundaries, so
- * they can never disagree (asserted by the boundary test).
+ * ── OI-11 / §12.48c: sidecar READ-DERIVATION, no per-row writes ─────────────
+ * Decision (2026-07-11, basis recorded): per-row `confirmation_state` is NEVER
+ * stored on Ponder-managed tables and NEVER written back by this tracker. The
+ * previous design (ranged external `UPDATE`s of a `confirmation_state` column)
+ * was disproven by the OI-11 verification against the pinned ponder 0.16.8
+ * (decisions.md §11, indexer.md §7.3): Ponder's indexing-store cache retains
+ * rows in memory across realtime blocks, prefetch never re-reads cached keys,
+ * and flush rewrites ALL columns from the cached copy — so an external upgrade
+ * on a handler-mutated row (`tokens` on every Trade) is silently reverted and
+ * states flap backwards, violating the §5.1 monotonicity invariant. Ponder's
+ * own docs are explicit: "Direct SQL queries should not insert, update, or
+ * delete rows from Ponder tables" (ponder.sh/docs/query/direct-sql, checked
+ * 2026-07-11). §12.48c sanctions the sidecar shape; of the two sidecar
+ * variants (per-row `event_confirmations` join table vs pure read-derivation)
+ * we chose READ-DERIVATION — the strongest form: the tier of any row is a pure
+ * function of `block_number` vs the offchain `confirmation_watermarks`
+ * singleton (§3.8, migrations/0002 — the sidecar), derived at read time by
+ * every consumer. No write-back exists, so nothing can be reverted or drift;
+ * a per-row join table would only re-introduce O(rows) writes for data that is
+ * fully determined by two integers. The API derives the tier in its SELECTs
+ * (`apps/api/src/lib/confirmation.ts` `confirmationStateSql`) and DTO
+ * projections (`projectConfirmation`); both encode the same `stateForBlock`
+ * rule from `@robbed/shared`, so they can never disagree.
  *
- * Decide-it-yourself decisions (basis recorded inline):
- *  - **Direct ranged UPDATE vs sidecar (OI-11).** Chosen: direct `UPDATE` of
- *    `confirmation_state` on the Ponder-managed event tables — monotonic,
- *    reorg-compatible, one indexed pass on `block_number` (§7.3 sanctioned single
- *    external write). This is the boring path; if the pinned Ponder version
- *    forbids external writes to its live store the fallback is an
- *    `event_confirmations` sidecar joined at read time (not built here). Verify
- *    against the pinned version at M2-3 (OI-11 still OPEN, §10).
+ * Monotonicity now holds STRUCTURALLY: `stateForBlock(b, wm)` is monotone in
+ * `wm`, and `nextWatermark` never lets `safe`/`finalized` regress — therefore a
+ * derived tier can never go backwards (asserted by the transition suite).
+ *
+ * Other decide-it-yourself decisions (basis recorded inline):
  *  - **Reorg detection.** Watermarks are reorg-IMMUNE by construction (§5.3 —
  *    they only reference L1-posted blocks, never soft-confirmed head), so the
  *    only visible reorg signal is the L2 HEAD moving backwards. We detect
@@ -32,11 +48,7 @@
  *    returns `null` and the tick no-ops; the L1-watermark fallback (M2-3b) is the
  *    documented seam, NOT built here. OPEN (§10).
  */
-import {
-  stateForBlock,
-  upgradeConfirmationState,
-  type ConfirmationState,
-} from "@robbed/shared";
+import { stateForBlock, type ConfirmationState } from "@robbed/shared";
 import {
   getDefaultPublisher,
   publishConfirmations,
@@ -47,20 +59,6 @@ import { setConfirmationLag } from "./metrics";
 
 /** Poll cadence — posting is minutes, finality ~13min, so 5s is ample (§5.1). */
 export const TRACKER_POLL_MS = 5_000;
-
-/**
- * Ponder-managed event tables carrying a `confirmation_state` column
- * (indexer.md §3). `balances`/`candles` are derived (no per-event state).
- * Fixed allowlist — interpolated into DDL, never from user input.
- */
-export const CONFIRMATION_EVENT_TABLES = [
-  "tokens",
-  "trades",
-  "transfers",
-  "graduations",
-  "fee_collections",
-] as const;
-export type ConfirmationEventTable = (typeof CONFIRMATION_EVENT_TABLES)[number];
 
 /** In-memory watermark snapshot (mirrors `confirmation_watermarks`, §3.8). */
 export interface WatermarkState {
@@ -80,11 +78,11 @@ export interface ObservedTags {
 
 /**
  * Monotonic watermark advance. `safe`/`finalized` only ever move forward
- * (reorg-immune, §5.3): we take the max so a transient lower reading never
- * downgrades a materialized row. `latest` may regress on a reorg — handled by
- * `detectReorg`, not here (here we still floor it forward for the steady case).
- * Returns the next state and whether `safe`/`finalized` advanced (the trigger
- * for materialization + broadcast).
+ * (reorg-immune, §5.3): we take the max so a transient lower reading can never
+ * regress a derived tier (the ONLY monotonicity anchor under read-derivation).
+ * `latest` may regress on a reorg — handled by `detectReorg`, not here (here we
+ * still floor it forward for the steady case). Returns the next state and
+ * whether `safe`/`finalized` advanced (the trigger for persist + broadcast).
  */
 export function nextWatermark(
   current: WatermarkState,
@@ -106,68 +104,35 @@ export function detectReorg(currentLatest: number, observedLatest: number): numb
 }
 
 /**
- * Pure materialization of the authoritative rule (§3.8) over a set of rows —
- * the reference the transition suite drives (monotonicity, boundary-block).
- * Never downgrades: the new state is `upgrade(current, stateForBlock(...))`.
+ * Pure read-derivation of the authoritative rule (§3.8) over a set of rows —
+ * the reference the transition suite drives (monotonicity, boundary-block) and
+ * the exact semantics the API's SQL derivation must encode. Stateless: the tier
+ * is a pure function of `blockNumber` vs the watermark sidecar; no stored
+ * per-row state exists to upgrade or to corrupt (OI-11/§12.48c).
  */
-export function materializeRows<T extends { blockNumber: number; confirmationState: ConfirmationState }>(
+export function deriveConfirmationStates<T extends { blockNumber: number }>(
   rows: T[],
   wm: Pick<WatermarkState, "safe" | "finalized">,
-): Array<Omit<T, "confirmationState"> & { confirmationState: ConfirmationState }> {
+): Array<T & { confirmationState: ConfirmationState }> {
   return rows.map((r) => ({
     ...r,
-    confirmationState: upgradeConfirmationState(
-      r.confirmationState,
-      stateForBlock(r.blockNumber, { safeBlock: wm.safe, finalizedBlock: wm.finalized }),
-    ),
+    confirmationState: stateForBlock(r.blockNumber, {
+      safeBlock: wm.safe,
+      finalizedBlock: wm.finalized,
+    }),
   }));
-}
-
-export interface SqlStatement {
-  text: string;
-  params: unknown[];
-}
-
-/**
- * Ranged monotonic `UPDATE`s that materialize `confirmation_state` for one event
- * table. `finalized` runs FIRST so a block `<= finalized` becomes `finalized`
- * and is then excluded from the `posted_to_l1` pass (WHERE `= 'soft_confirmed'`)
- * — encodes exactly the `stateForBlock` boundaries with no downgrade path.
- */
-export function materializationStatementsForTable(
-  schema: string,
-  table: ConfirmationEventTable,
-  wm: Pick<WatermarkState, "safe" | "finalized">,
-): SqlStatement[] {
-  const rel = `"${schema}"."${table}"`;
-  return [
-    {
-      text: `UPDATE ${rel} SET confirmation_state = 'finalized' WHERE block_number <= $1 AND confirmation_state <> 'finalized'`,
-      params: [wm.finalized],
-    },
-    {
-      text: `UPDATE ${rel} SET confirmation_state = 'posted_to_l1' WHERE block_number <= $1 AND confirmation_state = 'soft_confirmed'`,
-      params: [wm.safe],
-    },
-  ];
-}
-
-/** All ranged statements across every event table (§5.1 step 3). */
-export function materializationStatements(
-  schema: string,
-  wm: Pick<WatermarkState, "safe" | "finalized">,
-): SqlStatement[] {
-  return CONFIRMATION_EVENT_TABLES.flatMap((t) => materializationStatementsForTable(schema, t, wm));
 }
 
 // ── Runtime driver (injectable — the transition suite drives `runTrackerTick`) ─
 
-/** Persistence + materialization boundary (Pg impl below; fake in tests). */
+/**
+ * Persistence boundary for the watermark SIDECAR singleton only (Pg impl in
+ * `confirmationStore.ts`; fake in tests). Deliberately has NO way to touch
+ * Ponder-managed tables (OI-11 — external writes are forbidden).
+ */
 export interface ConfirmationStore {
   loadWatermarks(): Promise<WatermarkState | null>;
   saveWatermarks(wm: WatermarkState): Promise<void>;
-  /** Run the ranged `UPDATE`s for the given watermarks (one indexed pass each). */
-  materialize(wm: Pick<WatermarkState, "safe" | "finalized">): Promise<void>;
 }
 
 /** Polls the L2 block tags; returns `null` if the RPC rejects them (OI-8 seam). */
@@ -184,7 +149,9 @@ export interface TrackerDeps {
 /**
  * One tracker iteration (pure orchestration over injected deps). Returns the
  * next in-memory watermark state. Steps: fetch → reorg check → monotonic advance
- * → materialize + persist + broadcast on advance. Never throws into the loop.
+ * → persist + O(1) broadcast on advance. No per-row writes of any kind — tiers
+ * are derived at read time from the persisted watermark (OI-11/§12.48c). Never
+ * throws into the loop.
  */
 export async function runTrackerTick(current: WatermarkState, deps: TrackerDeps): Promise<WatermarkState> {
   const now = deps.now ?? (() => Date.now());
@@ -206,7 +173,6 @@ export async function runTrackerTick(current: WatermarkState, deps: TrackerDeps)
     // Gate-7 (§9.4): keep the confirmation-lag gauges fresh every tick.
     setConfirmationLag(next.latest, next.safe, next.finalized);
     if (advanced) {
-      await deps.store.materialize({ safe: next.safe, finalized: next.finalized });
       await deps.store.saveWatermarks(next);
       publishConfirmations(deps.publisher, next.safe, next.finalized, Math.floor(now() / 1000));
     } else if (orphanFrom !== null) {

@@ -75,11 +75,13 @@
   --font-sans: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* type scale (sampled: 10.5 / 11 / 12 / 13 / 15 / 17 px) */
+  /* type scale (sampled: 10.5 / 11 / 11.5 / 12 / 13 / 14 / 15 / 16 / 17 px) */
   --text-2xs: 0.65625rem; /* 10.5px — form micro-labels */
   --text-2xs--line-height: 1.4;
   --text-xs: 0.6875rem; /* 11px — labels, tabs, side badges, taglines */
   --text-xs--line-height: 1.45;
+  --text-xs-plus: 0.71875rem; /* 11.5px — trade-details rows (Price impact / Fee / Max slippage), create subtitle */
+  --text-xs-plus--line-height: 1.45;
   --text-sm: 0.75rem; /* 12px — nav, buttons, deltas, stat values */
   --text-sm--line-height: 1.45;
   --text-base: 0.8125rem; /* 13px — rows, names, action buttons */
@@ -88,6 +90,8 @@
   --text-md--line-height: 1.4;
   --text-lg: 0.9375rem; /* 15px — big stat values, portfolio address */
   --text-lg--line-height: 1.4;
+  --text-lg-plus: 1rem; /* 16px — "LAUNCH A TOKEN" create-page title */
+  --text-lg-plus--line-height: 1.4;
   --text-xl: 1.0625rem; /* 17px — amount-input value */
   --text-xl--line-height: 1.35;
 
@@ -196,7 +200,9 @@
   }
   body {
     background-color: var(--color-bg);
-    color: var(--color-text);
+    /* Mockup page-wrapper base color is #C9D3C9 (secondary); bright #EDF3ED is
+     * opt-in per element (names, wordmark, values) — docs/Robbed.html line 177. */
+    color: var(--color-text-secondary);
     font-family: var(--font-mono);
     font-feature-settings: "rlig" 1, "calt" 1;
     /* Terminal density (mockup rows are 13px, mobile-first). */

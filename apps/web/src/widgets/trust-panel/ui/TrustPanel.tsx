@@ -5,7 +5,7 @@ import { formatUnits } from "viem";
 import type { Address } from "viem";
 
 import { useCurveReads } from "@/entities/curve";
-import { AddressLink, Button, Card, MonoLabel } from "@/shared/ui";
+import { AddressLink, Button, MonoLabel } from "@/shared/ui";
 import { LP_DESTINY_COPY } from "@/shared/config/copy";
 import { ROBBED, isPlaceholder } from "@/shared/config/addresses";
 import { useWsChannel } from "@/shared/lib/ws";
@@ -51,7 +51,10 @@ export function TrustPanel({ token }: { token: TokenDetail }) {
   const readUnavailable = reads.isError && !reads.isLoading;
 
   return (
-    <Card className="p-4">
+    // FLAT region (fidelity audit fix 1): the panel sits in the right rail below
+    // the trade widget with only a hairline top border delimiting it — no Card
+    // border/fill. Padding matches the rail (18px/20px horizontal rhythm).
+    <div className="border-t border-border px-5 py-4">
       <div className="mb-1 flex items-center justify-between border-b border-border pb-2">
         <MonoLabel size="xs" className="text-text-tertiary">
           Trust panel
@@ -144,7 +147,7 @@ export function TrustPanel({ token }: { token: TokenDetail }) {
 
       {/* v1.2 organic-flow metrics (indexer, advisory) */}
       <OrganicMetrics organic={token.trust.organic} />
-    </Card>
+    </div>
   );
 }
 

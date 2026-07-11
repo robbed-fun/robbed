@@ -1,17 +1,20 @@
 /**
- * External Uniswap v3-periphery ABI freeze + drift tests.
+ * External third-party ABI freeze + drift tests (Uniswap v3 periphery +
+ * Chainlink AggregatorV3Interface).
  *
  * These ABIs are transcribed VERBATIM from the pinned official artifacts
- * (src/abi/QuoterV2.json / SwapRouter02.json). The two assertions here make the
- * two failure modes impossible:
+ * (src/abi/QuoterV2.json / SwapRouter02.json / AggregatorV3Interface.json).
+ * The two assertions here make the two failure modes impossible:
  *  1. const ↔ JSON drift — the exported `as const` copy must deep-equal the JSON
  *     artifact (so hand-edits to either are caught).
- *  2. surface drift — the exact function set the frontend wires (M3-5 post-grad
- *     routing) is frozen; adding/removing one is a deliberate change, not silent.
+ *  2. surface drift — the exact function set the services wire (M3-5 post-grad
+ *     routing; §12.51 ETH/USD poller) is frozen; adding/removing one is a
+ *     deliberate change, not silent.
  */
 import { describe, expect, it } from "bun:test";
 import { toFunctionSelector, toFunctionSignature, type AbiFunction } from "viem";
-import { quoterV2Abi, swapRouter02Abi } from "../src/abi/external";
+import { aggregatorV3Abi, quoterV2Abi, swapRouter02Abi } from "../src/abi/external";
+import aggregatorV3Json from "../src/abi/AggregatorV3Interface.json";
 import quoterV2Json from "../src/abi/QuoterV2.json";
 import swapRouter02Json from "../src/abi/SwapRouter02.json";
 
@@ -23,6 +26,7 @@ function sigOf(fn: AbiFunction): string {
 /** const ABI as a plain AbiFunction[] (the const tuple type is too deep to filter). */
 const quoterFns = quoterV2Abi as unknown as AbiFunction[];
 const routerFns = swapRouter02Abi as unknown as AbiFunction[];
+const aggregatorFns = aggregatorV3Abi as unknown as AbiFunction[];
 
 describe("external ABIs are byte-identical to the pinned JSON artifacts", () => {
   it("quoterV2Abi === QuoterV2.json", () => {
@@ -30,6 +34,33 @@ describe("external ABIs are byte-identical to the pinned JSON artifacts", () => 
   });
   it("swapRouter02Abi === SwapRouter02.json", () => {
     expect(swapRouter02Abi as unknown).toEqual(swapRouter02Json as unknown);
+  });
+  it("aggregatorV3Abi === AggregatorV3Interface.json", () => {
+    expect(aggregatorV3Abi as unknown).toEqual(aggregatorV3Json as unknown);
+  });
+});
+
+describe("AggregatorV3Interface — the §12.51 ETH/USD poller read surface", () => {
+  const fns = aggregatorFns.filter((x) => x.type === "function");
+  it("exposes exactly the three §12.51 views (frozen — adopted from the indexer local copy)", () => {
+    expect(fns.map(sigOf).sort()).toEqual(["decimals()", "description()", "latestRoundData()"]);
+    for (const fn of fns) expect(fn.stateMutability).toBe("view");
+  });
+  it("latestRoundData returns the canonical 5-tuple (answer + updatedAt drive the staleness check)", () => {
+    const fn = fns.find((f) => f.name === "latestRoundData")!;
+    expect(fn.outputs.map((o) => `${o.type} ${o.name}`)).toEqual([
+      "uint80 roundId",
+      "int256 answer",
+      "uint256 startedAt",
+      "uint256 updatedAt",
+      "uint80 answeredInRound",
+    ]);
+  });
+  it("selectors are the canonical Chainlink AggregatorV3Interface selectors", () => {
+    const bySig = Object.fromEntries(fns.map((f) => [sigOf(f), toFunctionSelector(f)]));
+    expect(bySig["decimals()"]).toBe("0x313ce567");
+    expect(bySig["description()"]).toBe("0x7284e416");
+    expect(bySig["latestRoundData()"]).toBe("0xfeaf968c");
   });
 });
 

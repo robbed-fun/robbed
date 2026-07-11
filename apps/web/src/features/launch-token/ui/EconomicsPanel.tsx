@@ -55,8 +55,10 @@ export function EconomicsPanel({ ticker }: { ticker?: string }) {
 
   return (
     <div className="flex flex-col">
-      <div className="h-px w-full bg-border" />
-      <dl className="flex flex-col gap-2 pt-4">
+      {/* Mockup 2b summary (template 472): border-soft hairline top, 14px top
+          pad, 7px row gap, one 11.5px muted color across the whole block. */}
+      <div className="h-px w-full bg-border-soft" />
+      <dl className="flex flex-col gap-[7px] pt-3.5">
         <Row label="Deploy cost">{ethValue(econ.deployFeeWei)}</Row>
         <Row label="Starting price">{startingPrice}</Row>
         <Row label="Supply">{supply}</Row>
@@ -71,15 +73,17 @@ export function EconomicsPanel({ ticker }: { ticker?: string }) {
   );
 }
 
+/**
+ * Mockup 2b (template 472-475): label AND value share the single muted token
+ * at 11.5px — raw spans, not MonoText, because `text-xs-plus` is a
+ * custom size utility tailwind-merge would misclassify as a color and drop the
+ * tone class.
+ */
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-3">
-      <MonoText tone="muted" size="sm" className="shrink-0">
-        {label}
-      </MonoText>
-      <MonoText tone="secondary" size="sm" numeric className="text-right">
-        {children}
-      </MonoText>
+    <div className="flex items-baseline justify-between gap-3 text-xs-plus text-muted">
+      <dt className="shrink-0">{label}</dt>
+      <dd className="text-right tabular-nums">{children}</dd>
     </div>
   );
 }

@@ -41,9 +41,15 @@ export function ImageUpload({
         onClick={() => inputRef.current?.click()}
         aria-label="Upload token logo, 512 by 512"
         className={cn(
-          "group relative flex aspect-square w-full items-center justify-center overflow-hidden border border-dashed border-border-strong bg-transparent transition-colors hover:border-green focus:outline-none focus-visible:border-green disabled:cursor-not-allowed disabled:opacity-50",
+          "group relative flex h-24 w-24 items-center justify-center overflow-hidden border border-dashed border-border-strong transition-colors hover:border-green focus:outline-none focus-visible:border-green disabled:cursor-not-allowed disabled:opacity-50",
           image.error && "border-red",
         )}
+        // Mockup 2b (template 452): fixed 96×96 slot with a 45° hairline stripe
+        // fill — tokens only (var(--color-*)), raw hex is forbidden (web.md §7).
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(45deg, var(--color-bg), var(--color-bg) 6px, var(--color-surface) 6px, var(--color-surface) 12px)",
+        }}
       >
         {image.url ? (
           // Preview from our CDN — the API-re-encoded, content-addressed image.
@@ -55,10 +61,11 @@ export function ImageUpload({
           />
         ) : (
           <span className="flex flex-col items-center gap-0.5 text-center leading-tight">
-            <MonoText tone="faint" size="xs">
+            {/* Mockup 2b: 10.5px dropzone text (template 452). */}
+            <MonoText tone="faint" size="2xs">
               logo
             </MonoText>
-            <MonoText tone="faint" size="xs" numeric>
+            <MonoText tone="faint" size="2xs" numeric>
               512×512
             </MonoText>
           </span>
