@@ -21,12 +21,14 @@
  *                 spec OR the containing file OR any doc mentioned (by
  *                 basename, with or without .md) earlier in the same line. A
  *                 reference immediately preceded by "<name>.md" is resolved
- *                 strictly against that named doc; when the bare basename
- *                 matches more than one known location (e.g. "api.md" inside
- *                 docs/plans/api.md, whose driving doc is
- *                 docs/services/api.md), the ref is accepted if it resolves
- *                 in ANY candidate — basename collisions must not manufacture
- *                 false positives. One immediately preceded by the word
+ *                 strictly against that named doc; if a bare basename ever
+ *                 matches more than one known location, the ref is accepted
+ *                 when it resolves in ANY candidate — basename collisions
+ *                 must not manufacture false positives. (Since the 2026-07-12
+ *                 docs refactor, basenames are unique by policy — plans are
+ *                 docs/plans/<service>-plan.md, distinct from
+ *                 docs/services/<service>.md — so this is defense-in-depth,
+ *                 not a live code path; see docs/README.md rules.) One immediately preceded by the word
  *                 "spec" resolves strictly against launchpad-spec.md.
  *                 Limitation (deliberate, to keep false positives near
  *                 zero): a bare ref that is broken as a spec ref but happens
@@ -261,10 +263,12 @@ for (const f of mdFiles.values()) {
 
 const SECREF_RE = /§\s?(\d+(?:\.\d+)*)/g;
 
-// All docs a name could denote. A bare basename ("api.md") can collide across
-// directories (docs/plans/api.md vs docs/services/api.md); the caller accepts
-// a ref that resolves in ANY candidate so collisions don't manufacture false
-// positives (same near-zero-FP stance as the bare-ref limitation above).
+// All docs a name could denote. Basenames are unique by policy since the
+// 2026-07-12 docs refactor (docs/plans/api-plan.md vs docs/services/api.md —
+// the old api.md-in-both-directories collision is gone), but if a bare basename ever
+// collides again the caller accepts a ref that resolves in ANY candidate so
+// collisions don't manufacture false positives (same near-zero-FP stance as
+// the bare-ref limitation above).
 function findNamedDocs(name: string, fromDir: string): MdFile[] {
   const candidates = new Set([
     resolve(fromDir, name),

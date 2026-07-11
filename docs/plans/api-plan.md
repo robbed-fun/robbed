@@ -6,7 +6,7 @@
 
 ## Scope note
 
-This plan covers the **API + WS legs of M2**: `M2-2` (OpenAPI), `M2-9` (read endpoints incl. §5.1 search — was orphan A-1, now in scope, P-6), `M2-10` (upload + metadata, §12.19), `M2-11` (moderation + SIWE admin + rate limits), `M2-12` (gate-7 metric hooks incl. the v1.2 funding-cluster share), plus the API/WS orchestration legs of `I-1`/`I-3`. The pure-indexer items (`M2-4…M2-8`, `M2-13/14`) live in [indexer.md](indexer.md); they are **cross-service dependencies here, not tasks**. In particular **`M2-8` is the sole authoring item for `apps/api/src/ws.ts`** (Bun WS fanout host) — it is owned by the indexer plan even though the file sits in this service's tree; this plan consumes it and adds no WS-fanout row (see the flagged ownership seam at the foot).
+This plan covers the **API + WS legs of M2**: `M2-2` (OpenAPI), `M2-9` (read endpoints incl. §5.1 search — was orphan A-1, now in scope, P-6), `M2-10` (upload + metadata, §12.19), `M2-11` (moderation + SIWE admin + rate limits), `M2-12` (gate-7 metric hooks incl. the v1.2 funding-cluster share), plus the API/WS orchestration legs of `I-1`/`I-3`. The pure-indexer items (`M2-4…M2-8`, `M2-13/14`) live in [indexer-plan.md](indexer-plan.md); they are **cross-service dependencies here, not tasks**. In particular **`M2-8` is the sole authoring item for `apps/api/src/ws.ts`** (Bun WS fanout host) — it is owned by the indexer plan even though the file sits in this service's tree; this plan consumes it and adds no WS-fanout row (see the flagged ownership seam at the foot).
 
 ## Build order
 

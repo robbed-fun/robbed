@@ -211,6 +211,16 @@ jobs:
       # Readiness-gated bring-up (I-3/G-1): waits until every long-running service is healthy
       # (indexer = Ponder /ready, i.e. backfill complete) and every one-shot
       # (deps/createbuckets/apimigrations/deploychain) exited 0; fails loud with log tails.
+      # Linux-CI bind-mount UID fix: the `deploychain` foundry container runs `forge script`
+      # as the image's `foundry` user, but the repo is checked out as the runner user — so the
+      # container cannot create/write the bind-mounted forge output dirs (`contracts/out`,
+      # `cache`, `broadcast`) or emit `tools/localstack/out/local.env`. macOS Docker Desktop's
+      # osxfs/virtiofs masks this locally; on a Linux runner the mismatch is literal. Pre-create
+      # + world-write the dirs the deploy writes (CI checkout is throwaway).
+      - name: make deploy bind-mount dirs container-writable (CI Linux UID mismatch)
+        run: |
+          mkdir -p contracts/out contracts/cache contracts/broadcast tools/localstack/out
+          chmod -R 777 contracts/out contracts/cache contracts/broadcast tools/localstack/out
       - name: bring up stack (dev:stack)
         run: bun run dev:stack
         env:
