@@ -219,8 +219,8 @@ jobs:
       # + world-write the dirs the deploy writes (CI checkout is throwaway).
       - name: make deploy bind-mount dirs container-writable (CI Linux UID mismatch)
         run: |
-          mkdir -p contracts/out contracts/cache contracts/broadcast tools/localstack/out
-          chmod -R 777 contracts/out contracts/cache contracts/broadcast tools/localstack/out
+          mkdir -p contracts/out contracts/cache contracts/broadcast contracts/deployments tools/localstack/out
+          chmod -R 777 contracts/out contracts/cache contracts/broadcast contracts/deployments tools/localstack/out
       - name: bring up stack (dev:stack)
         run: bun run dev:stack
         env:
