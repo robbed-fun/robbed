@@ -1,6 +1,6 @@
 /**
  * ── truth-layer assertion markers (plan I-5a/I-5b) ───────────────────────────
- * A flow's `assertable-layers` (docs/user-flows.md, honouring the waivers) are
+ * A flow's `assertable-layers` (apps/web/e2e/user-flows.md, honouring the waivers) are
  * asserted through these three wrappers. They are BOTH runtime `test.step`s AND
  * the STATIC markers the `e2e:coverage` gate greps for: a spec must call exactly
  * the wrappers matching its declared layers — no more (over-assert), no fewer

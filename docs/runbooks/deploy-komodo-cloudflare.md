@@ -1,6 +1,6 @@
 # Runbook — Backend on Komodo, Frontend on Cloudflare Workers
 
-**Status:** v1.0, 2026-07-10. Authored by hoodpad-architect. Implements the hosting split ratified in **spec §12.45** (amends architecture.md §6). This runbook is the *plan* — buildable infra configs and the executed deploy land at implementation-plan **P-2/P-3** (Phase P); nothing here is executed at authoring time.
+**Status:** v1.0, 2026-07-10. Authored by hoodpad-architect. Implements the hosting split ratified in **spec §12.45** (amends architecture.md §6). This runbook is the *plan* — buildable infra configs and the executed deploy land at plan item **P-2/P-3** (Phase P); nothing here is executed at authoring time.
 
 > **Docs-first rule (mandatory every iteration).** Before touching any config in this runbook, consult current official docs — never work from memory. Primary: context7 MCP (`resolve-library-id` → `get-library-docs`); fallback: WebFetch of the canonical pages below. Docs beat assumptions; the spec beats docs (flag the conflict, do not silently diverge).
 >
@@ -83,7 +83,7 @@ Both service Dockerfiles are **multi-stage** and workspace-aware (build context 
 
 ### A.6b P-3 status — configs landed (2026-07-10)
 
-The buildable infra from this Part A is now committed (implementation-plan **P-3**, owner hoodpad-indexer):
+The buildable infra from this Part A is now committed (plan item **P-3**, owner hoodpad-indexer):
 
 - `apps/indexer/Dockerfile` — multi-stage `node:22-bookworm-slim`; corepack `pnpm@10.33.0`; build context = repo root; `pnpm install --frozen-lockfile --filter @robbed/indexer...`; `ponder codegen` (build-only placeholder env, discarded); `pnpm deploy --legacy --prod` bundle; runtime stage runs offchain `migrate` → `ponder start` under **Node**, with a copied `bun` binary used **only** to run the two TypeScript side-scripts (`migrate`/`rebuild`). Non-root (`node`). `EXPOSE 9464 42069`.
 - `apps/api/Dockerfile` — build stage on `node:22-bookworm-slim` (pnpm install, strict node_modules) → runtime on **`oven/bun:1.3.14`** (Bun runtime, spec §8/§9). One image, two entrypoints: default `CMD` = HTTP (`src/index.ts`); the `ws` compose service overrides `command` to `src/ws.ts` (build-arg `APP_ENTRY` alternative documented). Non-root (`bun`). `EXPOSE 3001 3002`.
@@ -166,7 +166,7 @@ initOpenNextCloudflareForDev();   // exposes CF bindings during `next dev`
 
 ### B.6 OG rendering: native → WASM (supersedes M3-8 for this target)
 
-`workerd` **cannot load native N-API addons**, so `@resvg/resvg-js` (chosen at implementation-plan M3-8) is unrunnable on Workers. Swap the raster backend to a **WASM path**:
+`workerd` **cannot load native N-API addons**, so `@resvg/resvg-js` (chosen at plan item M3-8) is unrunnable on Workers. Swap the raster backend to a **WASM path**:
 
 - **Preferred:** `@resvg/resvg-wasm` + `satori` in the OG route — keeps the existing satori layout code (web.md §6 content is unchanged: sparkline from `candles?from=&to=`, mcap ETH-first, progress, brand mark). Only the rasteriser and its init change (WASM module must be initialised once).
 - **Alternative:** Next `ImageResponse` / `next/og` (ships a WASM resvg internally) — viable if it behaves under OpenNext/workerd; verify at impl time (mirrors the old web-7 runtime check, now retargeted from Bun-self-host to workerd).
@@ -185,4 +185,4 @@ This is spec §12.45's required frontend consequence; layout unchanged, raster b
 
 ### B.8 Owner / handoff
 
-The Workers adaptation (OpenNext config + wrangler + OG→WASM + native-resvg removal) is **hoodpad-frontend**, executed **after** the concurrent `apps/web` redesign lands (do not edit `apps/web` while the redesign owns it). The Komodo Dockerfiles + Stack are **hoodpad-indexer** (owner of root compose / infra runbooks per implementation-plan P-9). See the two task specs in the delivering report.
+The Workers adaptation (OpenNext config + wrangler + OG→WASM + native-resvg removal) is **hoodpad-frontend**, executed **after** the concurrent `apps/web` redesign lands (do not edit `apps/web` while the redesign owns it). The Komodo Dockerfiles + Stack are **hoodpad-indexer** (owner of root compose / infra runbooks per plan item P-9). See the two task specs in the delivering report.

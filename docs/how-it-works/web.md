@@ -2,7 +2,7 @@
 
 **Status:** Design v1.0 — drives M3 implementation. Documentation-first: building from this doc should be a transcription exercise.
 **Owner:** robbed-frontend. Consumes contract types from `packages/shared` only; any missing indexer/API data is a gap reported to robbed-indexer via the orchestrator — never faked client-side.
-**Spec:** `launchpad-spec.md` v1.1 — §1, §2, §2.1, §5.1–5.4, §8, §8.3, §9. `CLAUDE.md` hard rules apply.
+**Spec:** `docs/spec.md` v1.1 — §1, §2, §2.1, §5.1–5.4, §8, §8.3, §9. `CLAUDE.md` hard rules apply.
 
 ---
 
@@ -501,7 +501,7 @@ Plus: LP sentence exists **only** as the single exported constant (grep for the 
 
 ## 9. Open items & decisions needed
 
-**Resolved 2026-07-09 (see `docs/decisions.md` and spec §12):**
+**Resolved 2026-07-09 (spec §12):**
 
 1. **WS + REST contract ratification** — **RESOLVED.** Canonical channels/messages = indexer.md §8.1/§8.2 (`global:launches`, `global:trades`, `global:confirmations`, `token:{address}:trades|candles:{interval}|events`; message types `launch`/`trade`/`candle`/`graduated`/`confirmations`/`reorg`/`metadata_verified`); canonical REST routes = api.md §3 (`/v1/...`, incl. `POST /v1/uploads/image` — no browser presign, spec §12.19 — and `GET /v1/trades/:txHash`, added to api.md). This doc has been corrected to the ratified names; all types come from `packages/shared`.
 2. **ETH/USD endpoint** — **RESOLVED.** `GET /v1/eth-usd → { price, source, asOf }` exists (api.md §3.5), backed by `eth_usd_snapshots`.

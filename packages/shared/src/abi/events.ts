@@ -3,7 +3,7 @@
  * (apps/indexer) and frontend decoding (apps/web).
  *
  * Shapes are TRANSCRIBED from the ratified contract designs:
- * - `TokenCreated`  — spec §12.15; docs/services/contracts.md §2.2 (CurveFactory)
+ * - `TokenCreated`  — spec §12.15; docs/how-it-works/contracts.md §2.2 (CurveFactory)
  * - `Trade`         — spec §12.15; contracts.md §2.3 (BondingCurve; ethAmount is GROSS, fee separate)
  * - `Graduated`     — contracts.md §2.5 (V3Migrator)
  * - `Transfer`      — canonical ERC-20; sixth indexed event family, sole source of

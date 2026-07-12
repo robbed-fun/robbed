@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     Frozen HTTP contract for `apps/api` (Hono on Bun) — transcribed from
-    `docs/services/api.md` (Design v1.0) and `launchpad-spec.md` §2/§2.1/§5/§8/§12.
+    `docs/how-it-works/api.md` (Design v1.0) and `docs/spec.md` §2/§2.1/§5/§8/§12.
     M2 implements this document; M3 (frontend) consumes it. Response DTO shapes
     are the zod schemas in `packages/shared/src/api-types.ts` — the schemas
     below mirror them and MUST NOT drift (shared package is authoritative).
@@ -1114,7 +1114,7 @@ components:
         mcapEth:
           allOf: [{ $ref: "#/components/schemas/DecimalString" }]
           description: >-
-            Native ETH market cap, wei decimal string (decisions.md §7.2 item 3).
+            Native ETH market cap, wei decimal string (spec §2 ETH-first; mcapEth refinement ratified 2026-07-10).
             ETH-first display source (§2) — USD mcap derives from it. Optional /
             additive: absent until the indexer materializes it; not in `required`.
         progressPct: { type: number, description: real_eth_reserves / graduation_eth }

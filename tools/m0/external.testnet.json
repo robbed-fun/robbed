@@ -3,7 +3,7 @@
   "chainId": 46630,
   "status": "RATIFIED — spec §12.52 (2026-07-11). Phase-T external-contract inventory for Robinhood Chain testnet (46630), consumed by `bun run derive --network=testnet` → out/constants.testnet.json. Derive FAILS CLOSED (naming this file) if any external value below is null.",
   "provenance": {
-    "specRef": "launchpad-spec.md §12.52 (decision 52, 2026-07-11)",
+    "specRef": "docs/spec.md §12.52 (decision 52, 2026-07-11)",
     "verification": "All addresses live-re-verified by robbed-architect on 2026-07-11 against rpc.testnet.chain.robinhood.com (eth_chainId == 46630). §12.28 runtime assertions pass live on this set: factory.feeAmountTickSpacing(10000) == 200, NPM.factory() == v3Factory, NPM.WETH9() == weth; Deploy.s.sol re-asserts all three at deploy time regardless (fail-closed).",
     "notes": [
       "weth: OFFICIAL (docs.robinhood.com/chain/protocol-contracts) — TransparentUpgradeableProxy bridge pattern matching mainnet; symbol() == \"WETH\" verified live (§12.52).",

@@ -6,7 +6,7 @@
  *     token age < 24h  → anchorPrice = first-trade price (creation-anchored)
  *     no trades        → change24hPct = 0
  *
- * CANONICAL HOME (decisions.md §7.2 item 2; anti-drift §12.29): this logic has
+ * CANONICAL HOME (spec §12.40e + §12.29 anti-drift): this logic has
  * ≥2 consumers — the indexer's `volume_eth_24h` decay/materialization job AND the
  * API `card`/`detail` projections — so per the one-source-of-truth rule it lives
  * here in `packages/shared`, not duplicated in `apps/indexer/src/change24h.ts`.

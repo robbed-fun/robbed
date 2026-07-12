@@ -104,7 +104,7 @@ export const wsMetadataVerifiedDataSchema = z.object({
  * reads identical fields whether it hydrates from REST or a live push. Block
  * coordinates follow the `trade` payload convention (dedup + confirmation
  * upgrade). Scalars are reused (`addressSchema`/`decimalStringSchema`/
- * `hex32Schema`) — no new fee shape is invented (decision D2, plans/shared-plan.md).
+ * `hex32Schema`) — no new fee shape is invented.
  */
 export const wsFeeCollectedDataSchema = z.object({
   token: addressSchema,

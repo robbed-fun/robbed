@@ -5,7 +5,7 @@
  * the V3 graduation price/tick in both token orderings (§6.3), LP tranche
  * sizing, and fee / anti-sniper proposals; validates with randomized
  * round-trip simulations; emits:
- *   out/constants.json    — canonical artifact (schema: docs/services/contracts.md §4)
+ *   out/constants.json    — canonical artifact (schema: docs/how-it-works/contracts.md §4)
  *   out/Constants.sol.txt — generated Solidity rendering (never hand-edited)
  *   out/constants.ts      — generated TS rendering for apps/web / packages/shared
  *   out/plots/*.svg + out/plots/checkpoints.md

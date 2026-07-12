@@ -1,7 +1,7 @@
 # ROBBED_ — M1 Consolidated Security Findings Register (M1-15)
 
 **Deliverable:** M1-15 — final M1 security gate. Full-suite adversarial review of `contracts/src/**` (6 contracts + `libs/CurveMath.sol` + `errors/Errors.sol` + interfaces).
-**Author:** hoodpad-security. **Date:** 2026-07-10. **Scope:** read-only on `contracts/`; findings route to hoodpad-contracts. Source of truth: `launchpad-spec.md` v1.1; threat model `docs/threat-model.md`.
+**Author:** hoodpad-security. **Date:** 2026-07-10. **Scope:** read-only on `contracts/`; findings route to hoodpad-contracts. Source of truth: the protocol spec (`docs/spec.md`) v1.1; threat model `docs/threat-model.md`.
 **Reviewed tree (exact):** `BondingCurve.sol`, `CurveFactory.sol`, `Router.sol`, `V3Migrator.sol`, `LPFeeVault.sol`, `LaunchToken.sol`, `libs/CurveMath.sol`, `errors/Errors.sol`, `interfaces/**`.
 
 ## Verdict
@@ -100,7 +100,7 @@ Every lens below was executed against the current tree. **All refuted.** No new 
 
 - Uniswap v3-core `IUniswapV3PoolActions` natspec (raw GitHub): `sqrtPriceLimitX96` bounds price (cannot cross after swap); positive `amountSpecified` = exact input; caller pays owed input in callback — validates V3Migrator arb-back "never overshoot" + callback design.
 - OpenZeppelin Contracts v5.x (docs.openzeppelin.com/context7): `ReentrancyGuard` = single per-contract storage lock; re-entry of any `nonReentrant` fn reverts (distinct from `ReentrancyGuardTransient`) — validates cross-entrypoint reentrancy resolution.
-- spec §6.5, §12.11–§12.13, §12.25, §12.28; `docs/threat-model.md` (UM-1/UM-2/UM-9, TM-T1/TM-T2, §8.1); `docs/implementation-plan.md` M1-1..M1-14 gate evidence.
+- spec §6.5, §12.11–§12.13, §12.25, §12.28; `docs/threat-model.md` (UM-1/UM-2/UM-9, TM-T1/TM-T2, §8.1); M1-1..M1-14 gate evidence (plan-item IDs; the execution tracker was retired 2026-07-12 — history in git).
 
 ---
 

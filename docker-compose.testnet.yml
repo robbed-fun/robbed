@@ -1,11 +1,11 @@
-# ROBBED_ — TESTNET stack (implementation-plan Phase T / T-5 staging shape, delivered ahead of the
+# ROBBED_ — TESTNET stack (Phase T / T-5 staging shape, delivered ahead of the
 # testnet deploy as P-9/M2-0 infrastructure): the same off-chain stack as docker-compose.yml
 # (postgres, redis, minio, api, ws, indexer, web) pointed at the REMOTE Robinhood Chain testnet.
 #
 #   NO anvil, NO deploychain: the chain is remote and contracts are deployed by the Phase-T
 #   `forge script` run (T-3), never by compose.
 #
-# ── HARD RULE: no invented testnet parameters (spec §13, implementation-plan Phase T note) ──
+# ── HARD RULE: no invented testnet parameters (spec §13, Phase-T rule) ──
 # The Robinhood testnet chain ID / RPC / WS / Blockscout URLs are a §13 open item pulled from
 # OFFICIAL Robinhood docs at Phase-T start. This file carries NO defaults for them — every
 # `${TESTNET_*:?…}` below makes `docker compose config`/`up` fail loud when unset. Export them
@@ -204,7 +204,7 @@ services:
       - |
         if [ ! -f tools/localstack/out/testnet.env ]; then
           echo "FATAL: tools/localstack/out/testnet.env not found." >&2
-          echo "  Contract addresses + START_BLOCK come from the Phase-T testnet deploy (implementation-plan T-3," >&2
+          echo "  Contract addresses + START_BLOCK come from the Phase-T testnet deploy (plan item T-3," >&2
           echo "  which writes tools/deployments/testnet.json); emit/copy them to tools/localstack/out/testnet.env" >&2
           echo "  with the same keys as the local deploychain local.env. No contracts are deployed on testnet yet" >&2
           echo "  until Phase T runs. See docs/runbooks/docker.md 'Testnet stack'." >&2
@@ -287,7 +287,7 @@ services:
       - |
         if [ ! -f tools/localstack/out/testnet.env ]; then
           echo "FATAL: tools/localstack/out/testnet.env not found." >&2
-          echo "  Contract addresses + START_BLOCK come from the Phase-T testnet deploy (implementation-plan T-3," >&2
+          echo "  Contract addresses + START_BLOCK come from the Phase-T testnet deploy (plan item T-3," >&2
           echo "  which writes tools/deployments/testnet.json); emit/copy them to tools/localstack/out/testnet.env" >&2
           echo "  with the same keys as the local deploychain local.env. No contracts are deployed on testnet yet" >&2
           echo "  until Phase T runs. See docs/runbooks/docker.md 'Testnet stack'." >&2

@@ -1,6 +1,6 @@
 # Runbook — Environment Variable Inventory (all services)
 
-**Status:** v1.1, 2026-07-11. Authored by hoodpad-architect (implementation-plan **P-1**). Inputs: indexer.md §2, api.md §2/§4/§5, web.md §2.3/§9.6, `.env.example`, deploy-komodo-cloudflare.md A.3/B.2. v1.1: table re-verified against a full `process.env`/`vm.env` grep of `apps/` + `tools/` + `contracts/script` (2026-07-11) — API section rewritten from `apps/api/src/config.ts` (role-split DB URLs, `API_PORT`, NSFW thresholds, `TRUSTED_PROXY_HEADER`), indexer sidecar/flow/metrics vars added, §12.51 Chainlink rows kept, dev/test tooling section (§5) added.
+**Status:** v1.1, 2026-07-11. Authored by hoodpad-architect (plan item **P-1**). Inputs: indexer.md §2, api.md §2/§4/§5, web.md §2.3/§9.6, `.env.example`, deploy-komodo-cloudflare.md A.3/B.2. v1.1: table re-verified against a full `process.env`/`vm.env` grep of `apps/` + `tools/` + `contracts/script` (2026-07-11) — API section rewritten from `apps/api/src/config.ts` (role-split DB URLs, `API_PORT`, NSFW thresholds, `TRUSTED_PROXY_HEADER`), indexer sidecar/flow/metrics vars added, §12.51 Chainlink rows kept, dev/test tooling section (§5) added.
 
 This is the **authoritative per-variable table** for every service. It is the source `.env.example` and the Komodo/Workers secret stores are populated from.
 

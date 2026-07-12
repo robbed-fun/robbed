@@ -1,6 +1,6 @@
 # Runbook — Mainnet-Prep Deploy (contracts + Safe handover + hosting)
 
-**Status:** v1.1, 2026-07-11. Authored by hoodpad-architect + hoodpad-contracts (implementation-plan **P-2**; the M4/M5 handoff register at the bottom is **P-4**). v1.1: §3.1 updated for the §12.49 domain decision; handoff register re-derived against spec §13 as of 2026-07-11 (OI-6/OI-8/OI-11/web-10 closed) and extended with the H.6 caps-lift residuals from the M1 close-out. This is a **prepared, not executed** runbook — the Goal is "production-ready, not production-launched" (spec §14 Phase A). Nothing here runs until Gate G-A passes and the user directs a mainnet launch (Phase B / M4).
+**Status:** v1.1, 2026-07-11. Authored by hoodpad-architect + hoodpad-contracts (plan item **P-2**; the M4/M5 handoff register at the bottom is **P-4**). v1.1: §3.1 updated for the §12.49 domain decision; handoff register re-derived against spec §13 as of 2026-07-11 (OI-6/OI-8/OI-11/web-10 closed) and extended with the H.6 caps-lift residuals from the M1 close-out. This is a **prepared, not executed** runbook — the Goal is "production-ready, not production-launched" (spec §14 Phase A). Nothing here runs until Gate G-A passes and the user directs a mainnet launch (Phase B / M4).
 
 > **This runbook does not decide human/policy items.** Every step marked **NEEDS-USER** is a placeholder for a decision outside the Goal (§13). The runbook makes the *choreography* executable; the *values* are furnished by the user/ops/security before Phase B.
 
@@ -139,7 +139,7 @@ Contracts are **immutable, no proxies** (§6) — there is no contract "rollback
 ---
 ---
 
-# M4 / M5 Handoff Register (implementation-plan P-4)
+# M4 / M5 Handoff Register (plan item P-4)
 
 **Everything intentionally left for launch.** This register is the consolidated list of what is *out of the Phase-A Goal* and enters at Phase B (M4/M5), only after Gate G-A passes with explicit user direction. Sources for every item exist today; nothing here is discovered-later.
 
@@ -158,7 +158,7 @@ Contracts are **immutable, no proxies** (§6) — there is no contract "rollback
 
 ## H.2 §13 open items still pending at launch (re-derived from spec §13 as of 2026-07-11)
 
-**Closed since register v1.0 (removed from the table):** OI-6 ETH/USD source — Chainlink CONFIRMED on 4663, proxy `0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9` with fail-closed startup assertions (§12.51); OI-8 `safe`/`finalized` tags — SUPPORTED on the official RPC, M2-3b L1-watermark fallback stays dormant/not funded (§12.48b); OI-11 confirmation materialization — sidecar `event_confirmations` table MANDATORY on ponder 0.16.8, direct-UPDATE rework in flight at robbed-indexer (§12.48c); web-10 large-value threshold = 1.0 ETH config (§12.47); testnet chain params — id 46630/RPC/WS/explorer (§12.49); **O-8 WETH-leg arb budget *definition* — formally CLOSED by architect ratification (spec §12.33 update, 2026-07-11):** the M1-10 Part-1 symmetric per-leg rule (`wethArbBudget = wethForMint × MIGRATION_SLIPPAGE_BPS / 10_000`; token leg mirrors it) IS the demanded definition, proven in gate-2 invariant 6 — the gate-6 griefing-cost quantification + UM-2 Part-2 residual remain caps-lift (M4) items, tracked via threat-model §8.1 / gate 6, not this row (decisions.md §13).
+**Closed since register v1.0 (removed from the table):** OI-6 ETH/USD source — Chainlink CONFIRMED on 4663, proxy `0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9` with fail-closed startup assertions (§12.51); OI-8 `safe`/`finalized` tags — SUPPORTED on the official RPC, M2-3b L1-watermark fallback stays dormant/not funded (§12.48b); OI-11 confirmation materialization — sidecar `event_confirmations` table MANDATORY on ponder 0.16.8, direct-UPDATE rework in flight at robbed-indexer (§12.48c); web-10 large-value threshold = 1.0 ETH config (§12.47); testnet chain params — id 46630/RPC/WS/explorer (§12.49); **O-8 WETH-leg arb budget *definition* — formally CLOSED by architect ratification (spec §12.33 update, 2026-07-11):** the M1-10 Part-1 symmetric per-leg rule (`wethArbBudget = wethForMint × MIGRATION_SLIPPAGE_BPS / 10_000`; token leg mirrors it) IS the demanded definition, proven in gate-2 invariant 6 — the gate-6 griefing-cost quantification + UM-2 Part-2 residual remain caps-lift (M4) items, tracked via threat-model §8.1 / gate 6, not this row (ratified 2026-07-11; ledger retired 2026-07-12 — history: git).
 
 Human decisions (NEEDS-USER):
 
@@ -215,6 +215,6 @@ Folded in so nothing recorded this week is rediscovered at M4:
 |---|---|---|
 | **14 fork-gated mutation survivors** (M1-13 → M1-12) | The amount-min-floor survivors of the V3Migrator arb-back mutation campaign ride the env-gated gate-3 fork run (`FOUNDRY_PROFILE=fork forge test` with `ROBINHOOD_RPC_URL`). Local half closed: adequacy 0.585 → 0.800, all 40 remaining survivors dispositioned (16 equivalent / 5 DID / 5 UG / 14 fork-gated). Sign-off completes when the fork run kills or dispositions the 14. | M1-12 fork run (pre-M4); robbed-contracts |
 | **UM-2 Part-2 hatch decision** | Extreme grief beyond the ~1% recoverable arb range leaves `graduate()` reverting→retriable (non-permanent, third-party-correctable, zero attacker profit — attacker locks ≳0.08 ETH to freeze 8.08 ETH). Three dispositions on file: (a) gate-6 economic proof only; (b) non-§12.12-touching hatch — timeout → permissionlessly widen arb tolerance/iterations or corrector-assisted retry (likely-preferred; leaves the two-way `ReadyToGraduate` lock intact); (c) §12.12-touching hatch that reopens sells — **(c) is NEEDS-USER**. | gate 6 / M4; robbed-contracts + robbed-security (+ USER only if (c)) |
-| **`PORT-*` flow ratification** | Portfolio flows PORT-1..5 authored (user-flows.md §3b addendum + waiver rows, 2026-07-11); architect ratification pending. Due **before the I-5a `e2e:coverage` baseline freezes** — a Phase-A obligation, tracked here only so the register is the single consolidated pending-list. | robbed-architect; pre-I-5a (NOT a launch item) |
+| **`PORT-*` flow ratification** | Portfolio flows PORT-1..5 authored (apps/web/e2e/user-flows.md §3b addendum + waiver rows, 2026-07-11); architect ratification pending. Due **before the I-5a `e2e:coverage` baseline freezes** — a Phase-A obligation, tracked here only so the register is the single consolidated pending-list. | robbed-architect; pre-I-5a (NOT a launch item) |
 
 **Verify (P-4 leg):** this register enumerates gates 5–10, the §13 open set re-derived as of 2026-07-11 (human + mechanical), the beta-cap process, the §12.27 anti-sniper redesign, each of the six Bucket-6 runbooks, and the H.6 caps-lift residuals; `/spec-check` clean on the final tree (G-10 — runs at Goal exit once Phase P fully lands).

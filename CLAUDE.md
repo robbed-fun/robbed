@@ -1,6 +1,6 @@
 # ROBBED_ — Pump.fun-style launchpad on Robinhood Chain
 
-Source of truth: `launchpad-spec.md` (v1.1). When code and spec disagree, the spec wins; when the spec is silent, ask or record the decision in §12/§13.
+Source of truth: `docs/spec.md` (v1.1). When code and spec disagree, the spec wins; when the spec is silent, ask or record the decision in §12/§13. Contributor process (PR flow, test tiers, validate.sh): `CONTRIBUTING.md`.
 
 ## Hard rules (violations are bugs, not style)
 
@@ -41,6 +41,10 @@ Key invariants the test suite must hold: `k` non-decreasing from trades; curve s
 ## Milestones
 
 M0 parameter notebook → M1 contracts + gates 1–4 → M2 indexer/API → M3 frontend → M4 gates 5–8 → M5 caps lift. Portfolio/creator-fees/4337 are Phase 2 — but schema tracks `creator` per token and `creatorFeeBps` (hardcoded 0) from day 1.
+
+## Docs placement
+
+Protocol docs → `docs/` (`spec.md`, `how-it-works/`, `runbooks/`). Developer docs → root (`CONTRIBUTING.md`, `SECURITY.md`) + colocated per-package READMEs. Security reviews/audits → `audits/` with an index row. **NEVER create plans/trackers/status/progress md files anywhere** (removed 2026-07-12; no flagship public DeFi repo ships them — enforced by doc-check's `docs-placement` check). Full rules + machine-consumer map: `docs/README.md`. Commits: Conventional Commits per CONTRIBUTING.md §Commit messages — enforced by `.githooks/commit-msg`.
 
 ## Docs-first rule
 

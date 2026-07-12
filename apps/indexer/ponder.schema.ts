@@ -14,7 +14,7 @@
  * ONE deliberate exception (OI-11 / spec §12.48c): the shared db-row types'
  * `confirmation_state` field is NOT a stored column here. Per-row storage on
  * Ponder tables cannot be maintained (the indexing-store cache silently
- * reverts external UPDATEs on handler-mutated rows — decisions.md §11), so the
+ * reverts external UPDATEs on handler-mutated rows — spec §12.48c), so the
  * tier is DERIVED at read time from `block_number` vs the offchain
  * `confirmation_watermarks` sidecar singleton (§3.8): the API's SELECTs emit a
  * derived `confirmation_state` column (`apps/api/src/lib/confirmation.ts`),

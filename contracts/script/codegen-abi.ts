@@ -274,7 +274,7 @@ for (const { artifact, events } of EVENT_SOURCES) {
   eventsByContract[artifact] = fragments;
 }
 
-// Plan-item verification hooks (implementation-plan M1-3; spec §12.15): the two
+// Plan-item verification hooks (M1-3; spec §12.15): the two
 // fields the indexer contract specifically hinges on must be present.
 const hasInput = (artifact: string, ev: string, input: string) =>
   eventsByContract[artifact]

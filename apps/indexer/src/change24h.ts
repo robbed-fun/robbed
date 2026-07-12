@@ -1,7 +1,7 @@
 /**
  * 24h change anchor resolver — RE-EXPORT of the canonical shared implementation.
  *
- * ZERO-DRIFT (CLAUDE.md anti-drift rule; decisions.md §7.2 item 2): this logic
+ * ZERO-DRIFT (CLAUDE.md anti-drift rule; spec §12.40e): this logic
  * has ≥2 consumers — the indexer's `volume_eth_24h` decay/materialization job AND
  * the API `card`/`detail` projections — so its single source of truth now lives
  * in `packages/shared` (`@robbed/shared/change24h`). This module previously held

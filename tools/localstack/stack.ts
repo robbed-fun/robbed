@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * ── dev:stack — readiness-gated one-command bring-up (implementation-plan I-3, gate G-1) ──
+ * ── dev:stack — readiness-gated one-command bring-up (plan item I-3, gate G-1) ──
  *
  * `docker compose up -d --build`, then poll `docker compose ps` until EVERY
  * long-running service is healthy (or running, for services without a

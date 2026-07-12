@@ -1,7 +1,7 @@
 /**
  * Confirmation-state derivation (spec §2.1/§12.48c, api.md §2, indexer.md §5).
  *
- * Per OI-11 (decisions.md §11, verified 2026-07-11 against ponder 0.16.8) there
+ * Per OI-11 (spec §12.48c, version gate verified 2026-07-11 against ponder 0.16.8) there
  * is NO stored per-row `confirmation_state` column on the Ponder-managed event
  * tables — external writes to Ponder tables are silently reverted by its
  * indexing-store cache (and forbidden by Ponder's docs). The §12.48c sidecar is

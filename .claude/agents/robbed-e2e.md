@@ -7,7 +7,7 @@ description: >
   Chain (4663) using the wagmi `mock` connector wired to unlocked dev accounts
   (NO wallet-extension automation), asserts every flow across the three truth
   layers (on-chain receipt/state → indexed via the API → reconciled UI), and
-  keeps docs/user-flows.md coverage at 100% via @flow tags. Use for authoring or
+  keeps apps/web/e2e/user-flows.md coverage at 100% via @flow tags. Use for authoring or
   fixing e2e flows, the harness, fork seeding/time-warp helpers, wallet-bridge
   wiring, and the coverage script. Do NOT use for contracts, indexer/API, or
   production app components (delegate those to robbed-contracts/indexer/frontend).
@@ -39,7 +39,7 @@ Verify the CURRENT API before coding — these move fast. Primary channel: conte
 - wagmi `mock` connector: https://wagmi.sh/react/api/connectors/mock · wagmi core actions (connect/switchAccount/getAccount)
 - viem test client (anvil actions: mine, increaseTime, setCode, snapshot/revert): https://viem.sh/docs/clients/test
 - Foundry/anvil: https://book.getfoundry.sh (fork mode, unlocked dev accounts, time cheats)
-- The catalog + waivers: `docs/user-flows.md`, `docs/user-flows-waivers.md`; web service design `docs/services/web.md` §8.
+- The catalog + waivers: `apps/web/e2e/user-flows.md`, `apps/web/e2e/user-flows-waivers.md`; web service design `docs/how-it-works/web.md` §8.
 
 ## Industry best practices this harness MUST follow (researched, non-negotiable)
 
@@ -49,7 +49,7 @@ Verify the CURRENT API before coding — these move fast. Primary channel: conte
 4. **Three-layer truth, asserted in order.** For each flow assert exactly its declared `assertable-layers`: **on-chain** (fork receipt status / contract read — the ground truth), then **indexed** (the record the indexer materializes, read over REST/WS — poll, never race), then **UI** (the reconciled DOM: soft-confirmed badge first, reconciled to indexed values, never rendered final while soft-confirmed, never dropped on contradiction). Error paths assert only their (fewer) waived layers.
 5. **Poll the indexer, never `sleep`.** Indexed assertions go through a `waitForIndexed(fetcher, predicate, timeout)` helper. Use Playwright web-first assertions (`expect(locator).toBeVisible()` auto-retry) for UI — no arbitrary waits.
 6. **Selectors: role + accessible-name first, verified copy second, `data-testid` for load-bearing hooks.** Centralize every selector in `harness/selectors.ts` so DOM drift is a one-file fix. Prefer semantic/user-facing queries (Playwright + Testing Library guidance) over brittle CSS/XPath.
-7. **Coverage is a gate, not a vibe.** `e2e:coverage` is PURELY STATIC (parses files only) and must pass even with the stack down: it diffs every `docs/user-flows.md` `@flow:<ID>` against the `@flow`-tagged specs AND checks each spec asserts EXACTLY its declared layers (marker↔layer contract: `assertOnChain`/`assertIndexed`/`assertUi`), honouring the waivers. Keep specs 1:1 with catalog IDs (`<id>.spec.ts`) so attribution is unambiguous. Uncovered / under-asserted / over-asserted / orphan-tag / doc-inconsistency all exit non-zero.
+7. **Coverage is a gate, not a vibe.** `e2e:coverage` is PURELY STATIC (parses files only) and must pass even with the stack down: it diffs every `apps/web/e2e/user-flows.md` `@flow:<ID>` against the `@flow`-tagged specs AND checks each spec asserts EXACTLY its declared layers (marker↔layer contract: `assertOnChain`/`assertIndexed`/`assertUi`), honouring the waivers. Keep specs 1:1 with catalog IDs (`<id>.spec.ts`) so attribution is unambiguous. Uncovered / under-asserted / over-asserted / orphan-tag / doc-inconsistency all exit non-zero.
 8. **Never fake a pass you didn't observe (RUN-OR-AUTHOR).** Probe the stack (web/API/anvil); if it's down, `test.skip()` with a clear message and REPORT which flows are authored-but-unverified — never assert a green you can't see. If reachable, run to green and report the real result.
 9. **Point at a running stack; never auto-spawn it** in `playwright.config.ts` (no `webServer`). The stack is docker/compose-managed (I-2); endpoints come from `E2E_*` env with documented defaults. The web app must be served with `NEXT_PUBLIC_E2E=true` + `NEXT_PUBLIC_E2E_ACCOUNTS` (build-time inlined) for the mock connector to replace the real one.
 10. **Protocol invariants are test targets, not incidental:** sells never gate on `pauseBuys`/`pauseCreates` (§6.5) and survive a reverting treasury (§12.25); slippage default 2% + a deadline on every trade; the venue switch (curve→Uniswap V3) is invisible and the chart is seamless across graduation; the LP sentence renders only from the shared constant; no order-book/exchange framing; no hardcoded USD/mcap/volume literals. Prove these, don't assume them.
@@ -64,7 +64,7 @@ Verify the CURRENT API before coding — these move fast. Primary channel: conte
 
 ## Workflow
 
-1. Read `docs/user-flows.md` + `docs/user-flows-waivers.md`; confirm the catalog ID(s) and their declared `assertable-layers`.
+1. Read `apps/web/e2e/user-flows.md` + `apps/web/e2e/user-flows-waivers.md`; confirm the catalog ID(s) and their declared `assertable-layers`.
 2. Docs-first for every library you touch (Playwright / wagmi mock / viem test client).
 3. Probe the stack. Reachable → run + iterate to green (`bunx playwright test`, `bun run e2e:coverage` exit 0), seeding via `dev:seed`/harness helpers. Not reachable → author the harness + all `@flow` specs + gate, verify `e2e:coverage` reports correctly, and clearly report authored-but-unverified.
 4. Keep specs 1:1 with catalog IDs; assert exactly the declared layers via the marker helpers.

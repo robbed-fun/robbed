@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 /**
  * ROBBED_ env-sync check — `.env.example` ⇄ docs/runbooks/env-inventory.md
- * (implementation-plan P-1 / G-9 env leg; CLAUDE.md anti-drift spirit: env vars
- * are documented ONCE, in the inventory, and the per-app examples mirror it).
+ * (CLAUDE.md anti-drift spirit: env vars are documented ONCE, in the
+ * inventory, and the per-app examples mirror it).
  *
  * Run: `bun scripts/env-sync-check.ts`. Exit 0 when clean. Also invoked from
  * scripts/doc-check.ts (which CI's docs job runs) and validate.sh (`env-sync`).
