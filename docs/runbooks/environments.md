@@ -112,7 +112,7 @@ This maps `env-inventory.md`'s dev/testnet/prod columns onto the three envs. `en
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | unset (injected wallets only) | project id (web-6, §13) | project id (web-6, NEEDS-USER) |
 | `NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD` | `1.0` | `1.0` | `1.0` (§12.47 config, retunable in beta) |
 
-> The `api.*` / `ws.*` subdomain shapes above are **proposals** — the concrete public endpoints are whatever the Komodo Stack exposes (deploy-komodo-cloudflare.md A.6 step 6). Whether TESTNET/MAINNET APIs live under `robbed.fun` subdomains or separate hostnames is a robbed-indexer ops call at Phase-T/Phase-B deploy; the constraint is only that `CORS_ALLOWED_ORIGINS` and these three `NEXT_PUBLIC_*` agree per env.
+> The `api.*` / `ws.*` subdomain shapes above are **proposals** — the concrete public endpoints are whatever the backend compose stack exposes via its Cloudflare Tunnel. Whether TESTNET/MAINNET APIs live under `robbed.fun` subdomains or separate hostnames is a robbed-indexer ops call at Phase-T/Phase-B deploy; the constraint is only that `CORS_ALLOWED_ORIGINS` and these three `NEXT_PUBLIC_*` agree per env.
 
 ### 2d. Chain constants (NOT env vars) — asserted, not configured
 
@@ -130,7 +130,7 @@ This maps `env-inventory.md`'s dev/testnet/prod columns onto the three envs. `en
   - `opennextjs-cloudflare build && wrangler deploy --env testnet` → `robbed-testnet`
   - `opennextjs-cloudflare build && wrangler deploy --env production` → `robbed-production`
   - (or set `CLOUDFLARE_ENV`; `--env` wins over it). Wrap these as `deploy:testnet` / `deploy:production` scripts (robbed-frontend, at Workers adaptation).
-- **`compatibility_flags = ["nodejs_compat"]` + a recent `compatibility_date`** apply to every env (OpenNext SSR on workerd, deploy-komodo-cloudflare.md B.2) — these are inheritable, set once at top level.
+- **`compatibility_flags = ["nodejs_compat"]` + a recent `compatibility_date`** apply to every env (OpenNext SSR on workerd, `apps/web/wrangler.jsonc`) — these are inheritable, set once at top level.
 - **Custom domains** (Cloudflare Workers custom domains, per-env): `testnet.robbed.fun` → `robbed-testnet`; `robbed.fun` → `robbed-production`. Both live in the **single `robbed.fun` Cloudflare zone** (testnet is a subdomain). **These attach only after the DNS prerequisite (§4) is met.** Until then, use the auto-assigned `*.workers.dev` names (`robbed-testnet.<subdomain>.workers.dev`, etc.) for interim testing.
 
 > **Alternative considered and rejected:** two entirely separate Workers/projects. Rejected because named environments keep one codebase, one build, one `wrangler.jsonc` diff surface, and Cloudflare's own `<name>-<env>` convention — matching the anti-drift discipline (no duplicated config). Separate Workers would duplicate every binding by hand.
@@ -157,7 +157,7 @@ This runbook is docs/spec only. The concrete wiring below is routed; each owner 
 | # | Task | Owner | Notes |
 |---|---|---|---|
 | E-1 | Per-env `.env` files: `.env.local` (LOCAL, committed-safe defaults, zero secrets), `.env.testnet`, `.env.production` (secrets → Komodo/Workers stores, never committed); keep `.env.example` ⇄ `env-inventory.md` in sync (G-9 CI check). | robbed-shared (workspace/env owner) + robbed-frontend (web vars) | Do NOT commit secrets. LOCAL file is the only fully-committable one. |
-| E-2 | `apps/web/wrangler.jsonc` gains `env.testnet` + `env.production` blocks (non-inheritable `vars`/bindings repeated per env per §3); `deploy:testnet` / `deploy:production` scripts. | robbed-frontend (executed after `apps/web` redesign lands) + robbed-shared (workspace scripts) | Follows deploy-komodo-cloudflare.md Part B; adds the per-env layer. |
+| E-2 | `apps/web/wrangler.jsonc` gains `env.testnet` + `env.production` blocks (non-inheritable `vars`/bindings repeated per env per §3); `deploy:testnet` / `deploy:production` scripts. | robbed-frontend (executed after `apps/web` redesign lands) + robbed-shared (workspace scripts) | Adds the per-env layer to the Cloudflare Workers deploy (§12.45). |
 | E-3 | Per-env addresses codegen: deploy broadcasts → `tools/deployments/{testnet,mainnet}.json`; codegen emits `@robbed/shared` `addresses.ts` per env (LOCAL from the local broadcast). | robbed-contracts (deploy artifacts) + robbed-shared (codegen in `packages/shared`) | Extends the §12.38/M1-14 codegen. `packages/*` owned by robbed-shared. |
 | E-4 | Per-env indexer/API config: `INDEXER_RPC_*`, `START_BLOCK`, `ETH_USD_SOURCE_URL`, `CORS_ALLOWED_ORIGINS`, R2 bases resolved per env; Komodo Stack `testnet`/`production` variants (or one Stack, per-env secret sets). | robbed-indexer (owns indexer/api infra + root compose, P-9) | Komodo secret store per env; §12.48a/b env-gated checks run at Phase-T/M2 start against the live RPC. |
 | E-5 | DNS: add `robbed.fun` zone to the Cloudflare account, point nameservers, attach Worker custom domains (§4). | ops / user (§13 domain open item) | BLOCKING for branded domains; `*.workers.dev` until done. |

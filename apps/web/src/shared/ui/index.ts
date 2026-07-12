@@ -29,6 +29,8 @@ export * from "./kit/tooltip";
 export * from "./Amount";
 export * from "./UsdAmount";
 export * from "./ProgressBar";
+export * from "./GraduationProgress";
+export * from "./CopyAddressButton";
 export * from "./RelativeTime";
 export * from "./EmptyState";
 export * from "./ErrorState";
