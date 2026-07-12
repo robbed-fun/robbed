@@ -26,6 +26,28 @@ wallet ──txs──▶ Router ─▶ CurveFactory ─▶ LaunchToken + Bondin
 
 Full system overview: [docs/architecture.md](docs/architecture.md). Normative protocol spec: [docs/spec.md](docs/spec.md).
 
+## Deployments
+
+**Robinhood Chain Testnet (chain ID 46630)** — deployed, canary-exercised, and Blockscout-verified 2026-07-12 at deploy block **89648621**. The canonical machine-readable record is [`contracts/deployments/46630.json`](contracts/deployments/46630.json); this table is a convenience view of it.
+
+| Contract | Address (testnet explorer) |
+|---|---|
+| CurveFactory | [`0x6eb955d889b6958620FBE9DC17Fb84C7d3F08414`](https://explorer.testnet.chain.robinhood.com/address/0x6eb955d889b6958620FBE9DC17Fb84C7d3F08414) |
+| Router | [`0xF8D79D3D1fE742FebbbB5b82f0AAf8D8E4fD4841`](https://explorer.testnet.chain.robinhood.com/address/0xF8D79D3D1fE742FebbbB5b82f0AAf8D8E4fD4841) |
+| V3Migrator | [`0x62bB59cA67eEdAAfee4edc10A8821dd08e83A2B0`](https://explorer.testnet.chain.robinhood.com/address/0x62bB59cA67eEdAAfee4edc10A8821dd08e83A2B0) |
+| LPFeeVault | [`0xD57dDb22ca1587AE368083f6cE0D341358E5817D`](https://explorer.testnet.chain.robinhood.com/address/0xD57dDb22ca1587AE368083f6cE0D341358E5817D) |
+| LaunchToken (canary) | [`0x4efa77f362379c8c7a590AD37E830C8d04B7309E`](https://explorer.testnet.chain.robinhood.com/address/0x4efa77f362379c8c7a590AD37E830C8d04B7309E) |
+| BondingCurve (canary) | [`0x89A2317b9e8cA54Baa3242d7eD376Ea3Af1bE07d`](https://explorer.testnet.chain.robinhood.com/address/0x89A2317b9e8cA54Baa3242d7eD376Ea3Af1bE07d) |
+| Treasury Safe | [`0x4ae5b5Ae7D2edd7A2d43054246D6aaAcAAFC1000`](https://explorer.testnet.chain.robinhood.com/address/0x4ae5b5Ae7D2edd7A2d43054246D6aaAcAAFC1000) — canonical Safe v1.4.1, 1-of-1 dev signer (**testnet only**) |
+
+All six contracts are Blockscout-verified: solc **0.8.35** + **cancun**, MIT.
+
+Read the fine print:
+
+- **Testnet only.** Nothing is deployed on mainnet (4663); a mainnet launch is an explicit go/no-go decision behind the spec's Gate G-A (§14), not a default next step.
+- **The 1-of-1 dev-signer Safe is a testnet stand-in**, not the production treasury model — the mainnet Safe signer set (M-of-N) is a deliberately open decision (O-6).
+- **Factory ownership handover is in flight:** the Ownable2Step `transferOwnership` to the Safe was initiated at deploy; it takes effect only when the Safe calls `acceptOwnership()` (testnet lifecycle run, T-4).
+
 ## Monorepo map
 
 | Path | What | Stack |
