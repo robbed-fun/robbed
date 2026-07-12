@@ -1,6 +1,6 @@
 {
   "chainId": 46630,
-  "generatedAt": "2026-07-11T19:55:43.855Z",
+  "generatedAt": "2026-07-12T11:21:05.473Z",
   "ethUsdSnapshot": {
     "source": "coingecko (https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd&precision=8)",
     "timestamp": "2026-07-10T06:43:28.947Z",
@@ -70,11 +70,11 @@
     "positionManager": "0xFFe6CFc4f759b65f9B62c9D05A9E21a78cE93e12",
     "swapRouter02": "0xb79cB26e90EBBD9bC02c75267c9a86dBa1AFedB7",
     "quoterV2": "0xDDcBe4989C8171F721c5e683C9C6339B59718213",
-    "treasurySafe": "0x0000000000000000000000000000000000000000"
+    "treasurySafe": "0x4ae5b5Ae7D2edd7A2d43054246D6aaAcAAFC1000"
   },
   "provenance": {
     "generator": "tools/m0/derive.ts (@robbed/m0)",
-    "gitSha": "da3a0601c574dc1e29d1561bf5a2c18843967af4",
+    "gitSha": "28c0cb74cf7a644e6dc21ae93e3d2f61a3d97466",
     "ethUsdSource": "coingecko (https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd&precision=8)",
     "ethUsdPrice": "1771.50888854",
     "fetchedAt": "2026-07-10T06:43:28.947Z",
@@ -136,7 +136,7 @@
       "gasPriceWei": "100000000",
       "gasPriceBasis": "placeholder",
       "gasPriceSource": "ROBINHOOD_RPC_URL unset — M0 placeholder (finalize at M1 vs real testnet gas)",
-      "gasPriceFetchedAt": "2026-07-11T19:55:43.852Z",
+      "gasPriceFetchedAt": "2026-07-12T11:21:05.471Z",
       "marginNum": 3,
       "marginDen": 2,
       "graduationFeeWei": "450000000000000",

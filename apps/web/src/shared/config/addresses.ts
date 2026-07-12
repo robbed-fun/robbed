@@ -22,24 +22,18 @@ const deployment = getDeployment(CHAIN_ID);
 
 /**
  * E2E-ONLY address override (plan I-5). An ephemeral anvil fork of 4663 deploys
- * fresh contract addresses each `docker compose up`, which are NOT codegen'd into
- * `@robbed/shared` (that would bake fork addresses into the real-4663 prod build).
- * When `NEXT_PUBLIC_E2E==="true"`, the fork's deployed addresses are supplied via
- * `NEXT_PUBLIC_E2E_*` env (from `tools/localstack/out/local.env`) so the e2e build
- * can trade. Prod NEVER sets `NEXT_PUBLIC_E2E`, so this branch is inert there and
- * the real (codegen'd) `@robbed/shared` map is the only source. addresses.ts is
- * the sanctioned home for address literals (copy-lint exempt).
+ * FRESH contract addresses each bring-up (and the merged factory shape moved them
+ * off the codegen'd @robbed/shared 4663 map), which are NOT codegen'd into
+ * `@robbed/shared` — baking fork addresses into the real-4663 prod build would be
+ * wrong. When `NEXT_PUBLIC_E2E==="true"`, the fork's deployed addresses are
+ * supplied via `NEXT_PUBLIC_E2E_*` env (from `tools/localstack/out/local.env`) so
+ * the e2e build can trade against the live fork. Prod NEVER sets `NEXT_PUBLIC_E2E`,
+ * so this branch is inert there and the codegen'd map is the only source. Empty
+ * env values coerce to `undefined` so a partially-set env falls through cleanly.
+ * addresses.ts is the sanctioned home for address literals (copy-lint exempt).
  */
-const e2e =
-  process.env.NEXT_PUBLIC_E2E === "true"
-    ? {
-        router: process.env.NEXT_PUBLIC_E2E_ROUTER as Address | undefined,
-        curveFactory: process.env.NEXT_PUBLIC_E2E_CURVE_FACTORY as Address | undefined,
-        lpFeeVault: process.env.NEXT_PUBLIC_E2E_LP_FEE_VAULT as Address | undefined,
-        v3Migrator: process.env.NEXT_PUBLIC_E2E_MIGRATOR as Address | undefined,
-        treasury: process.env.NEXT_PUBLIC_E2E_TREASURY as Address | undefined,
-      }
-    : null;
+const e2eAddr = (v: string | undefined): Address | undefined =>
+  process.env.NEXT_PUBLIC_E2E === "true" && v ? (v as Address) : undefined;
 
 /**
  * Per-deployment robbed contract addresses (spec §6) for CHAIN_ID, derived from
@@ -48,11 +42,15 @@ const e2e =
  * sentinels until a CHAIN_ID deploy is codegen'd.
  */
 export const ROBBED = {
-  router: e2e?.router ?? deployment?.robbed.router ?? PLACEHOLDER,
-  curveFactory: e2e?.curveFactory ?? deployment?.robbed.curveFactory ?? PLACEHOLDER,
-  lpFeeVault: e2e?.lpFeeVault ?? deployment?.robbed.lpFeeVault ?? PLACEHOLDER,
-  v3Migrator: e2e?.v3Migrator ?? deployment?.robbed.v3Migrator ?? PLACEHOLDER,
-  treasury: e2e?.treasury ?? deployment?.robbed.treasury ?? PLACEHOLDER,
+  router: e2eAddr(process.env.NEXT_PUBLIC_E2E_ROUTER) ?? deployment?.robbed.router ?? PLACEHOLDER,
+  curveFactory:
+    e2eAddr(process.env.NEXT_PUBLIC_E2E_CURVE_FACTORY) ?? deployment?.robbed.curveFactory ?? PLACEHOLDER,
+  lpFeeVault:
+    e2eAddr(process.env.NEXT_PUBLIC_E2E_LP_FEE_VAULT) ?? deployment?.robbed.lpFeeVault ?? PLACEHOLDER,
+  v3Migrator:
+    e2eAddr(process.env.NEXT_PUBLIC_E2E_MIGRATOR) ?? deployment?.robbed.v3Migrator ?? PLACEHOLDER,
+  treasury:
+    e2eAddr(process.env.NEXT_PUBLIC_E2E_TREASURY) ?? deployment?.robbed.treasury ?? PLACEHOLDER,
 } satisfies Record<string, Address>;
 
 /**

@@ -8,13 +8,13 @@
  *  Deploy-time codegen (needs a broadcast) — the addresses seam of architecture.md
  *  §4: contracts-pipeline-owned, lives in packages/shared, consumed by the indexer
  *  config and web `shared/config/addresses.ts`. Every consumer selects ITS OWN
- *  chain via `getDeployment(chainId)`; local (31337 smoke) and live (4663) entries
- *  coexist here.
+ *  chain via `getDeployment(chainId)`; local (31337 smoke), testnet (46630) and
+ *  live (4663) entries coexist here.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 import type { Address } from "viem";
 
-export type DeploymentMode = "local" | "live";
+export type DeploymentMode = "local" | "testnet" | "live";
 
 /** The six-contract robbed topology + treasury for one chain (spec §6, §6.6). */
 export interface Deployment {
@@ -43,6 +43,29 @@ export interface Deployment {
 
 /** Every recorded deployment, keyed by chain id (string). @generated */
 export const ROBBED_DEPLOYMENTS = {
+  "4663": {
+    chainId: 4663,
+    mode: "live",
+    deployedAt: 1783856730,
+    robbed: {
+      curveFactory: "0x9849832a1d8274aaeDb1112ad9686413461e7101",
+      router: "0x8ac5eE52F70AE01dB914bE459D8B3d50126fd6aE",
+      v3Migrator: "0xa4E00CB342B36eC9fDc4B50b3d527c3643D4C49e",
+      lpFeeVault: "0xF342E904702b1D021F03f519D6D9614916b03f37",
+      treasury: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    },
+    external: {
+      weth: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      v3Factory: "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+      positionManager: "0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3",
+      swapRouter02: "0xCaf681a66D020601342297493863E78C959E5cb2",
+      quoterV2: "0x33e885eD0Ec9bF04EcfB19341582aADCb4c8A9E7",
+    },
+    canary: {
+      token: "0x1C64f7dBf856e85e6C0835f092055dD1a61D5312",
+      curve: "0x00a3e289149FC62C6b2b3B69C6C86d35069fb626",
+    },
+  },
   "31337": {
     chainId: 31337,
     mode: "local",
@@ -64,6 +87,29 @@ export const ROBBED_DEPLOYMENTS = {
     canary: {
       token: "0x856e4424f806D16E8CBC702B3c0F2ede5468eae5",
       curve: "0x8d38Ce174fBA60425b0A1d4d8a343010338576c8",
+    },
+  },
+  "46630": {
+    chainId: 46630,
+    mode: "testnet",
+    deployedAt: 1783856249,
+    robbed: {
+      curveFactory: "0x6eb955d889b6958620FBE9DC17Fb84C7d3F08414",
+      router: "0xF8D79D3D1fE742FebbbB5b82f0AAf8D8E4fD4841",
+      v3Migrator: "0x62bB59cA67eEdAAfee4edc10A8821dd08e83A2B0",
+      lpFeeVault: "0xD57dDb22ca1587AE368083f6cE0D341358E5817D",
+      treasury: "0x4ae5b5Ae7D2edd7A2d43054246D6aaAcAAFC1000",
+    },
+    external: {
+      weth: "0x7943e237c7F95DA44E0301572D358911207852Fa",
+      v3Factory: "0xdf9e3D6ffaC4513dD7b053212bbECcbCD15ec932",
+      positionManager: "0xFFe6CFc4f759b65f9B62c9D05A9E21a78cE93e12",
+      swapRouter02: "0xb79cB26e90EBBD9bC02c75267c9a86dBa1AFedB7",
+      quoterV2: "0xDDcBe4989C8171F721c5e683C9C6339B59718213",
+    },
+    canary: {
+      token: "0x4efa77f362379c8c7a590AD37E830C8d04B7309E",
+      curve: "0x89A2317b9e8cA54Baa3242d7eD376Ea3Af1bE07d",
     },
   },
 } as const satisfies Record<string, Deployment>;
