@@ -110,6 +110,7 @@ contract Deploy is Script {
     error CanaryPoolUninitialized(address pool);
     error CanaryPriceMismatch(uint160 expected, uint160 actual);
     error CreateFailed();
+    error MinFloorToleranceBandViolated(int24 toleranceTicks, uint16 migrationSlippageBps);
 
     /// @notice Deploy mode, auto-selected from `block.chainid` (decision #2). `Live` and `Testnet`
     ///         are the PUBLIC modes (identical discipline except the F-2 canonical-WETH literal);
@@ -234,6 +235,75 @@ contract Deploy is Script {
         uint256 maxGraduationFee = vm.parseJsonUint(cj, ".fees.maxGraduationFeeWei");
         uint256 maxCallerReward = vm.parseJsonUint(cj, ".fees.maxCallerRewardWei");
         if (maxCallerReward + maxGraduationFee >= graduationEth) revert GraduationUnfundable();
+
+        // Gate-4 mutation-disposition calibration pin (reports/mutation/README.md, "L362/L363" DID
+        // rows): the §6.3.2 amount-min floor `(1 − migrationSlippageBps/1e4)` must cover the worst
+        // amount skew the ±toleranceTicks final-price band (V3Migrator L255) admits, i.e.
+        //   1.0001^toleranceTicks × (1 − migrationSlippageBps/1e4) ≤ 1.
+        // A §12.32/§12.33 beta retune past this bound would (a) let the L362/L363 mins bite INSIDE
+        // the tolerance band — an NPM amount-min revert after the L255 check passed, a §12.12
+        // ReadyToGraduate liveness risk — and (b) silently invalidate the gate-4 disposition of the
+        // 14 min-weakening mutants (equivalent-in-reachable-states only under this relation). Fail
+        // the retuned deploy closed here (script-side only — no production bytecode change);
+        // mirrored against the TestConstants fixture by test/unit/GradCalibrationGuard.t.sol.
+        int24 toleranceTicks = int24(vm.parseJsonInt(cj, ".v3.toleranceTicks"));
+        uint16 migrationSlippageBps = uint16(vm.parseJsonUint(cj, ".v3.migrationSlippageBps"));
+        if (!_minFloorCoversToleranceBand(toleranceTicks, migrationSlippageBps)) {
+            revert MinFloorToleranceBandViolated(toleranceTicks, migrationSlippageBps);
+        }
+    }
+
+    // ── calibration relation (gate-4 DID pin) — 1e18 fixed point, no floats, no TickMath ──
+
+    /// @dev 1e18 fixed point ("WAD") + bps denominator for the calibration relation below.
+    uint256 internal constant WAD = 1e18;
+    uint256 internal constant BPS_DENOM = 10_000;
+    /// @dev 1.0001 in WAD — the v3-core tick base (price ratio per tick; Uniswap v3 whitepaper §6.1).
+    uint256 internal constant TICK_BASE_WAD = 1.0001e18;
+
+    /// @notice TRUE iff `1.0001^toleranceTicks × (1 − migrationSlippageBps/1e4) ≤ 1` — the relation
+    ///         under which the migrator's L362/L363 amount-mins can never bite (nor spuriously
+    ///         revert) inside the L255 ±toleranceTicks tolerance band.
+    /// @dev  Derivation: at a final tick within ±T of target (enforced, unmutated, by V3Migrator
+    ///       L255 before the mint), the non-binding side's pulled amount is depressed vs the
+    ///       target-price expectation by at most ×1.0001^(−T) (full-range amounts scale linearly
+    ///       with sqrtPrice; the price ratio per tick is exactly 1.0001 — v3-core TickMath). The
+    ///       mins demand ≥ (1 − s)·expected, so they are unreachable across the whole band iff
+    ///       1.0001^T·(1 − s) ≤ 1. Comparison in integers: bandWad·(1e4 − sBps) ≤ 1e18·1e4.
+    ///       Implementation decision (options weighed, per CLAUDE.md docs-first): (1) hardcoded
+    ///       1.0001^100 constant — rejected: a TOLERANCE_TICKS retune would NOT feed through, which
+    ///       is the exact silent-invalidation this guard exists to catch; (2) vendored TickMath —
+    ///       rejected: src/ deliberately has none (V3Migrator design decision #3) and sqrt-space
+    ///       comparison would need a bps square root; (3) CHOSEN: round-UP binary exponentiation in
+    ///       WAD. Round-up is one-sided-safe: pass ⇒ the true relation holds (upward bias ≤ 1 wei
+    ///       per multiply — +12 wei at T=100 vs a true margin of ~5.08e13 wei). Nonsense
+    ///       calibrations fail closed: negative tolerance / slippage ≥ 100% (a zero §6.3.2 min
+    ///       floor) return false; astronomic tolerances (≳3e5 ticks) revert on checked overflow.
+    function _minFloorCoversToleranceBand(int24 toleranceTicks, uint16 migrationSlippageBps)
+        internal
+        pure
+        returns (bool)
+    {
+        if (toleranceTicks < 0 || migrationSlippageBps >= BPS_DENOM) return false;
+        // int24 → uint24 is safe: the line above rejects every negative tolerance.
+        // forge-lint: disable-next-line(unsafe-typecast)
+        uint256 bandUpWad = _powTickWad(uint256(uint24(toleranceTicks))); // ≥ true 1.0001^T
+        return bandUpWad * (BPS_DENOM - migrationSlippageBps) <= WAD * BPS_DENOM;
+    }
+
+    /// @dev `1.0001^n` in WAD via square-and-multiply, every step rounded UP (`⌈a·b/1e18⌉`), so the
+    ///      result upper-bounds the true power — see {_minFloorCoversToleranceBand} for why the
+    ///      bias direction matters. Reference values (exact integer arithmetic, Fraction-based):
+    ///      n=100 → 1_010_049_662_092_876_580 (true floor 1_010_049_662_092_876_568, bias +12 wei);
+    ///      pinned in test/unit/GradCalibrationGuard.t.sol.
+    function _powTickWad(uint256 n) internal pure returns (uint256 acc) {
+        acc = WAD;
+        uint256 b = TICK_BASE_WAD;
+        while (n > 0) {
+            if (n & 1 == 1) acc = (acc * b + WAD - 1) / WAD;
+            n >>= 1;
+            if (n > 0) b = (b * b + WAD - 1) / WAD;
+        }
     }
 
     /// @dev Build the factory init struct straight from `constants.json` (nothing inlined — §6.4).
