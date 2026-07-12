@@ -1,0 +1,408 @@
+# ROBBED_ — MAINNET stack (Phase B staging shape): the same off-chain stack as
+# docker-compose.testnet.yml (postgres, redis, minio, api, ws, indexer, web + one-shots) pointed at
+# REAL Robinhood Chain MAINNET (4663). NO anvil, NO deploychain — the chain is remote and contracts
+# deploy only through the ratified Phase-B pipeline (Gate G-A governs), never via compose.
+#
+# ── STATUS: STAGED for Phase B — this stack FAILS CLOSED by design until a REAL 4663 deploy ──
+# There is NO real mainnet deployment today. Two independent gates keep this stack from coming
+# alive prematurely (verify both stay in place; neither may be "fixed" locally):
+#   1. `tools/localstack/out/mainnet.env` does not exist — api + indexer refuse to start without
+#      it (same fail-closed contract as the testnet stack pre-T-3). Only a real future mainnet
+#      deploy (the T-3 equivalent, Gate G-A passed) emits it.
+#   2. §12.55 known limit: the shared registry's "4663" entry is currently a mainnet-FORK
+#      pipeline artifact, so the indexer's chain-identity gate REFUSES INDEXER_CHAIN_ID=4663
+#      unless the stack declares itself a LOCAL fork via INDEXER_ALLOW_FORK_4663=1 — which this
+#      file deliberately does NOT set (only docker-compose.yml, the fork stack, does).
+# The stack comes alive when a real 4663 deploy lands `contracts/deployments/4663.json`
+# (replacing the fork artifact; registry re-codegen'd via robbed-shared) + `mainnet.env`, and
+# robbed-contracts' §12.55 follow-up makes fork artifacts distinguishable so the interim env
+# opt-in is replaced by a registry-mode assertion. NOTE: this compose file is the local
+# staging/dry-run shape — the REAL production deploy is the P-3 images on Komodo
+# (docs/runbooks/prod-images.md), where API_ENV=production forbids moderation stubs (§4.3).
+#
+# ── HARD RULE: no invented parameters (spec §2/§13) ──
+# Mainnet chain facts are ratified (CLAUDE.md chain facts; docs/runbooks/environments.md):
+# chain id 4663, public RPC https://rpc.mainnet.chain.robinhood.com (rate-limited; Alchemy
+# https://robinhood-mainnet.g.alchemy.com/v2/{KEY} recommended for sustained use). Mirroring the
+# testnet discipline, this file still carries NO silent defaults — required values arrive via
+# env (`:?` aborts loud), so a mistyped/absent value can never fall back unnoticed:
+#
+#   MAINNET_RPC_URL       required — official mainnet JSON-RPC (value above)
+#   MAINNET_RPC_WS_URL    OPTIONAL — WS JSON-RPC (Alchemy wss, key-gated). Empty/unset ⇒ the
+#                         indexer falls back to HTTP polling (INDEXER_RPC_WS optional in
+#                         apps/indexer/src/config.ts). NEVER a sequencer feed wss.
+#   MAINNET_CHAIN_ID      required — 4663; asserted against the live RPC by `chaincheck`
+#
+# ── Contract addresses + START_BLOCK: fail-closed on tools/localstack/out/mainnet.env ──
+# Same key contract as testnet.env / the local deploychain local.env (CURVE_FACTORY_ADDRESS,
+# ROUTER_ADDRESS, MIGRATOR_ADDRESS, TREASURY_ADDRESS, LP_FEE_VAULT_ADDRESS, START_BLOCK), to be
+# emitted from the real Phase-B deploy artifact. api + indexer refuse to start without it; there
+# is no best-effort mode (no local deploy one-shot can fill the gap).
+#
+# ── ANTI-DRIFT: deliberate self-contained MIRROR of docker-compose.testnet.yml ──
+# Same rationale as the testnet file (compose merge cannot delete services/edges). Discipline:
+# any change to a shared service goes to ALL THREE compose files (docker-compose.yml /
+# .testnet.yml / .mainnet.yml); review with `diff docker-compose.testnet.yml
+# docker-compose.mainnet.yml`. Sections copied verbatim are marked "MIRROR"; deltas "MAINNET".
+#
+# Distinct project name => distinct volumes/network (robbed-mainnet_*). Host ports live on a
+# DISTINCT 42XX block (dev 40XX/44XX, testnet 41XX), so all three stacks can run simultaneously:
+#   4200 web   4201 api   4202 ws   4229 ponder dev UI/GraphQL (4269 is dev-owned — see indexer)
+#   4232 postgres   4264 indexer metrics   4279 redis   4290 minio S3   4291 minio console
+# (env-var NAMES stay identical across stacks — only the `:-` defaults differ; an exported
+#  *_PORT in your shell/.env applies to ALL stacks and re-collides them.)
+name: robbed-mainnet
+
+# MIRROR of docker-compose.testnet.yml x-dev-base (see anti-drift note above).
+x-dev-base: &dev-base
+  build:
+    context: .
+    dockerfile: docker/dev.Dockerfile
+  image: robbed-dev
+  init: true
+  working_dir: /workspace
+  environment: &dev-env
+    npm_config_store_dir: /pnpm-store
+  volumes:
+    - .:/workspace
+    - robbed_pnpm_store:/pnpm-store
+    - robbed_root_nm:/workspace/node_modules
+    - robbed_api_nm:/workspace/apps/api/node_modules
+    - robbed_indexer_nm:/workspace/apps/indexer/node_modules
+    - robbed_web_nm:/workspace/apps/web/node_modules
+    - robbed_shared_nm:/workspace/packages/shared/node_modules
+
+services:
+  # ── MIRROR: Postgres 17 (+ pg_trgm) — see docker-compose.yml for tag rationale ──
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-robbed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-robbed_dev_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-robbed}
+    ports:
+      - "${POSTGRES_PORT:-4232}:5432"
+    volumes:
+      - robbed_pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── MIRROR: Redis 7 — pub/sub fanout + rate-limit windows ──
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-4279}:6379"
+    volumes:
+      - robbed_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── MIRROR: minio — R2/S3-compatible object store (still local here: real R2 is the
+  # production deploy's concern — prod-images.md / T-5 note) ──
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-robbed}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-robbed_dev_secret}
+    ports:
+      - "${MINIO_PORT:-4290}:9000"
+      - "${MINIO_CONSOLE_PORT:-4291}:9001"
+    volumes:
+      - robbed_miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── MIRROR: one-shot bucket bootstrap ──
+  createbuckets:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-robbed}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-robbed_dev_secret}
+      R2_BUCKET: ${R2_BUCKET:-robbed-assets}
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}; do echo 'waiting for minio'; sleep 1; done;
+      mc mb --ignore-existing local/$${R2_BUCKET};
+      mc anonymous set download local/$${R2_BUCKET};
+      echo 'bucket ready: '$${R2_BUCKET};
+      exit 0;
+      "
+    restart: "no"
+
+  # ── MAINNET: one-shot preflight — assert the remote RPC serves the DECLARED chain id ──
+  # Same pattern as the testnet chaincheck: fail loud on a wrong/mistyped RPC before any app
+  # touches it (read-only: one `cast chain-id`). Official value: 4663 (CLAUDE.md chain facts).
+  chaincheck:
+    image: ghcr.io/foundry-rs/foundry:v1.7.1
+    environment:
+      MAINNET_RPC_URL: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/runbooks/docker.md 'Mainnet stack'.}
+      MAINNET_CHAIN_ID: ${MAINNET_CHAIN_ID:?MAINNET_CHAIN_ID is required — 4663 (CLAUDE.md chain facts; asserted against the live RPC). See docs/runbooks/docker.md 'Mainnet stack'.}
+    # foundry image entrypoint is `sh -c` — command is ONE string (same as the other stacks).
+    command:
+      - |
+        set -e
+        echo "preflight: asserting RPC serves chain id $$MAINNET_CHAIN_ID"
+        GOT=$$(cast chain-id --rpc-url "$$MAINNET_RPC_URL")
+        if [ "$$GOT" != "$$MAINNET_CHAIN_ID" ]; then
+          echo "FATAL: RPC $$MAINNET_RPC_URL reports chain id $$GOT, expected MAINNET_CHAIN_ID=$$MAINNET_CHAIN_ID" >&2
+          exit 1
+        fi
+        echo "preflight OK: chain id $$GOT"
+    restart: "no"
+
+  # ── MIRROR: one-shot API-owned tables ──
+  apimigrations:
+    image: postgres:17
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-robbed_dev_pw}
+    volumes:
+      - ./apps/api/migrations:/migrations:ro
+    entrypoint: >
+      /bin/sh -c "
+      for f in /migrations/*.sql; do
+        echo \"applying $$f\";
+        psql -h postgres -U ${POSTGRES_USER:-robbed} -d ${POSTGRES_DB:-robbed} -v ON_ERROR_STOP=1 -f $$f || exit 1;
+      done;
+      echo 'api migrations applied';
+      "
+    restart: "no"
+
+  # ── MIRROR: one-shot pnpm install ──
+  deps:
+    <<: *dev-base
+    command:
+      - /bin/sh
+      - -c
+      - |
+        git config --global --add safe.directory /workspace
+        exec pnpm install --frozen-lockfile
+    restart: "no"
+
+  # ── api — Hono on Bun. MAINNET deltas: mainnet.env is REQUIRED (fail-closed — see header
+  # STATUS: it does not exist until a real Phase-B deploy), RPC → real mainnet. ──
+  api:
+    <<: *dev-base
+    command:
+      - /bin/sh
+      - -c
+      - |
+        if [ ! -f tools/localstack/out/mainnet.env ]; then
+          echo "FATAL: tools/localstack/out/mainnet.env not found." >&2
+          echo "  There is NO real mainnet deployment yet (Gate G-A governs; spec §14). This stack is" >&2
+          echo "  STAGED for Phase B and fails closed by design: contract addresses + START_BLOCK come" >&2
+          echo "  only from the real Phase-B deploy artifact (contracts/deployments/4663.json replacing" >&2
+          echo "  the fork artifact), emitted to tools/localstack/out/mainnet.env with the same keys as" >&2
+          echo "  testnet.env. See docs/runbooks/docker.md 'Mainnet stack'." >&2
+          exit 1
+        fi
+        set -a; . ./tools/localstack/out/mainnet.env; set +a
+        exec pnpm --filter @robbed/api dev
+    environment:
+      <<: *dev-env
+      API_PORT: "3001"
+      # Staging shape: this compose file is never the production deploy (see header) —
+      # production is the P-3 images on Komodo, where API_ENV=production forbids stubs (§4.3).
+      API_ENV: development
+      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
+      REDIS_URL: redis://redis:6379
+      R2_ENDPOINT: http://minio:9000
+      R2_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-robbed}
+      R2_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-robbed_dev_secret}
+      R2_BUCKET: ${R2_BUCKET:-robbed-assets}
+      R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4290}/${R2_BUCKET:-robbed-assets}
+      MODERATION_ALLOW_STUBS: "true"
+      # Cold `tokensOwed` read (api.md §3.4) against the real mainnet RPC. Required, no default.
+      ROBINHOOD_RPC_URL: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/runbooks/docker.md 'Mainnet stack'.}
+    ports:
+      - "${API_PORT:-4201}:3001"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      chaincheck:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3001/v1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── MIRROR: ws — Bun WS fanout (Redis-only, zero DB) ──
+  ws:
+    <<: *dev-base
+    working_dir: /workspace/apps/api
+    command: ["bun", "run", "--hot", "src/ws.ts"]
+    environment:
+      <<: *dev-env
+      WS_PORT: "3002"
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "${WS_PORT:-4202}:3002"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://localhost:3002"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── indexer — Ponder. MAINNET deltas: real mainnet RPC (http required, ws OPTIONAL —
+  # HTTP-polling fallback), addresses + START_BLOCK from the REQUIRED mainnet.env
+  # (fail-closed — see header STATUS).
+  #
+  # §12.55 chain-identity gate: INDEXER_CHAIN_ID=4663 below is DELIBERATELY left without
+  # INDEXER_ALLOW_FORK_4663 — the registry's 4663 entry is still the mainnet-FORK pipeline
+  # artifact, so loadConfig REFUSES to boot this indexer (the ruling forbids 4663 outside a
+  # LOCAL fork stack until a real deploy replaces the entry). That refusal is this stack's
+  # second fail-closed gate; never set the fork opt-in here. ──
+  indexer:
+    <<: *dev-base
+    command:
+      - /bin/sh
+      - -c
+      - |
+        # set -e per §12.55(d): the migrate step runs the fail-closed startup
+        # assertions (registry membership + live eth_chainId == INDEXER_CHAIN_ID) —
+        # its failure MUST kill the container, never be swallowed.
+        set -e
+        if [ ! -f tools/localstack/out/mainnet.env ]; then
+          echo "FATAL: tools/localstack/out/mainnet.env not found." >&2
+          echo "  There is NO real mainnet deployment yet (Gate G-A governs; spec §14). This stack is" >&2
+          echo "  STAGED for Phase B and fails closed by design: contract addresses + START_BLOCK come" >&2
+          echo "  only from the real Phase-B deploy artifact (contracts/deployments/4663.json replacing" >&2
+          echo "  the fork artifact), emitted to tools/localstack/out/mainnet.env with the same keys as" >&2
+          echo "  testnet.env. See docs/runbooks/docker.md 'Mainnet stack'." >&2
+          exit 1
+        fi
+        set -a; . ./tools/localstack/out/mainnet.env; set +a
+        # Offchain sidecar tables (watermarks, eth_usd, metadata_verifications — indexer.md §3); idempotent.
+        # MIRROR (anti-drift): phase 2 (GIN indexes + views over Ponder-managed tables) is
+        # applied by the indexer sidecar boot (src/offchainMigrations.ts).
+        pnpm --filter @robbed/indexer migrate
+        exec pnpm --filter @robbed/indexer exec ponder dev --hostname 0.0.0.0
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *dev-env
+      # §12.55: explicit selection; NO INDEXER_ALLOW_FORK_4663 here (see service comment).
+      INDEXER_CHAIN_ID: "4663"
+      INDEXER_RPC_HTTP: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/runbooks/docker.md 'Mainnet stack'.}
+      # OPTIONAL (see header): empty ⇒ apps/indexer/src/config.ts maps INDEXER_RPC_WS
+      # `|| undefined` ⇒ Ponder falls back to HTTP polling. Alchemy wss when a key exists;
+      # never a sequencer feed.
+      INDEXER_RPC_WS: ${MAINNET_RPC_WS_URL:-}
+      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
+      REDIS_URL: redis://redis:6379
+      METRICS_PORT: "9464"
+    ports:
+      # 4229, NOT the 4269 pattern-default: the dev stack already binds 4269 for its
+      # Ponder UI and all three stacks must be able to run simultaneously.
+      - "${PONDER_PORT:-4229}:42069"
+      - "${METRICS_HOST_PORT:-4264}:9464"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      chaincheck:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # MIRROR (anti-drift): Ponder /ready == historical indexing complete. A long remote
+      # backfill can exhaust these retries and show `unhealthy` while Ponder still works
+      # through history — honest status, not a stack-file failure (restart is "no").
+      test: ["CMD", "curl", "-sf", "http://localhost:42069/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 90s
+    restart: "no"
+
+  # ── web — Next.js 16. MAINNET deltas: MOCK_DATA hard "false", browser RPC → real mainnet. ──
+  web:
+    <<: *dev-base
+    command: ["pnpm", "--filter", "@robbed/web", "exec", "next", "dev", "-H", "0.0.0.0"]
+    environment:
+      <<: *dev-env
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-4201}
+      # MIRROR of the split-horizon API base: SSR (in-container) uses the service-DNS
+      # api:3001; the browser keeps the host-mapped NEXT_PUBLIC_API_BASE_URL.
+      API_BASE_URL_INTERNAL: http://api:3001
+      NEXT_PUBLIC_WS_URL: ws://localhost:${WS_PORT:-4202}
+      NEXT_PUBLIC_R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4290}/${R2_BUCKET:-robbed-assets}
+      NEXT_PUBLIC_RPC_HTTP: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/runbooks/docker.md 'Mainnet stack'.}
+      # OPTIONAL (see header): empty tolerated by the web env layer (apps/web/src/shared/lib/
+      # env.ts `rpcWs: … ?? ""`) — set the Alchemy wss when a key exists.
+      NEXT_PUBLIC_RPC_WS: ${MAINNET_RPC_WS_URL:-}
+      NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:-}
+      NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD: ${NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD:-}
+      # MAINNET: never the mock fixture — this stack exists to exercise real chain data.
+      NEXT_PUBLIC_MOCK_DATA: "false"
+    volumes:
+      - .:/workspace
+      - robbed_pnpm_store:/pnpm-store
+      - robbed_root_nm:/workspace/node_modules
+      - robbed_api_nm:/workspace/apps/api/node_modules
+      - robbed_indexer_nm:/workspace/apps/indexer/node_modules
+      - robbed_web_nm:/workspace/apps/web/node_modules
+      - robbed_shared_nm:/workspace/packages/shared/node_modules
+      - robbed_web_next:/workspace/apps/web/.next
+    ports:
+      - "${WEB_PORT:-4200}:3000"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+# Same volume KEYS as the other stacks, but the `name: robbed-mainnet` project prefix makes them
+# physically distinct (robbed-mainnet_robbed_pgdata vs robbed_/robbed-testnet_…) — mainnet state
+# never mixes with the fork's or testnet's.
+volumes:
+  robbed_pgdata:
+  robbed_redisdata:
+  robbed_miniodata:
+  robbed_pnpm_store:
+  robbed_root_nm:
+  robbed_api_nm:
+  robbed_indexer_nm:
+  robbed_web_nm:
+  robbed_shared_nm:
+  robbed_web_next:

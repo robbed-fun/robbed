@@ -298,6 +298,41 @@ Phase-B deploy replaces the entry.
 Also note: minio still stands in for R2 here; verification against **real R2** is the T-5 staging
 deploy's concern, not this compose file's.
 
+## Mainnet stack (`docker-compose.mainnet.yml`) — STAGED for Phase B, fails closed by design
+
+Same pattern as the testnet stack (project `robbed-mainnet`, own volumes, `chaincheck` one-shot,
+no anvil/deploychain), pointed at **real Robinhood Chain mainnet (4663)**. Env:
+`MAINNET_RPC_URL` (required, `:?` — official `https://rpc.mainnet.chain.robinhood.com`),
+`MAINNET_CHAIN_ID` (required — 4663, asserted live by `chaincheck`), `MAINNET_RPC_WS_URL`
+(optional, `:-` — Alchemy wss when a key exists; HTTP-polling fallback). Scripts:
+`dev:mainnet` / `:d` / `:down` / `:reset` / `:logs` / `:ps`.
+
+**There is no real mainnet deployment (Gate G-A governs), so the stack fails closed twice:**
+
+1. `api`/`indexer` refuse to start without `tools/localstack/out/mainnet.env` — emitted only by
+   a real future Phase-B deploy (the T-3 equivalent), same contract as testnet.env pre-T-3.
+2. §12.55: the registry's `4663` entry is a mainnet-**fork** artifact, so the indexer's
+   chain-identity gate refuses `INDEXER_CHAIN_ID=4663` without `INDEXER_ALLOW_FORK_4663=1` —
+   which this file deliberately never sets (only the local fork stack does).
+
+It comes alive when a real 4663 deploy lands `contracts/deployments/4663.json` (replacing the
+fork artifact; registry re-codegen'd) + `mainnet.env`, and the §12.55 robbed-contracts follow-up
+replaces the interim fork opt-in with a registry-mode assertion. This compose file is the local
+staging shape only — the real production deploy is the P-3 images on Komodo (`prod-images.md`).
+
+Host ports — **42XX block** (dev 40XX/44XX, testnet 41XX; all three stacks can run at once):
+
+| Service | Mainnet host port | (testnet) | (dev) |
+|---|---|---|---|
+| web | **4200** | 4100 | 4000 |
+| api | **4201** | 4101 | 4001 |
+| ws | **4202** | 4102 | 4002 |
+| ponder dev UI/GraphQL | **4229** (4269 is dev-owned) | 4169 | 4269 |
+| postgres | **4232** | 4132 | 4432 |
+| indexer metrics | **4264** | 4164 | 4964 |
+| redis | **4279** | 4179 | 4379 |
+| minio S3 / console | **4290 / 4291** | 4190 / 4191 | 4900 / 4901 |
+
 ## Not in this file (deferred)
 
 - **Production images** — these are dev-mode containers (bind mount + watchers). The prod build/deploy landed at **P-3**: `apps/indexer/Dockerfile` + `apps/api/Dockerfile` (multi-stage, non-root, pnpm-workspace-correct) and the Komodo backend Stack at `tools/deploy/komodo/` (see `deploy-komodo-cloudflare.md` A.6b). Those images reuse this file's `postgres:17` (+`pg_trgm` init) and `redis:7` choices; there is **no prod `web` image** (frontend → Cloudflare Workers, §12.45).
