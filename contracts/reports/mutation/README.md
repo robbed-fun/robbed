@@ -10,7 +10,8 @@ commands `run_curvemath_tests.sh` / `run_migrator_tests.sh`, scores in `scores.t
 |---|---|---|---|---|---|
 | `CurveMath.sol` | 64 | 58 | 6 (all provably equivalent) | 0.906 | **PASS** (58/58 killable killed) |
 | `V3Migrator.sol` (arb-back region) — original campaign 2026-07-10 | 200 | 117 | 83 | 0.585 | superseded ↓ |
-| `V3Migrator.sol` (arb-back region) — **M1-13 follow-up rerun 2026-07-11** | 200 | **160** | **40** (16 E, 5 DID, 5 UG, 14 FORK) | **0.800** | **local half CLOSED**; 14 FORK survivors ride the env-gated M1-12 fork run |
+| `V3Migrator.sol` (arb-back region) — **M1-13 follow-up rerun 2026-07-11** | 200 | **160** | **40** (16 E, 5 DID, 5 UG, 14 FORK) | **0.800** | superseded ↓ (FORK leg discharged) |
+| `V3Migrator.sol` (arb-back region) — **M1-12 fork-run discharge 2026-07-12** | 200 | **160** | **40** (16 E, **19 DID**, 5 UG, **0 FORK**) | **0.800** | **CLOSED** — gate-3 fork suite green + per-mutant fork-slice rerun; 0 env-gated survivors remain (see "M1-12 fork-run discharge" below) |
 
 Adequacy accounting for the rerun: the original 117 kills stand (their killing suites are
 unchanged); each of the 83 original survivors was re-executed against the new kill suite
@@ -46,14 +47,78 @@ ETH of attacker liquidity inside one tick. The boundary pair therefore pins the 
 edge via exact final-tick assertions, and genuine budget-bounded failure beyond the recoverable
 range is pinned by kill-tests 1 and 3 (exact `ArbBudgetExceeded` + retriability).
 
-## Remaining 40 survivors — dispositions (0 undispositioned)
+## M1-12 fork-run discharge (2026-07-12)
+
+The gate-3 fork suite ran GREEN against live Robinhood Chain mainnet (chain ID 4663, asserted via
+`cast chain-id`; RPC `https://rpc.mainnet.chain.robinhood.com` from docs.robinhood.com/chain/connecting;
+pinned fork block 7,210,863):
+`FOUNDRY_PROFILE=fork forge test` → `2 passed, 0 failed, 0 skipped` (`test_fork_arbSysSmoke`,
+`test_fork_fullLifecycle` — full create → trade → graduate → collect against the real §12.28 V3
+factory/NPM and real WETH `0x0Bd7…AD73`).
+
+The 14 FORK-dispositioned survivors were then re-executed per-mutant against the fork suite
+(mutant copied over `src/V3Migrator.sol`, `FOUNDRY_PROFILE=fork forge test`, non-zero exit =
+killed): **all 14 survived the clean fork lifecycle.** This is the expected — indeed the only
+possible — outcome: every one of the 14 *weakens* `tokenMin`/`wethMin` (the strengthening
+variants were already killed locally by the clean-mint paths), and a weakened minimum cannot bite
+on a clean, unpolluted mint. A scenario that kills them would need a hostile-ratio mint that slips
+past the arb-back loop and the L255 final tolerance check — both pinned unmutated by the local
+kill suite (kill-tests 1–4) and the `PoolGriefingNoHostileMint` invariant. The original
+"killable only against real-pool mint flows at scale" phrasing was optimistic; the honest final
+disposition is **DID (local-calibration; fork-confirmed unmutated-min liveness)** — the fork run
+proved the UNMUTATED mins' liveness against the real pool math, NOT the per-mutant equivalence
+(the per-mutant fork survivals were tautological, as conceded above); the equivalence half is a
+LOCAL calibration argument, pinned by the contingency guard below:
+
+1. **Liveness (real-pool half, previously unprovable locally):** the green fork lifecycle proves
+   the UNMUTATED mins accept the real-NPM mint at the deterministic graduation ratio — the mins
+   are not too tight against real v3 pool math.
+2. **Safety (local half, already pinned):** the mins' bite is unreachable while the pinned
+   arb-back loop + final tolerance check stand; they remain the spec-mandated §6.3.2
+   "amount-mins enforced" last line before mint (hard requirement — presence, not mutation
+   adequacy of a redundant net, is what the spec demands).
+
+0 env-gated survivors remain; the M1-13 rider on M1-12 is discharged.
+
+### Calibration contingency (2026-07-12 — the 14×DID row is CONTINGENT on this relation)
+
+The DID equivalence of the 14 L362/L363 min-weakening mutants holds ONLY while
+
+```
+1.0001^TOLERANCE_TICKS × (1 − MIGRATION_SLIPPAGE_BPS/10000) ≤ 1
+```
+
+i.e. the amount-min floor `(1 − s)` covers the worst amount skew the ±`TOLERANCE_TICKS`
+final-price band (V3Migrator L255) admits. Past the bound the UNMUTATED mins CAN bite in reachable
+states — weakening them becomes observable (equivalence gone, **gate 4 re-opens for these rows**)
+and, independently, graduation gains a §12.12 liveness hazard (NPM amount-min revert AFTER the
+L255 tolerance check passed). Current §12.33 calibration: `1.0001^100 × 0.99 = 0.99994917 ≤ 1`,
+margin ≈ 0.00508% — and the bound is SHARP: `TOLERANCE_TICKS = 101` at 100 bps already violates it
+(zero upward retune headroom).
+
+Both parameters are beta-retunable (§12.32/§12.33), so the relation is PINNED by two fail-closed
+guards (2026-07-12, robbed-security findings on the mutation-disposition review):
+
+- `test/unit/GradCalibrationGuard.t.sol` — asserts the relation for the `TestConstants` M0 mirror
+  (failure message names these gate-4 rows), proves the predicate catches the violating
+  calibrations (200 and 101 ticks @ 100 bps; 50 and 0 bps @ 100 ticks) via literal-pinned
+  negative cases, and proves the deploy-side assert below via a bad-calibration fixture.
+- `script/Deploy.s.sol::_consistencyChecks` — reverts `MinFloorToleranceBandViolated(toleranceTicks,
+  migrationSlippageBps)` pre-broadcast, so a retuned `constants.json` past the bound fails the
+  deploy closed (script-side only; no production bytecode change). Math is 1e18 fixed point
+  (round-UP square-and-multiply — pass ⇒ the true relation holds; no floats, no vendored TickMath).
+
+A future retune past the bound RE-OPENS gate 4 for these 14 rows: re-derive the disposition (and
+re-balance the min formulas / tolerance) before the retune ships.
+
+## Remaining 40 survivors — dispositions (0 undispositioned, 0 env-gated)
 
 Legend: **E** = provably equivalent in all reachable states; **DID** = defense-in-depth redundancy
 (the mutated check's bite is unreachable while the code it backs up is unmutated — kept per spec
 §6.3.2 "hard-assert before mint"); **UG** = unreachable guard (input domain orders of magnitude
-below the guarded bound); **FORK** = killable only against real-pool mint flows at scale —
-explicitly assigned to the env-gated gate-3 fork run (M1-12), NOT attempted locally per the M1-13
-residual scoping.
+below the guarded bound); ~~**FORK**~~ = *(retired 2026-07-12)* was: assigned to the env-gated
+gate-3 fork run (M1-12) — discharged as **DID (local-calibration; fork-confirmed unmutated-min
+liveness)** above.
 
 | Line | Mutants | Disposition | Reasoning |
 |---|---|---|---|
@@ -65,7 +130,7 @@ residual scoping.
 | L312 WETH remaining-budget form | 133 139 141 | E | Spend can never exceed the budget (each step's exact input IS the remaining budget), so the only boundary is `spent == budget`, where the `>` gate already yields 0 for every variant (`+`, `>=`, `!=` included). Verified empirically: 133 survives the over-budget scenario because iteration 2 still reverts `ArbBudgetExceeded` identically. |
 | L314 `budget <= 0` | 147 | E | `<= 0 ≡ == 0` on `uint256`. |
 | L320 spend accumulator inflations | 161 162 164 | E | 161/162 make `wethArbSpent` LARGER → iteration-2 budget is 0 exactly as in the original (same revert). 164: `before % after ≡ before − after` while a step spends < half the WETH balance — the budget is 1% of it. (Deflating variants 157/158/163/166 ARE killable and are killed by kill-test 3.) |
-| L362/L363 `tokenMin`/`wethMin` weakened | 169 170 171 172 173 174 178 181 182 183 184 185 186 190 | FORK | Weakened amount-mins only bite when the mint would ACCEPT a below-parity deposit that the (now pinned) arb-back loop failed to prevent — a real-pool defense-in-depth interplay assigned to the gate-3 fork lifecycle run (M1-12, `ROBINHOOD_RPC_URL`-gated). Explicitly out of local scope per the M1-13 residual. |
+| L362/L363 `tokenMin`/`wethMin` weakened | 169 170 171 172 173 174 178 181 182 183 184 185 186 190 | DID (local-calibration; fork-confirmed unmutated-min liveness — 2026-07-12) | Weakened amount-mins only bite when the mint would ACCEPT a below-parity deposit that the (pinned) arb-back loop failed to prevent. Discharged by the M1-12 fork run (see "M1-12 fork-run discharge" above): green real-pool lifecycle proves the unmutated mins pass the real NPM at the graduation ratio (liveness); per-mutant fork-slice rerun confirms all 14 survive the clean lifecycle (weakened mins cannot bite on a clean mint — their safety bite is unreachable while the pinned loop + L255 check stand). Kept per spec §6.3.2 amount-mins mandate. **CONTINGENT** on `1.0001^TOLERANCE_TICKS × (1 − MIGRATION_SLIPPAGE_BPS/1e4) ≤ 1` (see "Calibration contingency" above; pinned by `test/unit/GradCalibrationGuard.t.sol` + `Deploy._consistencyChecks`) — a §12.32/§12.33 retune past the bound re-opens gate 4 for this row. |
 | L467 `_toInt256` guard | 192 193 196 197 199 | UG | Guard bites only for `x` near `2^255`; arb budgets are curve inventory (≤ ~1e27) — free insurance, unreachable domain. |
 
 ## Reproduction
@@ -82,4 +147,14 @@ for m in $(cat reports/mutation/logs/migrator_notkilled.txt); do
     && echo "$m SURVIVED" || echo "$m KILLED"
 done
 git checkout -- src/V3Migrator.sol
+
+# M1-12 fork-slice rerun of the 14 (ex-)FORK survivors (what produced the 2026-07-12 row;
+# requires network access to the live 4663 RPC — block-pinned, so repeats hit the RPC cache):
+for m in 169 170 171 172 173 174 178 181 182 183 184 185 186 190; do
+  cp reports/mutation/mutants/migrator/V3Migrator.mutant.$m.sol src/V3Migrator.sol
+  ROBINHOOD_RPC_URL=https://rpc.mainnet.chain.robinhood.com FOUNDRY_PROFILE=fork \
+    forge test >/dev/null 2>&1 && echo "$m SURVIVED" || echo "$m KILLED"
+done
+git checkout -- src/V3Migrator.sol
+# 2026-07-12 result: all 14 SURVIVED (expected — see "M1-12 fork-run discharge").
 ```
