@@ -1,8 +1,9 @@
 "use client";
 
-import { WETH_ADDRESS } from "@robbed/shared";
 import { useSimulateContract } from "wagmi";
 import type { Address } from "viem";
+
+import { WETH } from "@/shared/config/addresses";
 
 import { buildV3QuoteRequest } from "../lib/v3";
 import type { TradeSide } from "./quote";
@@ -41,7 +42,7 @@ export function useV3Quote(args: {
   // WETH/0 fallback used while inactive is never sent.
   const request = buildV3QuoteRequest({
     side,
-    token: token ?? WETH_ADDRESS,
+    token: token ?? WETH,
     amountWei: amountWei ?? 0n,
   });
 

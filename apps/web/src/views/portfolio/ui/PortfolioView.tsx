@@ -1,5 +1,6 @@
 import { AppHeader } from "@/widgets/app-header";
 import { LiveStatusBanner } from "@/widgets/live-status-banner";
+import { NetworkBanner } from "@/widgets/network-banner";
 import { MobileNav } from "@/widgets/mobile-nav";
 
 import { PortfolioClient } from "./PortfolioClient";
@@ -29,6 +30,7 @@ export default async function PortfolioView({
   return (
     <>
       <LiveStatusBanner />
+      <NetworkBanner />
       <AppHeader />
       <main className="mx-auto w-full max-w-6xl pb-20 md:px-4 md:py-4 md:pb-6">
         <div className="border-y border-border bg-bg md:border">

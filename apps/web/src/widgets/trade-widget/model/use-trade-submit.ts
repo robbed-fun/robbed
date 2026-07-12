@@ -15,8 +15,7 @@ import {
   computeDeadline,
   venueForStatus,
 } from "@/entities/curve";
-import { ROBBED, requireAddress } from "@/shared/config/addresses";
-import { UNISWAP_V3 } from "@robbed/shared";
+import { ROBBED, V3, requireAddress } from "@/shared/config/addresses";
 
 /**
  * Trade submission → optimistic lifecycle wiring for BOTH venues (§4, §5.2). The
@@ -186,7 +185,7 @@ async function submitV3(a: VenueSubmitArgs): Promise<`0x${string}`> {
       writeContractAsync: a.writeContractAsync,
       token: a.token,
       owner: a.account,
-      spender: UNISWAP_V3.swapRouter02 as Address,
+      spender: V3.swapRouter02,
       amount: a.amountWei,
     });
   }

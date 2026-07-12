@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { LiveStatusBanner } from "@/widgets/live-status-banner";
+import { NetworkBanner } from "@/widgets/network-banner";
 import { AppHeader } from "@/widgets/app-header";
 import { MobileNav } from "@/widgets/mobile-nav";
 import { ApiError, getCandles, getHolders, getToken, getTrades } from "@/shared/api";
@@ -51,6 +52,7 @@ export default async function TokenDetailView({ address }: { address: string }) 
   return (
     <>
       <LiveStatusBanner />
+      <NetworkBanner />
       <AppHeader />
       {/* FLAT full-bleed regions (fidelity fix 1/2): the identity row's border-b
           and the columns' border-r run edge-to-edge — no container padding/gap;

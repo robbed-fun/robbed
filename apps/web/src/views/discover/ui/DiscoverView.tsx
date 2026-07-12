@@ -2,6 +2,7 @@ import { AppHeader } from "@/widgets/app-header";
 import { EventTape } from "@/widgets/event-tape";
 import { LiveStatusBanner } from "@/widgets/live-status-banner";
 import { MobileNav } from "@/widgets/mobile-nav";
+import { NetworkBanner } from "@/widgets/network-banner";
 import { TrendingCarousel } from "@/widgets/trending-carousel";
 import { getTokens } from "@/shared/api";
 
@@ -46,6 +47,7 @@ export default async function DiscoverView() {
   return (
     <>
       <LiveStatusBanner />
+      <NetworkBanner />
       <AppHeader />
       <main className="mx-auto max-w-6xl pb-16 md:px-4 md:py-4 md:pb-4">
         <div className="border-y border-border bg-bg md:border">

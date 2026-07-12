@@ -45,7 +45,8 @@
 # (docs.docker.com/reference/compose-file/merge — `!reset` is per-attribute only), so dropping
 # anvil/deploychain while keeping the local file untouched requires a standalone file. Discipline:
 # any change to the shared services (postgres/redis/minio/createbuckets/apimigrations/deps/api/ws/
-# indexer/web) MUST be applied to BOTH files; review with
+# indexer/web) MUST be applied to ALL THREE compose files (docker-compose.yml / .testnet.yml /
+# .mainnet.yml); review with
 #   diff docker-compose.yml docker-compose.testnet.yml
 # Sections copied verbatim are marked "MIRROR"; testnet-specific deltas are marked "TESTNET".
 #
@@ -358,13 +359,19 @@ services:
     restart: "no"
 
   # ── web — Next.js 16. TESTNET deltas: MOCK_DATA hard "false" (real-data stack), browser RPC →
-  # the official testnet endpoints (required, §13). Note: the wallet chain config derives from the
-  # shared CHAIN_ID (4663) — same T-1 dependency as the indexer note above. ──
+  # the official testnet endpoints (required, §13), and NEXT_PUBLIC_CHAIN_ID=46630 — the §12.55
+  # chain-identity pattern applied to the web (mirror of INDEXER_CHAIN_ID above): the env var
+  # SELECTS the target chain, the shared deployment registry DEFINES it (apps/web env.ts throws
+  # on a non-registry id). This flips the whole wagmi/viem chain object (id/name/explorer/WETH)
+  # and the address module to the official 46630 testnet params — without it the bundle would
+  # compile the shared mainnet CHAIN_ID (4663) and advertise the WRONG chain to wallets (the
+  # pre-2026-07-12 defect observed live on :4100). ──
   web:
     <<: *dev-base
     command: ["pnpm", "--filter", "@robbed/web", "exec", "next", "dev", "-H", "0.0.0.0"]
     environment:
       <<: *dev-env
+      NEXT_PUBLIC_CHAIN_ID: "46630"
       NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-4101}
       # MIRROR of docker-compose.yml split-horizon API base: SSR (in-container) uses the
       # service-DNS api:3001; the browser keeps the host-mapped NEXT_PUBLIC_API_BASE_URL.

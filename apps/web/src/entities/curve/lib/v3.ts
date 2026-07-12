@@ -1,6 +1,7 @@
 import { quoterV2Abi, swapRouter02Abi } from "@robbed/shared/abi";
-import { UNISWAP_V3, WETH_ADDRESS } from "@robbed/shared";
 import { encodeFunctionData, numberToHex, type Address, type Hex } from "viem";
+
+import { V3, WETH } from "@/shared/config/addresses";
 
 import type { TradeSide } from "../model/quote";
 
@@ -12,8 +13,9 @@ import type { TradeSide } from "../model/quote";
  *
  * The ABIs are the SHARED, pinned Uniswap periphery artifacts (`quoterV2Abi` /
  * `swapRouter02Abi` from `@robbed/shared/abi`, §12.28) — never hand-written
- * (CLAUDE.md anti-drift rule). Addresses are the shared `UNISWAP_V3` registry and
- * the shared `WETH_ADDRESS`; no address literal is inlined here.
+ * (CLAUDE.md anti-drift rule). Addresses are the PER-TARGET-CHAIN `V3` / `WETH`
+ * from `shared/config/addresses` (§12.55: the testnet build resolves the §12.52
+ * testnet set, mainnet the §12.28 set); no address literal is inlined here.
  *
  * DECISIONS (hoodpad-frontend; basis: Uniswap swap-router-contracts docs, verified
  * 2026-07-10):
@@ -54,8 +56,8 @@ export function resolveV3Direction(
   token: Address,
 ): { tokenIn: Address; tokenOut: Address } {
   return side === "buy"
-    ? { tokenIn: WETH_ADDRESS, tokenOut: token }
-    : { tokenIn: token, tokenOut: WETH_ADDRESS };
+    ? { tokenIn: WETH, tokenOut: token }
+    : { tokenIn: token, tokenOut: WETH };
 }
 
 export interface V3QuoteRequest {
@@ -86,7 +88,7 @@ export function buildV3QuoteRequest(args: {
 }): V3QuoteRequest {
   const { tokenIn, tokenOut } = resolveV3Direction(args.side, args.token);
   return {
-    address: UNISWAP_V3.quoterV2 as Address,
+    address: V3.quoterV2,
     abi: quoterV2Abi,
     functionName: "quoteExactInputSingle",
     args: [
@@ -125,7 +127,7 @@ export function buildV3SwapRequest(args: {
   deadline: bigint;
 }): V3SwapRequest {
   const { side, token, account, amountWei, minOut, deadline } = args;
-  const swapRouter = UNISWAP_V3.swapRouter02 as Address;
+  const swapRouter = V3.swapRouter02;
   const { tokenIn, tokenOut } = resolveV3Direction(side, token);
 
   if (side === "buy") {

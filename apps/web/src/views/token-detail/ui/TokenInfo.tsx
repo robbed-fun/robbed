@@ -1,6 +1,6 @@
 import type { TokenDetail } from "@robbed/shared";
 
-import { AddressLink, Divider, MonoLabel, MonoText } from "@/shared/ui";
+import { AddressLink, Divider, ExtLink, MonoLabel, MonoText } from "@/shared/ui";
 import { shortAddress } from "@/shared/lib/format";
 
 /**
@@ -70,34 +70,5 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-/**
- * Defense-in-depth https-only guard (hardening fix 2026-07-12, mirrors the API's
- * UM-5 allowlist): a stored href is only ever rendered as an anchor when it
- * parses as an absolute `https:` URL. Anything else — `javascript:`, `data:`,
- * `http:`, relative/malformed strings — renders as inert text, so a hostile
- * stored link can never become a clickable non-https destination even if the
- * API-side validation were bypassed.
- */
-function isHttpsUrl(href: string): boolean {
-  try {
-    return new URL(href).protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-function ExtLink({ href, label }: { href: string; label: string }) {
-  if (!isHttpsUrl(href)) {
-    return <span className="text-faint">{label}</span>;
-  }
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-muted underline decoration-dotted underline-offset-2 transition-colors hover:text-text"
-    >
-      {label} ↗
-    </a>
-  );
-}
+// The https-only ExtLink guard (UM-5 defense-in-depth, 2026-07-12) was promoted
+// to `shared/ui/ExtLink` so the faucet CTA shares the exact same guard (ERR-12).

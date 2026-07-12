@@ -12,13 +12,22 @@
  * ────────────────────────────────────────────────────────────────────────────
  */
 import type { Address } from "viem";
-import { CHAIN_ID, UNISWAP_V3 } from "@robbed/shared";
+import { UNISWAP_V3, WETH_ADDRESS } from "@robbed/shared";
 import { getDeployment } from "@robbed/shared/addresses";
 
-/** Zero sentinel — signals "no deployment for CHAIN_ID has been codegen'd". */
+import { env } from "@/shared/lib/env";
+
+/** Zero sentinel — signals "no deployment for the target chain has been codegen'd". */
 const PLACEHOLDER = "0x0000000000000000000000000000000000000000" as const;
 
-const deployment = getDeployment(CHAIN_ID);
+/**
+ * §12.55 target selection: the deployment entry for THIS build's chain
+ * (`env.chainId()` — NEXT_PUBLIC_CHAIN_ID validated against the shared
+ * registry, else compile-time 4663). The testnet build (46630) therefore
+ * resolves the T-3 testnet deployment, never the mainnet one.
+ */
+const TARGET_CHAIN_ID = env.chainId();
+const deployment = getDeployment(TARGET_CHAIN_ID);
 
 /**
  * E2E-ONLY address override (plan I-5). An ephemeral anvil fork of 4663 deploys
@@ -54,32 +63,42 @@ export const ROBBED = {
 } satisfies Record<string, Address>;
 
 /**
- * Canonical Uniswap V3 registry on 4663 — FIXED external addresses, ratified in
- * spec §12.28 and the single source in @robbed/shared (UNISWAP_V3). Re-exported
- * (not re-declared) so the post-grad widget imports one address module. Real
- * (not placeholders) and safe to use today.
+ * Canonical Uniswap V3 set for the TARGET chain — from the shared per-chain
+ * registry entry (mainnet 4663 = the §12.28 official set; testnet 46630 = the
+ * §12.52 adopted community deployment, TESTNET-ONLY). Falls back to the shared
+ * §12.28 mainnet constants only when no registry entry exists (pre-codegen
+ * mainnet builds — identical values by construction). Derived, never
+ * re-declared (anti-drift rule 2).
  */
 export const V3 = {
-  factory: UNISWAP_V3.factory,
-  positionManager: UNISWAP_V3.positionManager,
-  swapRouter02: UNISWAP_V3.swapRouter02,
-  quoterV2: UNISWAP_V3.quoterV2,
+  factory: deployment?.external.v3Factory ?? UNISWAP_V3.factory,
+  positionManager: deployment?.external.positionManager ?? UNISWAP_V3.positionManager,
+  swapRouter02: deployment?.external.swapRouter02 ?? UNISWAP_V3.swapRouter02,
+  quoterV2: deployment?.external.quoterV2 ?? UNISWAP_V3.quoterV2,
 } as const satisfies Record<string, Address>;
 
-/** True when no deployment for CHAIN_ID has been codegen'd (still a zero sentinel). */
+/**
+ * Canonical WETH for the TARGET chain — registry-derived (46630's WETH differs
+ * from mainnet's, §12.52). The shared mainnet `WETH_ADDRESS` constant is only
+ * the no-registry fallback. All web consumers (V3 path builders, quotes) import
+ * THIS, never `WETH_ADDRESS` directly.
+ */
+export const WETH: Address = deployment?.external.weth ?? WETH_ADDRESS;
+
+/** True when no deployment for the target chain has been codegen'd (still a zero sentinel). */
 export function isPlaceholder(address: Address): boolean {
   return address.toLowerCase() === PLACEHOLDER;
 }
 
 /**
- * Read a robbed address, failing loud if no CHAIN_ID deployment has been codegen'd
- * — a bad tx to 0x0 is far worse than a clear error. V3 (§12.28) addresses are real
- * and do not need this guard.
+ * Read a robbed address, failing loud if no target-chain deployment has been
+ * codegen'd — a bad tx to 0x0 is far worse than a clear error. V3 (§12.28/§12.52)
+ * addresses are real and do not need this guard.
  */
 export function requireAddress(address: Address, label: string): Address {
   if (isPlaceholder(address)) {
     throw new Error(
-      `[robbed/web] no deployment for CHAIN_ID=${CHAIN_ID} in @robbed/shared for ${label}. ` +
+      `[robbed/web] no deployment for chain ${TARGET_CHAIN_ID} in @robbed/shared for ${label}. ` +
         `Run the M1-14 deploy + codegen (bun contracts/script/codegen-addresses.ts) before using robbed addresses.`,
     );
   }

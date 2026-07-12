@@ -1,3 +1,6 @@
+import { CHAIN_ID } from "@robbed/shared";
+import { getDeployment } from "@robbed/shared/addresses";
+
 /**
  * Centralised env access (spec §2/§9). Every RPC/API/WS endpoint and config
  * value comes from env — NEVER inlined. No market metric ever lives here (§2).
@@ -44,6 +47,33 @@ function required(
 }
 
 export const env = {
+  /**
+   * Target chain id for THIS build — §12.55 chain-identity pattern applied to
+   * the web (mirror of the indexer's `INDEXER_CHAIN_ID`): the env var SELECTS a
+   * chain, it never DEFINES chain facts. The value must resolve in the shared
+   * deployment registry (`getDeployment`, packages/shared addresses.ts) — an
+   * unknown id throws, so nothing can be invented via env. Unset ⇒ the
+   * compile-time `CHAIN_ID` (mainnet 4663, @robbed/shared) — prod/local builds
+   * are unchanged. A per-target build compiles exactly ONE chain (§12.55: "per-
+   * target product builds may still compile a single chain id"): the testnet
+   * stack (docker-compose.testnet.yml web) injects NEXT_PUBLIC_CHAIN_ID=46630.
+   * Deliberately NOT using the `required(...)` build-phase placeholder: a SET-
+   * but-invalid value must fail `next build` loudly — that is a misconfig, not
+   * a missing build var.
+   */
+  chainId: () => {
+    const raw = process.env.NEXT_PUBLIC_CHAIN_ID;
+    if (!raw || raw.length === 0) return CHAIN_ID;
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed) || getDeployment(parsed) === undefined) {
+      throw new Error(
+        `[robbed/web] NEXT_PUBLIC_CHAIN_ID=${raw} has no entry in the shared deployment ` +
+          `registry (@robbed/shared ROBBED_DEPLOYMENTS). The env var selects a chain; the ` +
+          `registry defines it (spec §12.55) — run the deploy + codegen for that chain first.`,
+      );
+    }
+    return parsed;
+  },
   rpcHttp: () =>
     required(
       "NEXT_PUBLIC_RPC_HTTP",

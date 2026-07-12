@@ -2,6 +2,7 @@ import { LaunchForm } from "@/features/launch-token";
 import { AppHeader } from "@/widgets/app-header";
 import { MobileNav } from "@/widgets/mobile-nav";
 import { LiveStatusBanner } from "@/widgets/live-status-banner";
+import { NetworkBanner } from "@/widgets/network-banner";
 import { CursorTag } from "@/shared/ui";
 import { TAGLINE_CREATE } from "@/shared/config/copy";
 
@@ -18,6 +19,7 @@ export default function CreateView() {
   return (
     <>
       <LiveStatusBanner />
+      <NetworkBanner />
       <AppHeader />
       {/* Mockup 2b (template 446-449): 560px column, 40/24/48 padding, 22px gap;
           16px title WITHOUT letter-spacing; 11.5px faint subtitle. Mobile keeps a
