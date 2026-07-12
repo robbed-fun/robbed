@@ -5,7 +5,7 @@
  * be quoted on-chain (`Router.quoteBuy` reverts `UnknownToken`). Instead we PREVIEW
  * it with the SHARED curve math — byte-identical to the on-chain `CurveMath`
  * library — seeded by the factory's initial virtual reserves (`virtualEth0` /
- * `virtualToken0`, read live from `curveParameters`). At curve start these reserves
+ * `virtualToken0`, read live from `curveDefaults()`). At curve start these reserves
  * are exact and the graduation clamp cannot engage, so `previewBuy` is EXACT here
  * (the module @dev note in `@robbed/shared/curve-quote`). We never re-implement the
  * curve math (CLAUDE.md anti-drift) — we import it.

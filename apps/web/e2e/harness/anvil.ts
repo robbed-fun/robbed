@@ -102,6 +102,23 @@ export function loadDeployedAddresses(): DeployedAddresses {
 
 // ── time-warp helpers (anti-sniper window + graduation) ──────────────────────
 
+/**
+ * CHAIN time, not host time. Specs warp the fork forward (`increaseTime`)
+ * across the suite, so the fork clock drifts arbitrarily far AHEAD of the
+ * host wallclock — any deadline/window computed from `Date.now()` eventually
+ * reads as already-expired on-chain. Always derive tx deadlines and query
+ * windows from the latest block timestamp.
+ */
+export async function chainNow(): Promise<number> {
+  const block = await publicClient.getBlock();
+  return Number(block.timestamp);
+}
+
+/** Fresh tx deadline `secondsAhead` past CHAIN time (default 10m). */
+export async function txDeadline(secondsAhead = 600): Promise<bigint> {
+  return BigInt((await chainNow()) + secondsAhead);
+}
+
 /** Advance the fork clock by `seconds` and mine a block (viem anvil actions). */
 export async function warpTime(seconds: number): Promise<void> {
   await testClient.increaseTime({ seconds });
@@ -161,7 +178,7 @@ export async function createTokenOnChain(args: {
 }): Promise<CreatedToken> {
   const wallet = walletFor(args.creator ?? ROLES.creator);
   const { router } = loadDeployedAddresses();
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
+  const deadline = await txDeadline();
   const value = args.deployFeeWei + (args.initialBuyWei ?? 0n);
   const txHash = await wallet.writeContract({
     address: router,
@@ -197,7 +214,7 @@ export async function buyOnChain(args: {
 }): Promise<Hash> {
   const wallet = walletFor(args.buyer ?? ROLES.trader);
   const { router } = loadDeployedAddresses();
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
+  const deadline = await txDeadline();
   return wallet.writeContract({
     address: router,
     abi: routerAbi,

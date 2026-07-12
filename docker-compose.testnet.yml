@@ -295,6 +295,9 @@ services:
         fi
         set -a; . ./tools/localstack/out/testnet.env; set +a
         # Offchain sidecar tables (watermarks, eth_usd, metadata_verifications — indexer.md §3); idempotent.
+        # MIRROR of docker-compose.yml (anti-drift): phase 2 (GIN indexes + views over
+        # Ponder-managed tables) is applied by the indexer sidecar boot
+        # (src/offchainMigrations.ts) — never re-run migrate from compose for it.
         pnpm --filter @robbed/indexer migrate
         exec pnpm --filter @robbed/indexer exec ponder dev --hostname 0.0.0.0
     env_file:

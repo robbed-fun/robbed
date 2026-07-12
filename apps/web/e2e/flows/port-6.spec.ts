@@ -55,7 +55,12 @@ test(
     });
 
     await assertUi("dropping ?address= falls back to the connected wallet ('· you' returns)", async () => {
-      await page.goto(portfolio.route());
+      // Drop the filter via CLIENT-SIDE navigation (header nav) — a full reload
+      // would sever the mock-connector session (all four share the `mock`
+      // connector id, so wagmi's reconnect-on-mount cannot restore it; harness
+      // limitation, not a product surface).
+      await page.getByRole("link", { name: /^portfolio$/i }).first().click();
+      await expect(page).toHaveURL(/\/portfolio(?!\?)/);
       await expect(portfolio.addressChip(page, connected.address)).toBeVisible();
       await expect(portfolio.youSuffix(page).first()).toBeVisible();
     });

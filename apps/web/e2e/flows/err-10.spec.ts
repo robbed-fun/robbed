@@ -10,7 +10,7 @@ import {
   ROLES,
   seedToken,
   sel,
-  STACK,
+  isRpcRequest,
   test,
 } from "../harness";
 
@@ -37,7 +37,7 @@ test(
     await assertUi("a reverted receipt turns the pending row into a failed row + tx link", async () => {
       // Force the trade's receipt to read `reverted` — the client can't tell a
       // real revert from this and must run its failed-row treatment (§4 rule).
-      await page.route(STACK.rpcUrl, async (route) => {
+      await page.route(isRpcRequest, async (route) => {
         const body = route.request().postDataJSON?.();
         const calls = Array.isArray(body) ? body : [body];
         const rc = calls.find((c: any) => c?.method === "eth_getTransactionReceipt");
@@ -69,7 +69,9 @@ test(
       await sel.amountInput(page).fill("0.01");
       await sel.submitTrade(page).click();
       await expect(page.getByText(/failed|reverted/i).first()).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByRole("link", { name: /blockscout|view tx|explorer/i }).first()).toBeVisible();
+      // The row's tx affordance is an <a href="…blockscout…/tx/0x…"> whose
+      // visible label is the SHORT TRADER ADDRESS — match on the href.
+      await expect(page.locator('a[href*="blockscout"][href*="/tx/0x"]').first()).toBeVisible();
     });
   },
 );

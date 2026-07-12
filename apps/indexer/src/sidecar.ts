@@ -18,6 +18,7 @@
 import { Pool } from "pg";
 import { CONTROL_REVERIFY } from "@robbed/shared";
 import { config } from "./runtime";
+import { applyMigrationsAtBoot } from "./offchainMigrations";
 import { createReverifySubscriber, getDefaultPublisher } from "./publish";
 import { startConfirmationTracker } from "./confirmation";
 import { createPgConfirmationStore, createRpcTagFetcher } from "./confirmationStore";
@@ -64,17 +65,31 @@ export async function startSidecars(): Promise<void> {
     process.exit(1);
   }
 
-  if (process.env.INDEXER_SIDECARS === "off") {
-    console.log("[indexer sidecar] disabled via INDEXER_SIDECARS=off");
-    return;
-  }
   if (!config.databaseUrl) {
-    console.warn("[indexer sidecar] DATABASE_URL unset — tracker/verifier not started.");
+    console.warn("[indexer sidecar] DATABASE_URL unset — migrations/tracker/verifier not started.");
     return;
   }
 
   const schema = config.databaseSchema ?? "public";
   const pool = new Pool({ connectionString: config.databaseUrl });
+
+  // Offchain migrations, BOTH phases (first-class home of the post-Ponder
+  // re-run — replaces the I-5b compose /ready-polling stopgap; design + ponder
+  // 0.16.8 source basis in offchainMigrations.ts): the `:setup` hook runs after
+  // Ponder's own `database.migrate()` built its tables, so the phase-2 view/GIN
+  // migrations over them apply deterministically here — on EVERY boot, because
+  // a dev schema rebuild CASCADE-drops the external views. Runs BEFORE the
+  // INDEXER_SIDECARS gate (the 0003 search GIN indexes serve the API even with
+  // the sidecar loops off) and BEFORE any job starts (the pnl/flow jobs read the
+  // phase-2 views — fresh-DB ordering, PORT-1 root cause). Never throws into
+  // indexing; failure logs loudly and returns false.
+  await applyMigrationsAtBoot(pool, schema);
+
+  if (process.env.INDEXER_SIDECARS === "off") {
+    console.log("[indexer sidecar] disabled via INDEXER_SIDECARS=off");
+    await pool.end();
+    return;
+  }
 
   try {
     // M2-6 confirmation tracker (watermark sidecar only — no writes into

@@ -3,11 +3,12 @@
 -- these.
 --
 -- ORDERING (important): these indexes are on the Ponder-managed `tokens` table,
--- so they can only be created AFTER Ponder has created that table (first
--- `ponder start`). The migrate runner therefore applies this file with its
--- search_path set to the Ponder schema (DATABASE_SCHEMA) and SKIPS it when
--- `tokens` does not yet exist — re-run migrate after Ponder is up to apply them.
--- All CREATE INDEX IF NOT EXISTS → idempotent and safe to re-run.
+-- so they can only be created AFTER Ponder has created that table. The migrate
+-- runner applies this file with its search_path set to the Ponder schema
+-- (DATABASE_SCHEMA) and SKIPS it when `tokens` does not yet exist; the INDEXER
+-- SIDECAR BOOT (src/offchainMigrations.ts, Ponder :setup hook — after Ponder's
+-- own table migration) re-applies it automatically on every start, so no manual
+-- re-run is needed. All CREATE INDEX IF NOT EXISTS → idempotent, safe to re-run.
 --
 -- CAVEAT (flagged for ops, M4): Ponder's zero-downtime deploys can create a new
 -- versioned schema; re-run `bun run migrate` after such a deploy to re-apply

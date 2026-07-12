@@ -133,7 +133,8 @@ function curveParameters() external view returns (CurveParameters memory); // st
 function curveOf(address token) external view returns (address);
 function tokenOf(address curve) external view returns (address);
 function isCurve(address account) external view returns (bool);
-function config() external view returns (FactoryConfig memory);   // current config snapshot for Router/UI
+function config() external view returns (FactoryConfig memory);   // operational config snapshot (12 fields — §12.39 amendment)
+function curveDefaults() external view returns (CurveDefaults memory); // immutable curve-shape defaults (§12.38/§12.39)
 function globalCurveEth() external view returns (uint256);
 
 // ── Owner (Safe) — every setter emits an event; every value hard-capped in code ──
@@ -155,31 +156,27 @@ function setMigrator(address migrator_) external onlyOwner;                // ON
 - **Snapshotted into each curve at creation** (owner changes affect future launches only): `virtualEth0`, `virtualToken0`, `curveSupply`, `lpTranche`, `graduationEth`, `tradeFeeBps`, `creatorFeeBps` (always 0), `graduationFee`, `callerReward`, `earlyWindowSeconds`, `maxEarlyBuyWei`.
 - **Read live from the factory at call time** (operational, never blocks sells, never alters economics): `treasury` (fee destination), `pauseBuys` (buy-side kill switch), `perTokenEthCap` / `globalEthCap` (beta risk caps, buy-side only).
 
-**`FactoryConfig` struct (ratified — spec §12.39; returned whole by `config()`).** The single current-config snapshot consumed by Router, the UI/Trust-panel, and the indexer startup read (§12.38). It mirrors the storage field set below — **no invented fields**. Two subtleties: (1) it carries the immutable **curve-shape defaults** so the indexer gets every constant it caches from one read; (2) these fields are *factory-current* — an owner `setTradeFeeBps`/`setGraduationFee`/… affects **future curves only**, so per-token live economics (e.g. an older curve's `TRADE_FEE_BPS`, §12.40d) are read from **that curve**, never from `config()`. This is separate from `CurveParameters` (the staged per-curve deploy struct, valid only mid-`createToken`).
+**Factory read surface (ratified — spec §12.39, amended 2026-07-12: SPLIT surface is canonical).** The current-config read consumed by Router, the UI/Trust-panel, and the indexer startup read (§12.38) spans three legs — **no invented fields, nothing unreadable**: (1) **`config()` → `FactoryConfig`** — the 12 owner-settable operational fields only; (2) **`curveDefaults()` → `CurveDefaults`** — the five immutable curve-shape defaults; the canonical pre-create economics read (Create-page preview, indexer startup cache — safe before any curve exists, unlike `curveParameters()` which is all-zero outside `createToken`); (3) **dedicated getters** — `router()`, `migrator()`, `weth()`, `treasury()`, plus the setter ceilings `maxCreationFee`/`maxGraduationFee`/`maxCallerReward` as `public immutable` (constructor-asserted, incl. `maxCallerReward + maxGraduationFee < graduationEth` → `GraduationUnfundable`). The §12.40d caveat stands across all three legs: these values are *factory-current* — an owner `setTradeFeeBps`/`setGraduationFee`/… affects **future curves only**, so per-token live economics (e.g. an older curve's `TRADE_FEE_BPS`) are read from **that curve**, never from the factory. Both structs are separate from `CurveParameters` (the staged per-curve deploy struct, valid only mid-`createToken`).
 
 ```solidity
 struct FactoryConfig {
     // operational, owner-settable (govern future curves for snapshotted economics)
-    address treasury;
-    address router;
-    address migrator;
-    address weth;
-    uint16  tradeFeeBps;
+    address treasury;             // fee destination (read live by curves)
+    uint16  tradeFeeBps;          // default for future curves, ≤ 200
     uint16  creatorFeeBps;        // ≡ 0 (§7), no fee-path reader
     uint256 creationFee;
     uint256 graduationFee;
     uint256 callerReward;
     uint64  earlyWindowSeconds;
     uint128 maxEarlyBuyWei;
-    uint128 perTokenEthCap;
-    uint128 globalEthCap;
-    bool    pauseCreates;
-    bool    pauseBuys;
-    // immutable ceilings (deploy-time bounds on the setters)
-    uint256 maxCreationFee;
-    uint256 maxGraduationFee;
-    uint256 maxCallerReward;
-    // immutable curve-shape defaults (indexer caches these for new curves — §12.38)
+    bool    pauseCreates;         // blocks Router.createToken only
+    bool    pauseBuys;            // blocks buys only — NEVER sells
+    uint128 perTokenEthCap;       // beta cap, buy-side only
+    uint128 globalEthCap;         // beta cap, buy-side only
+}
+
+struct CurveDefaults {
+    // immutable curve-shape defaults — new shape = new factory version (§6)
     uint256 virtualEth0;
     uint256 virtualToken0;
     uint256 curveSupply;
@@ -188,7 +185,7 @@ struct FactoryConfig {
 }
 ```
 
-hoodpad-contracts aligns the M1 implementation to this itemization; any divergence in the landed M1-8 struct is reported to hoodpad-architect, never silently differed.
+The landed M1-8 implementation diverged from the original single-struct itemization (one `FactoryConfig` also carrying addresses, ceilings, and curve shape); the divergence was reported per this section's rule and the split surface re-ratified as canonical on 2026-07-12 (spec §12.39 amendment — the frozen 12-field `config()` ABI was already consumed by indexer/web via the §12.38 shared codegen ABIs, and every itemized field remains on-chain readable).
 
 **Storage**
 
@@ -210,7 +207,7 @@ hoodpad-contracts aligns the M1 implementation to this itemization; any divergen
 | `curveOf`, `tokenOf`, `isCurve` | mappings | append-only |
 | `tokenCounter` | `uint256` | monotonic salt input |
 | `_stagedParams` | `CurveParameters` | transient-by-convention (written+deleted within `createToken`) |
-| Curve economics defaults (`virtualEth0` etc.) | `uint256` each | storage, owner-settable? → **No.** `immutable`, from constants.json. Changing curve shape = new factory version (§6). |
+| Curve economics defaults (`virtualEth0` etc.) | `uint256` each | storage, owner-settable? → **No.** `internal immutable`, from constants.json; exposed via `curveDefaults()` (§12.39 amendment). Changing curve shape = new factory version (§6). |
 
 **Events**
 

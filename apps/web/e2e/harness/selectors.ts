@@ -21,6 +21,8 @@ export const copy = {
   earlyBuyCap: /Early-launch buy cap: max/i,
   graduatingInterstitial: /Graduating to Uniswap V3/i,
   tradingOnV3: /Trading on Uniswap V3/i,
+  // TokenHeader status pill post-grad (verified TokenHeader.tsx: "GRADUATED → V3").
+  graduatedPill: /GRADUATED\s*→\s*V3/i,
   softConfirmed: /Soft-confirmed/i,
   postedToL1: /Posted to L1/i,
   rpcUnavailable: /on-chain read unavailable/i,
@@ -28,7 +30,9 @@ export const copy = {
   readFromChain: /read from chain/i,
   fixedSupply: /1,000,000,000 fixed/i,
   metadataMismatch: /MISMATCH/i,
-  awaitingIndex: /awaiting index/i,
+  // ConfirmationBadge TOOLTIP copy when the WS-silence flag is set (web.md §4.5):
+  // "Awaiting the indexer — retrying." — tooltip-only, hover the badge first.
+  awaitingIndex: /awaiting the indexer/i,
   degradedBanner: /Live updates degraded/i,
 } as const;
 
@@ -44,15 +48,23 @@ export const sel = {
   submitTrade: (page: Page) =>
     page.getByRole("button", { name: /^(buy|sell)\s|^connect wallet$/i }).last(),
   tradeFeed: (page: Page) => page.getByRole("list", { name: /trades?/i }).first(),
+  // TradeWidget quote rows (InfoRows): `<span>Fee</span><span>1%</span>` etc.
+  // Exact "Fee" / "Min received" labels exist ONLY in the widget (the TrustPanel
+  // says "curve fee" in prose — a previous /curve fee/i assertion passed via the
+  // panel and never checked the widget). `..` = the flex Row wrapper.
+  feeRow: (page: Page) => page.getByText("Fee", { exact: true }).locator(".."),
+  minReceivedRow: (page: Page) => page.getByText("Min received", { exact: true }).locator(".."),
   trustPanel: (page: Page) => page.getByText(copy.ownerless).locator("xpath=ancestor::*[3]"),
   tokenCard: (page: Page) => page.getByRole("link", { name: /\/t\// }),
   searchBox: (page: Page) => page.getByRole("searchbox").first(),
 } as const;
 
-/** Launch form fields — the form uses PLACEHOLDERS, not labels (verified DOM). */
+/** Launch form fields — the form uses PLACEHOLDERS, not labels (verified DOM).
+ * `exact: true` on ticker is LOAD-BEARING: the default substring match makes
+ * "MILK" also hit the NAME input ("Moonmilk"), overwriting the name. */
 export const launch = {
-  name: (page: Page) => page.getByPlaceholder("Moonmilk").first(),
-  ticker: (page: Page) => page.getByPlaceholder("MILK").first(),
+  name: (page: Page) => page.getByPlaceholder("Moonmilk", { exact: true }).first(),
+  ticker: (page: Page) => page.getByPlaceholder("MILK", { exact: true }).first(),
   description: (page: Page) => page.getByPlaceholder(/what is this token about/i).first(),
   initialBuy: (page: Page) => page.getByLabel(/initial buy/i).first(),
   fileInput: (page: Page) => page.locator('input[type="file"]').first(),

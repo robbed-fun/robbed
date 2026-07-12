@@ -6,6 +6,7 @@ import {
   buyOnChain,
   connectAs,
   expect,
+  txDeadline,
   loadDeployedAddresses,
   publicClient,
   routes,
@@ -32,7 +33,7 @@ test(
         functionName: "quoteBuy",
         args: [token.token, 10n ** 16n],
       })) as readonly bigint[];
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
+      const deadline = await txDeadline();
       // Demand more than the quote → the on-chain slippage guard must revert.
       await expect(
         publicClient.simulateContract({

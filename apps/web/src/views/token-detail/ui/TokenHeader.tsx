@@ -15,10 +15,12 @@ import { shortAddress } from "@/shared/lib/format";
 
 /**
  * Token Detail above-the-fold header (§5.2, web.md §3.2) — ROBBED_ terminal skin
- * (docs/Robbed.html "2a Token detail"). SERVER-rendered: the identity row
- * (avatar · NAME TICKER · addr·created·creator) and the stat cells (PRICE /
- * VOL 24H / 24H / MCAP / HOLDERS / BONDING) are meaningful without client JS so
- * crawlers and JS-off users get the pitch (SSR-vs-client decision, web.md).
+ * (docs/Robbed.html "2a Token detail"). Rendered inside the client island (TD-6)
+ * so the status pill + bonding cell track the LIVE token status, but still
+ * SERVER-pre-rendered: the identity row (avatar · NAME TICKER ·
+ * addr·created·creator) and the stat cells (PRICE / VOL 24H / 24H / MCAP /
+ * HOLDERS / BONDING) are meaningful without client JS so crawlers and JS-off
+ * users get the pitch (SSR-vs-client decision, web.md).
  *
  * All metrics are indexer/on-chain SUPPLIED values (§2): PRICE = `priceEth`,
  * VOL 24H = `volume24h` (ETH wei, ETH-first denomination), 24H = `change24hPct`,

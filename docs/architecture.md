@@ -115,7 +115,7 @@ Not a service — the interface layer all three consume (see §4).
 | Metadata canonicalization (`canonicalizeMetadata`, `metadataHash`) + golden fixtures | `packages/shared` `metadata.ts` — **single implementation**, api.md §5 | API (hash at publish), web (pre-sign verify), indexer (verify vs chain) |
 | Confirmation vocabulary `soft_confirmed \| posted_to_l1 \| finalized` | shared `confirmation.ts` (semantics: spec §2.1, pipeline: indexer.md §5) | all three |
 | Constants (chain 4663, WETH, LP sentence, intervals, size caps) | shared `constants.ts` | all three |
-| Full read-function ABIs → `packages/shared/src/abi/*.json` (§12.38) — **compilation-time** codegen (`forge build`, no deploy) | hoodpad-contracts (M1-3b) → shared codegen, contracts.md §7.4 | indexer (`config()` startup read, replaces env-interim), web M3-5 Trust-panel live reads (never hand-written) |
+| Full read-function ABIs → `packages/shared/src/abi/*.json` (§12.38) — **compilation-time** codegen (`forge build`, no deploy) | hoodpad-contracts (M1-3b) → shared codegen, contracts.md §7.4 | indexer (`curveDefaults()` startup read — spec §12.39 amendment — replaces env-interim), web M3-5 Trust-panel live reads (never hand-written) |
 | Deploy artifacts → generated **addresses** — **deploy-time** codegen (needs a broadcast) | hoodpad-contracts (M1-14 output) → shared codegen | indexer config, web `lib/addresses.ts` (never hand-edited) |
 
 Change protocol for any row above: the owning doc changes first, consuming agents review, architect signs off — in the docs **before** code (see [CONTRIBUTING.md](../CONTRIBUTING.md)).

@@ -201,6 +201,15 @@ export const tokenDetailSchema = tokenCardSchema.extend({
   curveAddress: addressSchema,
   v3PoolAddress: addressSchema.optional(),
   graduatedAt: z.number().int().nonnegative().optional(),
+  /**
+   * LP NFT tokenId from the `Graduated` event (indexer.md §3.3
+   * `graduations.lp_token_id`) — present iff the token has graduated. Additive
+   * optional field (2026-07-12, robbed-indexer; robbed-shared-reviewable): lets
+   * the /fees surface and clients call `LPFeeVault.collect(tokenId)` without
+   * re-reading the raw graduation log (e2e COLLECT-1 gap). uint256 → decimal
+   * string, same convention as every other uint256 on the wire.
+   */
+  lpTokenId: decimalStringSchema.optional(),
   supply: z.object({
     total: decimalStringSchema,
     curveHeld: decimalStringSchema,

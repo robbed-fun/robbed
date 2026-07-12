@@ -4,6 +4,7 @@ import {
   assertOnChain,
   assertUi,
   buyOnChain,
+  chainNow,
   expect,
   publicClient,
   routes,
@@ -27,7 +28,9 @@ test(
     });
 
     await assertIndexed("candles endpoint returns one merged series", async () => {
-      const now = Math.floor(Date.now() / 1000);
+      // CHAIN time — the fork clock is warped far ahead of the host wallclock,
+      // so a host-now window would miss the trade's candle bucket entirely.
+      const now = await chainNow();
       const res = await waitForIndexed(
         () => api.candles(token.token, "1m", now - 3600, now + 60),
         (r) => (r.candles?.length ?? 0) > 0,

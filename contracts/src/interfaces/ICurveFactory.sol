@@ -5,9 +5,11 @@ pragma solidity 0.8.35;
 ///        (spec §6, §6.4, §6.6, §10 gate 7; contracts.md §2.2)
 /// @notice The only contract with an owner (Ownable2Step; owner = Gnosis Safe treasury). The owner
 ///         can never touch live-curve economics, token supply, or the LPFeeVault (spec §6.6).
-///         Pause flags are granular: `pauseCreates`, `pauseBuys` — **no `pauseSells` exists**
+///         Pause flags are granular: `pauseCreates`, `pauseBuys` — **no sell-side pause flag exists**
 ///         (spec §6.5).
-/// @dev FROZEN interface (tests-as-spec phase). Config mutability model (contracts.md §2.2):
+/// @dev FROZEN interface (tests-as-spec phase); one ratified ADDITIVE extension since freeze:
+///      `CurveDefaults` + `curveDefaults()` (spec §12.38/§12.39 seam; LAUNCH-2), a pure view that
+///      changes no existing signature. Config mutability model (contracts.md §2.2):
 ///      curve economics are snapshotted into each curve at creation (owner changes affect future
 ///      launches only); `treasury`, `pauseBuys` and the beta caps are read live (operational,
 ///      never block sells, never alter economics).
@@ -33,6 +35,23 @@ interface ICurveFactory {
         uint256 callerReward; // permissionless graduate() incentive (spec §6.2)
         uint64 earlyWindowSeconds; // anti-sniper timestamp window (spec §12.18)
         uint128 maxEarlyBuyWei; // per-tx gross ETH cap inside the window (spec §6.5)
+    }
+
+    /// @notice Immutable factory-level curve-shape defaults — the five M0 `constants.json`
+    ///         economics snapshotted into every FUTURE curve at creation (spec §12.38/§12.39
+    ///         seam; contracts.md §2.2). Returned by {curveDefaults} so pre-create consumers
+    ///         (the Create-page starting-price / graduation / initial-buy preview — LAUNCH-2;
+    ///         the indexer startup cache) can read the shape BEFORE any curve exists.
+    /// @dev Distinct from (a) {CurveParameters} — the deploy-transient staging struct, all-zero
+    ///      outside `createToken` — and (b) the per-curve public immutables (§12.40d), which only
+    ///      exist after a curve deploys. All five fields are `immutable` on the factory: a new
+    ///      curve shape = a new factory version (spec §6), so this view can never change.
+    struct CurveDefaults {
+        uint256 virtualEth0; // initial virtual ETH reserves (curve.virtualEthWei)
+        uint256 virtualToken0; // initial virtual token reserves (curve.virtualTokenWei)
+        uint256 curveSupply; // tokens sellable on the curve, ≈793.1M e18
+        uint256 lpTranche; // LP tranche minted at graduation, ≈206.9M e18
+        uint256 graduationEth; // net-of-fee real-reserve graduation threshold (spec §12.11)
     }
 
     /// @notice Live config snapshot for Router/UI (contracts.md §2.2 `config()`).
@@ -113,9 +132,21 @@ interface ICurveFactory {
 
     // ────────────────────────────────── Views ──────────────────────────────────
 
-    /// @notice Staged curve parameters — meaningful only mid-`createToken`, read by the
-    ///         BondingCurve constructor (contracts.md §2.2).
+    /// @notice DEPLOY-TRANSIENT staging read — meaningful ONLY mid-`createToken`, consumed by
+    ///         the BondingCurve constructor via `ICurveFactory(msg.sender).curveParameters()`
+    ///         (constant-init-code CREATE2 staging pattern, contracts.md §2.2).
+    /// @dev At ANY other time this returns the ALL-ZERO struct: the staging slot is written and
+    ///      `delete`d inside `createToken`. Off-chain consumers MUST NOT read curve shape from
+    ///      here (LAUNCH-2 root cause) — use {curveDefaults} for the factory-level defaults, or
+    ///      the per-curve public immutables once a curve exists (§12.40d). Behavior is
+    ///      intentionally unchanged: the curve constructor depends on these exact semantics.
     function curveParameters() external view returns (CurveParameters memory);
+
+    /// @notice Factory-level immutable curve-shape defaults (see {CurveDefaults}). Safe to read
+    ///         at any time, including before the first curve exists — this is the canonical
+    ///         pre-create economics read for the Create-page preview (LAUNCH-2) and the indexer
+    ///         startup cache (spec §12.38/§12.39).
+    function curveDefaults() external view returns (CurveDefaults memory);
 
     /// @notice token → curve registry (append-only).
     function curveOf(address token) external view returns (address);

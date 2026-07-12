@@ -50,14 +50,53 @@ export function formatEthNumber(eth: number, opts?: { decimals?: number }): stri
   const decimals = opts?.decimals ?? 4;
   const abs = Math.abs(eth);
   const sign = eth < 0 ? MINUS_SIGN : "";
+  if (abs >= 1e21) {
+    // Review fix (2026-07-11): Number#toFixed switches to exponential notation at
+    // 1e21 ("1e+21 ETH"). Intl with `notation: "standard"` never emits e-notation,
+    // so the huge-magnitude branch keeps the same fixed zero-padded contract.
+    const huge = new Intl.NumberFormat("en-US", {
+      useGrouping: false,
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(abs);
+    return `${sign}${huge}`;
+  }
   const fixed = abs.toFixed(decimals);
   if (abs !== 0 && abs < 10 ** (1 - decimals) && Number(fixed) !== abs) {
     // 2 significant digits, zero-padded via toFixed (never trimmed):
     // 0.000001 → places 7 → "0.0000010"; 0.00034 → places 5 → "0.00034".
-    const places = Math.min(100, Math.max(decimals, 1 - Math.floor(Math.log10(abs))));
-    return `${sign}${abs.toFixed(places)}`;
+    // Review fix (2026-07-11): round to 2 sig digits FIRST and derive the places
+    // from the ROUNDED value — 0.00009999 must render "0.00010" (2 sig), not
+    // "0.000100" (places from the pre-rounded magnitude yielded 3 sig digits).
+    // The exponent comes from `toExponential` (exact, string-based) rather than
+    // Math.log10 to avoid float-epsilon flooring errors at power-of-ten edges.
+    const rounded = Number(abs.toPrecision(2));
+    const exp = Number(rounded.toExponential(1).split("e")[1]);
+    const places = Math.min(100, Math.max(decimals, 1 - exp));
+    return `${sign}${rounded.toFixed(places)}`;
   }
   return `${sign}${fixed}`;
+}
+
+/**
+ * Display-only price float (indexer `priceEth`, a display float per the shared
+ * WS/REST contract) → 2 significant digits in PLAIN decimal notation, never
+ * exponential. Review fix (2026-07-11): `toPrecision(2)` rendered early curve
+ * prices as "9.3e-10" in the trades table; Intl with `notation: "standard"`
+ * never emits e-notation (verified empirically, 2026-07-12) and
+ * `minimumSignificantDigits` retains the trailing zero ("0.0000010").
+ */
+export function formatPriceEth(price: number | null, sigDigits = 2): string {
+  if (price === null || !Number.isFinite(price)) return "—";
+  if (price === 0) return "0.0";
+  const sign = price < 0 ? MINUS_SIGN : "";
+  const text = new Intl.NumberFormat("en-US", {
+    notation: "standard",
+    useGrouping: false,
+    minimumSignificantDigits: sigDigits,
+    maximumSignificantDigits: sigDigits,
+  }).format(Math.abs(price));
+  return `${sign}${text}`;
 }
 
 /** Token amount from a wei decimal string (18 decimals) → compact (1.24M). */
@@ -82,8 +121,21 @@ export function formatCompact(n: number): string {
 export function formatPercent(pct: number | null, opts?: { signed?: boolean }): string {
   if (pct === null || !Number.isFinite(pct)) return "—";
   const s = Math.abs(pct).toFixed(1);
-  if (pct < 0) return `${MINUS_SIGN}${s}%`;
-  return opts?.signed && pct > 0 ? `+${s}%` : `${s}%`;
+  // Review fix (2026-07-11): branch the sign on the ROUNDED display value —
+  // −0.04 rounds to "0.0" and must render unsigned "0.0%", never "−0.0%".
+  const roundsToZero = Number(s) === 0;
+  if (pct < 0 && !roundsToZero) return `${MINUS_SIGN}${s}%`;
+  return opts?.signed && pct > 0 && !roundsToZero ? `+${s}%` : `${s}%`;
+}
+
+/**
+ * Companion to `formatPercent` for tone/tint decisions: true when the value
+ * ROUNDS to the "0.0%" display (1-decimal contract). A delta that displays as
+ * zero must tint neutral, not red/green (review fix 2026-07-11 — "−0.0%" red).
+ */
+export function percentRoundsToZero(pct: number | null): boolean {
+  if (pct === null || !Number.isFinite(pct)) return true;
+  return Number(Math.abs(pct).toFixed(1)) === 0;
 }
 
 /** Relative age from a unix-seconds timestamp (indexer block time). */

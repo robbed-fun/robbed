@@ -42,7 +42,13 @@ test(
       await page.goto(`${routes.discover}?sort=newest&filter=pregrad`);
       await expect(page).toHaveURL(/sort=newest/);
       await expect(page).toHaveURL(/filter=pregrad/);
-      await expect(page.getByText(token.ticker).first()).toBeVisible();
+      // Grid rows are <a href="/t/<addr>"> whose text carries the NAME + the
+      // indexer-computed mcap cell (the ticker text only appears in the
+      // trending carousel, which is volume-gated — never rely on it here).
+      const row = page.locator(`a[href="/t/${token.token.toLowerCase()}"]`).first();
+      await expect(row).toBeVisible();
+      await expect(row).toContainText(new RegExp(token.name, "i"));
+      await expect(row).toContainText(/mcap/i);
     });
   },
 );

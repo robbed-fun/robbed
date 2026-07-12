@@ -33,11 +33,18 @@ test.describe("TD-12", () => {
         const page = await noJs.newPage();
         await page.goto(`${STACK.webUrl}${routes.token(token.token)}`);
         await expect(page.locator('meta[property="og:image"]')).toHaveCount(1);
-        await expect(page.getByText(/SHAR/i).first()).toBeVisible();
-        await noJs.close();
+        await expect(page.getByText(new RegExp(token.ticker, "i")).first()).toBeVisible();
 
-        // (2) OG route returns a real PNG at the spec dimensions.
-        const res = await page.request.get(`${STACK.webUrl}${routes.og(token.token)}`);
+        // (2) The share unit a crawler actually fetches is the og:image META
+        // target — follow it (the implementation serves the satori PNG from the
+        // API `/v1/og/<address>.png`, not the catalog's literal
+        // `/t/[address]/opengraph-image` — divergence noted to the architect).
+        // MUST run BEFORE the context closes (page.request dies with it).
+        const ogUrl = await page
+          .locator('meta[property="og:image"]')
+          .getAttribute("content");
+        expect(ogUrl).toBeTruthy();
+        const res = await page.request.get(ogUrl!);
         expect(res.status()).toBe(200);
         expect(res.headers()["content-type"]).toContain("image/png");
         const buf = await res.body();
@@ -45,6 +52,7 @@ test.describe("TD-12", () => {
         const width = buf.readUInt32BE(16);
         const height = buf.readUInt32BE(20);
         expect([width, height]).toEqual([1200, 630]);
+        await noJs.close();
       });
     },
   );

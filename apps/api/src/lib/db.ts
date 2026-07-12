@@ -58,6 +58,11 @@ export interface TokenDetailRow extends TokenListRow {
   curve_balance: string | null;
   /** Token balance held by the V3 pool (supply.lpTranche). */
   pool_balance: string | null;
+  /**
+   * LP NFT tokenId from `graduations.lp_token_id` (LEFT JOIN; null pre-grad).
+   * Surfaces as the detail DTO's optional `lpTokenId` (shared api-types).
+   */
+  lp_token_id: string | null;
   verification: Pick<
     MetadataVerificationRow,
     "onchain_hash" | "computed_hash" | "status" | "verified_at"
@@ -158,10 +163,22 @@ export interface Db {
   }): Promise<CandleRow[]>;
   getHolders(input: { token: string; limit: number }): Promise<HolderJoinedRow[]>;
   getFeeCollections(token: string): Promise<FeeCollectionRow[]>;
+  /**
+   * `graduations.lp_token_id` for a graduated token (null pre-grad) — the LP
+   * NFT the fees dashboard reads `tokensOwed` for (UncollectedFeesReader input).
+   */
+  getLpTokenId(token: string): Promise<string | null>;
 
   // ── portfolio (spec §5.4; api.md §3) ──────────────────────────────────────
   /** Per-address materialized roll-up backing GET /v1/portfolio/:address; null when the address never appeared. */
   getAddressPnl(address: string): Promise<AddressPnlRow | null>;
+  /**
+   * Live `count(*)` of the address's curve+V3 trades, straight off `trades`
+   * (uses `trades_trader_idx`). The summary's `tradeCount` reads THIS, not the
+   * advisory `address_pnl.trade_count` — the roll-up job ticks every ~60s, so a
+   * fresh trade (or a fresh DB before the first tick) would show 0 (PORT-1).
+   */
+  countAddressTrades(address: string): Promise<number>;
   /**
    * ALL priceable holdings for an address (balance > 0), unpaginated — the
    * summary aggregates totalValueEth + unrealized PnL over the whole set. Bounded

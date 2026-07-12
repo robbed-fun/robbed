@@ -81,6 +81,8 @@ export function fixtureToken(overrides: Partial<TokenDetailRow> = {}): TokenDeta
     creator_tokens_created: 3,
     curve_balance: (800_000_000n * 10n ** 18n).toString(),
     pool_balance: null,
+    lp_token_id: null, // pre-grad default; graduated fixtures override
+
     verification: {
       onchain_hash: "0x" + "ab".repeat(32),
       computed_hash: "0x" + "ab".repeat(32),
@@ -197,8 +199,19 @@ export class FakeDb implements Db {
   async getFeeCollections() {
     return [];
   }
+  async getLpTokenId(a: string) {
+    return this.tokens.get(a)?.lp_token_id ?? null;
+  }
   async getAddressPnl(a: string) {
     return this.pnl.get(a) ?? null;
+  }
+  /** Live trade count — from addressTrades, overridable via `tradeCounts`. */
+  tradeCounts = new Map<string, number>();
+  async countAddressTrades(a: string) {
+    return (
+      this.tradeCounts.get(a) ??
+      this.addressTrades.filter((t) => t.trader === a).length
+    );
   }
   async getAllHoldings(a: string) {
     return this.holdings.get(a) ?? [];
