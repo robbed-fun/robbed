@@ -86,53 +86,14 @@ describe("copy-lint · forbidden copy (spec §1/§2/§12.14)", () => {
   });
 
   // ── .json leg (W4-A hardening, 2026-07-12) ──────────────────────────────────
-  // DECISION (hoodpad-frontend; basis recorded): the demo fixture
-  // `src/shared/mock/robbed-mock.json` MUST keep the literal sentence — it is
-  // DATA validated against the shared `z.literal(LP_COPY)` schema (api-types
-  // `trust.lpCopy`), and JSON cannot reference a TS constant. So the fixture is
-  // the ONE allowlisted .json, and a companion test pins its every occurrence
-  // byte-identical to `LP_COPY` (drift of either side fails loud). Any OTHER
-  // .json under app/+src carrying the sentence is a violation.
-  const LP_JSON_ALLOWLIST = [join("src", "shared", "mock", "robbed-mock.json")];
-
-  it("no .json under app/+src carries the LP sentence (allowlist: the mock fixture)", () => {
+  // The LP sentence lives ONLY in the shared `LP_COPY` constant — no .json under
+  // app/+src may carry it (JSON cannot reference the TS constant, so any
+  // occurrence is a hardcoded copy that can drift). Zero allowlist entries.
+  it("no .json under app/+src carries the LP sentence", () => {
     const hits = ROOTS.flatMap((r) => walk(r, /\.json$/))
-      .filter((f) => !LP_JSON_ALLOWLIST.some((x) => f.endsWith(x)))
       .filter((f) => read(f).includes(LP_COPY))
       .map(rel);
     expect(hits, `LP sentence hardcoded in .json: ${hits.join(", ")}`).toEqual([]);
-  });
-
-  it("the allowlisted mock fixture's LP copy is byte-identical to the shared constant", () => {
-    const fixture = ROOTS.flatMap((r) => walk(r, /\.json$/)).find((f) =>
-      LP_JSON_ALLOWLIST.some((x) => f.endsWith(x)),
-    );
-    expect(fixture, "mock fixture missing — update LP_JSON_ALLOWLIST").toBeTruthy();
-
-    // Walk every string value; anything that LOOKS like the LP sentence (shares
-    // the constant's opening fragment — derived from LP_COPY, never spelled out
-    // here) must equal it exactly. At least one occurrence must exist, so the
-    // allowlist can never go vacuous.
-    const probe = LP_COPY.slice(0, 12);
-    const offenders: string[] = [];
-    let occurrences = 0;
-    const visit = (node: unknown, path: string): void => {
-      if (typeof node === "string") {
-        if (node.includes(probe)) {
-          occurrences += 1;
-          if (node !== LP_COPY) offenders.push(`${path}: ${JSON.stringify(node)}`);
-        }
-        return;
-      }
-      if (Array.isArray(node)) node.forEach((v, i) => visit(v, `${path}[${i}]`));
-      else if (node && typeof node === "object") {
-        for (const [k, v] of Object.entries(node)) visit(v, `${path}.${k}`);
-      }
-    };
-    visit(JSON.parse(read(fixture!)), "$");
-
-    expect(occurrences, "fixture no longer carries the LP field — drop the allowlist entry").toBeGreaterThan(0);
-    expect(offenders, `fixture LP copy drifted from LP_COPY:\n${offenders.join("\n")}`).toEqual([]);
   });
 });
 

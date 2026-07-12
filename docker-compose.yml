@@ -375,6 +375,10 @@ services:
       <<: *dev-env
       # Browser-visible (NEXT_PUBLIC_) — must use HOST-mapped 4XXX ports, not service DNS names.
       NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-4001}
+      # Split-horizon API base: SSR fetches run INSIDE this container, where the browser URL
+      # (host-mapped localhost:4001) is ECONNREFUSED — server-only code prefers this service-DNS
+      # base (api service's internal port 3001); the browser keeps NEXT_PUBLIC_API_BASE_URL.
+      API_BASE_URL_INTERNAL: http://api:3001
       NEXT_PUBLIC_WS_URL: ws://localhost:${WS_PORT:-4002}
       NEXT_PUBLIC_R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4900}/${R2_BUCKET:-robbed-assets}
       # Browser → host-mapped anvil fork (chain 4663). anvil serves ws on the same port.
@@ -393,6 +397,18 @@ services:
       # NEXT_PUBLIC_E2E_ACCOUNTS=<addr0,..,addr3> docker compose up -d web`.
       NEXT_PUBLIC_E2E: ${NEXT_PUBLIC_E2E:-}
       NEXT_PUBLIC_E2E_ACCOUNTS: ${NEXT_PUBLIC_E2E_ACCOUNTS:-}
+      # Fork contract addresses for the e2e build (addresses.ts E2E override —
+      # apps/web/src/shared/config/addresses.ts). The ephemeral fork's deploys are
+      # NOT codegen'd into @robbed/shared, so without these `requireAddress()`
+      # throws and no UI-driven tx can ever be sent. Values come from the
+      # deploychain one-shot output `tools/localstack/out/local.env`
+      # (ROUTER_ADDRESS → NEXT_PUBLIC_E2E_ROUTER, etc.). Only read when
+      # NEXT_PUBLIC_E2E=true; unset (prod-shaped) by default.
+      NEXT_PUBLIC_E2E_ROUTER: ${NEXT_PUBLIC_E2E_ROUTER:-}
+      NEXT_PUBLIC_E2E_CURVE_FACTORY: ${NEXT_PUBLIC_E2E_CURVE_FACTORY:-}
+      NEXT_PUBLIC_E2E_LP_FEE_VAULT: ${NEXT_PUBLIC_E2E_LP_FEE_VAULT:-}
+      NEXT_PUBLIC_E2E_MIGRATOR: ${NEXT_PUBLIC_E2E_MIGRATOR:-}
+      NEXT_PUBLIC_E2E_TREASURY: ${NEXT_PUBLIC_E2E_TREASURY:-}
     volumes:
       - .:/workspace
       - robbed_pnpm_store:/pnpm-store

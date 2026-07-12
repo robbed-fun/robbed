@@ -29,8 +29,14 @@ export async function generateTokenMetadata(address: string): Promise<Metadata> 
     const description =
       token.description?.slice(0, 200) ||
       `${token.name} on ${BRAND} — ${AMM_TAGLINE} on Robinhood Chain.`;
-    // Absolute URL from env (§2 — never inline an origin). apiBaseUrl() strips
-    // any trailing slash, so this composes to exactly one `/v1/og/…` segment.
+    // Absolute URL from env (§2 — never inline an origin). DELIBERATELY the
+    // PUBLIC base, NOT the split-horizon `env.apiFetchBaseUrl()` (web.md §2.3):
+    // generateMetadata runs server-side, but this URL is emitted into the HTML
+    // head for EXTERNAL crawlers (X/Telegram/Discord), which fetch it from
+    // OUTSIDE our network — swapping in `API_BASE_URL_INTERNAL` would make
+    // every share card point at an unreachable compose-internal host. Do not
+    // "fix" this to the internal base. apiBaseUrl() strips any trailing slash,
+    // so this composes to exactly one `/v1/og/…` segment.
     const ogImageUrl = `${env.apiBaseUrl()}/v1/og/${normalized}.png`;
     const ogImage = {
       url: ogImageUrl,

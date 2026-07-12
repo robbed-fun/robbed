@@ -112,29 +112,13 @@ describe("formatUsd — never a bare USD figure (spec §2)", () => {
   });
 });
 
-describe("formatUsd — demo-mode compact (Gap 2), gated by NEXT_PUBLIC_MOCK_DATA", () => {
-  const asOf = "2026-07-10T12:00:00.000Z";
-  const usd = (n: string): UsdValue => ({ usd: n, ethUsd: "3200", asOf });
-
-  it("prod path (flag off) keeps FULL precision", () => {
-    const prev = process.env.NEXT_PUBLIC_MOCK_DATA;
-    delete process.env.NEXT_PUBLIC_MOCK_DATA;
-    expect(formatUsd(usd("610000")).text).toBe("$610,000");
-    process.env.NEXT_PUBLIC_MOCK_DATA = prev;
-  });
-
-  it("demo path (flag on) renders compact, byte-for-byte matching the mockup labels", () => {
-    const prev = process.env.NEXT_PUBLIC_MOCK_DATA;
-    process.env.NEXT_PUBLIC_MOCK_DATA = "true";
-    // Values + labels straight from docs/Robbed.html (ROBBED_ terminal).
-    expect(formatUsd(usd("610000")).text).toBe("$610K");
-    expect(formatUsd(usd("1200000")).text).toBe("$1.2M");
-    expect(formatUsd(usd("4100000")).text).toBe("$4.1M");
-    expect(formatUsd(usd("240000")).text).toBe("$240K");
-    expect(formatUsd(usd("820000")).text).toBe("$820K");
-    expect(formatUsd(usd("12000")).text).toBe("$12K");
-    expect(formatUsd(usd("402000")).text).toBe("$402K");
-    if (prev === undefined) delete process.env.NEXT_PUBLIC_MOCK_DATA;
-    else process.env.NEXT_PUBLIC_MOCK_DATA = prev;
+describe("formatUsd — full precision, never compact (§2 source fidelity)", () => {
+  it("renders the indexer figure verbatim (no compact notation)", () => {
+    const v: UsdValue = {
+      usd: "610000",
+      ethUsd: "3200",
+      asOf: "2026-07-10T12:00:00.000Z",
+    };
+    expect(formatUsd(v).text).toBe("$610,000");
   });
 });

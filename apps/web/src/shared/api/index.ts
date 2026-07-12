@@ -20,7 +20,6 @@ import {
 import type { z } from "zod";
 
 import { env } from "@/shared/lib/env";
-import { resolveMock } from "@/shared/mock/mock-api";
 
 /**
  * Typed REST client over the FROZEN `@robbed/shared` contract (api.md §3;
@@ -58,13 +57,10 @@ async function apiGet<T>(
   schema: z.ZodType<T>,
   opts: FetchOpts = {},
 ): Promise<T> {
-  // DEMO MODE (task A): serve the mock fixture, re-validated with the SAME frozen
-  // schema so the demo can never drift from the contract. Strictly gated — this
-  // branch is dead code when the flag is off.
-  if (env.mockData()) {
-    return schema.parse(resolveMock(path));
-  }
-  const res = await fetch(`${env.apiBaseUrl()}${path}`, {
+  // Split-horizon base (web.md §2.3): SSR fetches prefer the server-only
+  // API_BASE_URL_INTERNAL (compose-internal origin); browsers always resolve
+  // to NEXT_PUBLIC_API_BASE_URL. Single resolution point in shared/lib/env.ts.
+  const res = await fetch(`${env.apiFetchBaseUrl()}${path}`, {
     headers: { accept: "application/json" },
     signal: opts.signal,
     ...(opts.revalidate !== undefined
@@ -80,7 +76,7 @@ async function apiPost<T>(
   schema: z.ZodType<T>,
   headers?: Record<string, string>,
 ): Promise<T> {
-  const res = await fetch(`${env.apiBaseUrl()}${path}`, {
+  const res = await fetch(`${env.apiFetchBaseUrl()}${path}`, {
     method: "POST",
     headers: { accept: "application/json", ...headers },
     body,

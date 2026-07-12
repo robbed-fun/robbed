@@ -340,6 +340,9 @@ services:
     environment:
       <<: *dev-env
       NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-4001}
+      # MIRROR of docker-compose.yml split-horizon API base: SSR (in-container) uses the
+      # service-DNS api:3001; the browser keeps the host-mapped NEXT_PUBLIC_API_BASE_URL.
+      API_BASE_URL_INTERNAL: http://api:3001
       NEXT_PUBLIC_WS_URL: ws://localhost:${WS_PORT:-4002}
       NEXT_PUBLIC_R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4900}/${R2_BUCKET:-robbed-assets}
       NEXT_PUBLIC_RPC_HTTP: ${TESTNET_RPC_URL:?TESTNET_RPC_URL is required — official Robinhood testnet RPC (spec §13 / Phase T; never invented). See docs/runbooks/docker.md 'Testnet stack'.}

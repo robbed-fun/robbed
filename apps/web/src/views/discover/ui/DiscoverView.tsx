@@ -4,8 +4,6 @@ import { LiveStatusBanner } from "@/widgets/live-status-banner";
 import { MobileNav } from "@/widgets/mobile-nav";
 import { TrendingCarousel } from "@/widgets/trending-carousel";
 import { getTokens } from "@/shared/api";
-import { env } from "@/shared/lib/env";
-import { MOCK_EVENT_TAPE } from "@/shared/mock/mock-api";
 
 /**
  * Discover `/` (§5.1) — ROBBED_ terminal redesign (docs/Robbed.html "2d").
@@ -52,10 +50,7 @@ export default async function DiscoverView() {
       <main className="mx-auto max-w-6xl pb-16 md:px-4 md:py-4 md:pb-4">
         <div className="border-y border-border bg-bg md:border">
           <TrendingCarousel tokens={trending} />
-          <EventTape
-            tokens={registryTokens}
-            mockEntries={env.mockData() ? MOCK_EVENT_TAPE : undefined}
-          />
+          <EventTape tokens={registryTokens} />
         </div>
       </main>
       <MobileNav />
