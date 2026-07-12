@@ -99,7 +99,8 @@ describe("copy-lint · forbidden copy (spec §1/§2/§12.14)", () => {
 
 // ── (2) address literals — spec §9 / web.md §2.3 ──────────────────────────────
 // Only WETH (in shared/lib/chain.ts, itself sourced from @robbed/shared) and the
-// generated shared/config/addresses.ts may carry a 40-hex literal.
+// hand-authored address seam shared/config/addresses.ts (deriving from the
+// generated @robbed/shared map) may carry a 40-hex literal.
 
 describe("copy-lint · no inline address literals (spec §9)", () => {
   const ADDRESS_EXEMPT = [

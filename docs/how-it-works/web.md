@@ -72,11 +72,17 @@ apps/web/
     │   │                         //     (RETIRED with §12.50(f): token-grid/, king-of-the-hill-hero/,
     │   │                         //      launch-ticker/, site-header/; token-og/ moved with OG → API, §6)
     │   ├── price-chart/ · trade-widget/ · trade-feed/ · trust-panel/ · holder-table/
-    │   └── live-status-banner/
+    │   ├── live-status-banner/
+    │   └── network-banner/       //   onboarding-friction strip (all views): composes switch-network +
+    │                             //     get-testnet-eth with wrong-network-first precedence; e2e-inert
     ├── features/                 // user actions / interactions
     │   ├── search-tokens/        //   ui/SearchBox + search query logic
     │   ├── launch-token/         //   the create-token flow (slice name unchanged by the /create route rename)
-    │   └── connect-wallet/       //   ui/WalletConnectButton (RainbowKit ConnectButton wrapper)
+    │   ├── connect-wallet/       //   ui/WalletConnectButton (RainbowKit ConnectButton wrapper)
+    │   ├── switch-network/       //   wrong-network guard: model/use-network-guard (one-shot auto
+    │   │                         //     useSwitchChain + manual retry) + presentational WrongNetworkBanner
+    │   └── get-testnet-eth/      //   faucet CTA (TESTNET target only): config/faucets (official §12.52
+    │                             //     URLs, ?address= prefill) + zero-balance trigger + ui/FaucetCta
     ├── entities/                 // business-domain models: ui/ + model/ + (api/ when a slice needs its own) + index.ts
     │   ├── token/ · trade/ · holder/ · curve/
     │   └── //   FUTURE (Phase P): entities/portfolio (holdings/activity per address)
@@ -87,10 +93,12 @@ apps/web/
         │   │                     //     EmptyState, ErrorState, AddressLink, TokenAvatar) + index.ts
         │   └── kit/              //   vendored shadcn primitives (button, input, textarea, …) restyled to the
         │                         //     terminal tokens — color-lint EXEMPT
-        ├── lib/                  //   chain.ts (defineChain 4663; WETH from @robbed/shared), wagmi.ts, ws.tsx,
+        ├── lib/                  //   chain.ts (defineChain, env-selected target 4663|46630 per §12.55;
+        │                         //     WETH from the shared per-chain registry), wagmi.ts, ws.tsx,
         │                         //     ws-client.ts, query-keys.ts, format.ts, env.ts, utils.ts, wallets/, og/
         ├── api/                  //   index.ts — typed REST client over the frozen @robbed/shared contract
-        └── config/              //   addresses.ts (GENERATED — never hand-edited), copy.ts (LP/AMM copy + BRAND)
+        └── config/              //   addresses.ts (hand-authored derivation over the GENERATED
+                                  //     @robbed/shared map — NOT a codegen target), copy.ts (LP/AMM copy + BRAND)
 
 apps/web/tests/                   // Vitest units (outside the layer graph)
 apps/web/e2e/                     // Playwright specs (§8 of this doc)
@@ -116,31 +124,29 @@ Rules:
 - Client components hydrate TanStack Query with `initialData` passed from the server component (no double-fetch flash).
 - URL state after §12.50(f): the Discover sort/filter `searchParams` surface is **retired** (sorts/filters remain API capabilities). URL state remains for the `?q=` search deep link (`UrlSeededSearchBox` reads it via `useSearchParams` under a Suspense boundary — Next 16 static-prerender rule) and `/portfolio?address=`.
 
-### 2.3 Chain config — `lib/chain.ts` (§2, §9)
+### 2.3 Chain config — `lib/chain.ts` (§2, §9, §12.55)
 
 ```ts
 import { defineChain } from "viem";
+import { getDeployment } from "@robbed/shared/addresses";
+
+const TARGET_CHAIN_ID = env.chainId();          // NEXT_PUBLIC_CHAIN_ID (registry-validated) | 4663
+const facts = CHAIN_FACTS[TARGET_CHAIN_ID];     // official name + explorer per chain — transcribed, never invented
 
 export const robinhoodChain = defineChain({
-  id: 4663,
-  name: "Robinhood Chain",
+  id: TARGET_CHAIN_ID,                          // 4663 mainnet (default) | 46630 testnet
+  name: facts.name,                             // "Robinhood Chain" | "Robinhood Chain Testnet"
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: {
-    default: { http: [process.env.NEXT_PUBLIC_RPC_HTTP!], webSocket: [process.env.NEXT_PUBLIC_RPC_WS!] },
-  },
-  blockExplorers: {
-    default: { name: "Blockscout", url: "https://robinhoodchain.blockscout.com" },
-  },
-  contracts: {
-    weth9: { address: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73" }, // official docs (§2)
-    // multicall3: OPEN — verify canonical 0xcA11...  deployed on 4663 (this doc §9.7)
-  },
+  rpcUrls: { default: { http: [env.rpcHttp()] /* + optional webSocket */ } },
+  blockExplorers: { default: { name: "Blockscout", url: facts.explorerUrl } },
+  contracts: { weth9: { address: getDeployment(TARGET_CHAIN_ID)?.external.weth } },
 });
 ```
 
-- RPC endpoints from env only. `NEXT_PUBLIC_RPC_HTTP`, `NEXT_PUBLIC_RPC_WS` (Alchemy per §8).
+- **Per-target chain selection (§12.55, fixed 2026-07-12):** one build compiles exactly ONE chain. `env.chainId()` reads `NEXT_PUBLIC_CHAIN_ID`; when set it must resolve in the shared deployment registry (`getDeployment` — env *selects*, the registry *defines*; unknown id throws), unset ⇒ the compile-time mainnet `CHAIN_ID` (4663). Official facts (name/explorer) live in a per-chain map inside `lib/chain.ts` — 4663 from CLAUDE.md, 46630 from runbooks/testnet.md §1 — a registered chain without recorded facts (31337) fails loud. The testnet compose stack injects `NEXT_PUBLIC_CHAIN_ID=46630` (docker-compose.testnet.yml `web.environment`); `apps/web/.env.testnet` is the value sheet for the Workers testnet build. **Why the whole object must be official:** wagmi 2.18's injected connector `switchChain` falls back to `wallet_addEthereumChain` built from this object (name/nativeCurrency/`rpcUrls.default.http[0]`/blockExplorers — verified from installed source 2026-07-12), so wallets receive exactly these params. Proven in `tests/chain.test.ts`.
+- RPC endpoints from env only. `NEXT_PUBLIC_RPC_HTTP`, `NEXT_PUBLIC_RPC_WS` (Alchemy per §8). On testnet the WS JSON-RPC is the key-gated Alchemy endpoint or nothing — **never** the sequencer feed `wss://feed.testnet…` (a block feed, not JSON-RPC).
 - **Split-horizon API base (SSR vs browser, fixed 2026-07-12):** every data-plane REST fetch (`src/shared/api` + `src/entities/portfolio/api`) resolves its origin through ONE point — `env.apiFetchBaseUrl()` in `src/shared/lib/env.ts`. Server-side (`typeof window === "undefined"`) it prefers the **server-only** `API_BASE_URL_INTERNAL` (no `NEXT_PUBLIC_` prefix ⇒ never inlined into the client bundle; runtime-read on the server — nextjs.org env-variables guide, v16.2.10, verified 2026-07-12), falling back to `NEXT_PUBLIC_API_BASE_URL` when unset; browsers always use the public base. Rationale: inside the compose stack (dev + CI e2e) the public base is a HOST-mapped port (`http://localhost:4001`) that is ECONNREFUSED from within the web container — compose sets `API_BASE_URL_INTERNAL=http://api:3001`; host-run dev and prod (Workers) leave it unset and behave exactly as before. **Exception — og:image stays PUBLIC:** `views/token-detail/model/metadata.ts` builds the `og:image` absolute URL from `env.apiBaseUrl()` on purpose; `generateMetadata` runs server-side but the URL is fetched by external crawlers from outside our network, so the internal base must never be used there. Not touched by the split: the WS client (browser-only), wagmi RPC transports (client-side). Resolution order proven in `tests/env.test.ts`.
-- **WETH is the only inline address literal in the entire app.** Everything else imports from `lib/addresses.ts`, generated from deploy artifacts (M1 output) — the pre-commit/CI grep enforces this (§8.3 of this doc).
+- **Zero inline address literals in the entire app (tightened 2026-07-12):** WETH now also resolves from the shared per-chain deployment registry (`getDeployment(chainId).external.weth` — 46630's WETH differs from mainnet's, §12.52), and `shared/config/addresses.ts` derives the robbed six + the V3 set + `WETH` for the TARGET chain (testnet build → the §12.52 testnet V3 set, mainnet → §12.28). Consumers (`entities/curve` V3 builders, trade-widget spender) import `V3`/`WETH` from `@/shared/config/addresses` — never `UNISWAP_V3`/`WETH_ADDRESS` from `@robbed/shared` directly (those are mainnet-only constants). The pre-commit/CI grep enforces this (§8.3 of this doc).
 - Never use `block.number` anywhere, including UI display of "block height" — it is an L1 estimate on Orbit (CLAUDE.md). If a block/sequence number is ever displayed, it comes from the indexer's event metadata.
 
 ### 2.4 Wallet config — `lib/wagmi.ts` (§9, §12.2)
@@ -152,7 +158,9 @@ import { injectedWallet, robinhoodWallet, walletConnectWallet } from "@rainbow-m
 
 - Wallet groups: **injected · Robinhood Wallet · WalletConnect** — exactly these (§9). `robinhoodWallet` is in RainbowKit's wallet list; verify behavior on chain 4663 during M3 (it is WalletConnect-based under the hood).
 - `WALLETCONNECT_PROJECT_ID` from env (open item, this doc §9.6).
-- Single-chain app: `chains: [robinhoodChain]`; RainbowKit prompts network switch if wallet is elsewhere.
+- Single-chain app: `chains: [robinhoodChain]` (the env-selected target, §2.3); RainbowKit's ConnectButton still shows its built-in "Wrong network" chip when the wallet is elsewhere.
+- **Wrong-network popup + auto-switch (2026-07-12, `features/switch-network` + `widgets/network-banner`):** on connect and on every `chainChanged` (both surfaced by `useAccount().chainId` re-renders), a wallet chain ≠ target renders a terminal-mono banner and fires **exactly one** automatic `useSwitchChain().switchChain({ chainId: target })` per mismatch episode (keyed connector.uid + wrong chain id — never a popup loop); a declined request leaves a manual "Switch network" retry. The injected connector's `wallet_addEthereumChain` fallback (error 4902) proposes the official params straight from the chain object; WalletConnect wallets receive the same request over the WC session. Complements (never fights) RainbowKit's built-in chip; the single `useNetworkGuard` instance lives in the widget so the banner stays presentational. E2E-inert: the mock connector is always on the configured chain AND both features hard-gate on `NEXT_PUBLIC_E2E`. Proven in `tests/network-banner.test.tsx`.
+- **Faucet CTA (testnet target only, `features/get-testnet-eth`):** wallet connected on the testnet target with native balance exactly 0 (wagmi `useBalance`, gated query) → banner linking the official faucet with the connected address prefilled (`https://faucet.testnet.chain.robinhood.com/?address=…`) + the verified Chainlink/QuickNode fallbacks (spec §12.52; runbooks/testnet.md §1/§3). URLs live in the slice's `config/` segment, double-gated on registry `mode === "testnet"` — never rendered on mainnet/local; all links go through the shared https-only `ExtLink` guard (ERR-12). Dismissible per session (`sessionStorage`); wrong-network takes precedence (widget order + the CTA's own on-target requirement). Proven in `tests/faucet-config.test.ts` + `tests/faucet-cta.test.tsx`.
 - No ERC-4337, no smart-account connectors, no gas sponsorship paths (Phase 2, §5.4/§12.2).
 
 ### 2.5 Providers — `app/providers.tsx`
