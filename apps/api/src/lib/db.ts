@@ -15,7 +15,9 @@ import type {
   AddressPnlRow,
   AnchorCandle,
   BalanceRow,
+  BotFlag,
   CandleRow,
+  CompetitorSnapshotRow,
   ConfirmationWatermarksRow,
   EthUsdSnapshotRow,
   FeeCollectionRow,
@@ -67,6 +69,20 @@ export interface TokenDetailRow extends TokenListRow {
 
 export interface HolderJoinedRow extends BalanceRow {
   flags: Pick<AddressFlagsRow, "flags" | "cluster_id"> | null;
+}
+
+/**
+ * §8.5 advisory bot-flag summary over a token's CURRENT holders (api.md §3.7,
+ * D-4/M2-13). Query artifact, not a wire shape — the route zero-fills `byFlag`
+ * into the full shared `BotFlag` record. Advisory only (§8.4/§8.5).
+ */
+export interface TokenFlagSummary {
+  /** Holders (balance > 0) carrying at least one bot flag. */
+  flaggedHolders: number;
+  /** Distinct funder clusters among the flagged holders. */
+  clusterCount: number;
+  /** Per-flag holder counts; flags no holder carries are simply absent. */
+  byFlag: Partial<Record<BotFlag, number>>;
 }
 
 /**
@@ -189,6 +205,22 @@ export interface Db {
     cursorToken: string | null;
     limit: number;
   }): Promise<TokenListRow[]>;
+
+  // ── internal dashboard (D-4; api.md §3.7) — read-only, advisory §8.5 ──────
+  /** `token_flow_stats` row for one token; null until the flow job computes. */
+  getTokenFlowStats(token: string): Promise<TokenFlowStatsRow | null>;
+  /** Bot-flag counts over the token's current holders (M2-13 flow quality). */
+  getTokenFlagSummary(token: string): Promise<TokenFlagSummary>;
+  /**
+   * `competitor_snapshots` newest-first (M2-14; Gate G-A.2). Keyset cursor
+   * `(captured_at, source)` DESC — rows are shared `CompetitorSnapshotRow`
+   * verbatim (§2: source + captured_at always present, never fabricated).
+   */
+  listCompetitorSnapshots(input: {
+    cursorCapturedAt: string | null;
+    cursorSource: string | null;
+    limit: number;
+  }): Promise<CompetitorSnapshotRow[]>;
 
   // ── stats ─────────────────────────────────────────────────────────────────
   getStats(nowSec: number): Promise<{

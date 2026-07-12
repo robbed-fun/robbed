@@ -18,6 +18,7 @@ import { candleRoutes } from "./routes/candles";
 import { feeRoutes } from "./routes/fees";
 import { healthRoutes } from "./routes/health";
 import { holderRoutes } from "./routes/holders";
+import { internalRoutes } from "./routes/internal";
 import { metaRoutes } from "./routes/meta";
 import { metadataRoutes } from "./routes/metadata";
 import { ogRoutes } from "./routes/og";
@@ -51,6 +52,8 @@ export function createApp(deps: AppDeps) {
   app.use("/v1/metadata", rateLimit(rlDeps, ROUTE_LIMITS.metadata));
   app.use("/v1/search", rateLimit(rlDeps, ROUTE_LIMITS.search));
   app.use("/v1/admin/*", rateLimit(rlDeps, ROUTE_LIMITS.admin));
+  // Internal dashboard (api.md §3.7) — admin-SIWE-gated, same limit class.
+  app.use("/internal/*", rateLimit(rlDeps, ROUTE_LIMITS.admin));
   // Reads: everything else under /v1 except health probes (never rate-limited).
   const reads = rateLimit(rlDeps, ROUTE_LIMITS.reads);
   app.use("/v1/tokens", reads);
@@ -82,6 +85,7 @@ export function createApp(deps: AppDeps) {
   app.route("/", metadataRoutes(deps));
   app.route("/", ogRoutes(deps));
   app.route("/", adminRoutes(deps));
+  app.route("/", internalRoutes(deps));
 
   return app;
 }

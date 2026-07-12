@@ -41,6 +41,11 @@ tags:
     description: Confirmations, ETH/USD, health (spec §2, §2.1)
   - name: admin
     description: Moderation admin — SIWE session auth, listing visibility only (spec §8.4)
+  - name: internal
+    description: >-
+      Internal ops dashboard — read-only, admin-SIWE-gated (D-4, decisions.md §15;
+      api.md §3.7). Feeds Gate G-A.1/G-A.2 (spec §14). Advisory-only (spec §8.4/§8.5):
+      never gates chain state, listing, or any user path. Not consumed by the public frontend.
 
 paths:
   /v1/uploads/image:
@@ -675,22 +680,26 @@ paths:
       operationId: readyz
       summary: Readiness probe — DB + Redis + R2 checks (gate-7)
       description: >-
-        Data-carrying probe (k8s-style): BOTH the 200 and the 503 return the same
-        `{ data: { ok, checks }, error: null }` envelope so the per-dependency
-        `checks` breakdown always survives — the 503 is NOT an ErrorEnvelope
-        (RATIFIED 2026-07-10; matches apps/api/src/routes/health.ts). `ok` is
-        false and the HTTP status is 503 when any dependency is unreachable.
+        200 carries the structured per-dependency `checks` breakdown; the 503 is
+        the STANDARD ErrorEnvelope with the closed-enum code `upstream_unavailable`
+        and the failing dependency names in `message` (NORMATIVE — api.md §3.5,
+        2026-07-12 W3/M2-2 reconcile; supersedes the 2026-07-10 data-carrying-503
+        annotation, which contradicted the shared enum's own `upstream_unavailable
+        = readyz-503` disposition). Orchestration gates on the HTTP status alone.
       responses:
         "200":
-          description: "All dependencies reachable (`ok: true`)"
+          description: "All dependencies reachable (`ok: true`, full `checks` object)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ReadyzResponse" }
         "503":
-          description: "One or more dependencies failing (`ok: false`); same data shape as 200"
+          description: >-
+            One or more dependencies unreachable — `error.code =
+            upstream_unavailable`, failing dependency names in `error.message`
+            (e.g. "not ready: db, r2")
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/ReadyzResponse" }
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
   /v1/admin/nonce:
     get:
@@ -941,6 +950,109 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /internal/flow/{address}:
+    get:
+      tags: [internal]
+      operationId: internalFlow
+      summary: Per-token flow quality — organic %, cluster stats, bot-flag counts (M2-13; Gate G-A.1)
+      description: >-
+        D-4 (decisions.md §15) / api.md §3.7. Read-only §8.5 telemetry over the
+        indexer's `token_flow_stats` + `address_flags` side tables. `organic` is
+        EXACTLY the shared organicFlowSchema object the public Trust panel gets
+        (same projection) — the holder estimate is a RANGE, never a point value
+        (spec §5.2). Advisory only — never gates chain state or listing
+        (spec §8.4/§8.5). Admin-SIWE-gated; not consumed by the public frontend.
+      security:
+        - adminSession: []
+      parameters:
+        - $ref: "#/components/parameters/TokenAddress"
+      responses:
+        "200":
+          description: Flow-quality summary for the token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [token, organic, flagged]
+                    properties:
+                      token: { $ref: "#/components/schemas/Address" }
+                      organic:
+                        oneOf:
+                          - $ref: "#/components/schemas/OrganicFlow"
+                          - type: "null"
+                      flagged:
+                        type: object
+                        required: [holders, clusters, byFlag]
+                        description: §8.5 advisory summary over the token's current holders
+                        properties:
+                          holders:
+                            type: integer
+                            minimum: 0
+                            description: Holders carrying at least one bot flag
+                          clusters:
+                            type: integer
+                            minimum: 0
+                            description: Distinct funder clusters among flagged holders
+                          byFlag:
+                            type: object
+                            required: [farm, sniper, programmatic, wash, arb_exit]
+                            description: Per-flag holder counts (shared BotFlag vocabulary)
+                            properties:
+                              farm: { type: integer, minimum: 0 }
+                              sniper: { type: integer, minimum: 0 }
+                              programmatic: { type: integer, minimum: 0 }
+                              wash: { type: integer, minimum: 0 }
+                              arb_exit: { type: integer, minimum: 0 }
+                  error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /internal/competitor-snapshots:
+    get:
+      tags: [internal]
+      operationId: internalCompetitorSnapshots
+      summary: Competitor traction snapshots, paged newest-first (M2-14; Gate G-A.2)
+      description: >-
+        D-4 (decisions.md §15) / api.md §3.7. Reads the indexer's
+        `competitor_snapshots` table (spec §8.5.3 weekly hood.fun traction).
+        Rows are the shared CompetitorSnapshotRow VERBATIM — `source` +
+        `captured_at` are NOT NULL by table constraint and ALWAYS present
+        (spec §2: never a hardcoded/fabricated metric). While the snapshot
+        source is unconfigured the table is empty and this returns an empty
+        page. Admin-SIWE-gated; read-only.
+      security:
+        - adminSession: []
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: "Snapshots, newest first (captured_at DESC, source DESC keyset)"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [snapshots, nextCursor]
+                    properties:
+                      snapshots:
+                        type: array
+                        items: { $ref: "#/components/schemas/CompetitorSnapshot" }
+                      nextCursor: { $ref: "#/components/schemas/NextCursor" }
+                  error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
 components:
   securitySchemes:
     adminSession:
@@ -1156,26 +1268,53 @@ components:
           description: >-
             v1.2 organic-flow metrics (spec §5.2/§8.5) from indexer
             token_flow_stats — advisory/heuristic, never gates chain state.
-            Organic-holder estimate is a RANGE, never a point value. null until
-            the stats job first computes.
+            null until the stats job first computes.
           oneOf:
-            - type: object
-              required: [holderPctLow, holderPctHigh, volumePct, flaggedClusterVolPct24h, methodology, updatedAt]
-              properties:
-                holderPctLow: { type: number }
-                holderPctHigh: { type: number }
-                volumePct:
-                  type: number
-                  description: "organic-volume % (wash-flagged volume excluded, §8.5)"
-                flaggedClusterVolPct24h:
-                  type: number
-                  description: "flagged-cluster share of 24h curve volume"
-                methodology:
-                  type: string
-                  description: "tooltip source, e.g. heuristic — see §8.5"
-                updatedAt:
-                  oneOf: [{ type: string, format: date-time }, { type: "null" }]
+            - $ref: "#/components/schemas/OrganicFlow"
             - type: "null"
+
+    OrganicFlow:
+      type: object
+      required: [holderPctLow, holderPctHigh, volumePct, flaggedClusterVolPct24h, methodology, updatedAt]
+      description: >-
+        Shared organicFlowSchema (packages/shared api-types.ts) — the §5.2/§8.5
+        organic-flow object served both on the public Trust panel
+        (TrustPanel.organic) and the internal /internal/flow/{address} endpoint.
+        Organic-holder estimate is a RANGE, never a point value (spec §5.2).
+        Advisory/heuristic — never gates chain state (spec §8.4/§8.5).
+      properties:
+        holderPctLow: { type: number }
+        holderPctHigh: { type: number }
+        volumePct:
+          type: number
+          description: "organic-volume % (wash-flagged volume excluded, §8.5)"
+        flaggedClusterVolPct24h:
+          type: number
+          description: "flagged-cluster share of 24h curve volume"
+        methodology:
+          type: string
+          description: "tooltip source, e.g. heuristic — see §8.5"
+        updatedAt:
+          oneOf: [{ type: string, format: date-time }, { type: "null" }]
+
+    CompetitorSnapshot:
+      type: object
+      required: [source, captured_at, tokens_per_day, graduations, visible_volume_eth]
+      description: >-
+        Shared CompetitorSnapshotRow VERBATIM (packages/shared db-rows.ts;
+        indexer.md §8.5.3) — snake_case row-as-wire, deliberate for the internal
+        surface (api.md §3.7). Every row carries its source + capture timestamp
+        (spec §2 — never a hardcoded metric).
+      properties:
+        source:
+          type: string
+          description: "Stable source label, e.g. dune:query/1234567 — never fabricated"
+        captured_at: { type: string, format: date-time }
+        tokens_per_day: { type: integer, minimum: 0 }
+        graduations: { type: integer, minimum: 0 }
+        visible_volume_eth:
+          allOf: [{ $ref: "#/components/schemas/DecimalString" }]
+          description: ETH-wei decimal string (no float precision loss)
 
     TokenDetail:
       allOf:
@@ -1439,14 +1578,15 @@ components:
       type: object
       required: [data, error]
       description: >-
-        Readiness envelope shared by the 200 and 503 responses of /v1/readyz.
-        `ok` mirrors `db && redis && r2`; a false `ok` is served with HTTP 503.
+        Readiness envelope for the 200 arm of /v1/readyz (`ok: true`, all checks
+        passing). The 503 arm is the standard ErrorEnvelope (api.md §3.5
+        normative, 2026-07-12) — not this shape.
       properties:
         data:
           type: object
           required: [ok, checks]
           properties:
-            ok: { type: boolean }
+            ok: { type: boolean, const: true }
             checks:
               type: object
               required: [db, redis, r2]

@@ -211,8 +211,21 @@ GET /v1/portfolio/:address/created?cursor=&limit=             (§5.4 CREATED tab
 ```
 GET /v1/confirmations          → { safeBlock, finalizedBlock, latestBlock, updatedAt }   (§2.1; SSR initial state)
 GET /v1/eth-usd                → { price, source, asOf }                                  (§2; frontend display source)
-GET /v1/healthz                → liveness; /v1/readyz → DB+Redis+R2 checks (gate-7 probes)
+GET /v1/healthz                → liveness probe: 200 { ok: true }
+GET /v1/readyz                 → readiness probe, DB+Redis+R2 (gate-7 probes):
+  200 → { data: { ok: true, checks: { db, redis, r2 } }, error: null }
+  503 → the STANDARD §2 error envelope: { data: null, error: { code: 'upstream_unavailable',
+        message: 'not ready: <failing dep names>' } } — failing dependencies are named in
+        `message`; the structured `checks` object exists on the 200 arm only.
 ```
+
+**Normative (2026-07-12 — W3/M2-2 readyz-envelope reconcile).** The 503 arm follows the closed
+shared error enum (`upstream_unavailable`, ratified into `errorCodeSchema` 2026-07-10 with the
+explicit disposition "readyz-503 dependency-down") — ONE envelope shape for every non-2xx
+response, no data-carrying-503 special case. This supersedes the "data-carrying 503" annotation
+previously in `apps/api/openapi.yaml` (2026-07-10), which contradicted the shared enum's own
+`upstream_unavailable` disposition. Orchestration (`dev:health`, container healthchecks) gates on
+the HTTP status alone and is unaffected.
 
 ### 3.5a OG share cards (spec §5.2 share card)
 
@@ -240,6 +253,9 @@ GET /v1/og/{address}.png        → image/png 1200×630 — the token's ROBBED_ 
 All under `/v1/admin/*`, auth per §6. Every action audit-logged.
 
 ```
+GET   /v1/admin/nonce          → { nonce } — single-use SIWE nonce (Redis, 10-min TTL); public (mints the session)
+POST  /v1/admin/login          { message, signature } → Set-Cookie session (12h) + { address, csrfToken }
+POST  /v1/admin/logout         → clears the session cookie; idempotent, no session required
 GET   /v1/admin/moderation/queue?status=pending_review|flagged&cursor=
         → queue items: token, image, metadata, vendor scores, impersonation match, current visibility
 POST  /v1/admin/moderation/:tokenAddress/visibility   { visibility: visible|hidden, reason }
@@ -251,6 +267,54 @@ POST  /v1/admin/metadata/:tokenAddress/reverify        → publishes `control:re
                                                           writes indexer-owned tables; indexer.md §6.2 is the sole writer)
 GET   /v1/admin/audit-log?cursor=
 ```
+
+### 3.7 Internal dashboard endpoints (D-4 — decisions.md §15; M2-13/M2-14; Gate G-A.1/G-A.2)
+
+Thin, READ-ONLY internal surface under `/internal/*`, consumed by the internal ops dashboard /
+Gate G-A evidence collection — never by the public frontend. **Gating: admin-SIWE session** (the
+same `requireAdmin` cookie session as §3.6/§6.2). Chosen over internal-network-only gating per
+D-4's "least new surface" reasoning: the SIWE session mechanism already exists, whereas network
+topology is deployment-owned and unverifiable from this repo. Rate-limited in the admin class
+(§6.3). GET-only → no CSRF (CSRF guards mutations only). **Advisory-only framing is binding
+(§8.4/§8.5):** everything here is labeling/telemetry — it never gates chain state, listing, or
+any user path.
+
+```
+GET /internal/flow/:address                                    (M2-13; Gate G-A.1 flow quality)
+  404 → unknown token. 200 →
+  { token,                                                     -- lowercased token address
+    organic: OrganicFlow | null,                               -- EXACTLY the shared organicFlowSchema object the Trust
+                                                               --   panel gets (§3.4) — same projection (projections/
+                                                               --   trust.ts buildOrganic); null until the §8.5 job has
+                                                               --   computed token_flow_stats. holderPctLow/High is a
+                                                               --   RANGE (§5.2 — no false precision); volumePct and
+                                                               --   flaggedClusterVolPct24h are the §8.5.2 estimates
+                                                               --   (wash-excluded organic volume / cluster share of
+                                                               --   24h curve volume).
+    flagged: {                                                 -- §8.5 advisory summary over THIS token's current holders
+      holders,                                                 -- count of holders carrying ≥1 BotFlag
+      clusters,                                                -- distinct funder clusters among flagged holders
+      byFlag: { farm, sniper, programmatic, wash, arb_exit }   -- per-flag holder counts (shared BotFlag vocabulary)
+    } }
+
+GET /internal/competitor-snapshots?cursor=&limit=              (M2-14; Gate G-A.2 traction input)
+  200 → { snapshots: CompetitorSnapshotRow[], nextCursor }     -- newest first: ORDER BY captured_at DESC, source DESC;
+                                                               --   keyset cursor (captured_at, source), §2 pagination
+  Rows are the shared `CompetitorSnapshotRow` VERBATIM (source, captured_at, tokens_per_day,
+  graduations, visible_volume_eth — snake_case row-as-wire, deliberate for the internal surface).
+  §2 discipline: `source` + `captured_at` are NOT NULL by table constraint and always present —
+  the endpoint only reads, it can never fabricate a metric. While the snapshot source is
+  unconfigured (indexer `unconfiguredCompetitorSource`, spec §13 / §8.5.3 "manual until
+  configured") the table stays empty and this returns an empty page.
+```
+
+**DTO disposition (routed to robbed-shared, not self-resolved).** The two composite response
+shapes (`{ token, organic, flagged }` and `{ snapshots, nextCursor }`) are built entirely from
+shared primitives (`organicFlowSchema`, `BotFlag`, `CompetitorSnapshotRow`) and typed API-locally
+in `apps/api/src/routes/internal.ts`. They have exactly ONE consumer (the internal dashboard), so
+per the §12.40c single-consumer precedent they may stay API-local — or robbed-shared may ratify
+`internalFlowResponseSchema` / `competitorSnapshotsResponseSchema` into `api-types.ts`. Flagged in
+the W3 report; either way nothing shared is redeclared here.
 
 ## 4. Moderation pipeline (§8.4)
 

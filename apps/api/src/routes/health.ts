@@ -3,16 +3,19 @@
  * liveness signal; `/v1/readyz` probes DB + Redis + R2 and returns 503 when any
  * dependency is down so `dev:health` / orchestration can gate startup.
  *
- * NOTE (flagged): openapi types readyz's 503 as `ErrorEnvelope`, but the frozen
- * `error.code` enum has no service-unavailable member. To avoid inventing a code
- * AND to keep the `checks` detail probes need, readyz returns the SAME
- * `{ ok, checks }` data shape with HTTP 503 (envelope `error:null`). Reconcile
- * with hoodpad-shared: either add `upstream_unavailable` to the enum or accept a
- * data-carrying 503 here.
+ * Envelope (NORMATIVE — api.md §3.5, 2026-07-12 W3/M2-2 reconcile): the 200 arm
+ * carries the structured `{ ok: true, checks }` breakdown; the 503 arm is the
+ * STANDARD shared ErrorEnvelope with the closed-enum code `upstream_unavailable`
+ * (ratified 2026-07-10 with the explicit "readyz-503 dependency-down"
+ * disposition) and the failing dependency names in `message`. One envelope shape
+ * for every non-2xx response — the prior data-carrying-503 special case is
+ * superseded (openapi.yaml updated in lockstep). Orchestration gates on the HTTP
+ * status alone.
  */
 import { Hono } from "hono";
+import { ERROR_CODES } from "@robbed/shared";
 import type { AppDeps } from "../deps";
-import { ok } from "../lib/envelope";
+import { errBody, ok } from "../lib/envelope";
 
 export function healthRoutes(deps: AppDeps) {
   const app = new Hono();
@@ -25,8 +28,17 @@ export function healthRoutes(deps: AppDeps) {
       deps.redis.ping().catch(() => false),
       deps.storage.ping().catch(() => false),
     ]);
-    const allOk = db && redis && r2;
-    return c.json({ data: { ok: allOk, checks: { db, redis, r2 } }, error: null }, allOk ? 200 : 503);
+    if (db && redis && r2) {
+      return ok(c, { ok: true as const, checks: { db, redis, r2 } });
+    }
+    const failing = Object.entries({ db, redis, r2 })
+      .filter(([, up]) => !up)
+      .map(([name]) => name)
+      .join(", ");
+    return c.json(
+      errBody(ERROR_CODES.upstream_unavailable, `not ready: ${failing}`),
+      503,
+    );
   });
 
   return app;

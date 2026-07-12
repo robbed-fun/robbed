@@ -30,6 +30,19 @@ describe("meta + health", () => {
     expect(res.status).toBe(200);
     expect((await readJson(res)).data.checks).toEqual({ db: true, redis: true, r2: true });
   });
+  it("readyz 503 is the STANDARD error envelope with upstream_unavailable (api.md §3.5 normative)", async () => {
+    const deps = makeTestDeps();
+    deps.db.ping = async () => {
+      throw new Error("db down");
+    };
+    const res = await createApp(deps).request(new Request("http://x/v1/readyz"));
+    expect(res.status).toBe(503);
+    const body = await readJson(res);
+    // No data-carrying 503 special case — one envelope shape for every non-2xx.
+    expect(body.data).toBeNull();
+    expect(body.error.code).toBe("upstream_unavailable");
+    expect(body.error.message).toContain("db"); // failing dep named in message
+  });
   it("confirmations + eth-usd are schema-valid", async () => {
     const confirmations = (await readJson(await get("/v1/confirmations"))).data;
     const ethUsd = (await readJson(await get("/v1/eth-usd"))).data;
