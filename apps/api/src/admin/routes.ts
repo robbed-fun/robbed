@@ -5,10 +5,11 @@
  * `control:reverify` on Redis — the INDEXER flips its own row, X-9; the API never
  * writes indexer tables); audit log. Every mutation is audit-logged.
  *
- * NOTE (flagged): the frozen openapi has NO login/nonce endpoints, yet SIWE needs
- * them to mint the session the `adminSession` scheme references. `GET
- * /v1/admin/nonce` + `POST /v1/admin/login` + `POST /v1/admin/logout` are added
- * here and flagged for hoodpad-shared to add to openapi.yaml.
+ * The SIWE lifecycle (`GET /v1/admin/nonce` + `POST /v1/admin/login` + `POST
+ * /v1/admin/logout`) is IN the frozen contract: transcribed into openapi.yaml
+ * (ratified 2026-07-10) and api.md §3.6 — the earlier "absent from openapi" flag
+ * is resolved (W3/M2-2, 2026-07-12). The openapi-sync test holds route table and
+ * yaml in endpoint-for-endpoint lockstep.
  */
 import { Hono } from "hono";
 import {
@@ -47,7 +48,7 @@ const tokenParamSchema = z.object({ tokenAddress: addressSchema });
 export function adminRoutes(deps: AppDeps) {
   const app = new Hono<{ Variables: AdminVars }>();
 
-  // ── SIWE login lifecycle (flagged: not in openapi) ────────────────────────
+  // ── SIWE login lifecycle (openapi: adminNonce/adminLogin/adminLogout) ─────
   app.get("/v1/admin/nonce", async (c) => {
     const nonce = await issueNonce(deps.redis);
     return ok(c, { nonce });

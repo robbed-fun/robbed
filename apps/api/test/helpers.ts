@@ -25,11 +25,14 @@ import { stubVendors } from "../src/moderation/vendors";
 import type {
   AddressPnlRow,
   CandleRow,
+  CompetitorSnapshotRow,
   ConfirmationWatermarksRow,
   EthUsdSnapshotRow,
   ModerationStatusRow,
+  TokenFlowStatsRow,
   TradeRowDb,
 } from "@robbed/shared";
+import type { TokenFlagSummary } from "../src/lib/db";
 
 /**
  * Bun's `Response.json()` is typed `Promise<unknown>`; tests read the loose
@@ -223,6 +226,39 @@ export class FakeDb implements Db {
       volume24hEthWei: "0",
       treasuryFeesCollectedWeth: "0",
     };
+  }
+  // ── internal dashboard fixtures (D-4; api.md §3.7) ──
+  flowStats = new Map<string, TokenFlowStatsRow>();
+  flagSummaries = new Map<string, TokenFlagSummary>();
+  competitorSnapshots: CompetitorSnapshotRow[] = [];
+  async getTokenFlowStats(token: string) {
+    return this.flowStats.get(token) ?? null;
+  }
+  async getTokenFlagSummary(token: string): Promise<TokenFlagSummary> {
+    return (
+      this.flagSummaries.get(token) ?? { flaggedHolders: 0, clusterCount: 0, byFlag: {} }
+    );
+  }
+  async listCompetitorSnapshots(input: {
+    cursorCapturedAt: string | null;
+    cursorSource: string | null;
+    limit: number;
+  }) {
+    // Mirrors the real keyset: (captured_at, source) DESC, strictly-less filter.
+    const sorted = [...this.competitorSnapshots].sort((a, b) =>
+      a.captured_at === b.captured_at
+        ? b.source.localeCompare(a.source)
+        : b.captured_at.localeCompare(a.captured_at),
+    );
+    const cAt = input.cursorCapturedAt;
+    const cSrc = input.cursorSource;
+    const after =
+      cAt != null && cSrc != null
+        ? sorted.filter(
+            (s) => s.captured_at < cAt || (s.captured_at === cAt && s.source < cSrc),
+          )
+        : sorted;
+    return after.slice(0, input.limit);
   }
   async getModerationStatus(t: string) {
     return this.moderation.get(t) ?? null;

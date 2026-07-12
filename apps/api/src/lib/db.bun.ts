@@ -16,6 +16,7 @@ import type {
   AddressPnlRow,
   BotFlag,
   CandleRow,
+  CompetitorSnapshotRow,
   ConfirmationWatermarksRow,
   EthUsdSnapshotRow,
   FeeCollectionRow,
@@ -531,6 +532,89 @@ export function createBunDb(config: Config): Db {
         ORDER BY t.created_at DESC, t.address DESC LIMIT $${params.length}`;
       const rows = (await ro.unsafe(text, params)) as Record<string, unknown>[];
       return rows.map(mapTokenList);
+    },
+
+    // ── internal dashboard (D-4; api.md §3.7) — read-only, advisory §8.5 ─────
+    async getTokenFlowStats(token) {
+      const rows = (await ro.unsafe(
+        `SELECT token_address, organic_holder_pct_low, organic_holder_pct_high,
+                organic_volume_pct, flagged_cluster_vol_pct_24h, updated_at
+           FROM token_flow_stats WHERE token_address = $1`,
+        [token],
+      )) as Record<string, unknown>[];
+      const r = rows[0];
+      if (!r) return null;
+      return {
+        token_address: String(r.token_address),
+        organic_holder_pct_low: Number(r.organic_holder_pct_low),
+        organic_holder_pct_high: Number(r.organic_holder_pct_high),
+        organic_volume_pct: Number(r.organic_volume_pct),
+        flagged_cluster_vol_pct_24h: Number(r.flagged_cluster_vol_pct_24h),
+        updated_at: iso(r.updated_at),
+      } satisfies TokenFlowStatsRow;
+    },
+
+    async getTokenFlagSummary(token) {
+      // Flagged = current holders (balance > 0) with ≥1 §8.5 label. Two boring
+      // aggregate queries (totals, then per-flag via unnest) — the flagged-holder
+      // population per token is small, and both stay on `ro`.
+      const [totals, perFlag] = await Promise.all([
+        ro.unsafe(
+          `SELECT count(*) AS holders,
+                  count(DISTINCT af.cluster_id) FILTER (WHERE af.cluster_id IS NOT NULL) AS clusters
+             FROM balances b
+             JOIN address_flags af ON af.address = b.holder
+            WHERE b.token_address = $1 AND b.balance::numeric > 0
+              AND cardinality(af.flags) > 0`,
+          [token],
+        ) as Promise<Record<string, unknown>[]>,
+        ro.unsafe(
+          `SELECT f.flag, count(*) AS n
+             FROM balances b
+             JOIN address_flags af ON af.address = b.holder
+             CROSS JOIN LATERAL unnest(af.flags) AS f(flag)
+            WHERE b.token_address = $1 AND b.balance::numeric > 0
+            GROUP BY f.flag`,
+          [token],
+        ) as Promise<Record<string, unknown>[]>,
+      ]);
+      const t = totals[0];
+      const byFlag: Partial<Record<BotFlag, number>> = {};
+      for (const r of perFlag) byFlag[String(r.flag) as BotFlag] = num(r.n);
+      return {
+        flaggedHolders: num(t?.holders),
+        clusterCount: num(t?.clusters),
+        byFlag,
+      };
+    },
+
+    async listCompetitorSnapshots(input) {
+      // Newest first, keyset (captured_at, source) DESC (api.md §3.7). Rows are
+      // shared CompetitorSnapshotRow verbatim — source + captured_at NOT NULL by
+      // table constraint (§2: never a fabricated metric; empty while the source
+      // is unconfigured).
+      const where: string[] = [];
+      const params: unknown[] = [];
+      if (input.cursorCapturedAt != null && input.cursorSource != null) {
+        params.push(input.cursorCapturedAt, input.cursorSource);
+        where.push(`(captured_at, source) < ($${params.length - 1}::timestamptz, $${params.length})`);
+      }
+      params.push(input.limit);
+      const text = `SELECT source, captured_at, tokens_per_day, graduations, visible_volume_eth
+        FROM competitor_snapshots
+        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+        ORDER BY captured_at DESC, source DESC
+        LIMIT $${params.length}`;
+      const rows = (await ro.unsafe(text, params)) as Record<string, unknown>[];
+      return rows.map(
+        (r): CompetitorSnapshotRow => ({
+          source: String(r.source),
+          captured_at: iso(r.captured_at),
+          tokens_per_day: num(r.tokens_per_day),
+          graduations: num(r.graduations),
+          visible_volume_eth: str(r.visible_volume_eth),
+        }),
+      );
     },
 
     async getStats(nowSec) {

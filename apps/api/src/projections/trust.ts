@@ -9,8 +9,27 @@
  * `config.TRADE_FEE_BPS`, which would misreport an older curve deployed under a
  * different fee. Same for the card/list surface.
  */
-import { LP_COPY, type TrustPanel } from "@robbed/shared";
+import { LP_COPY, type OrganicFlow, type TokenFlowStatsRow, type TrustPanel } from "@robbed/shared";
 import type { TokenDetailRow } from "../lib/db";
+
+/**
+ * The ONE `token_flow_stats` row → shared `organicFlowSchema` projection.
+ * Served on the public Trust panel (below) AND the internal flow-quality
+ * endpoint (routes/internal.ts, D-4/M2-13) — extracted so the two surfaces
+ * cannot drift (anti-drift; api.md §3.7 "same projection").
+ */
+export function buildOrganic(flow: TokenFlowStatsRow | null): OrganicFlow | null {
+  return flow
+    ? {
+        holderPctLow: flow.organic_holder_pct_low,
+        holderPctHigh: flow.organic_holder_pct_high,
+        volumePct: flow.organic_volume_pct,
+        flaggedClusterVolPct24h: flow.flagged_cluster_vol_pct_24h,
+        methodology: "heuristic — see §8.5",
+        updatedAt: flow.updated_at,
+      }
+    : null;
+}
 
 export function buildTrust(row: TokenDetailRow): TrustPanel {
   return {
@@ -29,15 +48,6 @@ export function buildTrust(row: TokenDetailRow): TrustPanel {
       tradeFeeBps: row.trade_fee_bps, // §12.40d per-curve snapshot, not factory-current
       creatorFeeBps: row.creator_fee_bps, // 0 in v1 (§7), present from day 1
     },
-    organic: row.flow
-      ? {
-          holderPctLow: row.flow.organic_holder_pct_low,
-          holderPctHigh: row.flow.organic_holder_pct_high,
-          volumePct: row.flow.organic_volume_pct,
-          flaggedClusterVolPct24h: row.flow.flagged_cluster_vol_pct_24h,
-          methodology: "heuristic — see §8.5",
-          updatedAt: row.flow.updated_at,
-        }
-      : null,
+    organic: buildOrganic(row.flow),
   };
 }
