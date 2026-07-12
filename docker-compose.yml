@@ -322,6 +322,9 @@ services:
       - /bin/sh
       - -c
       - |
+        # set -e per §12.55(d): the migrate step runs the fail-closed startup
+        # assertions — its failure MUST kill the container, never be swallowed.
+        set -e
         set -a; . ./tools/localstack/out/local.env; set +a
         # Offchain sidecar tables (watermarks, eth_usd, metadata_verifications — indexer.md §3)
         # live outside Ponder's schema management; the migrate script is idempotent.
@@ -337,6 +340,13 @@ services:
         required: false
     environment:
       <<: *dev-env
+      # §12.55 chain-identity gate: explicit selection (registry-validated + live
+      # RPC-asserted). This stack is the anvil FORK of mainnet — eth_chainId 4663.
+      INDEXER_CHAIN_ID: "4663"
+      # §12.55 known limit: the registry's 4663 entry is a mainnet-FORK pipeline
+      # artifact, so 4663 is refused unless the stack declares itself a LOCAL fork
+      # (this one is — the sanctioned exception until a real Phase-B deploy).
+      INDEXER_ALLOW_FORK_4663: "1"
       INDEXER_RPC_HTTP: http://anvil:8545
       DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
       REDIS_URL: redis://redis:6379

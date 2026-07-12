@@ -185,6 +185,28 @@ Named volumes persist across `up`/`down`: `robbed_pgdata` / `robbed_redisdata` /
 `docker compose down -v` wipes everything — clean-slate reset (next `up` re-runs Postgres init and a full
 `pnpm install`).
 
+### DB-only reset — `bun run dev:db:reset` (backfill-from-chain proof)
+
+`tools/localstack/reset-db.ts` wipes ONLY the indexer/API database state and proves it re-derives
+from the chain: stops `indexer`/`api`/`ws` (anvil/postgres/redis/minio/web stay up — anvil's
+in-memory chain IS the backfill source), drops the `public` + `ponder_sync` schemas (dropping
+Ponder's RPC cache forces a true refetch from anvil, not a cache replay), restores the bootstrap
+`public` schema + `pg_trgm`, deletes the persisted Redis `*:seq` channel counters (the only Redis
+keys that persist; the publish latch is process-local), re-runs the `apimigrations` one-shot, then
+restarts the consumers with plain `docker start` on the compose-resolved container names — never
+`compose up`/`compose start`, since BOTH re-run exited `depends_on` one-shots (observed live:
+`compose start` re-ran `deploychain`, redeploying contracts and rewriting `local.env`; a tripwire
+in the script fails loud if `local.env` changes mid-reset) — and waits fail-loud until Ponder
+`/ready` + API `/v1/readyz` are green again.
+
+- **Backfills from chain:** tokens, trades, graduations, V3 swaps/collects, candles, flows, pnl,
+  confirmation watermarks, metadata verification verdicts (re-fetched from minio).
+- **LOST (not chain-recoverable):** `moderation_status` + `moderation_audit_log` (moderation
+  verdicts, admin audit trail) and the `eth_usd`/competitor snapshot history (external-source
+  series — history restarts at the next poll).
+
+Knobs: `DEV_RESET_TIMEOUT_SECS` (default 900). Local stack only — never point it at testnet.
+
 ## Testnet stack (`docker-compose.testnet.yml`)
 
 > **End-to-end testnet guide (wallet, faucet, env, deploy, lifecycle): `docs/runbooks/testnet.md`.** This section covers only the compose mechanics.
@@ -198,8 +220,24 @@ services or `depends_on` edges from an untouched base (`!reset` is per-attribute
 docs.docker.com/reference/compose-file/merge), so a standalone file is the only shape that keeps the
 local file untouched. **Anti-drift discipline:** any change to a shared service goes to BOTH files;
 review with `diff docker-compose.yml docker-compose.testnet.yml` (services are annotated `MIRROR` vs
-`TESTNET`). Distinct project name `robbed-testnet` → distinct volumes/network; host ports reuse the
-4XXX convention, so don't run both stacks simultaneously without overriding `*_PORT`.
+`TESTNET`). Distinct project name `robbed-testnet` → distinct volumes/network; host ports live on a
+distinct **41XX block** (dev keeps 40XX/44XX), so **both stacks run simultaneously** with no
+`*_PORT` overrides:
+
+| Service | Testnet host port | (dev stack) |
+|---|---|---|
+| web | **4100** | 4000 |
+| api | **4101** | 4001 |
+| ws | **4102** | 4002 |
+| postgres | **4132** | 4432 |
+| indexer metrics | **4164** | 4964 |
+| ponder dev UI/GraphQL | **4169** | 4269 |
+| redis | **4179** | 4379 |
+| minio S3 | **4190** | 4900 |
+| minio console | **4191** | 4901 |
+
+Env-var **names** are identical to the dev stack (only the `:-` defaults differ) — an exported
+`*_PORT` in your shell/`.env` applies to BOTH stacks and re-collides them.
 
 ### Prerequisites (§13 / Phase-T artifacts — the stack fails closed without them)
 
@@ -214,42 +252,51 @@ review with `diff docker-compose.yml docker-compose.testnet.yml` (services are a
 
 ### Env contract
 
-Export in the shell or a root `.env` (compose auto-loads it). All three are required; missing/empty
-values abort with the interpolation error message (verified: `docker compose -f
+Export in the shell or a root `.env` (compose auto-loads it). The two required vars abort with the
+interpolation error message when missing/empty (verified: `docker compose -f
 docker-compose.testnet.yml config` exits 1 with a message naming the variable and this section —
 never a silent default).
 
 | Variable | Required | Meaning |
 |---|---|---|
 | `TESTNET_RPC_URL` | yes | Official testnet JSON-RPC → indexer `INDEXER_RPC_HTTP`, api `ROBINHOOD_RPC_URL`, web `NEXT_PUBLIC_RPC_HTTP`, `chaincheck` preflight |
-| `TESTNET_RPC_WS_URL` | yes | Official testnet WS RPC → indexer `INDEXER_RPC_WS`, web `NEXT_PUBLIC_RPC_WS` |
+| `TESTNET_RPC_WS_URL` | **no — WS optional, HTTP polling fallback** | WS JSON-RPC → indexer `INDEXER_RPC_WS`, web `NEXT_PUBLIC_RPC_WS`. Empty/unset is fine: `apps/indexer/src/config.ts` treats `INDEXER_RPC_WS` as optional (`\|\| undefined` → Ponder falls back to HTTP polling) and the web env layer tolerates empty. Set it to the **Alchemy wss** endpoint (`wss://robinhood-testnet.g.alchemy.com/v2/{KEY}`) when a key is provided — **never the sequencer feed** (`wss://feed.testnet…` is a block feed, not JSON-RPC) |
 | `TESTNET_CHAIN_ID` | yes | Official testnet chain id — asserted by the `chaincheck` one-shot (`cast chain-id` against `TESTNET_RPC_URL` must match; api/indexer gate on it via `depends_on`) |
 
-Everything else (`POSTGRES_*`, `MINIO_*`, `R2_BUCKET`, `*_PORT`, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`,
-`NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD`) keeps the same dev defaults as the local stack. `web` runs with
+Everything else (`POSTGRES_*`, `MINIO_*`, `R2_BUCKET`, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`,
+`NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD`) keeps the same dev defaults as the local stack; `*_PORT`
+defaults are re-based to the 41XX block (table above). `web` runs with
 `NEXT_PUBLIC_MOCK_DATA=false` hardcoded — this stack exists to exercise real testnet data.
 
 ### Bring-up
 
 ```bash
-export TESTNET_RPC_URL=…   TESTNET_RPC_WS_URL=…   TESTNET_CHAIN_ID=…   # from official docs (§13)
+export TESTNET_RPC_URL=…   TESTNET_CHAIN_ID=…   # from official docs (§13); TESTNET_RPC_WS_URL optional (Alchemy wss, HTTP-polling fallback)
 # tools/localstack/out/testnet.env must exist (T-3 output — see prerequisites)
 pnpm dev:testnet          # or dev:testnet:d / :down / :reset / :logs / :ps
 docker compose -f docker-compose.testnet.yml config   # static validation (fails loud on missing env)
 ```
 
-### Known limitation — indexer/web chain gates are MAINNET constants (honest status)
+### Chain-identity gate (§12.55, implemented 2026-07-12 — replaces the earlier "bypassed gate" limitation)
 
-The indexer's fail-closed startup assertions (`apps/indexer/src/assertions.ts` +
-`apps/indexer/src/config.ts`) pin `chainId === 4663` via the shared `CHAIN_ID` constant (statically
-AND against the live RPC) and canonical WETH from `@robbed/shared`; **neither is env-overridable**
-(only `V3_FACTORY_ADDRESS` / `V3_NPM_ADDRESS` accept env overrides). The web wallet config derives
-from the same shared `CHAIN_ID`. If the official testnet chain id ≠ 4663, the indexer will
-correctly refuse to start until **T-1** lands testnet constants through robbed-shared
-(architect-ratified). This is fail-closed behavior working as designed — the compose file is
-delivered ahead of the testnet deploy as ready infrastructure; **do not weaken the assertions** to
-make the stack boot. Also note: minio still stands in for R2 here; verification against **real R2**
-is the T-5 staging deploy's concern, not this compose file's.
+The indexer consumes an explicit **`INDEXER_CHAIN_ID`** (compose-injected: `4663` on the local
+fork stack, `46630` here; **no default exists**). Double fail-closed assertion
+(`apps/indexer/src/config.ts` + `src/assertions.ts`): the id must resolve in the shared deployment
+registry (`packages/shared/src/addresses.ts` — env selects a chain, it can never invent one) AND
+the live RPC's `eth_chainId` must equal it (`assertRuntime`, run by `migrate` before
+`ponder dev`). Every chain-dependent address (WETH, V3 factory/NPM/SwapRouter02, the robbed
+contracts, treasury) resolves from that registry entry — the pre-§12.55 mainnet-default fallbacks
+that would have silently missed testnet graduated-pool `Swap`/`Collect` are gone. The deploy
+artifact (`local.env`/`testnet.env`) takes precedence for the robbed contracts (live truth on a
+fork stack; identical to the registry on testnet by construction). **`set -e` is restored in both
+compose files' indexer commands (§12.55(d))** — an assertion failure kills the container instead
+of being swallowed (the pre-ruling defect observed live). §12.55 known limit: the registry's
+`4663` entry is a mainnet-**fork** pipeline artifact, so `INDEXER_CHAIN_ID=4663` is refused unless
+the stack declares `INDEXER_ALLOW_FORK_4663=1` (only `docker-compose.yml` does) — until a real
+Phase-B deploy replaces the entry.
+
+Also note: minio still stands in for R2 here; verification against **real R2** is the T-5 staging
+deploy's concern, not this compose file's.
 
 ## Not in this file (deferred)
 

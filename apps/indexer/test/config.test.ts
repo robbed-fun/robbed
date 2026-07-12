@@ -18,6 +18,8 @@ const CURVE_ENV = [
 ] as const;
 
 const TOUCHED = [
+  "INDEXER_CHAIN_ID",
+  "INDEXER_ALLOW_FORK_4663",
   "INDEXER_RPC_HTTP",
   "INDEXER_RPC_WS",
   "CURVE_FACTORY_ADDRESS",
@@ -34,7 +36,10 @@ const saved = new Map<string, string | undefined>();
 
 beforeEach(() => {
   for (const k of TOUCHED) saved.set(k, process.env[k]);
-  // Minimal REQUIRED non-curve env for a successful boot.
+  // Minimal REQUIRED non-curve env for a successful boot. §12.55: explicit chain
+  // selection; 4663 needs the LOCAL-fork opt-in (registry entry is a fork artifact).
+  process.env.INDEXER_CHAIN_ID = "4663";
+  process.env.INDEXER_ALLOW_FORK_4663 = "1";
   process.env.INDEXER_RPC_HTTP = "http://localhost:8545";
   process.env.CURVE_FACTORY_ADDRESS = "0x" + "11".repeat(20);
   process.env.MIGRATOR_ADDRESS = "0x" + "22".repeat(20);
@@ -62,7 +67,8 @@ describe("loadConfig — no curve-constant env vars (§12.40d)", () => {
   it("carries no `curve` constants field on the config object", () => {
     const config = loadConfig();
     expect((config as unknown as Record<string, unknown>).curve).toBeUndefined();
-    // Sanity: the non-curve required fields still resolve.
+    // Sanity: the non-curve required fields still resolve. WETH comes from the
+    // 4663 registry entry (§12.55(c)) — which equals the canonical constant.
     expect(config.chainId).toBe(4663);
     expect(config.weth).toBe(WETH_ADDRESS.toLowerCase());
     expect(config.curveFactory).toBe("0x" + "11".repeat(20));

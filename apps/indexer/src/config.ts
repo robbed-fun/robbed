@@ -1,10 +1,18 @@
 /**
- * Indexer configuration & address resolution (indexer.md §2).
+ * Indexer configuration & address resolution (indexer.md §2; spec §12.55).
  *
- * All addresses come from env EXCEPT canonical WETH (asserted, never
- * configurable) and the ratified Uniswap V3 registry (spec §12.28, mirrored in
- * `@robbed/shared` `UNISWAP_V3`) which env may override. Addresses are stored
- * and compared lowercase throughout (indexer.md §3 conventions).
+ * ── §12.55 chain-identity gate (ratified 2026-07-12, self-contained record) ──
+ * `INDEXER_CHAIN_ID` is REQUIRED and has NO default: the env var SELECTS a
+ * chain, it never defines chain facts — the value must resolve in the shared
+ * deployment registry (`@robbed/shared/addresses`, codegen from
+ * `contracts/deployments/<chainId>.json`, D-2/§12.49), and the live RPC's
+ * `eth_chainId` is asserted equal at boot (`assertRuntime`, the (b) live half).
+ * Every chain-dependent address (WETH, V3 factory/NPM/SwapRouter02, the robbed
+ * contracts, treasury) resolves from that registry entry per §12.55(c) —
+ * per-chain address defaults inside indexer code are FORBIDDEN. The live
+ * deploy artifact (compose-injected local.env/testnet.env) takes precedence
+ * over the registry snapshot for the robbed contracts (see loadConfig note).
+ * Addresses are stored and compared lowercase throughout (indexer.md §3).
  *
  * NO market metrics live here (spec §2 hard rule).
  *
@@ -20,7 +28,7 @@
  * curve, never `config()` (the divergence M1-3b flagged: these five are
  * `internal immutable` on CurveFactory, not surfaced by `config()`).
  */
-import { UNISWAP_V3, WETH_ADDRESS, CHAIN_ID } from "@robbed/shared";
+import { ROBBED_DEPLOYMENTS, getDeployment } from "@robbed/shared/addresses";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
@@ -33,21 +41,26 @@ function req(name: string): string {
   return v;
 }
 
-/** Normalize + validate an address env var (lowercased, non-zero). */
-function reqAddress(name: string): string {
-  const v = req(name).toLowerCase();
+/**
+ * Deploy-artifact env injection with registry fallback (§12.55(c) note in
+ * loadConfig): env set ⇒ validated env value wins (live artifact); unset ⇒ the
+ * shared-registry value. The fallback is ALWAYS registry-sourced — never a
+ * literal in this file.
+ */
+function envAddressOr(name: string, registryValue: string): string {
+  const raw = process.env[name];
+  const v = (raw && raw !== "" ? raw : registryValue).toLowerCase();
   if (!ADDRESS_RE.test(v)) throw new Error(`[indexer config] ${name} is not a 20-byte address: ${v}`);
   if (v === ZERO_ADDRESS) throw new Error(`[indexer config] ${name} must be non-zero`);
   return v;
 }
 
-/** Address env with a ratified default (env override allowed), lowercased + non-zero. */
-function addressWithDefault(name: string, fallback: string): string {
-  const raw = process.env[name];
-  const v = (raw && raw !== "" ? raw : fallback).toLowerCase();
-  if (!ADDRESS_RE.test(v)) throw new Error(`[indexer config] ${name} is not a 20-byte address: ${v}`);
-  if (v === ZERO_ADDRESS) throw new Error(`[indexer config] ${name} must be non-zero`);
-  return v;
+/** Required integer env (no default — §12.55(b)). */
+function reqInt(name: string): number {
+  const v = req(name);
+  const n = Number(v);
+  if (!Number.isInteger(n) || n <= 0) throw new Error(`[indexer config] ${name} must be a positive integer, got ${JSON.stringify(v)}`);
+  return n;
 }
 
 function optInt(name: string, dflt: number): number {
@@ -69,6 +82,8 @@ export interface IndexerConfig {
   migrator: string;
   v3Factory: string;
   v3PositionManager: string;
+  /** Chain's SwapRouter02 (registry-resolved, §12.55(c)) — own-contract whitelist (§8.5 heuristic 3). */
+  swapRouter02: string;
   redisUrl: string | undefined;
   databaseUrl: string | undefined;
   databaseSchema: string | undefined;
@@ -96,25 +111,55 @@ export interface IndexerConfig {
  * the migrate/rebuild scripts.
  */
 export function loadConfig(): IndexerConfig {
+  // ── §12.55(a)+(b) static half: explicit selection, registry-validated, NO default ──
+  const chainId = reqInt("INDEXER_CHAIN_ID");
+  const deployment = getDeployment(chainId);
+  if (!deployment) {
+    throw new Error(
+      `[indexer config] INDEXER_CHAIN_ID=${chainId} has no entry in the shared deployment registry ` +
+        `(packages/shared/src/addresses.ts — recorded chains: ${Object.keys(ROBBED_DEPLOYMENTS).join(", ")}). ` +
+        `§12.55(b): the env var SELECTS a chain, it never defines one; nothing can be invented via env.`,
+    );
+  }
+  // ── §12.55 known limit: the "4663" registry entry is a mainnet-FORK pipeline artifact ──
+  // (anvil dev-account treasury; contracts/deployments/4663.json is fork-evidence-only under
+  // D-2). Until a real Phase-B deploy replaces it, 4663 is FORBIDDEN outside a LOCAL fork
+  // stack; the fork stack declares itself via INDEXER_ALLOW_FORK_4663=1 (docker-compose.yml).
+  // Follow-up for a mode-based assertion is routed to robbed-contracts in the ruling text.
+  if (chainId === 4663 && process.env.INDEXER_ALLOW_FORK_4663 !== "1") {
+    throw new Error(
+      `[indexer config] INDEXER_CHAIN_ID=4663 refused (§12.55 known limit): the registry's 4663 entry ` +
+        `is a mainnet-fork pipeline artifact — 4663 is forbidden outside a LOCAL fork stack until a real ` +
+        `Phase-B deploy replaces it. A LOCAL fork stack sets INDEXER_ALLOW_FORK_4663=1 (compose-injected).`,
+    );
+  }
   return {
-    chainId: CHAIN_ID,
+    chainId,
     rpcHttp: req("INDEXER_RPC_HTTP"),
     rpcWs: process.env.INDEXER_RPC_WS || undefined,
     startBlock: optInt("START_BLOCK", 0),
-    // WETH is asserted against the canonical constant, never taken from env.
-    weth: WETH_ADDRESS.toLowerCase(),
-    curveFactory: reqAddress("CURVE_FACTORY_ADDRESS"),
-    router: process.env.ROUTER_ADDRESS ? process.env.ROUTER_ADDRESS.toLowerCase() : undefined,
-    migrator: reqAddress("MIGRATOR_ADDRESS"),
-    // V3 factory / NPM: ratified registry (spec §12.28) as default, env may override.
-    v3Factory: addressWithDefault("V3_FACTORY_ADDRESS", UNISWAP_V3.factory),
-    v3PositionManager: addressWithDefault("V3_NPM_ADDRESS", UNISWAP_V3.positionManager),
+    // ── §12.55(c): chain-dependent addresses resolve from the registry entry ──
+    // External set: registry ONLY (the per-chain in-code defaults this replaces
+    // were the §12.55 motivating defect — mainnet V3 silently used on testnet).
+    weth: deployment.external.weth.toLowerCase(),
+    v3Factory: deployment.external.v3Factory.toLowerCase(),
+    v3PositionManager: deployment.external.positionManager.toLowerCase(),
+    swapRouter02: deployment.external.swapRouter02.toLowerCase(),
+    // Robbed contracts + treasury: same registry resolution, but the LIVE deploy
+    // artifact (compose-injected local.env/testnet.env, §12.49 D-2) takes
+    // precedence when present — on a LOCAL fork stack every `up` runs a fresh
+    // deploy, so the artifact is the live truth and the codegen registry entry is
+    // its (possibly stale) snapshot; on testnet/mainnet the two are identical by
+    // construction. Artifact injection is not a per-chain default in code.
+    curveFactory: envAddressOr("CURVE_FACTORY_ADDRESS", deployment.robbed.curveFactory),
+    router: envAddressOr("ROUTER_ADDRESS", deployment.robbed.router),
+    migrator: envAddressOr("MIGRATOR_ADDRESS", deployment.robbed.v3Migrator),
     redisUrl: process.env.REDIS_URL || undefined,
     databaseUrl: process.env.DATABASE_URL || undefined,
     databaseSchema: process.env.DATABASE_SCHEMA || undefined,
     r2MetadataBaseUrl: process.env.R2_METADATA_BASE_URL || undefined,
     metadataFetchRewrite: loadFetchRewrite(),
-    treasury: process.env.TREASURY_ADDRESS ? process.env.TREASURY_ADDRESS.toLowerCase() : undefined,
+    treasury: envAddressOr("TREASURY_ADDRESS", deployment.robbed.treasury),
   };
 }
 
@@ -131,4 +176,4 @@ function loadFetchRewrite(): { from: string; to: string } | undefined {
   return { from, to };
 }
 
-export { WETH_ADDRESS, ZERO_ADDRESS };
+export { ZERO_ADDRESS };

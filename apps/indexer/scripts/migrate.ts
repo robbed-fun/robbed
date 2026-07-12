@@ -44,9 +44,9 @@ async function main(): Promise<void> {
       client.release();
     }
 
-    console.log("[migrate] running runtime assertions (pg_trgm, chain id 4663)…");
+    console.log(`[migrate] running runtime assertions (pg_trgm, live chain id == INDEXER_CHAIN_ID=${config.chainId} — §12.55(b))…`);
     const rpc = createPublicClient({ transport: http(config.rpcHttp) });
-    await assertRuntime(pool, rpc);
+    await assertRuntime(pool, rpc, config.chainId);
     console.log("[migrate] OK");
   } finally {
     await pool.end();

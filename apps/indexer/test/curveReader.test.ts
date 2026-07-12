@@ -6,7 +6,11 @@
  */
 import { describe, expect, it } from "bun:test";
 import { bondingCurveAbi } from "@robbed/shared/abi";
-import { readCurveImmutables, type ContractReader } from "../src/curveReader";
+import {
+  readCurveImmutables,
+  readCurveImmutablesWithFallback,
+  type ContractReader,
+} from "../src/curveReader";
 
 /** Stub client returning canned values keyed by functionName; records calls. */
 function stubClient(values: Record<string, bigint | number>): {
@@ -92,5 +96,54 @@ describe("readCurveImmutables (§12.40d per-curve read)", () => {
     // A curve created under a prior fee is read from ITS curve, so the fee is
     // per-token — never the factory config (§12.40d divergence handling).
     expect(calls.some((c) => c.functionName === "TRADE_FEE_BPS")).toBe(true);
+  });
+});
+
+const ALL_VALUES = {
+  VIRTUAL_ETH_0: 30n * 10n ** 18n,
+  VIRTUAL_TOKEN_0: 1_073_000_000n * 10n ** 18n,
+  CURVE_SUPPLY: 800_000_000n * 10n ** 18n,
+  LP_TOKEN_TRANCHE: 200_000_000n * 10n ** 18n,
+  GRADUATION_ETH: 85n * 10n ** 18n,
+  TRADE_FEE_BPS: 100,
+} as const;
+
+/** Stub that always throws — a pruned non-archive node ("missing trie node"). */
+function prunedClient(): ContractReader {
+  return {
+    async readContract() {
+      throw new Error("missing trie node ef2c… (path ) state … is not available, not found");
+    },
+  };
+}
+
+describe("readCurveImmutablesWithFallback — pruned-state fallback at latest", () => {
+  it("uses the primary (event-block) reader when it succeeds — fallback untouched", async () => {
+    const primary = stubClient(ALL_VALUES);
+    let fallbackTouched = false;
+    const fallback: ContractReader = {
+      async readContract() {
+        fallbackTouched = true;
+        throw new Error("must not be called");
+      },
+    };
+    const c = await readCurveImmutablesWithFallback(primary.client, fallback, CURVE);
+    expect(c.tradeFeeBps).toBe(100);
+    expect(fallbackTouched).toBe(false);
+  });
+
+  it("falls back to the latest reader when the event-block state is pruned", async () => {
+    const fallback = stubClient(ALL_VALUES);
+    const c = await readCurveImmutablesWithFallback(prunedClient(), fallback.client, CURVE);
+    // Values come from the fallback and are complete (immutables: value-identical).
+    expect(c.virtualEth0).toBe(ALL_VALUES.VIRTUAL_ETH_0);
+    expect(c.graduationEth).toBe(ALL_VALUES.GRADUATION_ETH);
+    expect(fallback.calls.length).toBe(6);
+  });
+
+  it("propagates the error when BOTH readers fail (fail-closed, never a fabricated row)", async () => {
+    await expect(
+      readCurveImmutablesWithFallback(prunedClient(), prunedClient(), CURVE),
+    ).rejects.toThrow(/missing trie node/);
   });
 });
