@@ -14,7 +14,7 @@ import {
   tokensResponseSchema,
 } from "@robbed/shared";
 import { createApp } from "../src/app";
-import { TEST_ADDR, makeTestDeps, readJson } from "./helpers";
+import { FakeDb, TEST_ADDR, fixtureToken, makeTestDeps, readJson } from "./helpers";
 
 const app = createApp(makeTestDeps());
 const get = (path: string) => app.request(new Request(`http://x${path}`));
@@ -63,6 +63,45 @@ describe("token reads", () => {
   it("detail is valid for a known token", async () => {
     const data = (await readJson(await get(`/v1/tokens/${TEST_ADDR}`))).data;
     expect(() => tokenDetailSchema.parse(data)).not.toThrow();
+  });
+  it("detail omits lpTokenId pre-grad and surfaces it for a graduated token", async () => {
+    // Pre-grad fixture (lp_token_id null) → field absent.
+    const pre = (await readJson(await get(`/v1/tokens/${TEST_ADDR}`))).data;
+    expect(pre.lpTokenId).toBeUndefined();
+    // Graduated: graduations.lp_token_id surfaces verbatim (COLLECT-1 gap —
+    // clients call LPFeeVault.collect(tokenId) from the API, not the raw log).
+    const grad = fixtureToken({
+      graduated: true,
+      graduated_at: 1_700_000_500,
+      v3_pool_address: "0x5555555555555555555555555555555555555555",
+      lp_token_id: "777",
+    });
+    const gradApp = createApp(makeTestDeps({ db: new FakeDb([grad]) }));
+    const data = (await readJson(await gradApp.request(`/v1/tokens/${TEST_ADDR}`))).data;
+    const parsed = tokenDetailSchema.parse(data);
+    expect(parsed.lpTokenId).toBe("777");
+  });
+  it("fees positions the tokensOwed read on the indexed lp_token_id", async () => {
+    const grad = fixtureToken({
+      graduated: true,
+      v3_pool_address: "0x5555555555555555555555555555555555555555",
+      lp_token_id: "777",
+    });
+    const seen: string[] = [];
+    const feesApp = createApp(
+      makeTestDeps({
+        db: new FakeDb([grad]),
+        uncollectedFees: {
+          async read(input) {
+            seen.push(input.lpTokenId);
+            return { token: "0", weth: "0" };
+          },
+        },
+      }),
+    );
+    const res = await feesApp.request(`/v1/tokens/${TEST_ADDR}/fees`);
+    expect(res.status).toBe(200);
+    expect(seen).toEqual(["777"]);
   });
   it("detail 404s for an unknown token", async () => {
     const res = await get("/v1/tokens/0x9999999999999999999999999999999999999999");

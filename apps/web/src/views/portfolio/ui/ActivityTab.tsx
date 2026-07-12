@@ -21,7 +21,7 @@ import {
   SideBadge,
   Skeleton,
 } from "@/shared/ui";
-import { formatEthFromWei, shortAddress } from "@/shared/lib/format";
+import { formatEthFromWei, formatPriceEth, shortAddress } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 /**
@@ -98,7 +98,8 @@ const activityColumns: ColumnDef<TradeRow>[] = [
     ),
     cell: ({ row }) => (
       <span className="hidden text-right tabular-nums text-muted sm:block">
-        {row.original.priceEth === null ? "—" : row.original.priceEth.toPrecision(2)}
+        {/* Same review fix as the token-detail feed: 2-sig decimal, never e-notation. */}
+        {formatPriceEth(row.original.priceEth)}
       </span>
     ),
   },

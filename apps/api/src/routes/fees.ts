@@ -22,13 +22,17 @@ export function feeRoutes(deps: AppDeps) {
     const token = await deps.db.getTokenListRow(address);
     if (!token) throw errors.notFound("token not found");
 
+    // The LP NFT tokenId comes from the indexed graduations row (null pre-grad)
+    // — the tokensOwed read is positioned on it, never guessed or re-derived
+    // from raw logs.
+    const lpTokenId = await deps.db.getLpTokenId(address);
     const [rows, ctx, uncollected] = await Promise.all([
       deps.db.getFeeCollections(address),
       loadProjectionContext(deps),
       deps.uncollectedFees.read({
         token: address,
         pool: token.v3_pool_address ?? "",
-        lpTokenId: "",
+        lpTokenId: lpTokenId ?? "",
       }),
     ]);
 

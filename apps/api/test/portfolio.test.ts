@@ -66,6 +66,8 @@ describe("GET /v1/portfolio/:address", () => {
     const db = new FakeDb([]);
     db.pnl.set(TEST_HOLDER, pnlRow());
     db.holdings.set(TEST_HOLDER, [fixtureHolding()]);
+    // tradeCount is LIVE (counted off trades), not the roll-up's trade_count.
+    db.tradeCounts.set(TEST_HOLDER, 5);
     const res = await app(db, {
       walletBalance: { async read() { return (2n * ETH).toString(); } },
     }).request(`/v1/portfolio/${TEST_HOLDER}`);
@@ -103,6 +105,20 @@ describe("GET /v1/portfolio/:address", () => {
   it("rejects a malformed address (400)", async () => {
     const res = await app(new FakeDb([])).request("/v1/portfolio/not-an-address");
     expect(res.status).toBe(400);
+  });
+
+  // PORT-1 regression (2026-07-12): tradeCount must NOT depend on the advisory
+  // address_pnl job — indexed trades count immediately even when the roll-up
+  // row does not exist yet (fresh DB before the job's first tick).
+  it("tradeCount is live from trades even when address_pnl has no row yet", async () => {
+    const db = new FakeDb([]);
+    db.tradeCounts.set(TEST_HOLDER, 3); // 3 indexed trades, no pnl row
+    const res = await app(db).request(`/v1/portfolio/${TEST_HOLDER}`);
+    const summary = portfolioSummarySchema.parse((await readJson(res)).data);
+    expect(summary.tradeCount).toBe(3);
+    // roll-up-derived fields stay advisory (null/0 until the job ticks).
+    expect(summary.firstSeenAt).toBeNull();
+    expect(summary.tokensCreated).toBe(0);
   });
 });
 
@@ -233,6 +249,7 @@ describe("portfolio projection units", () => {
     const summary = toPortfolioSummary({
       address: TEST_HOLDER,
       pnl: null,
+      tradeCount: 0,
       holdings: [fixtureHolding({ total_bought_tokens: "0", total_eth_in: "0" })],
       walletEthBalance: "0",
       ethUsd: null,
@@ -246,6 +263,7 @@ describe("portfolio projection units", () => {
     const summary = toPortfolioSummary({
       address: TEST_HOLDER,
       pnl: pnlRow({ pnl_confidence: "estimated", realized_pnl_low: "0", realized_pnl_high: (2n * ETH).toString() }),
+      tradeCount: 5,
       holdings: [],
       walletEthBalance: "0",
       ethUsd: null,

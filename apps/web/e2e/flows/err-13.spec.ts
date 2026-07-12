@@ -8,7 +8,7 @@ import {
   readReserves,
   routes,
   seedToken,
-  STACK,
+  isRpcRequest,
   test,
 } from "../harness";
 
@@ -30,7 +30,7 @@ test(
     await assertUi("failing browser eth_call degrades the row to 'read unavailable'", async () => {
       // Fail the browser's on-chain reads only (the API stays up on purpose:
       // its cached reserves must NEVER be substituted, §5.2).
-      await page.route(STACK.rpcUrl, async (route) => {
+      await page.route(isRpcRequest, async (route) => {
         const body = route.request().postDataJSON?.();
         const calls = Array.isArray(body) ? body : [body];
         if (calls.some((c: any) => c?.method === "eth_call")) {

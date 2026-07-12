@@ -4,8 +4,8 @@ import {
   assertOnChain,
   assertUi,
   buyOnChain,
+  chainNow,
   expect,
-  forkNowSeconds,
   publicClient,
   routes,
   seedToken,
@@ -28,11 +28,11 @@ test(
     });
 
     await assertIndexed("candles endpoint returns one merged series", async () => {
-      // FORK clock, not wall clock: accumulated warps put block timestamps ahead
-      // of Date.now(), so a wall-time window would exclude the fresh candle.
-      const now = await forkNowSeconds();
+      // CHAIN time — the fork clock is warped far ahead of the host wallclock,
+      // so a host-now window would miss the trade's candle bucket entirely.
+      const now = await chainNow();
       const res = await waitForIndexed(
-        () => api.candles(token.token, "1m", now - 3600, now + 600),
+        () => api.candles(token.token, "1m", now - 3600, now + 60),
         (r) => (r.candles?.length ?? 0) > 0,
         { label: "candles materialized" },
       );

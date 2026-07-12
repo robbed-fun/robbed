@@ -1,12 +1,12 @@
 import { routerAbi } from "@robbed/shared/abi";
 
 import {
-  forkDeadline,
   assertOnChain,
   assertUi,
   buyOnChain,
   connectAs,
   expect,
+  txDeadline,
   loadDeployedAddresses,
   publicClient,
   routes,
@@ -33,7 +33,7 @@ test(
         functionName: "quoteBuy",
         args: [token.token, 10n ** 16n],
       })) as readonly bigint[];
-      const deadline = await forkDeadline(); // fork clock, not wall
+      const deadline = await txDeadline();
       // Demand more than the quote → the on-chain slippage guard must revert.
       await expect(
         publicClient.simulateContract({

@@ -70,7 +70,26 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+/**
+ * Defense-in-depth https-only guard (hardening fix 2026-07-12, mirrors the API's
+ * UM-5 allowlist): a stored href is only ever rendered as an anchor when it
+ * parses as an absolute `https:` URL. Anything else — `javascript:`, `data:`,
+ * `http:`, relative/malformed strings — renders as inert text, so a hostile
+ * stored link can never become a clickable non-https destination even if the
+ * API-side validation were bypassed.
+ */
+function isHttpsUrl(href: string): boolean {
+  try {
+    return new URL(href).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function ExtLink({ href, label }: { href: string; label: string }) {
+  if (!isHttpsUrl(href)) {
+    return <span className="text-faint">{label}</span>;
+  }
   return (
     <a
       href={href}

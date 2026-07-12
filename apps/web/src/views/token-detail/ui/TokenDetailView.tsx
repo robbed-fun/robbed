@@ -6,7 +6,6 @@ import { MobileNav } from "@/widgets/mobile-nav";
 import { ApiError, getCandles, getHolders, getToken, getTrades } from "@/shared/api";
 import { candleWindow } from "@/widgets/price-chart";
 
-import { TokenHeader } from "./TokenHeader";
 import { TokenDetailClient } from "./TokenDetailClient";
 
 /**
@@ -57,9 +56,11 @@ export default async function TokenDetailView({ address }: { address: string }) 
           and the columns' border-r run edge-to-edge — no container padding/gap;
           each region pads itself per the mockup. */}
       <main className="mx-auto flex max-w-6xl flex-col pb-24 md:pb-0">
-        <TokenHeader token={token} holderCount={initialHolders?.holderCount} />
+        {/* TokenHeader renders inside the client island (still SSR-pre-rendered)
+            so the status pill/bonding cell track the LIVE token status (TD-6). */}
         <TokenDetailClient
           token={token}
+          holderCount={initialHolders?.holderCount}
           initialTrades={initialTrades}
           initialHolders={initialHolders}
           initialCandles={initialCandles}

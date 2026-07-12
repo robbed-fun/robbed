@@ -9,6 +9,7 @@
  * needs a bespoke state (near-graduation, freshly-graduated, hostile-treasury)
  * build exactly what it asserts.
  */
+import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { canonicalizeJson, metadataHash } from "@robbed/shared/metadata";
@@ -48,14 +49,16 @@ export function graduationEthWei(): bigint {
   return BigInt(forkConstants().curve.graduationEthWei as string);
 }
 
+/** Trade fee as the widget's plain label ("1%") — derived from the notebook, never hardcoded. */
+export function tradeFeeLabel(): string {
+  const bps = Number(forkConstants().fees.tradeFeeBps);
+  const pct = bps / 100;
+  return `${Number.isInteger(pct) ? pct : pct.toFixed(1)}%`;
+}
+
 /** Anti-sniper early-window length (M0 notebook) — warp past it before bulk buys. */
 export function antiSniperWindowSeconds(): number {
   return Number(forkConstants().antiSniper.windowSeconds);
-}
-
-/** The single V3 fee tier (M0 notebook `v3.feeTier` — 1%; never hardcoded). */
-export function v3FeeTier(): number {
-  return Number(forkConstants().v3.feeTier);
 }
 
 /** A minimal valid PNG (1×1) for the API upload path (it re-encodes anyway). */
@@ -76,23 +79,12 @@ export async function pinMetadata(fields: {
   ticker: string;
   description?: string;
 }): Promise<PinnedMetadata> {
-  // 1) image → POST /v1/uploads/image (multipart; API sniffs + re-encodes).
-  // The route is rate-limited (uploads_m 3/min, uploads_h 10/h — api mw); a
-  // suite run does several real uploads, so back off and retry on
-  // `rate_limited` exactly like a well-behaved client (bounded, ~95s).
-  let up: { data: { imageUrl: string; imageHash: string }; error: any } | undefined;
-  for (let attempt = 0; ; attempt++) {
-    const form = new FormData();
-    form.append("image", new Blob([ONE_PX_PNG], { type: "image/png" }), "seed.png");
-    const upRes = await fetch(`${STACK.apiUrl}/v1/uploads/image`, { method: "POST", body: form });
-    up = (await upRes.json()) as { data: { imageUrl: string; imageHash: string }; error: any };
-    if (!up.error) break;
-    if (up.error.code === "rate_limited" && attempt < 4) {
-      await new Promise((r) => setTimeout(r, 22_000));
-      continue;
-    }
-    throw new Error(`upload failed: ${up.error.code}`);
-  }
+  // 1) image → POST /v1/uploads/image (multipart; API sniffs + re-encodes)
+  const form = new FormData();
+  form.append("image", new Blob([ONE_PX_PNG], { type: "image/png" }), "seed.png");
+  const upRes = await fetch(`${STACK.apiUrl}/v1/uploads/image`, { method: "POST", body: form });
+  const up = (await upRes.json()) as { data: { imageUrl: string; imageHash: string }; error: any };
+  if (up.error) throw new Error(`upload failed: ${up.error.code}`);
 
   // 2) metadata → POST /v1/metadata (server canonicalizes + keccak)
   const body = {
@@ -211,10 +203,10 @@ export async function ensureBuysEnabled(): Promise<void> {
 }
 
 /** Full happy fixture: local hash → createToken → wait until the indexer lists it.
- * `pin: true` routes through the REAL API pin path (upload + POST /v1/metadata,
- * rate-limited `uploads_h`) so the indexer's verifier can actually FETCH the
- * JSON and materialize description/links — required by flows that assert
- * metadata-sourced display (TD-11). Default stays the local (unfetchable) hash. */
+ * `pin: true` routes through the REAL API upload+pin path (rate-limited 10/h!) so
+ * the metadata JSON exists in object storage and the indexer's verifier can fetch
+ * it (description/links render only then) — use it ONLY where a flow asserts
+ * fetched-metadata display (TD-11). */
 export async function seedToken(opts: {
   creator?: DevAccount;
   name: string;
@@ -249,6 +241,82 @@ export async function seedToken(opts: {
     { label: `token ${created.token} indexed` },
   );
   return { ...created, name, ticker, addresses, metadata };
+}
+
+/**
+ * ERR-6b fixture: a token whose ON-CHAIN committed metadataHash ≠ the keccak of
+ * its STORED canonical JSON — i.e. the pinned object was tampered with
+ * post-pin. Build order avoids any race with the indexer's 30s verifier pass:
+ *  1. pin real metadata via the API (hash H, object at metadata/H.json);
+ *  2. OVERWRITE the stored object with mutated bytes (object-store manipulation
+ *     via `mc` inside the minio container — a fixture operation on test infra,
+ *     exactly like `anvil_setCode`; no product surface is touched);
+ *  3. only then create the token committing H, so the verifier's FIRST fetch
+ *     already sees the tampered body → verdict `mismatch`.
+ * Requires docker access to the compose minio container; callers should skip
+ * with a clear message when unavailable (remote-stack runs).
+ */
+export async function seedMismatchToken(opts?: {
+  name?: string;
+  ticker?: string;
+}): Promise<SeededToken> {
+  await ensureCreatesEnabled();
+  const tag = nonce();
+  const name = `${opts?.name ?? "Tampered Coin"} ${tag}`;
+  const ticker = `${(opts?.ticker ?? "TMPR").slice(0, 7)}${tag}`;
+  const metadata = await pinMetadata({
+    name,
+    ticker,
+    description: "ERR-6b original description.",
+  });
+
+  // Mutate ONE field; keep the JSON valid so the verifier reaches the hash
+  // comparison (not a parse failure).
+  const mutated = metadata.canonicalJson.replace(
+    "ERR-6b original description.",
+    "ERR-6b TAMPERED post-pin.",
+  );
+  if (mutated === metadata.canonicalJson) {
+    throw new Error("[e2e seed] mismatch fixture: mutation did not apply");
+  }
+  const container = process.env.E2E_MINIO_CONTAINER ?? "robbed-minio-1";
+  const user = process.env.MINIO_ROOT_USER ?? "robbed";
+  const pass = process.env.MINIO_ROOT_PASSWORD ?? "robbed_dev_secret";
+  const bucket = process.env.R2_BUCKET ?? "robbed-assets";
+  const b64 = Buffer.from(mutated, "utf8").toString("base64");
+  // Object layout is `metadata/{keccak-NO-0x}.json` (apps/api/src/media/storage.ts).
+  const key = metadata.metadataHash.replace(/^0x/, "");
+  execSync(
+    `docker exec ${container} sh -c "mc alias set local http://localhost:9000 ${user} ${pass} >/dev/null && ` +
+      `echo ${b64} | base64 -d | mc pipe local/${bucket}/metadata/${key}.json"`,
+    { stdio: "pipe" },
+  );
+
+  const addresses = loadDeployedAddresses();
+  const created = await createTokenOnChain({
+    name,
+    symbol: ticker,
+    metadataHash: metadata.metadataHash,
+    metadataUri: metadata.metadataUri,
+    deployFeeWei: deployFeeWei(),
+  });
+  await waitForIndexed(
+    () => api.token(created.token),
+    (t) => Boolean(t?.address),
+    { label: `mismatch token ${created.token} indexed` },
+  );
+  return { ...created, name, ticker, addresses, metadata };
+}
+
+/** True when the compose minio container is reachable for the ERR-6b fixture. */
+export function canProvisionMismatchFixture(): boolean {
+  try {
+    const container = process.env.E2E_MINIO_CONTAINER ?? "robbed-minio-1";
+    execSync(`docker exec ${container} sh -c "mc --version >/dev/null 2>&1"`, { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Drive a curve to just under (or over) the graduation threshold via buys. */

@@ -11,4 +11,3 @@ export * from "./layers";
 export * from "./wallet";
 export { sel, copy, routes, launch, portfolio, portfolioCopy } from "./selectors";
 export * from "./seed";
-export { injectMaliciousLinks, clearMetadataVerification } from "./db";

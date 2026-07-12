@@ -880,6 +880,46 @@ export const curveFactoryAbi = [
   },
   {
     "type": "function",
+    "name": "curveDefaults",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct ICurveFactory.CurveDefaults",
+        "components": [
+          {
+            "name": "virtualEth0",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "virtualToken0",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "curveSupply",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "lpTranche",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "graduationEth",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "curveOf",
     "inputs": [
       {

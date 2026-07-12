@@ -18,6 +18,8 @@ async function get<T = unknown>(path: string): Promise<T> {
 export const api = {
   healthz: () => fetch(`${STACK.apiUrl}/v1/healthz`).then((r) => r.ok),
   tokens: (q = "") => get<{ tokens: any[]; nextCursor: string | null }>(`/v1/tokens${q}`),
+  // king-of-the-hill wraps the leader as `{ token }` (api.md §3.3) — unwrap it.
+  kingOfTheHill: async () => (await get<{ token: any }>(`/v1/tokens/king-of-the-hill`)).token,
   token: (address: string) => get<any>(`/v1/tokens/${address.toLowerCase()}`),
   // /v1/search returns `{ results }`; normalize to `{ tokens }` for the specs.
   search: async (q: string) => {
@@ -26,12 +28,11 @@ export const api = {
   },
   trades: (address: string, limit = 50) =>
     get<{ trades: any[] }>(`/v1/tokens/${address.toLowerCase()}/trades?limit=${limit}`),
-  // /v1/trades/:txHash returns `{ trades: [...] }` (one tx can carry several
-  // Trade logs — verified live 2026-07-12); normalize to the first trade so
-  // predicates can read a single record. Empty array → null (keeps polling).
+  // `/v1/trades/:txHash` returns ALL Trade rows in the tx as `{ trades: [...] }`
+  // (a create-with-initial-buy tx has two); unwrap the first for single-trade specs.
   tradeByTx: async (txHash: string) => {
     const d = await get<{ trades: any[] }>(`/v1/trades/${txHash.toLowerCase()}`);
-    return d.trades?.[0] ?? null;
+    return d.trades?.[0];
   },
   candles: (address: string, interval: string, from: number, to: number) =>
     get<{ candles: any[] }>(

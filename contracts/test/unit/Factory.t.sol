@@ -226,6 +226,56 @@ contract FactoryTest is BaseFixture {
         assertEq(factory.owner(), newOwner, "ownership not accepted");
     }
 
+    // ───────── curveDefaults() — factory-level curve-shape view (§12.38/§12.39, LAUNCH-2) ─────────
+
+    function test_curveDefaults_matchesConstructorInputs_beforeAnyCurveExists() public view {
+        // LAUNCH-2: the Create-page preview needs the FACTORY-level defaults pre-create —
+        // per-curve immutables don't exist yet, and curveParameters() is deploy-transient.
+        assertEq(factory.tokenCounter(), 0, "precondition: no curve deployed yet");
+        ICurveFactory.CurveDefaults memory d = factory.curveDefaults();
+        assertEq(d.virtualEth0, TestConstants.VIRTUAL_ETH_0, "virtualEth0 != constructor input");
+        assertEq(d.virtualToken0, TestConstants.VIRTUAL_TOKEN_0, "virtualToken0 != constructor input");
+        assertEq(d.curveSupply, TestConstants.CURVE_SUPPLY, "curveSupply != constructor input");
+        assertEq(d.lpTranche, TestConstants.LP_TRANCHE, "lpTranche != constructor input");
+        assertEq(d.graduationEth, TestConstants.GRADUATION_ETH, "graduationEth != constructor input");
+        // Non-zero on any configured factory (the constructor rejects zero shape values), so the
+        // pre-create preview can always render.
+        assertGt(d.virtualEth0, 0, "virtualEth0 zero");
+        assertGt(d.virtualToken0, 0, "virtualToken0 zero");
+        assertGt(d.curveSupply, 0, "curveSupply zero");
+        assertGt(d.lpTranche, 0, "lpTranche zero");
+        assertGt(d.graduationEth, 0, "graduationEth zero");
+    }
+
+    function test_curveDefaults_matchCurveSnapshot_afterCreate() public {
+        // The defaults the view exposes are exactly what gets snapshotted into a new curve.
+        ICurveFactory.CurveDefaults memory d = factory.curveDefaults();
+        (, BondingCurve curve) = _create();
+        assertEq(curve.VIRTUAL_ETH_0(), d.virtualEth0, "curve virtualEth0 != defaults");
+        assertEq(curve.VIRTUAL_TOKEN_0(), d.virtualToken0, "curve virtualToken0 != defaults");
+        assertEq(curve.CURVE_SUPPLY(), d.curveSupply, "curve curveSupply != defaults");
+        assertEq(curve.LP_TOKEN_TRANCHE(), d.lpTranche, "curve lpTranche != defaults");
+        assertEq(curve.GRADUATION_ETH(), d.graduationEth, "curve graduationEth != defaults");
+    }
+
+    function test_curveParameters_isAllZeroOutsideCreateToken() public {
+        // Documented-by-test (LAUNCH-2 root cause): curveParameters() is the deploy-transient
+        // CREATE2 staging read — ALL ZERO before and after createToken; never a UI config read.
+        ICurveFactory.CurveParameters memory p = factory.curveParameters();
+        assertEq(p.token, address(0), "staging non-zero before create");
+        assertEq(p.virtualEth0, 0, "staging non-zero before create");
+        _create();
+        p = factory.curveParameters();
+        assertEq(p.token, address(0), "staging not deleted after create");
+        assertEq(p.router, address(0), "staging not deleted after create");
+        assertEq(p.virtualEth0, 0, "staging not deleted after create");
+        assertEq(p.virtualToken0, 0, "staging not deleted after create");
+        assertEq(p.curveSupply, 0, "staging not deleted after create");
+        assertEq(p.lpTranche, 0, "staging not deleted after create");
+        assertEq(p.graduationEth, 0, "staging not deleted after create");
+        assertEq(p.tradeFeeBps, 0, "staging not deleted after create");
+    }
+
     // ─────── No sell-pause exists (proof by construction: config surface only) ───────
 
     function test_config_exposesOnlyBuyAndCreatePauses() public {

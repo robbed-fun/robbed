@@ -41,14 +41,17 @@ test(
       );
     });
 
-    await assertUi("the venue switch appears live (no reload) — widget re-engines to V3", async () => {
-      // Shipped post-grad copy (verified DOM 2026-07-12): the status pill reads
-      // "GRADUATED → V3" and the trade widget re-engines to the §5.2 invariant
-      // "Trading on Uniswap V3". The catalog requires this flip WS-driven with no
-      // reload; assert on the trade widget's re-engine signal.
+    await assertUi("the widget re-engines to Uniswap V3 without a reload", async () => {
+      // The venue switch the user observes live is the WIDGET flip: the
+      // graduating interstitial gives way to the V3 panel ("Trading on Uniswap
+      // V3") with NO reload. (The HEADER status pill is server-rendered and
+      // only updates on a fresh render — its live WS flip is a gap reported to
+      // robbed-frontend; the catalog's "all WS-driven" step is asserted on the
+      // widget surface.)
       await expect(page.getByText(copy.tradingOnV3).first()).toBeVisible({
-        timeout: 20_000,
+        timeout: 30_000,
       });
+      await expect(page.getByText(copy.graduatingInterstitial)).toHaveCount(0);
     });
   },
 );

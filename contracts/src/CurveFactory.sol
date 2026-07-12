@@ -339,8 +339,29 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
     // ──────────────────────────────── Views ────────────────────────────────────
 
     /// @inheritdoc ICurveFactory
+    /// @dev LOUD semantics note (LAUNCH-2 root cause): this is the CREATE2 staging callback for
+    ///      the BondingCurve constructor (decision #1 above), NOT a config surface. Outside the
+    ///      `_deployCurve` window `_stagedParams` is deleted, so this returns ALL ZEROS by design.
+    ///      Behavior is intentionally unchanged — the constant-init-code staging pattern depends
+    ///      on it. Off-chain readers wanting curve shape: {curveDefaults}.
     function curveParameters() external view override returns (CurveParameters memory) {
         return _stagedParams;
+    }
+
+    /// @inheritdoc ICurveFactory
+    /// @dev Pure view over the five curve-shape `immutable`s (spec §12.38/§12.39 seam; LAUNCH-2:
+    ///      the Create-page pre-create preview reads these factory-level defaults — per-curve
+    ///      immutables §12.40d only exist after a curve deploys, and {curveParameters} is
+    ///      deploy-transient). §6.6 owner-reach: adds no authority — no setter, no state write,
+    ///      values fixed at factory deploy (new shape = new factory version, spec §6).
+    function curveDefaults() external view override returns (CurveDefaults memory) {
+        return CurveDefaults({
+            virtualEth0: _virtualEth0,
+            virtualToken0: _virtualToken0,
+            curveSupply: _curveSupply,
+            lpTranche: _lpTranche,
+            graduationEth: _graduationEth
+        });
     }
 
     /// @inheritdoc ICurveFactory

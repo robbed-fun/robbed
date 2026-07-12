@@ -7,6 +7,7 @@ import {
   routes,
   seedToken,
   test,
+  waitForHydration,
   waitForIndexed,
 } from "../harness";
 
@@ -33,6 +34,9 @@ test(
 
     await assertUi("search box shows the debounced dropdown and Enter navigates", async () => {
       await page.goto(routes.discover);
+      // Hydration barrier: a fill before React hydration settles is wiped when
+      // the client tree regenerates (see waitForHydration).
+      await waitForHydration(page);
       const box = page.getByRole("searchbox").first();
       await box.fill(token.ticker);
       // Results render as buttons inside the popover; wait for the dropdown entry.

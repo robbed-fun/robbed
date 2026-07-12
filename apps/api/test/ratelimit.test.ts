@@ -57,3 +57,25 @@ describe("resolveClientIp (anti-spoof)", () => {
     expect(resolveClientIp(c, "X-Forwarded-For", "10.0.0.9")).toBe("1.2.3.4");
   });
 });
+
+describe("RATE_LIMIT_SCALE (dev/e2e multiplier — never a bypass)", () => {
+  // ROUTE_LIMITS is computed at module load; this suite runs with the ambient
+  // env (unset or the compose value), so assert the INVARIANTS rather than a
+  // specific product: limits are exact multiples of the §6.3 base values and
+  // the multiplier is a clamped integer ≥ 1.
+  it("limits are the §6.3 base values times one shared integer scale ≥ 1", async () => {
+    const { ROUTE_LIMITS } = await import("../src/mw/ratelimit");
+    const base = { uploadsHour: 10, uploadsMin: 3, metadata: 20, search: 60, reads: 300, admin: 60 };
+    const scale = ROUTE_LIMITS.uploadsHour.limit / base.uploadsHour;
+    expect(Number.isInteger(scale)).toBe(true);
+    expect(scale).toBeGreaterThanOrEqual(1);
+    for (const [k, b] of Object.entries(base)) {
+      expect(ROUTE_LIMITS[k as keyof typeof ROUTE_LIMITS].limit).toBe(b * scale);
+    }
+  });
+  it("windows are never scaled", async () => {
+    const { ROUTE_LIMITS } = await import("../src/mw/ratelimit");
+    expect(ROUTE_LIMITS.uploadsHour.windowMs).toBe(60 * 60 * 1000);
+    expect(ROUTE_LIMITS.uploadsMin.windowMs).toBe(60 * 1000);
+  });
+});

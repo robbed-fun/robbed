@@ -10,3 +10,6 @@
  * code consumes them anymore.
  */
 export { TokenCard } from "./ui/TokenCard";
+// Live token status (TD-6): WS-reconciled TokenDetail + its pure venue-flip rules.
+export { applyGraduated, tradeImpliesGraduation } from "./model/live";
+export { useLiveTokenDetail } from "./model/use-live-token";

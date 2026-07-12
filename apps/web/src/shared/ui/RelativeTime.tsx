@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 import { formatAge } from "@/shared/lib/format";
+import { useNowTick } from "@/shared/lib/use-now";
 import { cn } from "@/shared/lib/utils";
 
 /**
  * Live-ticking relative age from a unix-seconds block timestamp (indexer time).
- * Client-only + `suppressHydrationWarning`: "age" is inherently request-relative,
- * so the server HTML and the first client paint can legitimately differ by a
- * tick — suppressing avoids a spurious hydration warning without hiding real
- * mismatches elsewhere. Never uses `block.number` (CLAUDE.md) — only timestamps.
+ * Hydration-safe (hardening fix, 2026-07-12): the server and the first client
+ * render emit a deterministic placeholder — never a `Date.now()`-derived string,
+ * which mismatched between SSR and hydration — and the real age fills right
+ * after mount via `useNowTick` (no `suppressHydrationWarning` band-aid).
+ * Never uses `block.number` (CLAUDE.md) — only timestamps.
  */
 export function RelativeTime({
   unixSeconds,
@@ -19,14 +19,10 @@ export function RelativeTime({
   unixSeconds: number;
   className?: string;
 }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useNowTick(30_000);
   return (
-    <span suppressHydrationWarning className={cn("tabular-nums", className)}>
-      {formatAge(unixSeconds, now)}
+    <span className={cn("tabular-nums", className)}>
+      {now === null ? "…" : formatAge(unixSeconds, now)}
     </span>
   );
 }

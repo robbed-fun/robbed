@@ -15,12 +15,9 @@ test(
   "TD-11 token info renders description, https-only links and Blockscout links",
   { tag: ["@flow:TD-11", "@layer:indexed", "@layer:ui"] },
   async ({ page }) => {
-    // Real pin path = upload rate-limit backoff (uploads_m 3/min) + a 30s
-    // verifier tick — triple the budget rather than race either.
-    test.slow();
-    // `pin: true` — the description renders from the INDEXED metadata document,
-    // so the JSON must be really pinned (API upload + pin) for the indexer's
-    // verifier to fetch it; a local-only hash stays "unfetched"/description-null.
+    // pin: true — the description renders only after the indexer's verifier
+    // FETCHES the pinned JSON from object storage (local fake URIs stay
+    // "unfetched" and the DTO's description stays null by design).
     const token = await seedToken({
       name: "Info Coin",
       ticker: "INFO",
@@ -28,16 +25,21 @@ test(
       pin: true,
     });
 
-    await assertIndexed("token summary + verified metadata are indexer-sourced", async () => {
+    await assertIndexed("token summary + fetched metadata are indexer-sourced", async () => {
+      // The metadata verifier pass runs on a 30s cadence — allow one full
+      // cadence plus the fetch before the description can surface. The verifier
+      // also works through a QUEUE — after a full-matrix run it holds ~40 earlier
+      // tokens, so a fresh token's first pass can take several cadences (observed:
+      // back-to-back matrix runs flaked at 90s). Model the busy-verifier case,
+      // not just the idle one; the assertions below stay exact.
+      test.setTimeout(240_000);
       const t = await waitForIndexed(
         () => api.token(token.token),
-        // Wait for the verifier to fetch + materialize the description (async).
+        // Wait for the metadata verifier to fetch + surface the description.
         (t) => Boolean(t?.address && t?.creator && t?.description),
-        // The verifier ticks every 30s (indexer VERIFIER_POLL_MS) — allow a full
-        // tick + fetch before declaring the metadata un-materialized.
-        { label: "token info + metadata indexed", timeoutMs: 60_000 },
+        { label: "token info + fetched description indexed", timeoutMs: 180_000, intervalMs: 3_000 },
       );
-      // Creator is the enriched object shape (api.md §3.4: address + tokensCreated).
+      // The DTO's creator is an OBJECT ({ address, tokensCreated }) — api.md §3.4.
       expect(t.creator.address ?? t.creator).toMatch(/^0x[0-9a-fA-F]{40}$/);
       expect(t.description).toContain("TD-11 e2e flow");
     });
@@ -45,10 +47,10 @@ test(
     await assertUi("info block shows description + Blockscout contract link", async () => {
       await page.goto(routes.token(token.token));
       await expect(page.getByText(/TD-11 e2e flow/i).first()).toBeVisible();
-      // The Contract row's link carries the short address as its NAME; assert
-      // by href shape (…blockscout.com/token/<address>) — structural, not copy.
+      // The contract link's visible label is the SHORT ADDRESS — match the href
+      // (Blockscout /token/<address>, built by the explorer helper).
       const explorerLink = page
-        .locator(`a[href*="blockscout.com/token/${token.token.toLowerCase()}"]`)
+        .locator(`a[href*="blockscout"][href*="${token.token.toLowerCase()}"]`)
         .first();
       await expect(explorerLink).toBeVisible();
     });

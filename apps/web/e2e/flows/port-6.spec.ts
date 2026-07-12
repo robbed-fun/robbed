@@ -55,12 +55,12 @@ test(
     });
 
     await assertUi("dropping ?address= falls back to the connected wallet ('· you' returns)", async () => {
-      // IN-APP navigation (header "portfolio" link), not a full page.goto: a hard
-      // reload tears down the in-memory mock-connector session (the e2e connector
-      // does not persist/reconnect across loads), which would test reconnect
-      // behavior instead of the subject swap this flow declares.
-      await page.getByRole("link", { name: /^portfolio$/i }).click();
-      await expect(page).toHaveURL(/\/portfolio(?!\?address=)/);
+      // Drop the filter via CLIENT-SIDE navigation (header nav) — a full reload
+      // would sever the mock-connector session (all four share the `mock`
+      // connector id, so wagmi's reconnect-on-mount cannot restore it; harness
+      // limitation, not a product surface).
+      await page.getByRole("link", { name: /^portfolio$/i }).first().click();
+      await expect(page).toHaveURL(/\/portfolio(?!\?)/);
       await expect(portfolio.addressChip(page, connected.address)).toBeVisible();
       await expect(portfolio.youSuffix(page).first()).toBeVisible();
     });

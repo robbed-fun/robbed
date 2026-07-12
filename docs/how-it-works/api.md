@@ -121,6 +121,8 @@ GET /v1/tokens/king-of-the-hill                                 (§5.1 hero)
 GET /v1/tokens/:address                                         (§5.2 detail + Trust panel)
   200 → TokenDetail: TokenCard fields +
     description, links, curveAddress, v3PoolAddress?, graduatedAt?,
+    lpTokenId?,                                                 -- LP NFT tokenId (graduations.lp_token_id); present iff graduated —
+                                                                --   drives LPFeeVault.collect(tokenId) (additive 2026-07-12, COLLECT-1 gap)
     supply: { total, curveHeld, lpTranche }                     -- from balances rows for curve/pool
     reserves: { virtualEth, virtualToken, realEth, realToken }  -- live curve state (Trust panel §5.2)
     graduation: { thresholdEth, progressPct }
@@ -184,6 +186,10 @@ GET /v1/portfolio/:address                                     (§5.4 stat cells
         pnlAllTime: EthPnlRange | null                          -- realized (address_pnl) + unrealized (live); null when no cost basis
   NO confirmationState (aggregate roll-up, like /stats and holders).
   Source: indexer `address_pnl` (roll-up) + `balances` (holdings) + RPC (wallet ETH).
+  tradeCount is a LIVE count(*) off `trades` (trades_trader_idx) — NOT the roll-up's
+  trade_count, which lags by up to one job interval and is 0 on a fresh DB before the
+  first tick (PORT-1, fixed 2026-07-12). firstSeenAt / tokensCreated / realized PnL
+  remain roll-up-sourced: advisory latency ≤ PNL_JOB_INTERVAL_MS (default 60s).
 
 GET /v1/portfolio/:address/holdings?cursor=&limit=              (§5.4 HOLDINGS table)
   Projects balances ⋈ tokens (BalanceRow IS the holding — anti-drift). Cursor: balance DESC.

@@ -17,6 +17,18 @@ async function bridgeReady(page: Page): Promise<void> {
   });
 }
 
+/**
+ * Hydration barrier. The app currently throws a hydration-text mismatch (age
+ * cells; reported to robbed-frontend) which makes React REGENERATE the client
+ * tree — any input filled before that settles is silently wiped. The e2e bridge
+ * mounts from a client effect, i.e. strictly AFTER hydration/regeneration
+ * commits, so waiting on it is a reliable "safe to interact" signal even for
+ * flows that never connect a wallet.
+ */
+export async function waitForHydration(page: Page): Promise<void> {
+  await bridgeReady(page);
+}
+
 export async function connectAs(page: Page, role: Role): Promise<string> {
   await bridgeReady(page);
   const idx = ROLE_INDEX[role];

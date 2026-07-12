@@ -236,11 +236,13 @@ export function createBunDb(config: Config): Db {
            mv.status AS mv_status, mv.verified_at AS mv_verified_at,
            fs.organic_holder_pct_low AS fs_hlow, fs.organic_holder_pct_high AS fs_hhigh,
            fs.organic_volume_pct AS fs_vol, fs.flagged_cluster_vol_pct_24h AS fs_cluster,
-           fs.updated_at AS fs_updated
+           fs.updated_at AS fs_updated,
+           g.lp_token_id AS g_lp_token_id
          ${TOKEN_LIST_FROM}
          LEFT JOIN balances bc ON bc.token_address = t.address AND bc.holder = t.curve_address
          LEFT JOIN balances bp ON bp.token_address = t.address AND bp.holder = t.v3_pool_address
          LEFT JOIN token_flow_stats fs ON fs.token_address = t.address
+         LEFT JOIN graduations g ON g.token_address = t.address
          WHERE t.address = $1`,
         [address],
       )) as Record<string, unknown>[];
@@ -263,6 +265,7 @@ export function createBunDb(config: Config): Db {
         creator_tokens_created: num(r.creator_tokens_created),
         curve_balance: nstr(r.curve_balance),
         pool_balance: nstr(r.pool_balance),
+        lp_token_id: nstr(r.g_lp_token_id),
         verification: r.mv_onchain
           ? {
               onchain_hash: String(r.mv_onchain),
@@ -450,6 +453,14 @@ export function createBunDb(config: Config): Db {
       return rows.map(mapFee);
     },
 
+    async getLpTokenId(token) {
+      const rows = (await ro.unsafe(
+        "SELECT lp_token_id FROM graduations WHERE token_address = $1",
+        [token],
+      )) as Record<string, unknown>[];
+      return rows[0] ? str(rows[0].lp_token_id) : null;
+    },
+
     // ── portfolio (spec §5.4) ─────────────────────────────────────────────────
     async getAddressPnl(address) {
       const rows = (await ro.unsafe(
@@ -474,6 +485,16 @@ export function createBunDb(config: Config): Db {
         pnl_confidence: (r.pnl_confidence as AddressPnlRow["pnl_confidence"]) ?? null,
         updated_at: iso(r.updated_at),
       } satisfies AddressPnlRow;
+    },
+
+    async countAddressTrades(address) {
+      // Live read off trades_trader_idx (trader, block_timestamp DESC) — cheap
+      // btree count; NOT the advisory address_pnl roll-up (60s job lag, PORT-1).
+      const rows = (await ro.unsafe(
+        "SELECT count(*)::int AS n FROM trades WHERE trader = $1",
+        [address],
+      )) as Record<string, unknown>[];
+      return num(rows[0]?.n);
     },
 
     async getAllHoldings(address) {

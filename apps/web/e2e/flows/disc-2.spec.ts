@@ -36,11 +36,12 @@ test(
     });
 
     await assertUi("ticker entry appears at the head and links to detail", async () => {
-      // Tape entries expose the token NAME (twice) + creator in their accessible
-      // name — never the ticker symbol (verified DOM snapshot 2026-07-12). The
-      // seeded name is run-unique (nonce suffix), so match on it.
-      const entry = page.getByRole("link", { name: new RegExp(token.name, "i") }).first();
+      // Tape rows are <Link href="/t/<addr>"> whose visible text is the token
+      // NAME (the ticker only feeds the avatar) — target the href, then check
+      // the row renders this launch's name.
+      const entry = page.locator(`a[href="/t/${token.token.toLowerCase()}"]`).first();
       await expect(entry).toBeVisible({ timeout: 15_000 });
+      await expect(entry).toContainText(new RegExp(token.name, "i"));
       await entry.click();
       await expect(page).toHaveURL(new RegExp(`/t/${token.token}`, "i"));
     });

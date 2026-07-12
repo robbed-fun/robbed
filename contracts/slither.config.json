@@ -12,7 +12,7 @@
   "exclude_informational_rationale": {
     "naming-convention": "Deliberate: UPPER_SNAKE_CASE public view getters (e.g. TRADE_FEE_BPS(), VIRTUAL_ETH_0(), MAX_EARLY_BUY(), FEE_TIER()) mirror the per-curve immutables and are the CANONICAL ABI names consumed by the indexer/frontend read paths (contracts.md §7.4, spec §12.38). Renaming would break the cross-service ABI contract. Style-only, no security impact.",
     "low-level-calls": "Deliberate: ETH is sent via `.call{value:}(\"\")` with typed custom-error reverts (spec §5.4) — the only correct primitive for the pull-payment/trader-payout paths (BondingCurve._sendEth, Router._sendEth). Recipients are the factory treasury, the seller, or the graduation caller; each site is nonReentrant + CEI.",
-    "too-many-digits": "Single site: CurveFactory._computeCurveAddress uses the CREATE2 init-code keccak literal — inherent to deterministic address precomputation (contracts.md §2.2 decision #1).",
+    "too-many-digits": "Single site: CurveFactory._computeCurveAddress derives the CREATE2 init-code hash as keccak256(type(BondingCurve).creationCode) — the detector flags the large creation-code constant the compiler inlines, inherent to deterministic address precomputation (contracts.md §2.2 decision #1). No hand-written numeric literal exists at the site.",
     "cyclomatic-complexity": "Informational; BondingCurve.buy is the graduation-clamp + anti-sniper + slippage path and is intentionally linear/branchy for auditability, not decomposed across trust boundaries.",
     "unindexed-event-address": "RouterSet(address)/MigratorSet(address) are one-time deploy-wiring admin events (contracts.md §7.2 step 5); not indexed by the Ponder pipeline (spec §8), indexing them buys nothing."
   }
