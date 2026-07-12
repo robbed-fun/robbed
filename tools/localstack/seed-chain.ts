@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * seed-chain.ts — `bun run dev:seed` (implementation-plan I-4, goal-gate G-2).
+ * seed-chain.ts — `bun run dev:seed` (plan item I-4, goal-gate G-2).
  * Owner: hoodpad-contracts (path-ownership note: `tools/localstack/seed-chain*`
  * + anvil/deploy glue → hoodpad-contracts; the surrounding compose/orchestration
  * is hoodpad-indexer's — this file deliberately touches nothing else there).

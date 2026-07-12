@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# robbed hard-rule enforcement (CLAUDE.md / launchpad-spec.md).
+# robbed hard-rule enforcement (CLAUDE.md / docs/spec.md).
 # PostToolUse hook for Write|Edit|MultiEdit: greps the just-written file for
 # spec violations. Exit 2 blocks the result and feeds the message back to the
 # agent; exit 0 passes. High-precision rules only — anything fuzzy belongs in
@@ -18,7 +18,7 @@ fi
 
 # Docs, spec, and .claude assets discuss the rules — never enforce on them.
 case "$file" in
-  */launchpad-spec.md|*/CLAUDE.md|*/docs/*|*/.claude/*|*README*|*.lock|*/lib/*) exit 0 ;;
+  *.md|*/docs/*|*/audits/*|*/.claude/*|*README*|*.lock|*/lib/*) exit 0 ;;
 esac
 
 fail=0

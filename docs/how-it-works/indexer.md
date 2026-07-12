@@ -46,7 +46,7 @@ Startup assertions: `pg_trgm` installed; V3 addresses present and non-zero; WETH
 
 ## 3. Event inventory & Postgres schema
 
-Event signatures below are the **canonical shapes ratified in spec §12.15** and normatively defined in `docs/services/contracts.md` §2 (contracts.md is authoritative for ABIs; this doc mirrors them). M1 artifacts must match byte-for-byte; **any divergence at implementation time is reported to robbed-architect, not worked around** (OI-1, resolved — the shapes are now a contract, not an assumption).
+Event signatures below are the **canonical shapes ratified in spec §12.15** and normatively defined in `docs/how-it-works/contracts.md` §2 (contracts.md is authoritative for ABIs; this doc mirrors them). M1 artifacts must match byte-for-byte; **any divergence at implementation time is reported to robbed-architect, not worked around** (OI-1, resolved — the shapes are now a contract, not an assumption).
 
 Ponder note: tables are declared in `ponder.schema.ts`; the SQL below is the *target relational shape* Ponder must produce (Ponder generates DDL from the schema file — column names/types below are normative, exact DDL is Ponder's). Tables marked **[offchain]** are written outside Ponder's reorg-tracked store (see §7.3) because they are updated by side processes (confirmation tracker, metadata verifier, moderation sync) and must not be rolled back by Ponder reorg handling.
 
@@ -384,7 +384,7 @@ CREATE TABLE metadata_verifications (
 
 ### 3.11 Moderation flags **[offchain]** (§8.4 — written by the API, read by both)
 
-Owned by the API service (see `docs/services/api.md` §4); listed here because token list queries join it. The indexer never writes it. Listing gating = `WHERE moderation.visibility != 'hidden'` applied in API list/search endpoints — chain state and raw indexed data are never touched by moderation (§8.4).
+Owned by the API service (see `docs/how-it-works/api.md` §4); listed here because token list queries join it. The indexer never writes it. Listing gating = `WHERE moderation.visibility != 'hidden'` applied in API list/search endpoints — chain state and raw indexed data are never touched by moderation (§8.4).
 
 ```sql
 CREATE TABLE moderation_status (

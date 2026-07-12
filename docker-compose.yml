@@ -139,7 +139,7 @@ services:
       "
     restart: "no"
 
-  # ── anvil — local chain (implementation-plan I-2): FORK of Robinhood Chain (4663) ──
+  # ── anvil — local chain (plan item I-2): FORK of Robinhood Chain (4663) ──
   # Fork mode (not a bare 31337 chain) is required: the indexer fail-closed asserts
   # chainId 4663 + canonical WETH/V3 (apps/indexer/src/assertions.ts), which only a fork
   # satisfies. Fork URL from the official Blockscout instance config

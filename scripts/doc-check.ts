@@ -12,24 +12,22 @@
  *                 any) to a real heading (GitHub slug rules).
  *  b. spec-ref  — every §N / §N.M / §N.M.K reference in docs/** resolves to a
  *                 section that exists. Valid targets: numbered headings in
- *                 launchpad-spec.md plus numbered list items scoped under them
+ *                 docs/spec.md plus numbered list items scoped under them
  *                 (so §12.15 = decision 15 under "## 12", §6.3.2 = step 2
  *                 under "### 6.3"). Docs also use § for their OWN sections
  *                 ("see §3.4 of this doc") and for other docs named on the
- *                 same line ("contracts.md §2.3/§2.4", "development-flow
- *                 §5.8"), so a bare reference is accepted if it exists in the
- *                 spec OR the containing file OR any doc mentioned (by
- *                 basename, with or without .md) earlier in the same line. A
- *                 reference immediately preceded by "<name>.md" is resolved
- *                 strictly against that named doc; if a bare basename ever
- *                 matches more than one known location, the ref is accepted
- *                 when it resolves in ANY candidate — basename collisions
- *                 must not manufacture false positives. (Since the 2026-07-12
- *                 docs refactor, basenames are unique by policy — plans are
- *                 docs/plans/<service>-plan.md, distinct from
- *                 docs/services/<service>.md — so this is defense-in-depth,
- *                 not a live code path; see docs/README.md rules.) One immediately preceded by the word
- *                 "spec" resolves strictly against launchpad-spec.md.
+ *                 same line ("contracts.md §2.3/§2.4"), so a bare reference
+ *                 is accepted if it exists in the spec OR the containing file
+ *                 OR any doc mentioned (by basename, with or without .md)
+ *                 earlier in the same line. A reference immediately preceded
+ *                 by "<name>.md" is resolved strictly against that named doc;
+ *                 if a bare basename ever matches more than one known
+ *                 location, the ref is accepted when it resolves in ANY
+ *                 candidate — basename collisions must not manufacture false
+ *                 positives (basenames are unique by policy since 2026-07-12;
+ *                 defense-in-depth, see docs/README.md). One immediately
+ *                 preceded by the word "spec" resolves strictly against
+ *                 docs/spec.md.
  *                 Limitation (deliberate, to keep false positives near
  *                 zero): a bare ref that is broken as a spec ref but happens
  *                 to exist under a doc name mentioned anywhere on the line —
@@ -55,10 +53,26 @@
  *  f. openapi   — apps/api/openapi.yaml, if present, parses as YAML.
  *  g. env-sync  — `.env.example` ⇄ docs/runbooks/env-inventory.md, both
  *                 directions, driven by the inventory's <!-- env-sync … -->
- *                 markers (implementation-plan P-1 / G-9 env leg). Logic lives
- *                 in scripts/env-sync-check.ts (also standalone-runnable and a
- *                 named validate.sh stage); included here so CI's docs job
- *                 enforces it on every push.
+ *                 markers. Logic lives in scripts/env-sync-check.ts (also
+ *                 standalone-runnable and a named validate.sh stage); included
+ *                 here so CI's docs job enforces it on every push.
+ *  h. docs-placement — the two-bucket docs policy (docs/README.md):
+ *                 (h1) forbidden internal-tracker artifacts fail loud — the
+ *                      retired paths (docs/implementation-plan.md, docs/plans/,
+ *                      docs/decisions.md, docs/development-flow.md,
+ *                      docs/traceability.md, docs/review/, docs/archive/) and
+ *                      any *.md whose basename matches
+ *                      /(implementation-plan|progress|status-report|standup|
+ *                      roadmap-tracker)/i anywhere outside .claude/;
+ *                 (h2) every *.md under docs/ must be in the sanctioned set —
+ *                      docs-root allowlist (README/spec/architecture/
+ *                      security-properties/threat-model) or a sanctioned
+ *                      subdir (how-it-works/, runbooks/, design/);
+ *                 (h3) machine-consumed files must exist at the exact paths
+ *                      their consumer scripts expect (spec, env-inventory,
+ *                      user-flows pair) so a move without re-pointing fails
+ *                      HERE with a named error instead of silently disabling
+ *                      a gate.
  */
 
 import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
@@ -208,7 +222,7 @@ function parseMd(path: string): MdFile {
 const mdFiles = new Map<string, MdFile>();
 for (const p of allMd) mdFiles.set(p, parseMd(p));
 
-const SPEC_PATH = join(ROOT, "launchpad-spec.md");
+const SPEC_PATH = join(ROOT, "docs/spec.md");
 const spec = mdFiles.get(SPEC_PATH);
 
 // strip inline code spans so `[x]` / `§y` inside backticks can't confuse the
@@ -264,17 +278,16 @@ for (const f of mdFiles.values()) {
 const SECREF_RE = /§\s?(\d+(?:\.\d+)*)/g;
 
 // All docs a name could denote. Basenames are unique by policy since the
-// 2026-07-12 docs refactor (docs/plans/api-plan.md vs docs/services/api.md —
-// the old api.md-in-both-directories collision is gone), but if a bare basename ever
-// collides again the caller accepts a ref that resolves in ANY candidate so
-// collisions don't manufacture false positives (same near-zero-FP stance as
-// the bare-ref limitation above).
+// 2026-07-12 docs refactor, but if a bare basename ever collides again the
+// caller accepts a ref that resolves in ANY candidate so collisions don't
+// manufacture false positives (same near-zero-FP stance as the bare-ref
+// limitation above).
 function findNamedDocs(name: string, fromDir: string): MdFile[] {
   const candidates = new Set([
     resolve(fromDir, name),
     join(ROOT, name),
     join(ROOT, "docs", name),
-    join(ROOT, "docs", "services", name),
+    join(ROOT, "docs", "how-it-works", name),
   ]);
   const out: MdFile[] = [];
   for (const c of candidates) {
@@ -284,9 +297,9 @@ function findNamedDocs(name: string, fromDir: string): MdFile[] {
   return out; // empty: named doc we can't locate — stay silent
 }
 
-// doc tokens ("contracts.md", "contracts", "development-flow", ...) -> files,
-// so "contracts.md §2.3/§2.4" and "development-flow §5.8" resolve against the
-// doc named on the line even when the ref itself isn't adjacent to the name
+// doc tokens ("contracts.md", "contracts", "architecture", ...) -> files, so
+// "contracts.md §2.3/§2.4" and "architecture.md §6" resolve against the doc
+// named on the line even when the ref itself isn't adjacent to the name
 const docByToken = new Map<string, MdFile[]>();
 for (const f of mdFiles.values()) {
   const base = basename(f.path).toLowerCase();
@@ -311,21 +324,21 @@ for (const f of mdFiles.values()) {
       const named = before.match(/([\w./-]+\.md)[`'")\]]*[\s(]*$/);
       let ok: boolean;
       let where: string;
-      if (named && basename(named[1]) !== "launchpad-spec.md") {
+      if (named && basename(named[1]) !== "spec.md") {
         const docs = findNamedDocs(named[1], dirname(f.path));
         if (docs.length === 0) continue;
         ok = docs.some((d) => d.sections.has(ref));
         where = named[1];
       } else if (named || /\bspec['’s]*[\s:(]*$/i.test(before)) {
         ok = spec?.sections.has(ref) ?? true;
-        where = "launchpad-spec.md";
+        where = "docs/spec.md";
       } else {
         ok = (spec?.sections.has(ref) ?? true) || f.sections.has(ref);
         if (!ok) {
           lineDocs ??= docTokenRes.filter(([re]) => re.test(line)).flatMap(([, docs]) => docs);
           ok = lineDocs.some((d) => d.sections.has(ref));
         }
-        where = "launchpad-spec.md (or this file / a doc named on the line)";
+        where = "docs/spec.md (or this file / a doc named on the line)";
       }
       if (!ok) report(rel(f.path), i + 1, "spec-ref", `§${ref} does not resolve to any section of ${where}`);
     }
@@ -418,6 +431,75 @@ if (existsSync(OPENAPI_PATH)) {
 // ── check g: .env.example ⇄ env-inventory sync (scripts/env-sync-check.ts) ──
 
 for (const f of envSyncFindings(ROOT, (m) => console.log(m))) findings.push(f);
+
+// ── check h: docs-placement — two-bucket policy (docs/README.md) ─────────────
+
+// h1a. Retired internal-tracker paths must never come back (removed 2026-07-12;
+// no flagship public DeFi repo ships plans/trackers/ledgers — docs/README.md).
+const FORBIDDEN_DOC_PATHS = [
+  "docs/implementation-plan.md",
+  "docs/traceability.md",
+  "docs/decisions.md",
+  "docs/development-flow.md",
+];
+const FORBIDDEN_DOC_DIRS = ["docs/plans", "docs/review", "docs/archive"];
+for (const p of FORBIDDEN_DOC_PATHS) {
+  if (existsSync(join(ROOT, p)))
+    report(p, 0, "docs-placement", "retired internal-tracker artifact — do not recreate (docs/README.md placement table)");
+}
+for (const d of FORBIDDEN_DOC_DIRS) {
+  if (existsSync(join(ROOT, d)))
+    report(d, 0, "docs-placement", "retired internal-tracker directory — do not recreate (docs/README.md placement table)");
+}
+
+// h1b. Tracker-style basenames are forbidden repo-wide (outside .claude/),
+// wherever they hide. Walk skips dependency/build/output dirs only.
+const FORBIDDEN_BASENAME_RE = /(implementation-plan|progress|status-report|standup|roadmap-tracker)/i;
+const WALK_SKIP = new Set([
+  ".git", "node_modules", ".next", ".open-next", "dist", "out", "cache",
+  "lib", "playwright-report", "test-results", ".idea", ".claude", "coverage", "mutants",
+]);
+function walkMd(dir: string, acc: string[]): string[] {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (WALK_SKIP.has(e.name)) continue;
+    const p = join(dir, e.name);
+    if (e.isDirectory()) walkMd(p, acc);
+    else if (e.name.endsWith(".md")) acc.push(p);
+  }
+  return acc;
+}
+for (const p of walkMd(ROOT, [])) {
+  if (FORBIDDEN_BASENAME_RE.test(basename(p)))
+    report(rel(p), 0, "docs-placement", `tracker-style doc basename ("${basename(p)}") — plans/progress/status docs are never committed (docs/README.md)`);
+}
+
+// h2. Every *.md under docs/ must be in the sanctioned set (docs/README.md map).
+const DOCS_ROOT_MD_ALLOWLIST = new Set([
+  "README.md", "spec.md", "architecture.md", "security-properties.md", "threat-model.md",
+]);
+const DOCS_SANCTIONED_SUBDIRS = new Set(["how-it-works", "runbooks", "design"]);
+for (const p of docsMd) {
+  const r = rel(p); // docs/...
+  const parts = r.split("/"); // ["docs", ...]
+  const ok =
+    (parts.length === 2 && DOCS_ROOT_MD_ALLOWLIST.has(parts[1])) ||
+    (parts.length > 2 && DOCS_SANCTIONED_SUBDIRS.has(parts[1]));
+  if (!ok)
+    report(r, 0, "docs-placement", "not in the sanctioned docs/ set — see the placement table in docs/README.md (protocol docs only; test catalogs colocate with tests, audits go to audits/, process docs to CONTRIBUTING.md)");
+}
+
+// h3. Machine-consumed files must exist where their consumer scripts point —
+// a move without re-pointing fails HERE with a named error, not silently.
+const MACHINE_CONSUMED: [string, string][] = [
+  ["docs/spec.md", "scripts/doc-check.ts spec-ref resolution (SPEC_PATH)"],
+  ["docs/runbooks/env-inventory.md", "scripts/env-sync-check.ts (env-sync gate)"],
+  ["apps/web/e2e/user-flows.md", "scripts/e2e-coverage.ts (e2e coverage gate CATALOG)"],
+  ["apps/web/e2e/user-flows-waivers.md", "scripts/e2e-coverage.ts (e2e coverage gate WAIVERS)"],
+];
+for (const [p, consumer] of MACHINE_CONSUMED) {
+  if (!existsSync(join(ROOT, p)))
+    report(p, 0, "docs-placement", `machine-consumed file missing — expected by ${consumer}; if it moved, re-point the consumer AND this list in the same change (docs/README.md)`);
+}
 
 // ── report ───────────────────────────────────────────────────────────────────
 

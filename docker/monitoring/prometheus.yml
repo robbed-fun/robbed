@@ -1,5 +1,5 @@
 # ROBBED_ gate-7 monitoring — Prometheus scrape config (spec §10 gate 7,
-# indexer.md §9.4; implementation-plan P-3).
+# indexer.md §9.4; plan item P-3).
 #
 # Scrapes the indexer's gate-7 `/metrics` server (M2-12, apps/indexer/src/
 # metricsServer.ts) on METRICS_PORT (default 9464). The exposition merges the

@@ -2,10 +2,10 @@
 
 Owner: **robbed-e2e** (`.claude/agents/robbed-e2e.md`). Plan rows **I-5a** (harness) + **I-5b** (all flows).
 
-This suite runs the **37→36 catalog flows** in `docs/user-flows.md` (DISC-1..4, TD-1..12 + TD-3b,
-LAUNCH-1..3, COLLECT-1, ERR-1..14 with ERR-6 split a/b = **36 stable IDs**) against a **running**
+This suite runs the **44 catalog flows** in `user-flows.md` (DISC-1..4, TD-1..12 + TD-3b,
+LAUNCH-1..3, COLLECT-1, ERR-1..14 with ERR-6 split a/b, PORT-1..8 = **44 stable IDs**) against a **running**
 stack — one `@flow`-tagged spec per catalog ID, each asserting **exactly** its declared
-`assertable-layers` (on-chain → indexed → UI), honouring `docs/user-flows-waivers.md`.
+`assertable-layers` (on-chain → indexed → UI), honouring `user-flows-waivers.md`.
 
 ## Layout
 

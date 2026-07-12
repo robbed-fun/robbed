@@ -128,8 +128,8 @@ export const tokenCardSchema = z.object({
   priceEth: z.number().nullable(), // display-only float; null before first trade
   mcap: usdValueSchema,
   /**
-   * Native ETH market cap, wei decimal string (decisions.md §7.2 item 3 —
-   * OPTIONAL refinement). ETH-first display source (§2): OG images / cards render
+   * Native ETH market cap, wei decimal string (ETH-first refinement ratified
+   * 2026-07-10 — OPTIONAL). ETH-first display source (§2): OG images / cards render
    * mcap in ETH from THIS field with no client-side `usd / ethUsd` division; the
    * USD `mcap` above derives FROM it (`mcapEth × ethUsd`). Additive + `.optional()`
    * so it is non-breaking: absent until the indexer materializes it into the card

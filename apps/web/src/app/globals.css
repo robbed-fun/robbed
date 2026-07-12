@@ -5,7 +5,7 @@
  * ROBBED_ design system — dark terminal-mono (redesign Phase F; basis:
  * docs/design/robbed-redesign-plan.md + docs/Robbed.html). Dark-only (§12.23
  * stands); mobile-first. Supersedes the M3-2 ROBBED_/shadcn look (recorded in
- * docs/services/web.md §7 + the plan's "spec deviations" list for §12).
+ * docs/how-it-works/web.md §7 + the plan's "spec deviations" list for §12).
  *
  * THIS IS THE ONLY FILE ALLOWED TO CONTAIN RAW COLOR VALUES.
  * The token-bypass lint (tests/copy-lint.test.ts) fails CI on any hex/rgb/hsl

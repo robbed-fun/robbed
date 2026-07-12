@@ -1,6 +1,6 @@
 # Service Design — Smart-Contract Layer (`contracts/`)
 
-**Status:** Design v1.0 — drives M1 implementation. Derived from `launchpad-spec.md` v1.1; where this doc and the spec disagree, the spec wins.
+**Status:** Design v1.0 — drives M1 implementation. Derived from `docs/spec.md` v1.1; where this doc and the spec disagree, the spec wins.
 **Owner:** hoodpad-contracts. Audited by hoodpad-security (§10 gates).
 **License:** MIT, all contracts. Repo public from day 1.
 
@@ -826,7 +826,7 @@ Legs 1–2 are compilation-time (M1 exit hands them to M2/M3); leg 3 is deploy-t
 
 ## 8. Open items & decisions needed
 
-Items below were flagged for hoodpad-architect / §12 resolution — **not decided unilaterally here**. Dispositions as of 2026-07-09 are recorded per row (full register: `docs/decisions.md`); remaining OPEN items live in spec §13 with owners.
+Items below were flagged for hoodpad-architect / §12 resolution — **not decided unilaterally here**. Dispositions as of 2026-07-09 are recorded per row (the decision register was retired 2026-07-12 — normative record: spec §12; history: git); remaining OPEN items live in spec §13 with owners.
 
 | ID | Item | Disposition / recommendation |
 |---|---|---|
@@ -848,4 +848,4 @@ Items below were flagged for hoodpad-architect / §12 resolution — **not decid
 
 ### Definition of done for M1 against this doc
 
-Implementation is a transcription of §2–§5; tests transcribe §6; deploy transcribes §7. Any deviation forced by open items O-1…O-11 must reference the item ID in the commit message and, once resolved, in spec §12. When this doc and `launchpad-spec.md` diverge, the spec wins and this doc gets a PR.
+Implementation is a transcription of §2–§5; tests transcribe §6; deploy transcribes §7. Any deviation forced by open items O-1…O-11 must reference the item ID in the commit message and, once resolved, in spec §12. When this doc and `docs/spec.md` diverge, the spec wins and this doc gets a PR.

@@ -4,7 +4,7 @@
 **Spec coverage:** §5.1 (search, discover data), §5.2 (token detail data), §5.3 (launch flow: uploads + metadata hash), §8 (Hono on Bun: R2 presigned uploads, moderation queue, search API; WS fanout), §8.3 (canonical metadata JSON to R2), §8.4 (moderation), §2 (no hardcoded market metrics), §2.1 (confirmation states in responses).
 **Runtime:** Hono on Bun. Storage: Cloudflare R2 + CDN. DB: read-mostly Postgres (indexer-owned tables) + API-owned moderation tables. Redis: rate limiting + WS fanout.
 
-Companion doc: `docs/services/indexer.md` — table shapes, channel taxonomy, and WS message schemas referenced below are defined there and in `packages/shared`.
+Companion doc: `docs/how-it-works/indexer.md` — table shapes, channel taxonomy, and WS message schemas referenced below are defined there and in `packages/shared`.
 
 ---
 
@@ -174,7 +174,7 @@ GET /v1/stats
 
 Advisory / read-only: no path mutates or depends on mutating chain state (§8.4). Any address resolves — an unknown address is an **empty** portfolio, never a 404 (the wallet ETH balance is a live chain read independent of the indexer). Shapes are the frozen `@robbed/shared` DTOs (`portfolioSummarySchema`, `portfolioHoldingSchema`, `tokenRefSchema`, `ethPnlRangeSchema`, `portfolio{Holdings,Activity,Created}ResponseSchema`) — never redeclared. **All ETH-first (§2):** value/PnL are wei decimal strings, USD mirrors derive at request time; **PnL is a nullable RANGE, no false precision (§5.2).**
 
-> **Spec deviation (flagged for robbed-architect §12 disposition):** §5.4 Portfolio was **Phase-2**; the ROBBED_ redesign (docs/design/robbed-redesign-plan.md page 4) surfaces it day 1. The DTO schemas were ratified into `packages/shared` and this endpoint set implements them, but the **Phase-2 → day-1 promotion itself** still wants a formal §12 disposition (mirrors the redesign plan's "4 pages incl. Portfolio overrides §5" item). Recorded here, not self-resolved. *Architect 2026-07-11: DISPOSITIONED — spec §12.50a records the promotion (Portfolio → v1, read-only, no new tx types, no `collect()` UI). The advisory-read semantics of this section (no WS channel; staleTime + refetch) are additionally RATIFIED with the `PORT-*` catalog addendum (user-flows.md §3b; decisions.md §13).*
+> **Spec deviation (flagged for robbed-architect §12 disposition):** §5.4 Portfolio was **Phase-2**; the ROBBED_ redesign (docs/design/robbed-redesign-plan.md page 4) surfaces it day 1. The DTO schemas were ratified into `packages/shared` and this endpoint set implements them, but the **Phase-2 → day-1 promotion itself** still wants a formal §12 disposition (mirrors the redesign plan's "4 pages incl. Portfolio overrides §5" item). Recorded here, not self-resolved. *Architect 2026-07-11: DISPOSITIONED — spec §12.50a records the promotion (Portfolio → v1, read-only, no new tx types, no `collect()` UI). The advisory-read semantics of this section (no WS channel; staleTime + refetch) are additionally RATIFIED with the `PORT-*` catalog addendum (apps/web/e2e/user-flows.md §3b; ratified 2026-07-11 — ledger retired, history: git).*
 
 ```
 GET /v1/portfolio/:address                                     (§5.4 stat cells)

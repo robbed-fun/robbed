@@ -148,8 +148,8 @@ jobs:
         working-directory: apps/web
 
   e2e:
-    # §9 / gate G-6 final leg (implementation-plan I-6): the full user-flow matrix
-    # (docs/user-flows.md ↔ apps/web/e2e, plan I-5) against the REAL local stack —
+    # §9 / gate G-6 final leg (plan item I-6): the full user-flow matrix
+    # (apps/web/e2e/user-flows.md ↔ apps/web/e2e/flows, plan item I-5) against the REAL local stack —
     # docker compose (I-2: postgres/redis/minio + anvil FORK of Robinhood Chain 4663 +
     # in-container contract deploy + api/ws/indexer/web), brought up readiness-gated via
     # `dev:stack` (I-3/G-1), health-checked via `dev:health`, then Playwright (mirrors
@@ -268,7 +268,7 @@ jobs:
 
   docs:
     # Mechanical doc lint (scripts/doc-check.ts): relative links + anchors,
-    # § references vs launchpad-spec.md, canonical LP copy, mermaid/code
+    # § references vs docs/spec.md, canonical LP copy, mermaid/code
     # fences, m0 constants markers, openapi.yaml parse. The LLM triage layer
     # is the local /doc-check command; this job only enforces the mechanical
     # findings.
@@ -279,7 +279,7 @@ jobs:
       - run: bun scripts/doc-check.ts
 
   spec-check:
-    # Headless spec compliance review of the PR diff (docs/development-flow.md).
+    # Headless spec compliance review of the PR diff (project policy — CONTRIBUTING.md).
     # Requires the ANTHROPIC_API_KEY repo secret; skips gracefully when absent
     # (e.g. forks) — the local /spec-check command remains mandatory either way.
     if: github.event_name == 'pull_request'

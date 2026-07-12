@@ -27,7 +27,7 @@ function mcapEthFloat(row: TokenListRow): number {
 }
 
 /**
- * mcap in ETH as a wei decimal string (decisions.md §7.2 item 3) — the ETH-first
+ * mcap in ETH as a wei decimal string (spec §2 ETH-first; mcapEth refinement ratified 2026-07-10) — the ETH-first
  * source for OG/cards so no client-side `usd / ethUsd` divide is needed. Computed
  * in integer space to avoid float loss on the >2^53 wei product:
  *   mcapWei = round(price × 1e18) [wei/token] × totalSupply(wei) / 1e18.

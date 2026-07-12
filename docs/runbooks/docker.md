@@ -4,7 +4,7 @@
 
 The root `docker-compose.yml` brings up the full local stack: the three dependency-free infra services
 (**Postgres** (+`pg_trgm`), **Redis**, **minio**), a **local chain** (anvil **fork of Robinhood Chain
-4663** + one-shot contract deploy — implementation-plan I-2), plus **every workspace app in
+4663** + one-shot contract deploy — plan item I-2), plus **every workspace app in
 dev/hot-reload mode** (api, ws fanout, indexer, web). App services share one dev image
 (`docker/dev.Dockerfile`: node 22 + bun + pnpm), bind-mount the repo at `/workspace`, and keep
 `node_modules` in named volumes so linux-native binaries (sharp, resvg) never collide with the macOS
@@ -63,7 +63,7 @@ probe (the server image has no curl/wget).
 
 ## Bring the stack up
 
-**One command (implementation-plan I-3, gate G-1):**
+**One command (plan item I-3, gate G-1):**
 
 ```bash
 bun run dev:stack    # up -d --build, then waits (readiness-gated) until every service is ready

@@ -1,7 +1,7 @@
 # Gate-4 mutation testing (M1-13) — CurveMath + V3Migrator arb-back
 
 Tool: `universalmutator 1.14.1` (sanctioned Gambit equivalent — gambit not on PATH, recorded in
-`docs/security/findings-m1.md`). Mutants under `mutants/`, campaign logs under `logs/`, kill
+`audits/2026-07-10_internal-adversarial-review_M1.md`). Mutants under `mutants/`, campaign logs under `logs/`, kill
 commands `run_curvemath_tests.sh` / `run_migrator_tests.sh`, scores in `scores.tsv`.
 
 ## Status
@@ -23,7 +23,7 @@ unchanged); each of the 83 original survivors was re-executed against the new ki
 ## M1-13 follow-up kill-tests (`test/unit/MigratorArbBackKill.t.sol`)
 
 The five enumerated adversarial kill-tests from the M1-13 residual
-(`docs/implementation-plan.md`, M1-13 / findings-m1.md row "migrator arb-back mutation adequacy").
+(plan item M1-13 / the M1 review row "migrator arb-back mutation adequacy").
 All revert expectations use the exact `ArbBudgetExceeded()` selector — in the unmutated migrator
 that error exists at a single site (`_arbStep`, `budget == 0`), reachable on a leg-over-budget
 scenario only on the SECOND loop iteration after a full-budget exact-input spend (v3-core: exact

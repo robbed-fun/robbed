@@ -1,6 +1,6 @@
 # ROBBED_ — User-Flow Layer Waivers
 
-**Owner:** hoodpad-frontend (author) · **Ratifier:** hoodpad-architect · **Companion to:** `docs/user-flows.md` (M3-11)
+**Owner:** hoodpad-frontend (author) · **Ratifier:** hoodpad-architect · **Companion to:** `user-flows.md` (M3-11)
 
 > **Architect sign-off:** `RATIFIED-BY: robbed-architect  DATE: 2026-07-11` — 16 waiver rows cross-checked against the catalog: exactly the 16 flows declaring <3 `assertable-layers` are listed, each with a valid P-7 rationale; the 20 unlisted flows all declare three layers. ERR-4/ERR-5 correctly held at full three layers (the §6.5/§12.25 invariants are *proven at the indexed layer* — a waiver there would gut the point). COLLECT-1 rationale amended for the §12.50 Portfolio page (read-only, no collect surface — waiver stands).
 
@@ -8,7 +8,7 @@
 
 ## Purpose
 
-`docs/user-flows.md` declares an `assertable-layers` set per flow (on-chain / indexed / UI). Happy paths assert all three; some flows legitimately assert fewer (P-7: an error path that produces no indexer record cannot be asserted at the indexed layer). This file records **every** flow that declares fewer than three layers, the **N/A layer(s)**, and the rationale — so the `e2e:coverage` gate treats those absences as intentional and does **not** livelock `/goal` waiting for an assertion that can never exist.
+`user-flows.md` declares an `assertable-layers` set per flow (on-chain / indexed / UI). Happy paths assert all three; some flows legitimately assert fewer (P-7: an error path that produces no indexer record cannot be asserted at the indexed layer). This file records **every** flow that declares fewer than three layers, the **N/A layer(s)**, and the rationale — so the `e2e:coverage` gate treats those absences as intentional and does **not** livelock the coverage gate waiting for an assertion that can never exist.
 
 A flow **not listed here** is asserted at all three layers.
 

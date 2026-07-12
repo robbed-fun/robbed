@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * create-safe.ts — `bun run safe:create` (implementation-plan T-2 prep).
+ * create-safe.ts — `bun run safe:create` (plan item T-2 prep).
  * Owner: robbed-contracts (tooling only — touches no contracts/src, no apps).
  *
  * Creates a treasury Safe using the CANONICAL Safe v1.4.1 contracts — never a

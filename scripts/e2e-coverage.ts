@@ -2,10 +2,10 @@
 /**
  * ── e2e:coverage — the static flow-coverage gate (plan I-5a) ─────────────────
  *
- * Diffs the flow catalog (`docs/user-flows.md`) against the `@flow`-tagged
+ * Diffs the flow catalog (`apps/web/e2e/user-flows.md`) against the `@flow`-tagged
  * Playwright specs (`apps/web/e2e/flows/*.spec.ts`) and asserts that EACH tagged
  * spec asserts EXACTLY its declared `assertable-layers` (on-chain/indexed/UI),
- * honouring `docs/user-flows-waivers.md`. Exits non-zero on any:
+ * honouring `apps/web/e2e/user-flows-waivers.md`. Exits non-zero on any:
  *   - catalog ID with no `@flow`-tagged spec (uncovered)
  *   - spec whose asserted layers ⊂ declared (under-asserted)
  *   - spec whose asserted layers ⊃ declared (over-asserted)
@@ -24,8 +24,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const CATALOG = join(ROOT, "docs/user-flows.md");
-const WAIVERS = join(ROOT, "docs/user-flows-waivers.md");
+const CATALOG = join(ROOT, "apps/web/e2e/user-flows.md");
+const WAIVERS = join(ROOT, "apps/web/e2e/user-flows-waivers.md");
 const FLOWS_DIR = join(ROOT, "apps/web/e2e/flows");
 
 type Layer = "on-chain" | "indexed" | "ui";

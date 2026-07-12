@@ -1,6 +1,6 @@
 # Runbook — Production images + gate-7 monitoring configs (P-3)
 
-**Status:** v1.0, 2026-07-11. Owner: robbed-indexer (infra runbooks per implementation-plan P-9). Companion to `deploy-komodo-cloudflare.md` (the hosting plan, spec §12.45) — this file records what P-3 actually **built and verified**: the production container images, the prod compose set, and the gate-7 monitoring/alert configs (spec §10 gate 7, `docs/services/indexer.md` §9.4).
+**Status:** v1.0, 2026-07-11. Owner: robbed-indexer (infra runbooks per plan item P-9). Companion to `deploy-komodo-cloudflare.md` (the hosting plan, spec §12.45) — this file records what P-3 actually **built and verified**: the production container images, the prod compose set, and the gate-7 monitoring/alert configs (spec §10 gate 7, `docs/how-it-works/indexer.md` §9.4).
 
 ## 1. Image inventory + path decision
 
