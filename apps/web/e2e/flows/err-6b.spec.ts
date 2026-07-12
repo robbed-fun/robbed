@@ -15,8 +15,13 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:ERR-6b — Metadata mismatch verdict on Trust panel (§8.3)
+// @flow:ERR-6b — Metadata mismatch verdict on the SafetyStrip (§8.3)
 // assertable-layers: on-chain · indexed · UI  (full 3-layer)
+//
+// §12.57 (2026-07-12): the deleted Trust panel's ⚠ MISMATCH verdict RELOCATES to the
+// compact SafetyStrip — its metadata tick renders "Metadata MISMATCH" (red). The
+// indexer verdict, the never-override rule, and the layers are unchanged; only the
+// display surface's name moved (cosmetic).
 //
 // Fixture: a token whose ON-CHAIN committed metadataHash ≠ the keccak of its
 // stored canonical JSON. SELF-PROVISIONED by the harness (seedMismatchToken:
@@ -24,7 +29,7 @@ import {
 // original hash), so no dev:seed dependency remains. `E2E_MISMATCH_TOKEN`
 // still wins when supplied (remote stacks without docker access).
 test(
-  "ERR-6b Trust panel renders the indexer's ⚠ MISMATCH verdict for a changed metadata",
+  "ERR-6b SafetyStrip renders the indexer's ⚠ MISMATCH verdict for a changed metadata",
   { tag: ["@flow:ERR-6b", "@layer:on-chain", "@layer:indexed", "@layer:ui"] },
   async ({ page }) => {
     // The verifier pass runs every 30s — allow one full cadence plus fetch.
@@ -58,7 +63,7 @@ test(
       );
     });
 
-    await assertUi("row 7 renders the red MISMATCH state (frontend never overrides)", async () => {
+    await assertUi("the SafetyStrip renders the red MISMATCH tick (frontend never overrides)", async () => {
       await page.goto(routes.token(token!));
       await expect(page.getByText(copy.metadataMismatch).first()).toBeVisible();
     });

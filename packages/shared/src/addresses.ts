@@ -14,7 +14,13 @@
  */
 import type { Address } from "viem";
 
-export type DeploymentMode = "local" | "testnet" | "live";
+/**
+ * A 4663 `fork` is a mainnet-FORK pipeline run (anvil --fork-url): same chainid as
+ * `live` but deliberately NOT live so a fork can never masquerade as a real mainnet
+ * deployment (§12.55). Consumers that require a canonical mainnet entry MUST assert
+ * `mode === "live"`; the indexer's chain-identity gate does exactly this.
+ */
+export type DeploymentMode = "local" | "testnet" | "live" | "fork";
 
 /** The six-contract robbed topology + treasury for one chain (spec §6, §6.6). */
 export interface Deployment {
@@ -45,13 +51,13 @@ export interface Deployment {
 export const ROBBED_DEPLOYMENTS = {
   "4663": {
     chainId: 4663,
-    mode: "live",
-    deployedAt: 1783856730,
+    mode: "fork",
+    deployedAt: 1783876253,
     robbed: {
-      curveFactory: "0x9849832a1d8274aaeDb1112ad9686413461e7101",
-      router: "0x8ac5eE52F70AE01dB914bE459D8B3d50126fd6aE",
-      v3Migrator: "0xa4E00CB342B36eC9fDc4B50b3d527c3643D4C49e",
-      lpFeeVault: "0xF342E904702b1D021F03f519D6D9614916b03f37",
+      curveFactory: "0x67d269191c92Caf3cD7723F116c85e6E9bf55933",
+      router: "0xc3e53F4d16Ae77Db1c982e75a937B9f60FE63690",
+      v3Migrator: "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E",
+      lpFeeVault: "0xc5a5C42992dECbae36851359345FE25997F5C42d",
       treasury: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
     },
     external: {
@@ -62,8 +68,8 @@ export const ROBBED_DEPLOYMENTS = {
       quoterV2: "0x33e885eD0Ec9bF04EcfB19341582aADCb4c8A9E7",
     },
     canary: {
-      token: "0x1C64f7dBf856e85e6C0835f092055dD1a61D5312",
-      curve: "0x00a3e289149FC62C6b2b3B69C6C86d35069fb626",
+      token: "0xfBD745797A0fb50429f0a2b04581092798Fdf30B",
+      curve: "0xd8abD9E063611fd8Dd88008474Ee8E04847f657F",
     },
   },
   "31337": {

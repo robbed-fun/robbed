@@ -9,9 +9,11 @@ import {
 import { holderRow, tokenDetail } from "./fixtures";
 
 /**
- * Holder funding-cluster grouping (v1.2, §5.2/§8.5). Pure grouping + a render
- * proving the cluster block + advisory botFlags appear when the API supplies
- * `clusterId`/`botFlags` — heuristic framing, gating nothing.
+ * Holder funding-cluster grouping (v1.2, §5.2/§8.5) — the PURE grouping helper is
+ * preserved (public entity API). NOTE (§12.58/§12.22): the redesigned Top Holders
+ * table NO LONGER re-groups client-side (that would re-rank a server-authoritative
+ * list); the surviving public §8.5 signal is the per-row advisory bot-flag chips,
+ * proven in the render block below.
  */
 
 vi.mock("@/shared/lib/ws", () => ({ useWsChannel: () => {} }));
@@ -41,10 +43,10 @@ describe("groupHoldersByCluster (pure)", () => {
   });
 });
 
-describe("HolderTable render — cluster block + advisory botFlags (§5.2)", () => {
-  it("renders a funding-cluster group and a botFlag badge when the API supplies them", async () => {
+describe("HolderTable render — row shape + advisory botFlags (§12.58)", () => {
+  it("renders rank/label/amount rows with structural + advisory §8.5 flag chips", async () => {
     vi.doMock("@/shared/api", () => ({
-      getHolders: vi.fn(),
+      getHolders: vi.fn(async () => ({ items: [], nextCursor: null })),
     }));
     const { HolderTable } = await import("@/widgets/holder-table");
 
@@ -52,10 +54,8 @@ describe("HolderTable render — cluster block + advisory botFlags (§5.2)", () 
     const holders = [
       holderRow({
         address: "0x00000000000000000000000000000000000000b1",
-        clusterId: "cl9",
         botFlags: ["farm"],
       }),
-      holderRow({ address: "0x00000000000000000000000000000000000000b2", clusterId: "cl9" }),
       holderRow({
         address: "0x00000000000000000000000000000000000000b3",
         flags: ["curve"],
@@ -64,13 +64,14 @@ describe("HolderTable render — cluster block + advisory botFlags (§5.2)", () 
 
     render(
       <QueryClientProvider client={qc}>
-        <HolderTable token={tokenDetail()} initialData={{ holders, holderCount: 42 }} />
+        <HolderTable token={tokenDetail()} initialData={{ items: holders, nextCursor: null }} />
       </QueryClientProvider>,
     );
 
-    expect(screen.getByText(/Funding cluster · 2 addresses/)).toBeTruthy();
-    expect(screen.getByText("farm")).toBeTruthy(); // advisory botFlag label
-    expect(screen.getByText("Bonding curve")).toBeTruthy(); // structural flag label
-    expect(screen.getByText(/42 holders/)).toBeTruthy();
+    // Titled table + the RULED row surface (§12.58): advisory bot-flag chip
+    // (surviving public organic-flow signal) + structural role chip.
+    expect(screen.getByText("Top holders")).toBeTruthy();
+    expect(screen.getByText("farm")).toBeTruthy(); // advisory §8.5 botFlag chip
+    expect(screen.getByText("Bonding curve")).toBeTruthy(); // structural flag chip
   });
 });

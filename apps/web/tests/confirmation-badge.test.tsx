@@ -12,49 +12,47 @@ import {
 import { tradeRow } from "./fixtures";
 
 /**
- * ConfirmationBadge tiers (§2.1). Proves the three tiers, that a soft-confirmed
- * trade NEVER renders as unqualified-final (§2.1.3), and that tiers advance from
- * the O(1) `global:confirmations` WATERMARK — not per-row messages (§12.20).
+ * ConfirmationBadge tiers (§2.1). §12.56 (USER-DIRECTED): the soft-confirmed tier
+ * renders NO visible chip — only posted-to-L1 / finalized surface. Proves the
+ * remaining tiers, that a soft-confirmed row shows no settlement badge (so it can
+ * never render as unqualified-final), and that the tier MACHINERY is unchanged:
+ * the display state still advances from soft-confirmed via the O(1)
+ * `global:confirmations` WATERMARK — not per-row messages (§12.20).
  */
 
 afterEach(cleanup);
 
-describe("confirmationBadgeMeta — labels + the never-final-while-soft rule", () => {
-  it("maps each display node to its tier label", () => {
-    expect(confirmationBadgeMeta("optimistic:soft-confirmed")!.label).toBe("Soft-confirmed");
-    expect(confirmationBadgeMeta("indexed:soft-confirmed")!.label).toBe("Soft-confirmed");
+describe("confirmationBadgeMeta — surfaced tiers + the removed soft chip (§12.56)", () => {
+  it("renders NO badge for the soft-confirmed tier (chip removed)", () => {
+    expect(confirmationBadgeMeta("optimistic:soft-confirmed")).toBeNull();
+    expect(confirmationBadgeMeta("indexed:soft-confirmed")).toBeNull();
+  });
+
+  it("still labels the surfaced posted/finalized tiers", () => {
     expect(confirmationBadgeMeta("indexed:posted-to-l1")!.label).toBe("Posted to L1");
     expect(confirmationBadgeMeta("indexed:finalized")!.label).toBe("Finalized");
     expect(confirmationBadgeMeta("removed")).toBeNull();
   });
 
-  it("a soft-confirmed badge keeps the pulse and never claims a settled tier", () => {
-    const soft = confirmationBadgeMeta("optimistic:soft-confirmed")!;
-    expect(soft.pulse).toBe(true);
-    expect(soft.label).not.toMatch(/final|posted/i);
-  });
-
-  it("maps a plain indexed ConfirmationState to its display node", () => {
+  it("maps a plain indexed ConfirmationState to its display node (machinery intact)", () => {
     expect(displayStateForIndexed("soft_confirmed")).toBe("indexed:soft-confirmed");
     expect(displayStateForIndexed("posted_to_l1")).toBe("indexed:posted-to-l1");
     expect(displayStateForIndexed("finalized")).toBe("indexed:finalized");
   });
 });
 
-describe("ConfirmationBadge render — three tiers", () => {
-  it("renders each tier's label", () => {
-    const { rerender } = render(<ConfirmationBadge state="optimistic:soft-confirmed" />);
-    expect(screen.getByText("Soft-confirmed")).toBeTruthy();
-    rerender(<ConfirmationBadge state="indexed:posted-to-l1" />);
+describe("ConfirmationBadge render — surfaced tiers only", () => {
+  it("renders the posted + finalized labels", () => {
+    const { rerender } = render(<ConfirmationBadge state="indexed:posted-to-l1" />);
     expect(screen.getByText("Posted to L1")).toBeTruthy();
     rerender(<ConfirmationBadge state="indexed:finalized" />);
     expect(screen.getByText("Finalized")).toBeTruthy();
   });
 
-  it("a soft-confirmed badge never renders 'Finalized'/'Posted' text", () => {
-    render(<ConfirmationBadge state="optimistic:soft-confirmed" />);
-    expect(screen.queryByText(/finalized/i)).toBeNull();
-    expect(screen.queryByText(/posted/i)).toBeNull();
+  it("a soft-confirmed row renders NOTHING (no chip, so never unqualified-final)", () => {
+    const { container } = render(<ConfirmationBadge state="optimistic:soft-confirmed" />);
+    expect(container.innerHTML).toBe("");
+    expect(screen.queryByText(/finalized|posted|soft-confirmed/i)).toBeNull();
   });
 });
 
@@ -99,7 +97,7 @@ describe("watermark drives tier upgrades on a RECONCILED trade (§12.20)", () =>
     expect(confirmationBadgeMeta(tradeDisplayState(s.byId.t1!))!.label).toBe("Finalized");
   });
 
-  it("an UN-reconciled optimistic trade stays soft-confirmed even past the watermark", () => {
+  it("an UN-reconciled optimistic trade stays soft-confirmed past the watermark, with no chip", () => {
     let s = createInitialTradesState();
     s = tradesReducer(s, {
       type: "submit",
@@ -119,7 +117,9 @@ describe("watermark drives tier upgrades on a RECONCILED trade (§12.20)", () =>
       type: "watermark",
       watermarks: { safeBlock: 10_000, finalizedBlock: 10_000 },
     });
+    // Machinery unchanged: the state stays soft-confirmed until an indexed
+    // reconcile arrives (§4). §12.56: that state renders no visible chip.
     expect(tradeDisplayState(s.byId.t2!)).toBe("optimistic:soft-confirmed");
-    expect(confirmationBadgeMeta(tradeDisplayState(s.byId.t2!))!.label).toBe("Soft-confirmed");
+    expect(confirmationBadgeMeta(tradeDisplayState(s.byId.t2!))).toBeNull();
   });
 });

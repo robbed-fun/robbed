@@ -6,15 +6,24 @@ import {V3Assertions} from "../../script/lib/V3Assertions.sol";
 
 /// @dev Minimal mock exposing only `feeAmountTickSpacing(uint24)` — selector-level dispatch is all
 ///      `V3Assertions` needs (it casts the address to `IUniswapV3Factory` and calls that one fn).
+///
+///      M1-1 F-1 hardening (audit 2026-07-10): the mock is fee-arg-SENSITIVE. A real V3 Factory
+///      returns a non-zero tick spacing ONLY for an ENABLED fee tier and 0 for every other fee. The
+///      earlier mock returned `_tickSpacing` for ANY fee, so a `V3Assertions.V3_FEE_TIER` mutation
+///      (querying a fee other than the 1% tier) still got 200 back and the mutant SURVIVED the pass
+///      test. By enabling only the 1% tier (10000), a mutated tier now resolves to spacing 0 →
+///      `assertV3Wiring` reverts → the `test_correctWiring_passes` case fails → the mutant is KILLED.
 contract MockV3Factory {
     int24 internal immutable _tickSpacing;
+    /// @dev The only fee tier this mock treats as enabled — the §12.1/§12.28 1% graduation tier.
+    uint24 internal constant ENABLED_FEE = 10_000;
 
     constructor(int24 tickSpacing_) {
         _tickSpacing = tickSpacing_;
     }
 
-    function feeAmountTickSpacing(uint24) external view returns (int24) {
-        return _tickSpacing;
+    function feeAmountTickSpacing(uint24 fee) external view returns (int24) {
+        return fee == ENABLED_FEE ? _tickSpacing : int24(0);
     }
 }
 
@@ -59,6 +68,25 @@ contract V3AssertionsTest is Test {
         address factory = address(new MockV3Factory(200));
         address npm = address(new MockNPM(factory, WETH));
         harness.check(factory, npm, WETH); // must not revert
+    }
+
+    // ── M1-1 F-1: mock is fee-arg-sensitive (kills a V3_FEE_TIER mutation) ────────
+
+    /// @notice Pins the F-1 hardening: the mock returns the configured spacing ONLY for the enabled
+    ///         1% tier (10000) and 0 for every other fee — mirroring a real Factory. This is precisely
+    ///         what makes a `V3Assertions.V3_FEE_TIER` mutation lethal: a mutated tier queries a
+    ///         disabled fee, gets spacing 0, and `assertV3Wiring` reverts, so `test_passesOnCorrectWiring`
+    ///         would fail and kill the mutant. A fee-INSENSITIVE mock returned 200 for any fee and let
+    ///         the mutant survive. If this ever regresses to fee-insensitivity, the asserts below break.
+    function test_mockFactory_isFeeArgSensitive() public {
+        MockV3Factory f = new MockV3Factory(200);
+        assertEq(f.feeAmountTickSpacing(10_000), int24(200), "enabled 1% tier must return the configured spacing");
+        // Any other fee tier is disabled (0) — a mutated V3_FEE_TIER lands here and reverts the assert.
+        assertEq(f.feeAmountTickSpacing(10_001), int24(0), "off-by-one tier must be disabled");
+        assertEq(f.feeAmountTickSpacing(9999), int24(0), "off-by-one tier must be disabled");
+        assertEq(f.feeAmountTickSpacing(3000), int24(0), "0.3% tier disabled in this mock");
+        assertEq(f.feeAmountTickSpacing(500), int24(0), "0.05% tier disabled in this mock");
+        assertEq(f.feeAmountTickSpacing(0), int24(0), "fee 0 disabled");
     }
 
     // ── revert: 1% tier not enabled ──────────────────────────────────────────

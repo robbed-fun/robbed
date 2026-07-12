@@ -26,8 +26,33 @@ export const api = {
     const d = await get<{ results: any[] }>(`/v1/search?q=${encodeURIComponent(q)}`);
     return { tokens: d.results ?? [] };
   },
-  trades: (address: string, limit = 50) =>
-    get<{ trades: any[] }>(`/v1/tokens/${address.toLowerCase()}/trades?limit=${limit}`),
+  // §12.59: the endpoint migrates to the `Paginated<T>` `{ items, nextCursor }`
+  // envelope (robbed-indexer, parallel). Normalize BOTH shapes so specs keep
+  // reading `.trades` regardless of migration timing (`items` preferred).
+  trades: async (address: string, limit = 50) => {
+    const d = await get<{ items?: any[]; trades?: any[] }>(
+      `/v1/tokens/${address.toLowerCase()}/trades?limit=${limit}`,
+    );
+    return { trades: d.items ?? d.trades ?? [] };
+  },
+  // §12.59: the RAW keyset envelope `{ items, nextCursor }` for the server-sort /
+  // pagination flow (TD-13). Unlike `trades` above it preserves `nextCursor` and
+  // forwards the allowlisted `sort`/`dir` + the opaque `cursor` verbatim, so a spec
+  // can assert the SERVER order changes and the opaque cursor keyset-paginates.
+  tradesPage: (
+    address: string,
+    opts: { sort?: string; dir?: string; cursor?: string; limit?: number } = {},
+  ) => {
+    const qs = new URLSearchParams();
+    if (opts.sort) qs.set("sort", opts.sort);
+    if (opts.dir) qs.set("dir", opts.dir);
+    if (opts.cursor) qs.set("cursor", opts.cursor);
+    if (opts.limit) qs.set("limit", String(opts.limit));
+    const q = qs.toString();
+    return get<{ items: any[]; nextCursor: string | null }>(
+      `/v1/tokens/${address.toLowerCase()}/trades${q ? `?${q}` : ""}`,
+    );
+  },
   // `/v1/trades/:txHash` returns ALL Trade rows in the tx as `{ trades: [...] }`
   // (a create-with-initial-buy tx has two); unwrap the first for single-trade specs.
   tradeByTx: async (txHash: string) => {
@@ -38,8 +63,14 @@ export const api = {
     get<{ candles: any[] }>(
       `/v1/tokens/${address.toLowerCase()}/candles?interval=${interval}&from=${from}&to=${to}`,
     ),
-  holders: (address: string, limit = 20) =>
-    get<{ holders: any[] }>(`/v1/tokens/${address.toLowerCase()}/holders?limit=${limit}`),
+  // §12.59: migrates to `Paginated<HolderRow>` `{ items, nextCursor }`. Normalize
+  // both shapes so specs keep reading `.holders` across the migration.
+  holders: async (address: string, limit = 20) => {
+    const d = await get<{ items?: any[]; holders?: any[] }>(
+      `/v1/tokens/${address.toLowerCase()}/holders?limit=${limit}`,
+    );
+    return { holders: d.items ?? d.holders ?? [] };
+  },
   // LP fee collections (api.md §3.4) — COLLECT-1's indexed surface.
   fees: (address: string) => get<any>(`/v1/tokens/${address.toLowerCase()}/fees`),
   // ── portfolio reads (api.md §3.4a) — the PORT-* indexed layer ───────────────

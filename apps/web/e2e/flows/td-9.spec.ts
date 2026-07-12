@@ -10,14 +10,18 @@ import {
   publicClient,
   routes,
   seedToken,
+  sel,
   test,
   waitForIndexed,
 } from "../harness";
 
-// @flow:TD-9 — Live trade feed: soft-confirmed badges & tier upgrades (§5.2/§2.1)
+// @flow:TD-9 — Live trade feed: tier upgrades, soft-confirmed CHIP removed (§12.56)
+// AMENDED 2026-07-12: §12.56 removes the visible "Soft-confirmed" chip; the tier
+// machinery (reconcile + §12.20 watermark) is unchanged. A fresh row shows NO
+// settlement chip; only posted-to-L1 / finalized surface. Layers unchanged.
 // assertable-layers: on-chain · indexed · UI
 test(
-  "TD-9 trade feed shows soft-confirmed, then upgrades toward posted as the watermark advances",
+  "TD-9 trade feed renders the row with no soft-confirmed chip; posted/finalized surface only",
   { tag: ["@flow:TD-9", "@layer:on-chain", "@layer:indexed", "@layer:ui"] },
   async ({ page }) => {
     const token = await seedToken({ name: "Feed Coin", ticker: "FEED" });
@@ -38,12 +42,15 @@ test(
       );
     });
 
-    await assertUi("row shows a soft-confirmed badge, never unqualified-final", async () => {
-      await expect(page.getByText(copy.softConfirmed).first()).toBeVisible({ timeout: 15_000 });
+    await assertUi("row appears with NO soft-confirmed chip; never unqualified-final", async () => {
+      // The trade row lands in the feed (§12.56: proven by the row, not a chip).
+      await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 15_000 });
+      // §12.56: the removed "Soft-confirmed" chip must NOT render anywhere.
+      await expect(page.getByText(copy.softConfirmed)).toHaveCount(0);
       // Advance the chain so the O(1) watermark can upgrade held rows (§12.20).
       await mine(5);
-      // Posted may appear once the safe watermark passes; soft-confirmed must never
-      // have rendered as a bare "confirmed"/"final" (asserted by absence of that copy).
+      // Posted/finalized may surface once the watermark passes; a soft-confirmed
+      // row must never have rendered as a bare "confirmed"/"final".
       await expect(page.getByText(/\bfinal(ized)?\b(?!.*soft)/i)).toHaveCount(0);
     });
   },

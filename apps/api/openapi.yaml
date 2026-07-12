@@ -257,13 +257,27 @@ paths:
     get:
       tags: [tokens]
       operationId: listTokenTrades
-      summary: Trade feed + WS reconnect backfill (spec §5.2; indexer.md §8.4)
+      summary: Trade feed — server-sorted + keyset-paginated (spec §5.2/§12.59; indexer.md §8.4)
+      description: |
+        Server-authoritative sort + keyset pagination (§12.59) — never client sort. `sort` is a CLOSED
+        allowlist mapped API-side to a fixed column (age→block_timestamp, side→is_buy, trader→trader,
+        amount→eth_amount, price→price_eth; tiebreak id=`{txHash}-{logIndex}`); anything outside it (or
+        a `dir` ≠ asc|desc) is 400 — no caller string reaches ORDER BY. Uniform `{ items, nextCursor }`
+        envelope (paginatedTradesResponseSchema).
       parameters:
         - $ref: "#/components/parameters/TokenAddress"
         - name: since
           in: query
           description: Unix timestamp or block number floor for backfill-heal
           schema: { type: integer, minimum: 0 }
+        - name: sort
+          in: query
+          description: Sort field (closed allowlist §12.59; default age). Out-of-allowlist ⇒ 400.
+          schema: { $ref: "#/components/schemas/TradeSortField" }
+        - name: dir
+          in: query
+          description: Sort direction (default desc — newest-first)
+          schema: { $ref: "#/components/schemas/SortDir" }
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
       responses:
@@ -277,13 +291,14 @@ paths:
                 properties:
                   data:
                     type: object
-                    required: [trades, nextCursor]
+                    required: [items, nextCursor]
                     properties:
-                      trades:
+                      items:
                         type: array
                         items: { $ref: "#/components/schemas/TradeRow" }
                       nextCursor: { $ref: "#/components/schemas/NextCursor" }
                   error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
@@ -369,15 +384,31 @@ paths:
     get:
       tags: [tokens]
       operationId: listTokenHolders
-      summary: Top holders with creator/curve/lp_pool/vault flags (spec §5.2 top-20)
+      summary: Top-holders table — server-sorted + keyset-paginated (spec §5.2/§12.58/§12.59)
+      description: |
+        Server-authoritative sort + keyset pagination (§12.59) — never client sort. First page (default
+        limit) is the top-N holders view. `sort` is a CLOSED allowlist mapped API-side to a fixed column
+        (rank/amount/percent→balance — per-token supply is fixed so all three are one physical key;
+        address→holder; label→a deterministic CASE over creator/curve/lp_pool/vault + §8.5 flags; tiebreak
+        holder); out-of-allowlist (or `dir` ≠ asc|desc) ⇒ 400 — no caller string reaches ORDER BY. Each row
+        carries `rank` = true balance-desc rank (ROW_NUMBER over the whole token), stable under any sort.
+        BREAKING (§12.59): replaces the pre-redesign `{ holders, holderCount }` with the uniform
+        `{ items, nextCursor }` (paginatedHoldersResponseSchema); `holderCount` is no longer returned here.
       parameters:
         - $ref: "#/components/parameters/TokenAddress"
-        - name: limit
+        - name: sort
           in: query
-          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+          description: Sort field (closed allowlist §12.59; default rank ≡ balance). Out-of-allowlist ⇒ 400.
+          schema: { $ref: "#/components/schemas/HolderSortField" }
+        - name: dir
+          in: query
+          description: Sort direction (default desc — biggest balance first)
+          schema: { $ref: "#/components/schemas/SortDir" }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
       responses:
         "200":
-          description: Top holders (flags computed at query time, not stored)
+          description: Holders page (flags + true balance rank computed at query time, not stored)
           content:
             application/json:
               schema:
@@ -386,13 +417,14 @@ paths:
                 properties:
                   data:
                     type: object
-                    required: [holders, holderCount]
+                    required: [items, nextCursor]
                     properties:
-                      holders:
+                      items:
                         type: array
                         items: { $ref: "#/components/schemas/HolderRow" }
-                      holderCount: { type: integer, minimum: 0 }
+                      nextCursor: { $ref: "#/components/schemas/NextCursor" }
                   error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
@@ -1157,6 +1189,24 @@ components:
     MetadataVerificationStatus:
       type: string
       enum: [match, mismatch, unfetched]
+    SortDir:
+      type: string
+      enum: [asc, desc]
+      description: Sort direction (spec §12.59; mirrors packages/shared sortDirSchema)
+    TradeSortField:
+      type: string
+      enum: [age, side, trader, amount, price]
+      description: >-
+        Closed trades-sort allowlist (§12.59; packages/shared TRADE_SORT_FIELDS). Mapped API-side to a
+        fixed column (age→block_timestamp, side→is_buy, trader→trader, amount→eth_amount, price→price_eth);
+        a value outside this enum is 400 — the ORDER BY security boundary.
+    HolderSortField:
+      type: string
+      enum: [rank, address, label, amount, percent]
+      description: >-
+        Closed holders-sort allowlist (§12.59; packages/shared HOLDER_SORT_FIELDS). Mapped API-side to a
+        fixed column (rank/amount/percent→balance, address→holder, label→role/flag CASE); a value outside
+        this enum is 400 — the ORDER BY security boundary.
 
     # ── Envelope ─────────────────────────────────────────────────────────────
     Error:
@@ -1370,6 +1420,10 @@ components:
               properties:
                 address: { $ref: "#/components/schemas/Address" }
                 tokensCreated: { type: integer, minimum: 0 }
+            holderCount:
+              type: integer
+              minimum: 0
+              description: Distinct holder count (tokens.holder_count, indexer.md §3.6) — the TokenHeader "Holders" stat (§5.2). Additive/optional (2026-07-12); restores the aggregate the /holders {items,nextCursor} migration dropped.
 
     TradeRow:
       type: object
@@ -1419,6 +1473,14 @@ components:
         address: { $ref: "#/components/schemas/Address" }
         balance: { $ref: "#/components/schemas/DecimalString" }
         pct: { type: number }
+        rank:
+          type: integer
+          minimum: 1
+          description: >-
+            1-based balance-descending rank within the token (derived at read time,
+            not stored). Additive + optional (mirrors packages/shared holderRowSchema,
+            2026-07-12): lets the sortable holders table show a stable rank column
+            under any sort. Absent until an endpoint populates it.
         flags:
           type: array
           items:

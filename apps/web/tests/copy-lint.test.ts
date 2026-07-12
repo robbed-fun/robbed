@@ -97,6 +97,32 @@ describe("copy-lint · forbidden copy (spec §1/§2/§12.14)", () => {
   });
 });
 
+// ── (1b) LP-copy PRESENCE on token detail — §12.57 must-render floor ──────────
+// After the Trust panel's deletion (§12.57), the §12.14 LP sentence must STILL
+// render on /t/[address]. Since the sentence may exist ONLY via the shared
+// constant (rule 1 above), presence is asserted by a token-detail surface
+// REFERENCING that constant. This is the copy-lint half of the §12.57 floor
+// (the DOM render is proven in safety-strip.test.tsx).
+
+describe("copy-lint · LP copy PRESENCE on token detail (§12.57 floor)", () => {
+  const TD_SURFACES = [
+    join("src", "views", "token-detail"),
+    join("src", "widgets", "safety-strip"),
+  ];
+  const LP_CONST = /\bLP_(?:DESTINY_COPY|COPY)\b/;
+
+  it("a token-detail surface references the shared LP constant", () => {
+    const tdFiles = sourceFiles().filter((f) =>
+      TD_SURFACES.some((d) => f.includes(d)),
+    );
+    const referencing = tdFiles.filter((f) => LP_CONST.test(read(f))).map(rel);
+    expect(
+      referencing.length,
+      "no token-detail surface references the shared LP constant (LP floor lost)",
+    ).toBeGreaterThan(0);
+  });
+});
+
 // ── (2) address literals — spec §9 / web.md §2.3 ──────────────────────────────
 // Only WETH (in shared/lib/chain.ts, itself sourced from @robbed/shared) and the
 // hand-authored address seam shared/config/addresses.ts (deriving from the

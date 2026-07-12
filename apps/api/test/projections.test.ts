@@ -100,6 +100,11 @@ describe("toTokenDetail Trust panel", () => {
     expect(detail.moderation.visibility).toBe("hidden");
     expect(detail.moderation.impersonationTicker).toBe("BTC");
   });
+  it("carries holderCount from tokens.holder_count (TokenHeader Holders stat, restores /holders drop)", () => {
+    expect(toTokenDetail(fixtureToken(), WM, SNAP).holderCount).toBe(17); // fixtureToken default
+    expect(toTokenDetail(fixtureToken({ holder_count: 0 }), WM, SNAP).holderCount).toBe(0);
+    expect(toTokenDetail(fixtureToken({ holder_count: 4231 }), WM, SNAP).holderCount).toBe(4231);
+  });
 });
 
 describe("sortKeyForRow (5 sorts)", () => {

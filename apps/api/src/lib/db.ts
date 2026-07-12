@@ -21,14 +21,18 @@ import type {
   ConfirmationWatermarksRow,
   EthUsdSnapshotRow,
   FeeCollectionRow,
+  HolderSortField,
   MetadataVerificationRow,
   ModerationStatusRow,
   ModerationVisibility,
+  SortDir,
   TokenFlowStatsRow,
   TokenRow,
   TradeRowDb,
+  TradeSortField,
 } from "@robbed/shared";
 import type { CandleInterval } from "@robbed/shared";
+import type { HolderSpecialAddresses } from "./listSort";
 
 /**
  * Per-token inputs for the shared `computeChange24hPct` resolver
@@ -74,6 +78,19 @@ export interface TokenDetailRow extends TokenListRow {
 
 export interface HolderJoinedRow extends BalanceRow {
   flags: Pick<AddressFlagsRow, "flags" | "cluster_id"> | null;
+  /**
+   * True balance-descending rank within the token (§12.59 / api.md §3.4), from
+   * `ROW_NUMBER() OVER (ORDER BY balance::numeric DESC, holder DESC)` over the
+   * WHOLE token — so a page sorted by address/label still carries the real rank
+   * (surfaces as the optional `HolderRow.rank`). Always populated now.
+   */
+  rank: number;
+  /**
+   * Deterministic label-sort key (§12.58/§12.59) from the role/flag CASE
+   * (listSort.ts `holderLabelRank`) — only consumed as the `label` sort's keyset
+   * value; not a wire field.
+   */
+  label_rank: number;
 }
 
 /**
@@ -162,10 +179,19 @@ export interface Db {
   ): Promise<Map<string, Change24hAnchor>>;
 
   // ── trades / candles / holders / fees ─────────────────────────────────────
+  /**
+   * Token trade feed — SERVER-side sorted + keyset-paginated (§12.59). `sort`/`dir`
+   * are already validated against the shared allowlist by the route; this method
+   * maps `sort`→a fixed column via `listSort.ts` (never interpolates a caller
+   * string). `cursorKey`/`cursorId` are the decoded keyset `(k, i)`. `since` is the
+   * WS reconnect backfill floor (applies on top of the sort).
+   */
   listTrades(input: {
     token: string;
     since: number | null;
-    cursorTs: number | null;
+    sort: TradeSortField;
+    dir: SortDir;
+    cursorKey: string | null;
     cursorId: string | null;
     limit: number;
   }): Promise<TradeRowDb[]>;
@@ -177,7 +203,21 @@ export interface Db {
     to: number;
     limit: number;
   }): Promise<CandleRow[]>;
-  getHolders(input: { token: string; limit: number }): Promise<HolderJoinedRow[]>;
+  /**
+   * Holders page — SERVER-side sorted + keyset-paginated (§12.59). Every row
+   * carries the token-global balance `rank` (ROW_NUMBER) + a `label_rank` for the
+   * `label` sort. `special` (creator/curve/pool/vault) drives the label CASE and
+   * is passed as bind params (never interpolated). `sort` is pre-validated.
+   */
+  getHolders(input: {
+    token: string;
+    sort: HolderSortField;
+    dir: SortDir;
+    cursorKey: string | null;
+    cursorId: string | null;
+    limit: number;
+    special: HolderSpecialAddresses;
+  }): Promise<HolderJoinedRow[]>;
   getFeeCollections(token: string): Promise<FeeCollectionRow[]>;
   /**
    * `graduations.lp_token_id` for a graduated token (null pre-grad) — the LP

@@ -4,7 +4,6 @@ import {
   assertOnChain,
   assertUi,
   connectAs,
-  copy,
   expect,
   chainNow,
   loadDeployedAddresses,
@@ -50,7 +49,8 @@ test(
       // a stale one reverts on-chain, as proven above) with no expiry error.
       await expect(page.getByText(/deadline 10m/i).first()).toBeVisible();
       await sel.submitTrade(page).click();
-      await expect(page.getByText(copy.softConfirmed).first()).toBeVisible({ timeout: 15_000 });
+      // §12.56: soft-confirmed chip removed — prove the trade landed via the feed row.
+      await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText(/expired/i)).toHaveCount(0);
     });
   },

@@ -15,15 +15,22 @@ import type { TradeDisplayState } from "../model/trades";
 
 /**
  * The single confirmation-tier badge (§2.1/§2.1.1-3, web.md §4.2). One component
- * renders every tier so the semantics are product-wide and can't drift:
- *   soft-confirmed (amber, pulse) → posted (blue) → finalized (green).
+ * renders every SURFACED tier so the semantics are product-wide and can't drift:
+ *   (soft-confirmed → no chip) → posted (blue) → finalized (green).
+ *
+ * §12.56 (USER-DIRECTED 2026-07-12): the user-facing "Soft-confirmed" chip + its
+ * L2-finality tooltip are REMOVED — the soft-confirmed display states render NO
+ * badge. The tier MACHINERY is UNCHANGED and still binding: the reducer/reconcile
+ * still tracks soft-confirmed, the §12.20 `global:confirmations` watermark still
+ * upgrades rows, and the never-final-while-soft rule holds trivially (no chip is
+ * shown until an indexed higher tier — posted/finalized — arrives). Only tier
+ * (1)'s VISIBLE badge is dropped; posted/finalized surfacing stays.
  *
  * HARD RULES it enforces (proven in tests/confirmation-badge.test.tsx):
- * - A soft-confirmed trade NEVER renders as unqualified-"final"/"confirmed"
- *   (rule §2.1.3): its label always carries the tier qualifier and it keeps the
- *   pulse treatment until an indexed higher tier arrives.
- * - Every tier's tooltip discloses the single-sequencer dependency (§10.10) in
- *   one sentence — soft confirmation is sequencer inclusion, not L1 settlement.
+ * - A soft-confirmed trade NEVER renders as unqualified-"final"/"confirmed": it
+ *   renders no settlement chip at all until it upgrades.
+ * - The posted/finalized tooltips still disclose the single-sequencer dependency
+ *   (§10.10) — soft confirmation is sequencer inclusion, not L1 settlement.
  */
 
 type BadgeVariant =
@@ -62,12 +69,10 @@ export function confirmationBadgeMeta(state: TradeDisplayState): BadgeMeta | nul
       };
     case "optimistic:soft-confirmed":
     case "indexed:soft-confirmed":
-      return {
-        label: "Soft-confirmed",
-        variant: "soft-confirmed",
-        pulse: true,
-        tooltip: `Included by the sequencer and tradeable now, but not yet posted to L1. ${SEQUENCER_NOTE}`,
-      };
+      // §12.56: the soft-confirmed tier renders NO visible chip/tooltip. The
+      // state itself is unchanged (reconcile + watermark upgrades still fire);
+      // the badge simply appears once the row upgrades to posted/finalized.
+      return null;
     case "indexed:posted-to-l1":
       return {
         label: "Posted to L1",

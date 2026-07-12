@@ -5,8 +5,8 @@ import {
   assertUi,
   copy,
   expect,
-  graduationEthWei,
   pushCurveTowardGraduation,
+  readGraduationEth,
   readReserves,
   routes,
   seedToken,
@@ -26,7 +26,10 @@ test(
 
     await assertOnChain("curve reserves are at/over GRADUATION_ETH (deterministic lock)", async () => {
       const { realEth } = await readReserves(token.curve);
-      expect(realEth >= graduationEthWei()).toBe(true);
+      // Threshold read LIVE from the deployed curve (not the notebook) — immune to
+      // the 8.08→7.92 constant move.
+      const target = await readGraduationEth(token.curve);
+      expect(realEth >= target).toBe(true);
     });
 
     await assertIndexed("indexer reports status = graduating", async () => {

@@ -28,11 +28,20 @@ import type {
   CompetitorSnapshotRow,
   ConfirmationWatermarksRow,
   EthUsdSnapshotRow,
+  HolderSortField,
   ModerationStatusRow,
+  SortDir,
   TokenFlowStatsRow,
   TradeRowDb,
+  TradeSortField,
 } from "@robbed/shared";
 import type { TokenFlagSummary } from "../src/lib/db";
+import {
+  holderLabelRank,
+  holderSortKey,
+  type HolderSpecialAddresses,
+  tradeSortKey,
+} from "../src/lib/listSort";
 
 /**
  * Bun's `Response.json()` is typed `Promise<unknown>`; tests read the loose
@@ -122,6 +131,91 @@ export function fixtureHolding(
   };
 }
 
+/** A raw `trades` row (curve, 1 ETH buy) for the token-detail feed tests. */
+export function fixtureTrade(overrides: Partial<TradeRowDb> = {}): TradeRowDb {
+  return {
+    id: `${"0x" + "11".repeat(32)}-0`,
+    token_address: TEST_ADDR,
+    trader: TEST_HOLDER,
+    venue: "curve",
+    is_buy: true,
+    eth_amount: (1n * 10n ** 18n).toString(),
+    token_amount: (1000n * 10n ** 18n).toString(),
+    fee_eth: (1n * 10n ** 16n).toString(),
+    price_eth: 0.00000001,
+    block_number: 100,
+    block_timestamp: 1_700_000_000,
+    tx_hash: "0x" + "11".repeat(32),
+    log_index: 0,
+    confirmation_state: "soft_confirmed",
+    ...overrides,
+  };
+}
+
+/** A raw `balances`⋈`address_flags` holder row; rank/label_rank are recomputed by
+ * FakeDb.getHolders (mirroring the SQL ROW_NUMBER + label CASE). */
+export function fixtureHolder(overrides: Partial<HolderJoinedRow> = {}): HolderJoinedRow {
+  return {
+    token_address: TEST_ADDR,
+    holder: TEST_HOLDER,
+    balance: (1000n * 10n ** 18n).toString(),
+    total_bought_tokens: "0",
+    total_sold_tokens: "0",
+    total_eth_in: "0",
+    total_eth_out: "0",
+    first_seen_at: 1_700_000_000,
+    last_active_at: 1_700_000_000,
+    flags: null,
+    rank: 0,
+    label_rank: 0,
+    ...overrides,
+  };
+}
+
+// ── in-memory keyset sort (mirrors db.bun.ts SQL semantics for route tests) ──
+// `kind` per field MIRRORS the `cast` in listSort.ts TRADE/HOLDER_SORT_COLUMNS
+// (numeric→bigint, double precision→number, boolean, text; tiebreak always text).
+// If these diverge from the real SQL, ordering tests pass while prod breaks — the
+// live curl in the container-recreate step is the real-SQL end-to-end check.
+type SortKind = "bigint" | "number" | "boolean" | "text";
+const TRADE_KIND: Record<TradeSortField, SortKind> = {
+  age: "number", side: "boolean", trader: "text", amount: "bigint", price: "number",
+};
+const HOLDER_KIND: Record<HolderSortField, SortKind> = {
+  rank: "bigint", amount: "bigint", percent: "bigint", address: "text", label: "number",
+};
+function cmpKind(kind: SortKind, a: string, b: string): number {
+  switch (kind) {
+    case "bigint": { const d = BigInt(a) - BigInt(b); return d < 0n ? -1 : d > 0n ? 1 : 0; }
+    case "number": { const d = Number(a) - Number(b); return d < 0 ? -1 : d > 0 ? 1 : 0; }
+    case "boolean": return (a === "true" ? 1 : 0) - (b === "true" ? 1 : 0); // false<true
+    case "text": return a < b ? -1 : a > b ? 1 : 0;
+  }
+}
+const cmpText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/** Sort by (key, tiebreak) in `dir`, drop rows at/behind the cursor, take `limit`. */
+function keysetPage<T>(
+  rows: T[], dir: SortDir, kind: SortKind,
+  keyOf: (r: T) => string, tbOf: (r: T) => string,
+  cursor: { k: string; i: string } | null, limit: number,
+): T[] {
+  const sorted = [...rows].sort((a, b) => {
+    const c = cmpKind(kind, keyOf(a), keyOf(b));
+    const primary = c !== 0 ? c : cmpText(tbOf(a), tbOf(b));
+    return dir === "desc" ? -primary : primary;
+  });
+  const filtered = cursor
+    ? sorted.filter((r) => {
+        const c = cmpKind(kind, keyOf(r), cursor.k);
+        if (c !== 0) return dir === "desc" ? c < 0 : c > 0;
+        const t = cmpText(tbOf(r), cursor.i);
+        return dir === "desc" ? t < 0 : t > 0;
+      })
+    : sorted;
+  return filtered.slice(0, limit);
+}
+
 export class FakeDb implements Db {
   wm: ConfirmationWatermarksRow = {
     id: 1,
@@ -185,8 +279,35 @@ export class FakeDb implements Db {
     }
     return out;
   }
-  async listTrades() {
-    return [];
+  /** Raw token-detail feed rows (seed per test); FakeDb sorts + keysets them. */
+  tokenTrades: TradeRowDb[] = [];
+  async listTrades(input: {
+    token: string;
+    since: number | null;
+    sort: TradeSortField;
+    dir: SortDir;
+    cursorKey: string | null;
+    cursorId: string | null;
+    limit: number;
+  }) {
+    let rows = this.tokenTrades.filter((t) => t.token_address === input.token);
+    if (input.since != null)
+      rows = rows.filter(
+        (t) => t.block_timestamp >= input.since! || t.block_number >= input.since!,
+      );
+    const cursor =
+      input.cursorKey != null && input.cursorId != null
+        ? { k: input.cursorKey, i: input.cursorId }
+        : null;
+    return keysetPage(
+      rows,
+      input.dir,
+      TRADE_KIND[input.sort],
+      (r) => tradeSortKey(input.sort, r),
+      (r) => r.id,
+      cursor,
+      input.limit,
+    );
   }
   async getTradesByTx() {
     return [];
@@ -196,8 +317,46 @@ export class FakeDb implements Db {
   async getCandles(): Promise<CandleRow[]> {
     return this.candles;
   }
-  async getHolders(): Promise<HolderJoinedRow[]> {
-    return [];
+  /** Raw holder rows (seed per test); FakeDb recomputes rank + label_rank. */
+  tokenHolders: HolderJoinedRow[] = [];
+  async getHolders(input: {
+    token: string;
+    sort: HolderSortField;
+    dir: SortDir;
+    cursorKey: string | null;
+    cursorId: string | null;
+    limit: number;
+    special: HolderSpecialAddresses;
+  }): Promise<HolderJoinedRow[]> {
+    const all = this.tokenHolders.filter(
+      (h) => h.token_address === input.token && BigInt(h.balance) > 0n,
+    );
+    // rank = ROW_NUMBER() OVER (ORDER BY balance::numeric DESC, holder DESC).
+    const ranked = [...all].sort((a, b) => {
+      const d = BigInt(b.balance) - BigInt(a.balance);
+      if (d !== 0n) return d < 0n ? -1 : 1;
+      return b.holder < a.holder ? -1 : b.holder > a.holder ? 1 : 0;
+    });
+    ranked.forEach((r, i) => {
+      r.rank = i + 1;
+      r.label_rank = holderLabelRank(
+        { holder: r.holder, botFlags: r.flags?.flags ?? null },
+        input.special,
+      );
+    });
+    const cursor =
+      input.cursorKey != null && input.cursorId != null
+        ? { k: input.cursorKey, i: input.cursorId }
+        : null;
+    return keysetPage(
+      ranked,
+      input.dir,
+      HOLDER_KIND[input.sort],
+      (r) => holderSortKey(input.sort, r),
+      (r) => r.holder,
+      cursor,
+      input.limit,
+    );
   }
   async getFeeCollections() {
     return [];

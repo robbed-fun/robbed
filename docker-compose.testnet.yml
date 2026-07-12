@@ -337,6 +337,15 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
       REDIS_URL: redis://redis:6379
       METRICS_PORT: "9464"
+      # MIRROR of docker-compose.yml — split-horizon metadata fetch (§8.3). This
+      # staging stack still uses minio, so the stored metadata_uri is the BROWSER
+      # base (host-mapped localhost:${MINIO_PORT}), unreachable from inside this
+      # container. The verifier fetches content-addressed objects from the
+      # internal base instead; the stored/displayed URL stays the public value.
+      # R2_METADATA_BASE_URL is the internal fallback when a row carries no uri.
+      R2_METADATA_BASE_URL: http://minio:9000/${R2_BUCKET:-robbed-assets}/metadata
+      METADATA_FETCH_REWRITE_FROM: http://localhost:${MINIO_PORT:-4190}/${R2_BUCKET:-robbed-assets}
+      METADATA_FETCH_REWRITE_TO: http://minio:9000/${R2_BUCKET:-robbed-assets}
     ports:
       - "${PONDER_PORT:-4169}:42069"
       - "${METRICS_HOST_PORT:-4164}:9464"

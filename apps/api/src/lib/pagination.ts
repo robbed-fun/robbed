@@ -12,16 +12,18 @@
  * `(sort_col, address) < (k, i)` for DESC). `limit` is clamped to
  * `[1, PAGE_LIMIT_MAX]` with `PAGE_LIMIT_DEFAULT`.
  */
-import { PAGE_LIMIT_DEFAULT, PAGE_LIMIT_MAX } from "@robbed/shared";
+import { clampListLimit, type KeysetCursorPayload } from "@robbed/shared";
 import { base64url, fromBase64url, hmacHex, safeEqual } from "./crypto";
 import { errors } from "./errors";
 
-export interface Cursor {
-  /** Sort-key value of the last row (string form for stable transport). */
-  k: string;
-  /** Tiebreak id (token address / row id) of the last row. */
-  i: string;
-}
+/**
+ * The signed cursor's logical payload. STRUCTURAL DEDUP (robbed-shared report
+ * note, §12.59): the `{ k, i }` shape is single-sourced as `KeysetCursorPayload`
+ * in `@robbed/shared` and re-exported here as `Cursor` — the API keeps ownership
+ * of the HMAC signing/verification, the shape lives once. `k` = string form of
+ * the active sort column's value on the last row; `i` = its stable tiebreak.
+ */
+export type Cursor = KeysetCursorPayload;
 
 export function encodeCursor(secret: string, cursor: Cursor): string {
   const payload = base64url(JSON.stringify(cursor));
@@ -49,8 +51,12 @@ export function decodeCursor(secret: string, raw: string | undefined): Cursor | 
   }
 }
 
+/**
+ * STRUCTURAL DEDUP (robbed-shared report note, §12.59): delegates to the shared
+ * `clampListLimit` — the single source for the `[1, PAGE_LIMIT_MAX]` clamp with
+ * `PAGE_LIMIT_DEFAULT` fallback. Kept as a thin re-export so existing call sites
+ * (`clampLimit`) stay stable while the logic lives once in `@robbed/shared`.
+ */
 export function clampLimit(raw: unknown): number {
-  const n = typeof raw === "string" ? Number.parseInt(raw, 10) : Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return PAGE_LIMIT_DEFAULT;
-  return Math.min(Math.floor(n), PAGE_LIMIT_MAX);
+  return clampListLimit(raw);
 }

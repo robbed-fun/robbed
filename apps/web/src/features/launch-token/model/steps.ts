@@ -43,14 +43,17 @@ export function launchStepLabel(step: LaunchStep): string {
       return "Awaiting signature";
     case "pending":
       return "Confirming transaction";
+    // §12.56: the visible "Soft-confirmed" launch label is dropped (the internal
+    // `soft-confirmed` step name is unchanged). This node means "receipt success
+    // — token tradeable now" (§5.3), so it reads as "Tradeable".
     case "soft-confirmed":
-      return "Soft-confirmed";
+      return "Tradeable";
     case "indexing":
       return "Opening your token";
     case "live":
       return "Live";
     case "live-unindexed":
-      return "Soft-confirmed — indexing";
+      return "Tradeable — indexing";
     case "error":
       return "Error";
   }

@@ -8,11 +8,14 @@
  * Verified copy sources:
  *   trade-widget/ui/TradeWidget.tsx  — role="tablist"/"tab" Buy/Sell; pause copy;
  *     "Early-launch buy cap: max"; "Graduating to Uniswap V3…"; "Trading on Uniswap V3"
- *   entities/trade/ui/ConfirmationBadge.tsx — "Soft-confirmed" / "Posted to L1"
- *   trust-panel/ui/TrustPanel.tsx    — "Ownerless token"; "read from chain";
- *     "1,000,000,000 fixed"; "on-chain read unavailable"
+ *   entities/trade/ui/ConfirmationBadge.tsx — "Posted to L1" / "Finalized"
+ *     (§12.56: the "Soft-confirmed" chip is REMOVED — `softConfirmed` is now an
+ *     ABSENCE assertion in TD-9, not a presence selector).
+ *   widgets/safety-strip/ui/SafetyStrip.tsx — "Ownerless token"; "read from chain";
+ *     "1,000,000,000 fixed"; "on-chain read unavailable"; the shared LP sentence
  *   features/launch-token/ui/LaunchForm.tsx — "New launches are temporarily paused."
  */
+import { LP_COPY } from "@robbed/shared";
 import type { Page } from "@playwright/test";
 
 import { STACK } from "./config";
@@ -25,15 +28,24 @@ export const copy = {
   tradingOnV3: /Trading on Uniswap V3/i,
   // TokenHeader status pill post-grad (verified TokenHeader.tsx: "GRADUATED → V3").
   graduatedPill: /GRADUATED\s*→\s*V3/i,
+  // §12.56: the visible soft-confirmed chip is REMOVED — used for ABSENCE checks.
   softConfirmed: /Soft-confirmed/i,
   postedToL1: /Posted to L1/i,
   rpcUnavailable: /on-chain read unavailable/i,
   ownerless: /Ownerless token/i,
   readFromChain: /read from chain/i,
   fixedSupply: /1,000,000,000 fixed/i,
+  // §12.57 must-render floor: the single shared LP sentence on token detail.
+  lpCopy: LP_COPY,
+  // SafetyStrip metadata tick (§12.57): renders "Metadata MISMATCH" for a changed
+  // hash — the Trust panel's old row-7 verdict, relocated (ERR-6b).
   metadataMismatch: /MISMATCH/i,
-  // ConfirmationBadge TOOLTIP copy when the WS-silence flag is set (web.md §4.5):
-  // "Awaiting the indexer — retrying." — tooltip-only, hover the badge first.
+  // ConfirmationBadge WS-silence note (web.md §4.5): "Awaiting the indexer —
+  // retrying." §12.56 CAVEAT — this note is APPENDED to a rendered badge's tooltip,
+  // but the soft-confirmed tier now renders NO badge, so a receipt-success-but-
+  // unindexed row has NO visible awaiting-index surface. ERR-14 therefore anchors to
+  // the surviving surface (the optimistic ROW is KEPT), not this tooltip. Retained
+  // for documentation only (no spec hovers it post-§12.56).
   awaitingIndex: /awaiting the indexer/i,
   degradedBanner: /Live updates degraded/i,
 } as const;
@@ -50,6 +62,25 @@ export const sel = {
   submitTrade: (page: Page) =>
     page.getByRole("button", { name: /^(buy|sell)\s|^connect wallet$/i }).last(),
   tradeFeed: (page: Page) => page.getByRole("list", { name: /trades?/i }).first(),
+  // §12.56: the "Soft-confirmed" chip is gone — an optimistic/indexed trade
+  // landing is now proven by the feed ROW appearing (the DataTable `<li>` rows
+  // under the `aria-label="Trades"` list), not by the removed badge.
+  tradeRows: (page: Page) =>
+    page.getByRole("list", { name: /trades?/i }).getByRole("listitem"),
+  // §12.59 SERVER-side sort + keyset pager on the token-detail `DataTable`s. A
+  // `SortHeader` is a role=button whose accessible name is the column label (the
+  // asc/desc glyph is aria-hidden); pick a TRADES-ONLY label (Age/Side/Trader/Price)
+  // to avoid the holders table's shared Amount/% headers. Clicking dispatches a
+  // `?sort=&dir=` refetch (never a client re-rank); the active header carries
+  // `aria-sort`. The `Pagination` is a single `<nav aria-label="Pagination">`
+  // (only the trades feed paginates in-suite — holders never exceeds its window).
+  sortHeader: (page: Page, label: string) =>
+    page.getByRole("button", { name: new RegExp(`^${label}$`, "i") }),
+  pager: (page: Page) => page.getByRole("navigation", { name: /pagination/i }),
+  pagerNext: (page: Page) =>
+    page.getByRole("navigation", { name: /pagination/i }).getByRole("button", { name: /next/i }),
+  pagerPrev: (page: Page) =>
+    page.getByRole("navigation", { name: /pagination/i }).getByRole("button", { name: /prev/i }),
   // TradeWidget quote rows (InfoRows): `<span>Fee</span><span>1%</span>` etc.
   // Exact "Fee" / "Min received" labels exist ONLY in the widget (the TrustPanel
   // says "curve fee" in prose — a previous /curve fee/i assertion passed via the

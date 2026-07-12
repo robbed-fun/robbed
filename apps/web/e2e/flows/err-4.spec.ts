@@ -51,7 +51,8 @@ test(
       await sel.sellTab(page).click();
       await sel.maxButton(page).click();
       await sel.submitTrade(page).click();
-      await expect(page.getByText(copy.softConfirmed).first()).toBeVisible({ timeout: 15_000 });
+      // §12.56: soft-confirmed chip removed — prove the sell landed via the feed row.
+      await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 15_000 });
     });
 
     let indexedSell: any;

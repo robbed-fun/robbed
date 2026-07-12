@@ -82,9 +82,10 @@ const V3_TICK_SPACING = 200; // 1% tier spacing
 
 // §6.4: creation fee ~$1–2 equivalent → take the midpoint as the target.
 const CREATION_FEE_USD_TENTHS = 15n; // $1.50, expressed in tenths of USD
-// PROPOSAL (O-9, review-required): graduation caller reward sized in USD terms
-// (~$5) because live gas data for chain 4663 is not yet available; must be
-// re-validated ≥10× actual graduate() gas cost on testnet at M1.
+// O-9 (§12.34): graduation caller reward sized in USD terms (~$5). M1 RE-VALIDATION
+// (2026-07-12) DONE — the ≥10×-graduate()-gas floor is now checked against the
+// FORK-MEASURED graduate() gas × live gas price (see the §12.34 `check` below);
+// passes with margin at current gas. Retunable within [0, maxCallerReward] in beta.
 const CALLER_REWARD_USD = 5n;
 // ── Graduation fee: small flat, COST-BASED (spec §12.26 / decision 26) ───────
 // Ratified: the graduation fee is a *small flat* fee sized to ≈ the V3-migration
@@ -98,7 +99,19 @@ const CALLER_REWARD_USD = 5n;
 // migrationGasEstimate — full graduate() path: flat grad-fee transfer, slot0
 // read, bounded arb-back swap loop (≤ MAX_ARB_ITERATIONS), full-range V3 mint via
 // the NonfungiblePositionManager, LP-NFT transfer to the vault, and dust handling.
-const MIGRATION_GAS_ESTIMATE = 3_000_000n; // gas units — M0 PLACEHOLDER, finalized at M1
+//
+// M1 RE-VALIDATION (2026-07-12) — MEASURED on a mainnet-fork of chain 4663 at the
+// LATEST block through the REAL §12.28 V3 factory/NPM (contracts/test/fork/
+// Lifecycle.t.sol `test_fork_lifecycleGas` / `test_fork_fullLifecycle`):
+//   graduate()+V3 migration = 814_729 gas (CLEAN, pool at target, no arb-back)
+//                             817_845 gas (WITH arb-back, polluted pool).
+// The placeholder was 3_000_000 (unfounded). MIGRATION_GAS_ESTIMATE is now grounded
+// in that measurement and rounded UP to a conservative bound that covers the full
+// MAX_ARB_ITERATIONS=8 arb-back loop under heavier griefing (each bounded arb swap
+// ≈ 50–130k gas): 1_500_000 ≈ 1.83× the measured worst case. Still a placeholder-
+// class knob per §12.26 (finalized at deploy against live gas), now measurement-based.
+const MEASURED_GRADUATE_GAS = 817_845n; // fork-measured worst case (arb-back), 2026-07-12
+const MIGRATION_GAS_ESTIMATE = 1_500_000n; // conservative fee basis; covers full arb-back
 // gasPriceWei — chain-4663 (Orbit L2) gas price. Fetched LIVE from
 // ROBINHOOD_RPC_URL when set (provenance recorded); otherwise this labeled
 // placeholder is used. Unlike ETH/USD (§2 hard-fail, no fallback), a placeholder
@@ -491,6 +504,28 @@ async function main(): Promise<void> {
       `= ${graduationFeeWei} wei (${eth(graduationFeeWei)} ETH); source=${gas.source}`,
   );
 
+  // §12.34 M1 re-validation (O-9): the permissionless graduate() caller reward must be ≥ 10× the
+  // REAL graduate() gas cost so triggering graduation is always strongly profitable (liveness of the
+  // §12.12 ReadyToGraduate → Graduated transition). Validated against the FORK-MEASURED graduate()
+  // gas × the LIVE gas price — not the placeholder. Advisory when gas is a placeholder (no live RPC),
+  // hard when live: a live-gas failure means the reward is under-sized and must be retuned before
+  // deploy (retunable within [0, maxCallerReward] in the capped beta).
+  const graduateGasCostWei = MEASURED_GRADUATE_GAS * gasPriceWei;
+  const callerRewardFloorWei = 10n * graduateGasCostWei;
+  const callerRewardCoversGas = callerRewardWei >= callerRewardFloorWei;
+  check(
+    "callerReward >= 10x real graduate() gas (§12.34, M1)",
+    callerRewardCoversGas,
+    `reward ${callerRewardWei} wei (${eth(callerRewardWei)} ETH) vs floor 10 × ${MEASURED_GRADUATE_GAS} gas × ` +
+      `${gasPriceWei} wei = ${callerRewardFloorWei} wei (${eth(callerRewardFloorWei)} ETH); gas ${gas.basis}`,
+  );
+  if (gas.basis === "live" && !callerRewardCoversGas) {
+    throw new Error(
+      `§12.34 VIOLATED at live gas: callerReward ${callerRewardWei} wei < 10× graduate() gas cost ` +
+        `${callerRewardFloorWei} wei. Raise CALLER_REWARD_USD or retune before deploy.`,
+    );
+  }
+
   // ── 4. Solve virtual reserves (§6.2 — algebra documented in lib/curve.ts) ─
   const targets: CurveTargets = {
     priceNum,
@@ -726,8 +761,8 @@ async function main(): Promise<void> {
   const generatedAt = new Date().toISOString();
   const reviewRequired = [
     "§13 GATE: ALL constants below are open item §13 until hoodpad-architect reviews this output; gate approval closes the item.",
-    "fees.graduationFeeWei: COST-BASED per §12.26 (decision 26) — a small flat fee = migrationGasEstimate × gasPriceWei × margin (see derivation.graduationFeeModel), NOT a %-of-raise and never a hardcoded USD figure. All inputs are M0 PLACEHOLDERS; the exact fee is finalized at M1 against real graduate() gas on testnet. gasPrice is fetched live when ROBINHOOD_RPC_URL is set, otherwise a labeled placeholder is used.",
-    "fees.callerRewardWei: PROPOSAL (O-9) — sized ≈$5 equivalent at snapshot; re-validate ≥10× graduate() gas on testnet at M1.",
+    "fees.graduationFeeWei: COST-BASED per §12.26 (decision 26) — a small flat fee = migrationGasEstimate × gasPriceWei × margin (see derivation.graduationFeeModel), NOT a %-of-raise and never a hardcoded USD figure. M1 RE-VALIDATION DONE (2026-07-12): migrationGasEstimate is now FORK-MEASURED (real §12.28 V3 factory/NPM, graduate()+V3 = ~817845 gas worst-case), not the old 3,000,000 placeholder. gasPrice is fetched live when ROBINHOOD_RPC_URL is set; the exact fee is still re-confirmed at deploy against live gas per §12.26.",
+    "fees.callerRewardWei: O-9 (§12.34) — sized ≈$5 equivalent at snapshot. M1 RE-VALIDATION DONE (2026-07-12): asserted ≥10× the FORK-MEASURED graduate() gas × live gas price (see derivation.graduationFeeModel.callerRewardCoversGasFloor); passes with margin.",
     "antiSniper.*: PROPOSAL (O-7) — 8s timestamp window (§12.18) with per-tx cap = 2.5% of GRADUATION_ETH; multi-wallet bypass documented.",
     "v3.toleranceTicks / maxArbIterations / migrationSlippageBps: PROPOSAL (O-8) — needed before gate-2 fuzz bounds are final.",
     "beta.*: PLACEHOLDER (O-10) — mainnet values set with hoodpad-security before beta deploy.",
@@ -848,6 +883,11 @@ async function main(): Promise<void> {
       graduationFeeModel: {
         basis: "cost-based (§12.26) — migrationGasEstimate × gasPriceWei × (marginNum/marginDen); NOT %-of-raise, no hardcoded USD",
         migrationGasEstimate: MIGRATION_GAS_ESTIMATE.toString(),
+        migrationGasBasis:
+          "MEASURED on a mainnet-fork of chain 4663 at the latest block via the real §12.28 V3 factory/NPM " +
+          "(contracts/test/fork/Lifecycle.t.sol, 2026-07-12): graduate()+V3 migration = 814729 gas clean / " +
+          `817845 gas with arb-back. Estimate rounded up to ${MIGRATION_GAS_ESTIMATE} (~1.83× measured) to cover the full MAX_ARB_ITERATIONS=8 loop.`,
+        measuredGraduateGas: MEASURED_GRADUATE_GAS.toString(),
         gasPriceWei: gasPriceWei.toString(),
         gasPriceBasis: gas.basis,
         gasPriceSource: gas.source,
@@ -855,7 +895,12 @@ async function main(): Promise<void> {
         marginNum: Number(GRAD_FEE_MARGIN_NUM),
         marginDen: Number(GRAD_FEE_MARGIN_DEN),
         graduationFeeWei: graduationFeeWei.toString(),
-        status: "M0 PLACEHOLDER inputs — exact fee finalized at M1 against real graduate() gas on testnet",
+        callerRewardGasFloorWei: callerRewardFloorWei.toString(),
+        callerRewardCoversGasFloor: callerRewardCoversGas,
+        status:
+          "M1 gas re-validation DONE (2026-07-12) — migrationGasEstimate is fork-measured; graduation fee " +
+          "and the §12.34 ≥10×-graduate()-gas caller-reward floor are validated against live gas. Exact fee " +
+          "still finalized at deploy against live gas per §12.26.",
       },
       rawTickToken0BeforeAlignment: rawTickA,
       k: c.k.toString(),

@@ -6,15 +6,17 @@
  */
 import type { HolderRow } from "@robbed/shared";
 import type { HolderJoinedRow } from "../lib/db";
+import type { HolderSpecialAddresses } from "../lib/listSort";
 import { ratio } from "./common";
 
-export interface SpecialAddresses {
-  creator: string;
-  curve: string;
-  pool: string | null;
-  /** Treasury / LPFeeVault addresses (config), lowercased. */
-  vaults: Set<string>;
-}
+/**
+ * Creator/curve/pool/vault addresses used BOTH by the flag projection here and
+ * the holders `label` sort CASE (lib/listSort.ts) — single-sourced as
+ * `HolderSpecialAddresses` so the label the row shows and the label it sorts by
+ * can't drift. The route builds ONE of these and passes it to `getHolders`
+ * (SQL CASE) and `toHolderRow` (flags).
+ */
+export type SpecialAddresses = HolderSpecialAddresses;
 
 export function toHolderRow(
   row: HolderJoinedRow,
@@ -32,6 +34,9 @@ export function toHolderRow(
     address: row.holder,
     balance: row.balance,
     pct: ratio(row.balance, totalSupply) * 100,
+    // True balance-desc rank over the whole token (§12.59) — stable even when
+    // this page is sorted by address/label (position ≠ rank there).
+    rank: row.rank,
     flags,
   };
   if (row.flags?.flags && row.flags.flags.length > 0) out.botFlags = row.flags.flags;

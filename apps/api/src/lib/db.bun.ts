@@ -37,7 +37,16 @@ import type {
   TokenListRow,
 } from "./db";
 import { confirmationStateSql } from "./confirmation";
+import { buildModerationUpsert } from "./moderationUpsert";
 import { sortDef } from "../search/sort";
+import {
+  HOLDER_SORT_COLUMNS,
+  HOLDER_TIEBREAK,
+  TRADE_SORT_COLUMNS,
+  TRADE_TIEBREAK,
+  keysetPredicate,
+  orderByClause,
+} from "./listSort";
 
 const num = (v: unknown): number => (v == null ? 0 : Number(v));
 const str = (v: unknown): string => (v == null ? "0" : String(v));
@@ -367,19 +376,22 @@ export function createBunDb(config: Config): Db {
     },
 
     async listTrades(input) {
+      // §12.59 server-side sort: `sort` was validated against the shared allowlist
+      // by the route, then mapped to a FIXED column here (never interpolated).
+      const col = TRADE_SORT_COLUMNS[input.sort];
       const where: string[] = ["token_address = $1"];
       const params: unknown[] = [input.token];
       if (input.since != null) {
         params.push(input.since);
         where.push(`(block_timestamp >= $${params.length} OR block_number >= $${params.length})`);
       }
-      if (input.cursorTs != null && input.cursorId != null) {
-        params.push(input.cursorTs, input.cursorId);
-        where.push(`(block_timestamp, id) < ($${params.length - 1}, $${params.length})`);
+      if (input.cursorKey != null && input.cursorId != null) {
+        params.push(input.cursorKey, input.cursorId);
+        where.push(keysetPredicate(col, TRADE_TIEBREAK, input.dir, params.length - 1, params.length));
       }
       params.push(input.limit);
       const text = `SELECT ${TRADE_SELECT} FROM trades WHERE ${where.join(" AND ")}
-        ORDER BY block_timestamp DESC, id DESC LIMIT $${params.length}`;
+        ORDER BY ${orderByClause(col.expr, TRADE_TIEBREAK, input.dir)} LIMIT $${params.length}`;
       const rows = (await ro.unsafe(text, params)) as Record<string, unknown>[];
       return rows.map(mapTrade);
     },
@@ -418,13 +430,60 @@ export function createBunDb(config: Config): Db {
     },
 
     async getHolders(input) {
-      const rows = (await ro.unsafe(
-        `SELECT b.*, af.flags AS af_flags, af.cluster_id AS af_cluster
-         FROM balances b LEFT JOIN address_flags af ON af.address = b.holder
-         WHERE b.token_address = $1 AND b.balance::numeric > 0
-         ORDER BY b.balance::numeric DESC LIMIT $2`,
-        [input.token, input.limit],
-      )) as Record<string, unknown>[];
+      // §12.59 server-side sort + keyset. Rank (ROW_NUMBER over the WHOLE token,
+      // balance DESC) and the label CASE are materialized in a CTE so a page
+      // sorted by address/label still carries the true balance rank, and the
+      // outer keyset/ORDER BY reference them by name. `sort` is pre-validated;
+      // the label CASE ordering integers MUST match listSort.ts holderLabelRank.
+      const { special } = input;
+      const col = HOLDER_SORT_COLUMNS[input.sort];
+      const params: unknown[] = [input.token]; // $1
+      params.push(special.creator.toLowerCase());
+      const pCreator = params.length;
+      params.push(special.curve.toLowerCase());
+      const pCurve = params.length;
+      params.push((special.pool ?? "").toLowerCase());
+      const pPool = params.length;
+      const vaultPlaceholders: string[] = [];
+      for (const v of special.vaults) {
+        params.push(v.toLowerCase());
+        vaultPlaceholders.push(`$${params.length}`);
+      }
+      const vaultWhen = vaultPlaceholders.length
+        ? `WHEN lower(b.holder) IN (${vaultPlaceholders.join(",")}) THEN 3`
+        : "";
+      const labelCase = `CASE
+          WHEN lower(b.holder) = $${pCurve} THEN 0
+          WHEN lower(b.holder) = $${pCreator} THEN 1
+          WHEN $${pPool} <> '' AND lower(b.holder) = $${pPool} THEN 2
+          ${vaultWhen}
+          WHEN af.flags IS NOT NULL AND cardinality(af.flags) > 0 THEN 4
+          ELSE 5 END`;
+      const outerWhere: string[] = [];
+      if (input.cursorKey != null && input.cursorId != null) {
+        params.push(input.cursorKey, input.cursorId);
+        outerWhere.push(
+          keysetPredicate(col, HOLDER_TIEBREAK, input.dir, params.length - 1, params.length),
+        );
+      }
+      params.push(input.limit);
+      const text = `
+        WITH ranked AS (
+          SELECT b.token_address, b.holder, b.balance, b.total_bought_tokens,
+                 b.total_sold_tokens, b.total_eth_in, b.total_eth_out,
+                 b.first_seen_at, b.last_active_at,
+                 af.flags AS af_flags, af.cluster_id AS af_cluster,
+                 ${labelCase} AS label_rank,
+                 ROW_NUMBER() OVER (ORDER BY b.balance::numeric DESC, b.holder DESC) AS rank
+            FROM balances b
+            LEFT JOIN address_flags af ON af.address = b.holder
+           WHERE b.token_address = $1 AND b.balance::numeric > 0
+        )
+        SELECT * FROM ranked
+        ${outerWhere.length ? `WHERE ${outerWhere.join(" AND ")}` : ""}
+        ORDER BY ${orderByClause(col.expr, HOLDER_TIEBREAK, input.dir)}
+        LIMIT $${params.length}`;
+      const rows = (await ro.unsafe(text, params)) as Record<string, unknown>[];
       return rows.map(
         (r): HolderJoinedRow => ({
           token_address: String(r.token_address),
@@ -439,6 +498,8 @@ export function createBunDb(config: Config): Db {
           flags: r.af_flags
             ? { flags: r.af_flags as BotFlag[], cluster_id: nstr(r.af_cluster) }
             : null,
+          rank: num(r.rank),
+          label_rank: num(r.label_rank),
         }),
       );
     },
@@ -670,19 +731,11 @@ export function createBunDb(config: Config): Db {
     },
 
     async upsertModerationStatus(token, patch) {
-      const cols = Object.keys(patch);
-      const vals = Object.values(patch);
-      const insertCols = ["token_address", ...cols];
-      const placeholders = insertCols.map((_, i) => `$${i + 1}`);
-      const updates = cols.map((c, i) => `${c} = $${i + 2}`);
-      const text = `INSERT INTO moderation_status (${insertCols.join(", ")}, updated_at)
-        VALUES (${placeholders.join(", ")}, coalesce($${insertCols.length + 1}, now()))
-        ON CONFLICT (token_address) DO UPDATE SET ${updates.join(", ")}, updated_at = now()
-        RETURNING *`;
-      const rows = (await rw.unsafe(text, [token, ...vals, patch.updated_at ?? null])) as Record<
-        string,
-        unknown
-      >[];
+      // SQL built by the pure `buildModerationUpsert` (moderationUpsert.ts) — it
+      // excludes `updated_at` from the dynamic columns so the column is never
+      // listed twice (Postgres 42701; the worker passes `updated_at` in patch).
+      const { text, params } = buildModerationUpsert(token, patch);
+      const rows = (await rw.unsafe(text, params)) as Record<string, unknown>[];
       return mapModeration(rows[0]!);
     },
 

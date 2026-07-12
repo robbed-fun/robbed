@@ -1,6 +1,13 @@
 # Runbook — Mainnet-Prep Deploy (contracts + Safe handover + hosting)
 
-**Status:** v1.2, 2026-07-12. Authored by hoodpad-architect + hoodpad-contracts (plan item **P-2**; the M4/M5 handoff register at the bottom is **P-4**). v1.1: §3.1 updated for the §12.49 domain decision; handoff register re-derived against spec §13 as of 2026-07-11 (OI-6/OI-8/OI-11/web-10 closed) and extended with the H.6 caps-lift residuals from the M1 close-out. v1.2 (staleness sweep): H.6 `PORT-*` row corrected to its ratified state (PORT-1..8 RATIFIED 2026-07-11, 44-flow I-5a baseline); H.6 mutation row re-verified against `contracts/reports/mutation/scores.tsv` (adequacy 0.800 post-rerun). This is a **prepared, not executed** runbook — the Goal is "production-ready, not production-launched" (spec §14 Phase A). Nothing here runs until Gate G-A passes and the user directs a mainnet launch (Phase B / M4).
+**Status:** v1.3, 2026-07-12 (living pre-mainnet checklist). Authored by robbed-architect + robbed-contracts (plan item **P-2**; the M4/M5 handoff register at the bottom is **P-4**). History: v1.1 re-derived the register against spec §13 as of 2026-07-11 (M1 close-out); v1.2 corrected the H.6 `PORT-*`/mutation rows. **v1.3 (this revision) re-dates the whole register + §0 preconditions against TODAY's state — the 2026-07-11 M1-close snapshot was stale.** The delta since M1 close: **testnet chain 46630 is DEPLOYED and all six contracts Blockscout-verified** (`contracts/deployments/46630.json`), O-5 pin `v0.8.35+commit.47b9dedd` + `cancun` **proven on the testnet Blockscout**; partial on-chain lifecycle validated (creation, 6 trades with exact 1% fee + curve math + sells, fee accrual to treasury §12.25). Every register item is now tagged with an explicit status: **DONE** / **BLOCKING** (blocking-before-mainnet, agent-owned) / **RECOMMENDED** / **NEEDS-USER** (§13 human/policy) / **GATE-G-A** (gated on §14 Gate-G-A entry). See **H.0** for the prioritized "what's left" split. This is a **prepared, not executed** runbook — the Goal is "production-ready, not production-launched" (spec §14 Phase A). Nothing here runs until Gate G-A passes and the user directs a mainnet launch (Phase B / M4).
+
+> **Status legend (used throughout this runbook):**
+> - **DONE** — completed and evidenced in-repo / on-chain (path or tx cited).
+> - **BLOCKING** — must be green before a real chain-4663 mainnet deploy; agent-owned, needs no user decision to *start*. This is the hard code/deploy gate list.
+> - **RECOMMENDED** — strongly advised for a real-money launch; a risk decision, not a mechanical gate.
+> - **NEEDS-USER** — a human/policy value or ratification outside the Goal (spec §13). The choreography is executable; the value is furnished by the user/ops/security.
+> - **GATE-G-A** — gated on Gate G-A (spec §14) passing with explicit user direction; nothing downstream runs until then.
 
 > **This runbook does not decide human/policy items.** Every step marked **NEEDS-USER** is a placeholder for a decision outside the Goal (§13). The runbook makes the *choreography* executable; the *values* are furnished by the user/ops/security before Phase B.
 
@@ -15,18 +22,22 @@
 
 ## 0. Preconditions (must all be green before starting)
 
-- [ ] Gate G-A passed with **explicit user direction** to launch (spec §14; NEEDS-USER) — this runbook is not entered otherwise.
-- [ ] Security gates 1–4 green (M1) + gates 5–8 green (M4) — see the M4/M5 handoff register below.
-- [ ] `docs/runbooks/env-inventory.md` (P-1) filled with real prod values, including all NEEDS-USER items.
-- [ ] Compiler pin + `cancun` target **confirmed against the Robinhood Blockscout verifier** (O-5 / §12.44) — throwaway-contract verify. If `0.8.35`/`cancun` unsupported, the architect records the corrected pin in §12 first; **never silently diverge**.
-- [ ] Robinhood **mainnet** chain params (chain id 4663, RPC, Blockscout URL) pulled from official Robinhood docs — never invented; deploy fails if unset (§13).
-- [ ] `tools/m0/out/constants.json` reviewed; beta-cap values populated (below, NEEDS-USER).
+Status tag on each line reflects TODAY (2026-07-12). "must all be green **before starting**" = before the real chain-4663 deploy in §1, not before authoring this runbook.
+
+- [ ] **GATE-G-A** — Gate G-A passed with **explicit user direction** to launch (spec §14; the legal-wrapper/ToS item is BLOCKING at G-A, NEEDS-USER) — this runbook is not entered otherwise.
+- [ ] **BLOCKING / GATE-G-A** — Security gates 1–4 green (M1, DONE) + gates 5–8 green (M4). Today: gates 1–4 green incl. gate-3 fork run vs live 4663 and gate-4 calibration pin; **gates 5, 6, 8, 9 still open** and **gate 7 (capped beta) NEEDS-USER on the O-10 caps** — see the M4/M5 handoff register (**H.1**) below.
+- [ ] **BLOCKING (partly NEEDS-USER)** — `docs/runbooks/env-inventory.md` (P-1) filled with real prod values. Structure DONE; the NEEDS-USER values (O-6 Safe/`ADMIN_ALLOWLIST`, O-10 caps, OI-A7 moderation, web-6 WalletConnect) are still placeholders — see **H.2**.
+- [ ] **BLOCKING** — Compiler pin `0.8.35` + `cancun` target confirmed against a Blockscout verifier. **Proven on the TESTNET Blockscout** (`explorer.testnet.chain.robinhood.com`, `v0.8.35+commit.47b9dedd` / `cancun`, all six verified — `contracts/deployments/46630.json`). **STILL OWED: the MAINNET `robinhoodchain.blockscout.com` round-trip** (O-5 / §12.44) — testnet ≠ mainnet verifier. If the mainnet verifier rejects `0.8.35`/`cancun`, the architect records the corrected pin in spec §12 first; **never silently diverge**.
+- [ ] **DONE (sourced) / GATE-G-A (use)** — Robinhood **mainnet** chain params (chain id 4663, RPC `rpc.mainnet.chain.robinhood.com`, Blockscout `robinhoodchain.blockscout.com`) sourced from official Robinhood docs (§12.55); consumed only at Phase B. Deploy fails if unset.
+- [ ] **BLOCKING — gas-model leg DONE (§12.62); ETH-peg RE-LOCK owed at deploy** — `tools/m0/out/constants.json` re-derived on a mainnet-fork (real §12.28 V3, 2026-07-12; gate-2 suite green, 182 pass). The **gas-model fixes are locked** (`MIGRATION_GAS_ESTIMATE 3M→1.5M` fork-measured `817,845` gas, cost-based `graduationFee` §12.26, `callerReward` ≥10×-gas floor at 6.2× §12.34). **BUT the ETH-pegged curve constants (`GRADUATION_ETH`, `VIRTUAL_ETH_0`, `CREATION_FEE`, `MAX_EARLY_BUY`, `CALLER_REWARD`, floor, V3 target tick) are a SNAPSHOT at `$1817.62115697` and MUST be re-derived + re-locked against the then-current sourced ETH/USD immediately before the mainnet deploy tx** (see §1 re-lock gate). Beta-cap values (below) remain NEEDS-USER.
 
 ---
 
 ## 1. Contract deploy (order per contracts.md §7.2)
 
 Executed with `script/Deploy.s.sol` (M1-14) against the mainnet RPC. The script is the source of truth for order + assertions; this section narrates it and marks the NEEDS-USER inputs.
+
+> **DEPLOY-TIME RE-LOCK GATE (§12.62 durability caveat) — run immediately before this deploy.** The ETH-pegged M0 constants MUST be re-derived against a **fresh sourced ETH/USD** (§2 live-query) and `constants.json` regenerated right before the deploy tx: `GRADUATION_ETH`, `VIRTUAL_ETH_0`, `CREATION_FEE`, `MAX_EARLY_BUY`, `CALLER_REWARD`, `organicVolumeFloor`, and the V3 `targetTick` all drift with ETH/USD — the `2026-07-12 $1817.62115697` snapshot is NOT valid at an arbitrary later deploy. `GRADUATION_FEE` is finalized here against **live gas** (§12.26). The gas-model constants (`MIGRATION_GAS_ESTIMATE` etc., fork-measured `817,845` gas) are **durable** and need no re-measure unless the §12.28 V3 addresses or opcode costs change. Do NOT deploy against a stale `constants.json`.
 
 **Deploy order (contracts.md §7.2, steps 1–7):**
 
@@ -90,6 +101,8 @@ Safe address  = <derived after creation — becomes the treasury constructor arg
 
 The LPFeeVault has **no owner** and nothing to hand over (§6.3/§6.6). The Migrator is immutable and unowned. Post-graduation there is **zero pause authority of any kind** (§6.5).
 
+> **Safe-rotation trap (G5-INFO-A, §12.61 / H.5).** A later treasury rotation via `CurveFactory.setTreasury` redirects **curve trade + graduation fees** immediately, but `LPFeeVault.treasury` is **immutable** — ongoing LP `collect()` fees keep flowing to the ORIGINAL treasury until a **new factory/vault version**. Rotating the Safe is therefore NOT a complete live-config change; LP-fee redirection needs a planned factory redeploy. By design (§6.3/§6.6 minimalism — no privileged withdraw path); recorded so ops does not treat a rotation as finished.
+
 ---
 
 ## 3. Off-chain hosting bring-up — see `deploy-komodo-cloudflare.md`
@@ -102,7 +115,7 @@ Hosting is fully specified in **`docs/runbooks/deploy-komodo-cloudflare.md`** (s
 ### 3.1 DNS / CDN / R2
 
 - [ ] R2 bucket `robbed-assets` (account `0b1b0b8753489a11d35ee922961f6b72`, §12.45) — pre-created; confirm the API write credentials and the public CDN base (`R2_PUBLIC_BASE_URL` / `NEXT_PUBLIC_R2_PUBLIC_BASE_URL`, env-inventory §2/§3).
-- [ ] Domains are **DECIDED (§12.49):** `robbed.fun` (mainnet) / `testnet.robbed.fun` (testnet). **DNS prerequisite (§13, still open):** `robbed.fun` is registered but not yet on Cloudflare DNS — point its nameservers at account `0b1b0b8753489a11d35ee922961f6b72` before Worker custom domains can attach (`*.workers.dev` interim until then).
+- [ ] Domains are **DECIDED (§12.49):** `robbed.fun` (mainnet) / `testnet.robbed.fun` (testnet). **DNS cutover DONE (2026-07-12):** both are on Cloudflare (account `0b1b0b8753489a11d35ee922961f6b72`) and currently **served via Cloudflare Tunnel** from the compose stacks (`cloudflared` service in each compose file) — the "mainnet" tunnel fronts the 46630-interim stack until a real 4663 deploy exists. Worker custom-domain attach is now unblocked; the interim tunnel path vs a final Worker custom-domain is an ops choice (still a §13 brand residual for OG mark + wordmark, H.2). *(Spec §12.55's DNS bullet was updated 2026-07-12 to "DNS cutover DONE — tunnel-served" to match this state.)*
 - [ ] Custom domain for the Workers frontend (`robbed-web`) + TLS/CDN route (deploy-komodo-cloudflare.md B.7 step 5).
 - [ ] Public TLS endpoints for the Komodo API + WS (`NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_WS_URL`) behind a reverse proxy/CDN; wire the Workers build vars to these (A.6 step 6).
 - [ ] `CORS_ALLOWED_ORIGINS` (API) set to the Workers web origin (env-inventory §2). **Gap closed 2026-07-12:** the API now reads it (`apps/api/src/mw/cors.ts`, api.md §6.1 — public `/v1` only, admin/internal never opened; prod boot fails when unset). No reverse-proxy CORS layer needed.
@@ -141,22 +154,53 @@ Contracts are **immutable, no proxies** (§6) — there is no contract "rollback
 
 # M4 / M5 Handoff Register (plan item P-4)
 
-**Everything intentionally left for launch.** This register is the consolidated list of what is *out of the Phase-A Goal* and enters at Phase B (M4/M5), only after Gate G-A passes with explicit user direction. Sources for every item exist today; nothing here is discovered-later.
+**Everything intentionally left for launch.** This register is the consolidated list of what is *out of the Phase-A Goal* and enters at Phase B (M4/M5), only after Gate G-A passes with explicit user direction. Sources for every item exist today; nothing here is discovered-later. **Re-dated 2026-07-12 against real current state** — the previous snapshot was the 2026-07-11 M1 close-out.
+
+## H.0 Current state + prioritized "what's left" (read this first)
+
+**Where we actually are (2026-07-12):**
+- **Testnet (chain 46630): DEPLOYED, all six contracts Blockscout-verified** (`contracts/deployments/46630.json`; O-5 pin `v0.8.35+commit.47b9dedd` + `cancun` proven on the testnet Blockscout). Off-chain testnet stack live via Cloudflare Tunnel (`testnet.robbed.fun`).
+- **On-chain lifecycle PARTIALLY validated on a live chain:** creation, 6 trades (exact 1% fee, curve math, sells), and fee accrual to treasury (§12.25) — confirmed on-chain. *(Owed artifact: `docs/runbooks/testnet.md` §7 points at a `testnet-lifecycle.md` tx-hash log that is not yet written — capture the tx hashes there so the evidence is reproducible.)* **A real `graduate()` has NEVER run on any live chain** (faucet-limited) — this is the single largest untested path (**B1**).
+- **Mainnet (chain 4663): NOT deployed.** The registry's `4663.json` is a **mainnet-fork artifact mislabeled `mode:"live"` with an Anvil dev-account treasury** (`0x7099…79C8`) — §12.55 known limit (**B2**). The "mainnet" compose stack currently boots against 46630 as an interim precisely because no real 4663 deploy exists; `robbed.fun` is on Cloudflare (tunnel-served interim) but points at that interim, not a real mainnet.
+
+**BLOCKING before a real chain-4663 mainnet deploy (agent-owned, no user decision required to start):**
+
+| ID | Item | Why blocking | Owner |
+|---|---|---|---|
+| **B1** | **Real graduation dry-run → funded-testnet graduation → mainnet canary.** `graduate()` + V3Migrator arb-back + `LPFeeVault.collect()` + `sweepFees()` end-to-end have never executed on a live chain. Sequence: (1) **fork-dry-run** on a mainnet-fork (deterministic, unlimited); (2) **funded-testnet graduation** (needs faucet top-ups past one drip — §12.52 gives 0.05 ETH/24h, GRADUATION_ETH ≈ 8.08 ETH, so multiple drips or a funded key); (3) **mainnet canary** in §1 step 7 + §5. Nothing else exercises the pre-seeded-pool defense (gate-2 invariant 6) against real chain state. | Largest untested path; graduation is single-fire, permissionless, and irreversible | robbed-contracts + robbed-security |
+| **B2** | **§12.55 fork-artifact `mode` labeling.** `Deploy.s.sol` / `codegen-addresses.ts` must make fork-run artifacts distinguishable from live ones (a `mode` that is not `"live"`, or fork artifacts never landing under the canonical mainnet key) so the indexer's §12.55 chain-identity gate can assert mode against the declared environment. Today `4663.json` still reads `mode:"live"` with a dev-account treasury. | An artifact that lies about being live can pollute a real deploy/indexer wiring; blocks trusting the 4663 key | robbed-contracts (in progress) |
+| **B3** | **Economics re-derivation — gas-model DONE (§12.62); ETH-peg RE-LOCK at deploy.** DONE 2026-07-12 on a mainnet-fork (real §12.28 V3, gate-2 green 182 pass): gas-model fixed (`3M→1.5M` fork-measured `817,845` gas, cost-based `graduationFee` §12.26, `callerReward` 6.2× ≥ the §12.34 10×-gas floor) — **durable**. **RESIDUAL (a durable requirement, not a one-time task):** the ETH-pegged constants (`GRADUATION_ETH` / `VIRTUAL_ETH_0` / `CREATION_FEE` / `MAX_EARLY_BUY` / `CALLER_REWARD` / floor / tick) are a snapshot at `$1817.62115697` and MUST be **re-derived + re-locked against fresh sourced ETH/USD immediately before the mainnet deploy tx** (§0 / §1). Constants never inlined (§2). | Gas-model was a placeholder (now fixed); the ETH peg drifts continuously → must be current at the deploy tx | robbed-contracts + robbed-security |
+| **B4** | **Mainnet Blockscout O-5 round-trip.** Verify pin `0.8.35` + `cancun` against `robinhoodchain.blockscout.com` (throwaway-contract check). Testnet Blockscout proved it; the mainnet verifier is a distinct instance and still owed. | The §0 precondition; a pin the mainnet verifier rejects fails every contract verification at deploy | robbed-contracts |
+
+**Dependency RESOLVED — gate 6 → UM-2 Part-2 (2026-07-12, §12.61):** the gate-6 economic red-team ran on the live fork (block 7,964,424, real V3) and **UM-2 Part-2 is dispositioned (a)** — the grief is **uneconomic** (attacker cost ~0.10–0.20 ETH ≈ 1.3–2.5% of the 8.08-ETH curve, profit 0, non-permanent) and **third-party correctable AT A PROFIT** (a harmed holder restores the tick for ≈+0.025 ETH, then `graduate()` succeeds); never a hostile mint (gate-2 invariant 6, 384 lifecycles). Restated precisely: (a) holds in the **incentive** sense (uneconomic + self-correcting), not the literal "prohibitively expensive" cost sense. Sanctioned closure = (i) a permissionless atomic **correct-and-graduate** periphery/keeper path (NON-§12.12-touching) + (ii) gate-7 standing-corrector monitoring on `ReadyToGraduate`-stall — **neither needs user ratification**. The **only user residual is the OPTIONAL sells-reopening §12.12-touching hatch (variant c)** — recorded NEEDS-USER risk-tolerance, **NOT mandatory**; recommendation is to proceed with (a) without (c) unless the user opts in. Tuning: raise `MIGRATION_SLIPPAGE_BPS` to widen the freeze cost (calibration-safe); `TOLERANCE_TICKS` is BLOCKED (GradCalibrationGuard proves 101 ticks violates). See H.6.
+
+**RECOMMENDED for a real-money launch (risk decisions, not mechanical gates):**
+- **Gate 9 — external audit go/no-go.** Strongly recommended before real money; the explicit decision is NEEDS-USER (architect + user). The gate-5 adversarial-AI pass is DONE, but a **≥3-frontier-model panel + a paid external firm** roll up here. See H.1.
+- ~~Gate 5 multi-model audit~~ **DONE** — adversarial-AI pass on the live fork; no fund-loss; info-only findings G5-INFO-A/B/C (§12.61). Residual (broader model panel + external firm) folds into gate 9.
+
+**NEEDS-USER (§13 human/policy — the runbook is blocked on the value, not the choreography):** O-6 real M-of-N treasury Safe (the current treasury is an Anvil dev account, not a Safe); O-10 beta caps; OI-A7 moderation vendor + mandated-reporting flow; legal wrapper / ToS (**BLOCKING at Gate G-A**); web-6 WalletConnect projectId; brand residuals (OG mark + header wordmark). See **H.2**.
+
+**Operational — partially done vs still owed (H.5):**
+- **DONE:** Cloudflare Tunnels + compose stacks live (testnet + mainnet-interim); archive-RPC fallback landed (`apps/indexer/src/latestReader.ts` / `curveReader.ts` — deterministic event-block reads degrade gracefully on a non-archive node); §12.55 indexer chain-identity gate landed.
+- **OWED:** provisioned **Alchemy mainnet archive RPC** (`robinhood-mainnet.g.alchemy.com`), **monitoring/alerting bring-up** (gate 7, §3.2), and the **incident runbooks (H.5 #6 + siblings)**.
+
+**Spec fixes — APPLIED 2026-07-12** (after the frontend redesign released spec.md): (1) §12.36's organic-floor parenthetical corrected "≈ 8.08 ETH" → **"≈ 40.4 ETH"** (= 5 × `GRADUATION_ETH`; the wei value + `floorGraduationsEquiv = 5` were always right); (2) the §12.55 DNS-prerequisite bullet (+ its §13 residual echo) updated to **"DNS cutover DONE — on Cloudflare, tunnel-served"** to match H.0.
 
 ## H.1 Security gates 5–10 checklist (spec §10)
 
-| Gate | What | Status entering M4 | Owner |
+| Gate | What | Status (2026-07-12) | Owner |
 |---|---|---|---|
-| 5 | Multi-model LLM audit of all six contracts | not started (out of Goal) | hoodpad-security |
-| 6 | Economic red-team — parameterized vs observed §2.2 bot/farm patterns; includes the **UM-2 grief-lock economic proof** (M1-10 Part-2 residual: attacker locks ≳0.08 ETH to freeze 8.08 ETH, non-permanent, third-party-correctable, zero profit) and the **V3Migrator arb-back kill-test follow-up** (M1-13: 5 enumerated adversarial tests + amount-min fork tests) | inputs exist (M1 findings) | hoodpad-security + hoodpad-contracts |
-| 7 | **Capped beta (MANDATORY)** — global + per-token caps (O-10), monitoring + alerting on invariant metrics, cluster-alert thresholds (§12.36), kill-switch = pause creates/buys only | caps NEEDS-USER (O-10) | hoodpad-security + architect |
-| 8 | Public bug bounty — terms NEEDS-USER (§13) | terms undecided | architect + ops |
-| 9 | External-review decision gate (explicit go/no-go on a paid external audit) | decision pending | architect + user |
-| 10 | Known-risks / heuristic-metrics disclosure doc published — content sources exist (threat-model, §8.5 heuristics, single-RPC UM-4 disclosure) | content exists, not published | architect |
+| 1–4 | Contract invariants + fuzz/invariant + fork run + mutation adequacy | **DONE** — gate-3 fork run GREEN vs live 4663 (pinned block, independently reproduced); gate-4 calibration pin fail-closed in `Deploy.s.sol` + `GradCalibrationGuard.t.sol`; adequacy 0.800 (H.6). Re-opens if a §12.32/§12.33 beta retune breaks the calibration bound. | robbed-contracts + robbed-security |
+| 5 | Adversarial-AI audit of all six contracts | **DONE — adversarial-AI pass on the live fork (block 7,964,424); no fund-loss.** Deepest single-model audit; a **≥3-frontier-model panel + a paid external firm remain RECOMMENDED** and roll up into gate 9. Info-only findings G5-INFO-A/B/C recorded (H.5 ops + §2). (§12.61) | robbed-security |
+| 6 | Economic red-team — parameterized vs observed §2.2 bot/farm patterns; includes the **UM-2 grief-lock economic proof** (M1-10 Part-2 residual) and the **V3Migrator arb-back kill-test follow-up** (M1-13: 5 enumerated adversarial tests + amount-min fork tests). Consumes the **B3** real-mainnet-gas economics. | **DONE on the live fork (block 7,964,424) — PASS on safety** (gate-2 invariants held over 384 lifecycles). **UM-2 Part-2 dispositioned (a)** (§12.61 / H.6). G6-1 multi-wallet bypass (acknowledged §6.5); **G6-2 (Medium) sandwich residual** → frontend 2% default slippage + deadline (shipped, `DEFAULT_SLIPPAGE_BPS=200`). | robbed-security + robbed-contracts |
+| 7 | **Capped beta (MANDATORY)** — global + per-token caps (O-10), monitoring + alerting on invariant metrics, cluster-alert thresholds (§12.36), kill-switch = pause creates/buys only | **NEEDS-USER** on the O-10 cap values; metrics hooks exist (§3.2), alert **delivery** owed (H.5) | robbed-security + architect + USER |
+| 8 | Public bug bounty — terms NEEDS-USER (§13) | **NEEDS-USER** — terms undecided | architect + ops + USER |
+| 9 | External-review decision gate (explicit go/no-go on a paid external audit) | **RECOMMENDED for real money + NEEDS-USER** — decision pending | architect + USER |
+| 10 | Known-risks / heuristic-metrics disclosure doc published — content sources exist (threat-model, §8.5 heuristics, single-RPC UM-4 disclosure) | content exists, **not published** | architect |
 
 **All 10 gates required before caps lift (M5).** Capped beta is mandatory, not optional.
 
-## H.2 §13 open items still pending at launch (re-derived from spec §13 as of 2026-07-11)
+## H.2 §13 open items still pending at launch (re-derived from spec §13 as of 2026-07-12)
 
 **Closed since register v1.0 (removed from the table):** OI-6 ETH/USD source — Chainlink CONFIRMED on 4663, proxy `0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9` with fail-closed startup assertions (§12.51); OI-8 `safe`/`finalized` tags — SUPPORTED on the official RPC, M2-3b L1-watermark fallback stays dormant/not funded (§12.48b); OI-11 confirmation materialization — sidecar `event_confirmations` table MANDATORY on ponder 0.16.8, direct-UPDATE rework in flight at robbed-indexer (§12.48c); web-10 large-value threshold = 1.0 ETH config (§12.47); testnet chain params — id 46630/RPC/WS/explorer (§12.49); **O-8 WETH-leg arb budget *definition* — formally CLOSED by architect ratification (spec §12.33 update, 2026-07-11):** the M1-10 Part-1 symmetric per-leg rule (`wethArbBudget = wethForMint × MIGRATION_SLIPPAGE_BPS / 10_000`; token leg mirrors it) IS the demanded definition, proven in gate-2 invariant 6 — the gate-6 griefing-cost quantification + UM-2 Part-2 residual remain caps-lift (M4) items, tracked via threat-model §8.1 / gate 6, not this row (ratified 2026-07-11; ledger retired 2026-07-12 — history: git).
 
@@ -164,26 +208,27 @@ Human decisions (NEEDS-USER):
 
 | Item | §13 / §12 ref | Blocks | Owner |
 |---|---|---|---|
-| Safe signer set (M-of-N, who) + admin SIWE allowlist | O-6 / OI-A8 | deploy §2 + admin auth | architect + ops + USER |
-| Beta cap values (`perTokenEthCap`/`globalEthCap`) | O-10 | gate-7 capped-beta deploy | hoodpad-security + USER |
+| **Real M-of-N treasury Safe** (signer set + threshold) + admin SIWE allowlist. **Today the treasury is an Anvil dev account** (`0x7099…79C8` in the fork artifact, §12.55 / B2) — NOT a Safe. O-6 furnishes the canonical Gnosis Safe (never a bespoke multisig, §6.6); the LPFeeVault treasury constructor arg is immutable, so the Safe must exist before §1 step 2 | O-6 / OI-A8 | deploy §2 + admin auth + LPFeeVault treasury | architect + ops + USER |
+| Beta cap values (`perTokenEthCap`/`globalEthCap`) | O-10 | gate-7 capped-beta deploy | robbed-security + USER |
 | Moderation vendor (CSAM hash-match + NSFW classifier) + mandated-reporting legal flow | OI-A7 | prod moderation | architect + ops + USER |
-| Bug bounty terms | §13 | gate 8 | architect + USER |
+| Bug bounty terms | §13 | gate 8 | architect + ops + USER |
 | Legal wrapper / ToS jurisdiction (MiCA/JDG) — **BLOCKING at Gate G-A** | §13 / §14 | Phase B entry | USER (legal) |
 | WalletConnect projectId | web-6 | WC/Robinhood Wallet connectors | USER |
-| Branding: name RESOLVED (`ROBBED_`/`robbed`, §12.46), domains DECIDED (`robbed.fun`/`testnet.robbed.fun`, §12.49); **still open:** `robbed.fun` nameserver cutover to Cloudflare DNS (deploy §3.1 prerequisite) + OG brand mark + header wordmark styling | §13 / §12.49 | Worker custom domains; OG images | architect + USER |
-| Organic-volume floor magnitude (`N` graduations-equiv/7d, Gate G-A.1; M0 default `N = 5`) | §12.36 / §14 | Gate G-A market call | architect + USER; recalibrate at M2 |
+| Branding residuals: name RESOLVED (`ROBBED_`/`robbed`, §12.46), domains DECIDED (`robbed.fun`/`testnet.robbed.fun`, §12.49). **DNS cutover now DONE** — `robbed.fun` + `testnet.robbed.fun` are on Cloudflare and served via Cloudflare Tunnel from the compose stacks (interim; the "mainnet" tunnel currently fronts the 46630-interim stack). Worker custom-domain attach is now unblocked. **Still open (NEEDS-USER):** OG brand mark + header wordmark styling | §13 / §12.49 | OG images; final Worker custom-domain vs tunnel choice | architect + USER |
+| Organic-volume floor magnitude (`N` graduations-equiv/7d, Gate G-A.1; M0 default `N = 5`, `floorWei = 5 × GRADUATION_ETH ≈ 40.4 ETH`) | §12.36 / §14 | Gate G-A market call | architect + USER; recalibrate at M2 |
 
 Mechanical §13 items still open (not human decisions, still pending at launch):
 
 | Item | Ref | When | Owner |
 |---|---|---|---|
-| Compiler pin `0.8.35` + `cancun` target verified against the Blockscout verifier (throwaway-contract check; §0 precondition above) | O-5 / §12.44 | before first deploy (testnet Phase T covers it) | hoodpad-contracts |
-| ~~Robinhood testnet **faucet URL**~~ — **CLOSED 2026-07-11 (§12.52):** `faucet.testnet.chain.robinhood.com` (0.05 ETH + 5 of each stock token / 24h; Chainlink + QuickNode fallbacks) — see `docs/runbooks/testnet.md` §3 | §13 → §12.52 | closed | hoodpad-contracts |
-| Weekly hood.fun traction snapshot (tokens/day, graduations, visible volume) — Gate G-A input; indexer job M2-14 exists, needs a configured source (`COMPETITOR_SNAPSHOT_INTERVAL_MS`, env-inventory §1) or manual/Dune | §13 / §8.5.3 | ongoing until G-A | hoodpad-indexer + architect |
+| Compiler pin `0.8.35` + `cancun` on the **TESTNET** Blockscout — **DONE** (`v0.8.35+commit.47b9dedd` / `cancun`, all six verified, `contracts/deployments/46630.json`) | O-5 / §12.44 / §12.52 | closed (Phase T) | robbed-contracts |
+| Compiler pin `0.8.35` + `cancun` on the **MAINNET** `robinhoodchain.blockscout.com` verifier — **STILL OWED (B4)**: distinct verifier instance; throwaway-contract round-trip before first mainnet deploy | O-5 / §12.44 | before first mainnet deploy | robbed-contracts |
+| ~~Robinhood testnet **faucet URL**~~ — **CLOSED 2026-07-11 (§12.52):** `faucet.testnet.chain.robinhood.com` (0.05 ETH + 5 of each stock token / 24h; Chainlink + QuickNode fallbacks) — see `docs/runbooks/testnet.md` §3. **Caveat (B1):** one drip covers many deploys but **not** a full graduation (`GRADUATION_ETH ≈ 8.08 ETH`), which is why a live-chain graduation is still untested | §13 → §12.52 | closed (faucet); graduation funding open (B1) | robbed-contracts |
+| Weekly hood.fun traction snapshot (tokens/day, graduations, visible volume) — Gate G-A input; indexer job M2-14 exists, needs a configured source (`COMPETITOR_SNAPSHOT_INTERVAL_MS`, env-inventory §1) or manual/Dune | §13 / §8.5.3 | ongoing until G-A | robbed-indexer + architect |
 
 ## H.3 Beta-cap process (gate 7)
 
-1. hoodpad-security proposes `perTokenEthCap` / `globalEthCap` from risk appetite + M2 organic-volume series; USER ratifies (O-10, §13).
+1. robbed-security proposes `perTokenEthCap` / `globalEthCap` from risk appetite + M2 organic-volume series + the **B3** real-mainnet-gas economics; USER ratifies (O-10, §13).
 2. Deploy with caps ACTIVE in Factory config (owner-settable — retunable during the beta without redeploy).
 3. Monitoring/alerting live (H.1 gate 7): invariant metrics + cluster-alert thresholds (§12.36).
 4. Kill-switch drills: confirm `pauseCreates`/`pauseBuys` from the admin Safe; confirm sells are **not** pausable.
@@ -197,6 +242,14 @@ Mechanical §13 items still open (not human decisions, still pending at launch):
 ## H.5 Bucket-6 pre-M4 operations runbooks (sources exist today — author before M4)
 
 Each is a standalone ops runbook to author before the capped beta. Sources listed are already in-repo.
+
+**Status (2026-07-12):** the *infrastructure* under several of these is partly built — Cloudflare Tunnels + compose stacks are **live** (testnet + mainnet-interim), the **archive-RPC fallback landed** (`apps/indexer/src/latestReader.ts` / `curveReader.ts`: a pruned/non-archive node degrades gracefully instead of silently missing event-block immutables), and the §12.55 chain-identity gate is in. **Still OWED before M4:** a provisioned **Alchemy mainnet archive RPC** (`robinhood-mainnet.g.alchemy.com`, the #1 second-RPC enhancement), **monitoring/alerting bring-up** (§3.2 configs landed at P-3; *deployment + delivery* owed), and the **incident runbook (#6)**. The runbook *documents* below are still unwritten.
+
+**Gate-5/6 informational findings (ops notes — recorded 2026-07-12, §12.61; none is a fund-loss bug):**
+- **G5-INFO-A — treasury-rotation split-brain (feeds the keeper + incident runbooks #5/#6, and §2).** `CurveFactory.treasury` is owner-settable (`setTreasury`), but `LPFeeVault.treasury` is **immutable** (§6.6). Rotating the Safe redirects **curve trade + graduation fees** immediately, but **ongoing LP `collect()` fees keep flowing to the OLD treasury until a new factory/vault version**. By design (the LPFeeVault has no privileged/withdraw path, §6.3/§6.6) — but an operational trap: **a Safe rotation ⇒ plan a new factory version**, never a live-config fix.
+- **G5-INFO-B —** `setAntiSniper` / `setCaps` are unbounded but **buy-side only** (never touch sells §6.5); ops note, not a sells-pause path.
+- **G5-INFO-C —** the graduation calibration margin is sharp (≈0.005%) but **guarded** — `MIGRATION_SLIPPAGE_BPS` is the safe freeze-cost dial; `TOLERANCE_TICKS` is BLOCKED (`GradCalibrationGuard` proves 101 ticks violates the fail-closed bound in `Deploy.s.sol`; UM-2 tuning is slippage-bps only).
+- **G6-2 (Medium) — sandwich residual (frontend obligation, already shipped).** A zero-slippage victim on a thin early curve can lose up to **~17%**, bounded by the victim's own slippage. The trade UI ships a sane default slippage + deadline: **`DEFAULT_SLIPPAGE_BPS = 200` (2%)** is the shared floor for the trade widget + launch initial-buy preview, with a non-zero floor and a client-recomputed `deadline`. **2% is the recorded default floor** (retunable in the capped beta).
 
 | # | Runbook | What it covers | Sources |
 |---|---|---|---|
@@ -214,7 +267,7 @@ Folded in so nothing recorded this week is rediscovered at M4:
 | Residual | What | Trigger / owner |
 |---|---|---|
 | ~~**14 fork-gated mutation survivors**~~ **DISCHARGED 2026-07-12** | Gate-3 fork run GREEN vs live 4663 (2/2, pinned block 7,210,863; independently reproduced by robbed-security). All 14 re-dispositioned **DID (local-calibration; fork-confirmed unmutated-min liveness)** — 0 env-gated remain; adequacy stays 0.800 (dispositions, not kills). The equivalence is **calibration-contingent** and now PINNED fail-closed: `1.0001^TOLERANCE_TICKS × (1 − MIGRATION_SLIPPAGE_BPS/10⁴) ≤ 1` asserted in `Deploy.s.sol` `_consistencyChecks` + `test/unit/GradCalibrationGuard.t.sol`; a §12.32/§12.33 beta retune past the bound fails the deploy and re-opens gate 4 (`contracts/reports/mutation/README.md` §Calibration contingency). | closed (security re-gate PASS 2026-07-12) |
-| **UM-2 Part-2 hatch decision** | Extreme grief beyond the ~1% recoverable arb range leaves `graduate()` reverting→retriable (non-permanent, third-party-correctable, zero attacker profit — attacker locks ≳0.08 ETH to freeze 8.08 ETH). Three dispositions on file: (a) gate-6 economic proof only; (b) non-§12.12-touching hatch — timeout → permissionlessly widen arb tolerance/iterations or corrector-assisted retry (likely-preferred; leaves the two-way `ReadyToGraduate` lock intact); (c) §12.12-touching hatch that reopens sells — **(c) is NEEDS-USER**. | gate 6 / M4; robbed-contracts + robbed-security (+ USER only if (c)) |
+| **UM-2 Part-2 hatch** — **DISPOSITIONED (a) RATIFIED 2026-07-12 (§12.61); CLOSED except optional (c)** | Gate 6 (live fork, block 7,964,424) quantified it: freezing `graduate()` costs the attacker **~0.10–0.20 ETH (1.3–2.5% of the 8.08-ETH curve), profit 0, non-permanent, third-party correctable AT A PROFIT** (a harmed holder restores the tick for ≈+0.025 ETH → next `graduate()` succeeds — refutes the "no corrector incentive" worry); never a hostile mint (gate-2 invariant 6). **Disposition (a) RATIFIED in the INCENTIVE sense** (uneconomic + self-correcting), not the literal "prohibitively expensive" cost sense. **Closed via two conditions, NEITHER user-gated:** (i) a permissionless atomic **correct-and-graduate** periphery/keeper path (NON-§12.12-touching; both ops already permissionless → composable) + (ii) gate-7 standing-corrector monitoring on `ReadyToGraduate`-stall (H.5 #5). **ONLY residual = OPTIONAL variant (c)** — the sells-reopening §12.12-touching hatch — recorded **NEEDS-USER risk-tolerance, NOT mandatory**; recommendation: ship (a) without (c). Tuning: `MIGRATION_SLIPPAGE_BPS` widens the cost (calibration-safe); `TOLERANCE_TICKS` BLOCKED (GradCalibrationGuard: 101 ticks violates). | closed except optional (c) — robbed-contracts (periphery) + robbed-security (monitoring); USER only if (c) |
 | ~~**`PORT-*` flow ratification**~~ **CLOSED 2026-07-11** *(row updated 2026-07-12 — was stale: "ratification pending")* | **PORT-1..8** authored (`apps/web/e2e/user-flows.md` §3b addendum + 8 waiver rows) and **RATIFIED by the architect the same day** (sign-off line in the `apps/web/e2e/user-flows.md` header; advisory-read semantics ratified — ruling folded into spec §12, ledger retired 2026-07-12). **44 flows = the I-5a `e2e:coverage` baseline.** Row retained for register completeness only — nothing pending, never was a launch item. | closed (was: robbed-architect, pre-I-5a) |
 
-**Verify (P-4 leg):** this register enumerates gates 5–10, the §13 open set re-derived as of 2026-07-11 (human + mechanical), the beta-cap process, the §12.27 anti-sniper redesign, each of the six Bucket-6 runbooks, and the H.6 caps-lift residuals; `/spec-check` clean on the final tree (G-10 — runs at Goal exit once Phase P fully lands).
+**Verify (P-4 leg):** this register leads with the H.0 prioritized "what's left" split (BLOCKING B1–B4 + the gate-6→UM-2 dependency + RECOMMENDED + NEEDS-USER + operational done/owed), then enumerates gates 1–10 (statuses as of 2026-07-12), the §13 open set re-derived as of 2026-07-12 (human + mechanical), the beta-cap process, the §12.27 anti-sniper redesign, each of the six Bucket-6 runbooks, and the H.6 caps-lift residuals; `/spec-check` clean on the final tree (G-10 — runs at Goal exit once Phase P fully lands). Two spec corrections were applied 2026-07-12 once the frontend redesign released spec.md (H.0: §12.36 "≈ 8.08 ETH" → "≈ 40.4 ETH"; §12.55 DNS bullet → "cutover DONE, tunnel-served").

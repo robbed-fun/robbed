@@ -46,7 +46,7 @@ evm_version = "cancun"
 # the revert behaviour of the already-green Router deadline path (M1-9) — an unacceptable blast
 # radius for an M1-10 change. The migrator instead keeps its stack within the legacy pipeline by
 # decomposing the flow into small helpers (one-swap `_arbStep`, isolated `_mint`/`_emitGraduated`)
-# and threading a single memory `Ctx` pointer. (Flagged to hoodpad-architect / M1-9: the Router
+# and threading a single memory `Ctx` pointer. (Flagged to robbed-architect / M1-9: the Router
 # deadline path is via_ir-sensitive and should be investigated before any future via_ir adoption.)
 # (evm_version is pinned "cancun" above — see the F-2 note next to solc.)
 

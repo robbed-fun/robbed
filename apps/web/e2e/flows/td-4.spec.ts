@@ -35,7 +35,8 @@ test(
       await sel.amountInput(page).fill("0.03");
       await expect(page.getByText(copy.tradingOnV3).first()).toBeVisible();
       await sel.submitTrade(page).click();
-      await expect(page.getByText(copy.softConfirmed).first()).toBeVisible({ timeout: 12_000 });
+      // §12.56: soft-confirmed chip removed — prove the optimistic row via the feed row.
+      await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 12_000 });
     });
 
     let indexedTrade: any;

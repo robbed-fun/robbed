@@ -65,7 +65,7 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 ### `@flow:TD-2` — Buy pre-grad (curve): optimistic → reconcile  ·  tx type `buy`
 - **Actors:** Trader (wallet connected).
 - **Preconditions:** token `status = curve`; buys not paused; quote from on-chain `Router.quoteBuy` (shared math = display fallback/oracle).
-- **Steps:** (1) Enter ETH in; widget shows expected out, min-received-after-2%-slippage, "1% curve fee → treasury", price impact. (2) Submit `Router.buy{value}` with a deadline. (3) Optimistic soft-confirmed row appears in TradeFeed immediately (badge amber, pulsing) — never rendered final. (4) WS `trade` (match `txHash`, fallback `sender+nonce`) reconciles amounts/price to indexed truth. (5) `global:confirmations` watermark upgrades the row soft-confirmed → posted → finalized locally (§12.20).
+- **Steps:** (1) Enter ETH in; widget shows expected out, min-received-after-2%-slippage, "1% curve fee → treasury", price impact. (2) Submit `Router.buy{value}` with a deadline. (3) Optimistic row appears in TradeFeed immediately (soft-confirmed STATE — §12.56: no visible "soft-confirmed" chip) — never rendered final. (4) WS `trade` (match `txHash`, fallback `sender+nonce`) reconciles amounts/price to indexed truth. (5) `global:confirmations` watermark upgrades the row (soft-confirmed → posted → finalized) locally (§12.20), surfacing the posted/finalized chip.
 - **assertable-layers:** on-chain · indexed · UI.
 
 ### `@flow:TD-3` — Sell pre-grad (curve)  ·  tx type `sell`
@@ -98,28 +98,36 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 - **Steps:** (1) Threshold crossed → status pill flips to "Graduating…" (see ERR-7). (2) `graduate()` executes → WS `graduated` on `token:{address}:events`. (3) Status flips to "Graduated → Uniswap V3", chart annotation appears, widget re-engines to V3 (TD-4/TD-5), Trust rows 3/4 flip to post-grad states — all WS-driven, no reload.
 - **assertable-layers:** on-chain · indexed · UI.
 
-### `@flow:TD-7` — Trust panel: seven rows with exact sourcing
+### `@flow:TD-7` — Safety strip: relocated must-render floor (live reads)
+> _**AMENDED 2026-07-12 (USER-DIRECTED §12.57 redesign):** the standalone Trust panel is DELETED (§12.57). Its HARD-RULE must-render floor RELOCATES into the compact `SafetyStrip` above the Top Holders table; this row now covers that floor. Layers (on-chain · indexed · UI) unchanged._
+> _`AMENDED-BY: robbed-frontend  DATE: 2026-07-12` · `RATIFIED-BY: robbed-architect  DATE: 2026-07-12` — verified against the SHIPPED `widgets/safety-strip/ui/SafetyStrip.tsx` (rendered above `HolderTable` in `views/token-detail/ui/TokenDetailClient.tsx`), not the amender's claims: the §12.14 LP sentence renders VERBATIM via `LP_DESTINY_COPY` (a re-export of shared `LP_COPY`, never re-typed); graduation progress + curve reserves are LIVE `useCurveReads` on-chain reads refetched on each WS trade ("read from chain"; RPC-fail → "unavailable", NEVER the API's cached reserves); ownerless ✓ / fixed-1B ✓ (live `totalSupply === TOTAL_SUPPLY_WEI`) / metadata-verdict / "1% → treasury" ticks kept; post-grad → "Graduated ✓ → Uniswap V3". The §12.57 floor is doubly enforced: copy-lint's token-detail LP-presence test + `tests/safety-strip.test.tsx` (verbatim LP render, live-vs-cached reserves, ÷-threshold progress, and the DROPPED organic-range block asserted ABSENT). RATIFIED as the §12.57 relocation._
 - **Actors:** Visitor.
-- **Preconditions:** RPC reachable for live reads; indexer verdicts available.
-- **Steps:** render (1) ownerless ✓ [indexer provenance], (2) fixed 1B supply ✓ [**live** `totalSupply()` = 1e27], (3) live curve reserves [**live** `BondingCurve.reserves()`, ~5s poll + refresh on each WS trade, **never** cached API values], (4) graduation threshold + progress [live reserves ÷ `GRADUATION_ETH`], (5) LP destination [the single shared LP constant, verbatim], (6) fee policy [live per-token `TRADE_FEE_BPS`, number never a string literal], (7) metadata hash verdict [indexer ✓/⚠, frontend never recomputes-and-overrides]. Post-grad: rows 3/4 show "curve retired — 0 ETH held" + "Graduated ✓".
+- **Preconditions:** RPC reachable for live reads; indexer metadata verdict available.
+- **Steps:** the SafetyStrip renders (1) live curve reserves [**live** `BondingCurve.reserves()`, refresh on each WS trade, **never** cached API values, "read from chain"], (2) graduation progress toward `GRADUATION_ETH` [live reserves ÷ threshold], (3) the LP destination [the single shared LP constant, **verbatim** — §12.14 floor, copy-lint asserts presence], plus the cheap ticks: ownerless ✓, fixed 1B supply ✓ [**live** `totalSupply()` = 1e27], metadata hash verdict [indexer ✓/⚠], fee "1% → treasury" [live `TRADE_FEE_BPS`]. Post-grad: reserves → "curve retired", graduation → "Graduated ✓ → Uniswap V3".
 - **assertable-layers:** on-chain · indexed · UI.
 
-### `@flow:TD-8` — Organic-flow metrics & funding-cluster grouping (v1.2, advisory)
+### `@flow:TD-8` — Advisory §8.5 flags on the Top Holders table (heuristic)
+> _**AMENDED 2026-07-12 (USER-DIRECTED §12.57/§12.58 redesign):** the standalone organic-holder RANGE + flow-quality blocks are DROPPED from the public page (preserved on the §12.54 internal endpoint). The surviving PUBLIC §8.5 surface is the per-row sniper/programmatic advisory chips on the Top Holders table. Layers (indexed · UI) + the on-chain waiver unchanged._
+> _`AMENDED-BY: robbed-frontend  DATE: 2026-07-12` · `RATIFIED-BY: robbed-architect  DATE: 2026-07-12` — verified against the SHIPPED `widgets/holder-table/ui/HolderTable.tsx` `LabelCell`: per-row `botFlags` render as small advisory chips (`BOT_FLAG_LABELS`, `title="Advisory heuristic label (§8.5) — not a fact, gates nothing"`) that gate nothing (§8.4/§8.5); a row with no flags shows "—", never a fabricated signal (DATA-GAP-1, §2). The standalone organic-range + flow-quality % blocks are ABSENT from the public surface (Trust-panel components deleted; `safety-strip.test.tsx` asserts the range block absent) and preserved on the §12.54 internal endpoint — no §8.5 capability lost. RATIFIED as the §12.57 transform (drop-public / preserve-internal)._
 - **Actors:** Visitor.
-- **Preconditions:** indexer `trust.organic` (`holderPctLow/High`, `volumePct`, `flaggedClusterVolPct24h`) and per-holder `clusterId`/`botFlags` present. **Blocked by DATA-GAP-1** until `packages/shared`/indexer ship these fields — until then rows render "estimating…"/omit, never a fabricated number.
-- **Steps:** (1) Organic-holder estimate renders as a **RANGE** ("~55–70%"), never a point value, with a §8.5 methodology tooltip. (2) Flow quality: "X% organic curve volume (24h)" / "Y% from flagged clusters", neutral wording. (3) Holder rows sharing a `clusterId` visually grouped; `botFlags` render as small advisory badges. Heuristic framing only — gates nothing.
+- **Preconditions:** indexer holder rows carry the §8.5 flag vocabulary (`botFlags`/`flags`); `clusterId`/`botFlags` may be absent on a fresh fork token. **DATA-GAP-1** context: when no bot flags are present the chips simply omit — never a fabricated signal.
+- **Steps:** (1) The Top Holders table renders; where a holder carries `botFlags`, they show as small **advisory** chips (sniper/programmatic/…), heuristic framing only — gating nothing (§8.4/§8.5). (2) The standalone organic-holder range + flow-quality % blocks are ABSENT from the public page (moved to the internal §12.54 surface).
 - **assertable-layers:** indexed · UI. _(No on-chain surface by design — §8.5; see waivers.)_
 
-### `@flow:TD-9` — Live trade feed: soft-confirmed badges & tier upgrades
+### `@flow:TD-9` — Live trade feed: tier upgrades (soft-confirmed chip removed)
+> _**AMENDED 2026-07-12 (USER-DIRECTED §12.56):** the visible "Soft-confirmed" chip + its L2-finality tooltip are REMOVED from the feed. The tier MACHINERY is unchanged (reconcile + §12.20 watermark); only posted-to-L1 / finalized SURFACE. Layers (on-chain · indexed · UI) unchanged._
+> _`AMENDED-BY: robbed-frontend  DATE: 2026-07-12` · `RATIFIED-BY: robbed-architect  DATE: 2026-07-12` — verified against the SHIPPED `entities/trade/ui/ConfirmationBadge.tsx`: the soft-confirmed display states (`optimistic:soft-confirmed`, `indexed:soft-confirmed`) return `null` (no chip/tooltip); `posted-to-l1` (blue) and `finalized` (green) still render with their single-sequencer-dependency tooltips; the never-final-while-soft rule holds trivially (no chip until an indexed higher tier). The §12.56-KEPT machinery — reconcile/txHash-reconciliation + the §12.20 `global:confirmations` watermark + posted/finalized surfacing (incl. §12.47 large-value escalation) — is untouched; only tier-(1)'s VISIBLE badge is dropped. Matches the §12.56 scope-(a) narrow ruling. RATIFIED. (Adjacent, out of THIS row's scope: §12.56 also covers §5.3 launch labeling — the `LAUNCH-1` stepper "Soft-confirmed" stage should be re-checked when that row is routed.)_
 - **Actors:** Visitor.
-- **Preconditions:** `GET /v1/tokens/:address/trades?limit=50`; WS `token:{address}:trades`; `global:confirmations` watermark.
-- **Steps:** (1) Initial feed loads. (2) WS `trade` prepends; the user's own optimistic trades merge in (§4). (3) `ConfirmationBadge` shows soft-confirmed → posted → finalized as the watermark advances; a row is **never** shown as unqualified-final while soft-confirmed.
+- **Preconditions:** `GET /v1/tokens/:address/trades` (server-sorted `Paginated<TradeRow>`); WS `token:{address}:trades`; `global:confirmations` watermark.
+- **Steps:** (1) Initial feed loads (common DataTable). (2) WS `trade` prepends into the live head; the user's own optimistic trades merge in (§4). (3) A fresh (soft-confirmed) row shows **no** settlement chip; `ConfirmationBadge` surfaces only **posted to L1 → finalized** as the watermark advances; a row is **never** shown as unqualified-final.
 - **assertable-layers:** on-chain · indexed · UI.
 
-### `@flow:TD-10` — Holder distribution (top 20)
+### `@flow:TD-10` — Top Holders table (rank · address · label · amount · %)
+> _**AMENDED 2026-07-12 (USER-DIRECTED §12.58/§12.59):** the holder list is promoted into the right-column Top Holders table (common DataTable) that REPLACES the deleted Trust panel, with SERVER-SIDE sort + keyset pagination. Layers (on-chain · indexed · UI) unchanged._
+> _`AMENDED-BY: robbed-frontend  DATE: 2026-07-12` · `RATIFIED-BY: robbed-architect  DATE: 2026-07-12` — verified against the SHIPPED `widgets/holder-table/ui/HolderTable.tsx` + `packages/shared/src/api-types.ts`: columns are `rank · address · label · amount · percent`; SERVER-AUTHORITATIVE per §12.59 — the `DataTable` is `manualSorting`, column `SortHeader`s dispatch a `?sort=&dir=` refetch and the browser NEVER re-ranks; pagination is an opaque keyset cursor (`useCursorStack` + `nextCursor`). `HOLDER_SORT_FIELDS = ["rank","address","label","amount","percent"]` matches the §12.59 holders allowlist EXACTLY (API validates, out-of-allowlist ⇒ 400), and `DEFAULT_HOLDER_SORT = amount DESC` ≡ rank ASC is the SSR-seeded live default. `label` = `HOLDER_FLAG_LABELS` (Creator / Bonding curve / LP fee vault, §12.16) + advisory bot-flags; balances are the indexer's Transfer-derived truth (§12.16), no new on-chain surface; WS-trade refresh throttled ≥5s. RATIFIED as the §12.58/§12.59 contract._
 - **Actors:** Visitor.
-- **Preconditions:** `GET /v1/tokens/:address/holders?limit=20`.
-- **Steps:** (1) Render rank/address/balance/%/bar. (2) Flags: creator / bonding curve / LP fee vault. (3) Refresh on WS trade events (throttled ≥5s). Pre-first-trade: curve row ~100%.
+- **Preconditions:** `GET /v1/tokens/:address/holders` (server-sorted `Paginated<HolderRow>`, `{items, nextCursor}`).
+- **Steps:** (1) Render rows **rank · address · label · amount · %**; label = Bonding curve / Creator / LP fee vault (+ §8.5 advisory chips). (2) Column headers dispatch SERVER-SIDE sort (`?sort=&dir=`), never client sort; keyset pager over an opaque cursor. (3) Refresh on WS trade events (throttled ≥5s). Pre-first-trade: the bonding-curve row holds ~100%.
 - **assertable-layers:** on-chain · indexed · UI.
 
 ### `@flow:TD-11` — Token info, Blockscout links, creator profile
@@ -136,6 +144,14 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 - **Preconditions:** token exists and is indexed (summary reachable for SSR + the API OG data read).
 - **Steps:** (1) Token Detail SSR HTML includes title/description/OG tags + meaningful above-the-fold (name/ticker/mcap/progress/trust summary) with `javaScriptEnabled:false`; `generateMetadata` emits `og:image` as the **absolute API URL** `{API_ORIGIN}/v1/og/{address}.png` (`token-detail/model/metadata.ts`) — no web OG route exists post-§12.53. (2) `GET {API_ORIGIN}/v1/og/{address}.png` returns `image/png` 1200×630 (API-rendered native satori + resvg, R2-cached `og/{address}/{version}.png`): token image + name/ticker + mini-candles sparkline + mcap ETH-first (USD only via live endpoint, else degrade to ETH) + graduation progress (or "Graduated → Uniswap V3") + soft-confirmed tagline. Unknown token → 404.
 - **assertable-layers:** indexed · UI. _(Render output, not a chain state change — see waivers.)_
+
+### `@flow:TD-13` — Token-detail tables: server-side sort + keyset pagination (§12.59)
+> _**AUTHORED 2026-07-12 (USER-DIRECTED §12.59 redesign):** the redesign's common `DataTable` gives the trade feed + Top Holders tables SERVER-side sort (`?sort=&dir=`, never a client re-rank; the allowlisted `ORDER BY` is the injection boundary) and keyset pagination over an opaque, HMAC-signed forward cursor. TD-9/TD-10 keep their row-CONTENT intent; this flow pins the server-driven mechanics. No on-chain surface (pure indexer read/paging — mirrors DISC-4 + PORT-5); indexed · UI, waived below._
+> _`AUTHORED-BY: robbed-e2e  DATE: 2026-07-12` · `RATIFIED-BY: robbed-architect  DATE: 2026-07-12` — NEW flow ratified. On-chain waiver JUSTIFIED under the DISC-4 (pure indexer query) + PORT-5 (cursor paging) precedent: server-side sort (`?sort=&dir=`, allowlisted `ORDER BY`) + keyset pagination over an opaque signed cursor read no chain state and change none, so an `eth_call`/receipt assertion cannot exist — while the underlying trade on-chain legs stay asserted in TD-2/TD-3/TD-4/TD-5. Verified against §12.59 (server-authoritative; closed sortable-field allowlist ⇒ 400 out-of-list) and the shipped `HolderTable`/`TradeFeed` mechanics (`manualSorting`, `useCursorStack`). Layers indexed · UI; waiver row in `user-flows-waivers.md`._
+- **Actors:** Visitor.
+- **Preconditions:** `GET /v1/tokens/:address/trades` (and `/holders`) accept the shared allowlist (`tradeListQuerySchema`: `sort` ∈ {age,side,trader,amount,price}, `dir` ∈ {asc,desc}; out-of-allowlist ⇒ 400) and return the `Paginated<TradeRow>` `{items, nextCursor}` envelope; `nextCursor` is opaque + server-signed (§12.59).
+- **Steps:** (1) A column-header click dispatches a SERVER sort — the browser re-requests with `?sort=&dir=` and renders the returned order verbatim (`manualSorting`; never a client re-rank), the active header reflecting the sort (`aria-sort`). (2) The API applies the allowlisted `ORDER BY`; the returned order changes and is keyset-stable. (3) The pager's Next re-requests the next page carrying the opaque `?cursor=`; Prev returns — pages are disjoint and continue the active order across the seam.
+- **assertable-layers:** indexed · UI. _(No chain state change — server sort/paging is a pure indexer read; see waivers.)_
 
 ---
 
@@ -176,7 +192,7 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 ### `@flow:PORT-2` — Tab switch: ACTIVITY (historical per-address trade slice)
 - **Actors:** Holder / Visitor with a resolved subject address.
 - **Preconditions:** `GET /v1/portfolio/:address/activity` returns the **shared `TradeRow` shape** (no parallel model).
-- **Steps:** (1) Click ACTIVITY — tab state is view-local, not URL (the address is the shareable unit). (2) Rows render AGE · SIDE · TOKEN · AMOUNT · PRICE. (3) Each row carries a `ConfirmationBadge` from the indexed `confirmationState` — a not-yet-finalized trade is never shown unqualified-final (§2.1/§12.20). This is a **historical read**, already reconciled to indexed truth — not the optimistic feed. (4) The token cell links to `/t/[address]`.
+- **Steps:** (1) Click ACTIVITY — tab state is view-local, not URL (the address is the shareable unit). (2) Rows render AGE · SIDE · TOKEN · AMOUNT · PRICE. (3) Each row carries a `ConfirmationBadge` from the indexed `confirmationState` — a not-yet-finalized trade is never shown unqualified-final (§2.1/§12.20). **§12.56:** the badge is now CONDITIONAL — the removed soft-confirmed chip means a soft-confirmed row shows NO settlement badge; posted-to-L1 / finalized surface as the watermark advances. This is a **historical read**, already reconciled to indexed truth — not the optimistic feed. (4) The token cell links to `/t/[address]`.
 - **assertable-layers:** indexed · UI. _(The trades' on-chain legs are asserted in TD-2/TD-3/TD-4/TD-5; see waivers.)_
 
 ### `@flow:PORT-3` — Tab switch: CREATED (tokens created by this address)
@@ -265,10 +281,11 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 - **Steps:** (1) Client recomputes and detects the mismatch. (2) **Signing is blocked** — the user is never committed to metadata they did not write; error surfaced; no tx broadcast.
 - **assertable-layers:** UI. _(Client-side guard prevents any tx → no on-chain / indexed record; see waivers.)_
 
-### `@flow:ERR-6b` — Metadata mismatch verdict on Trust panel (§8.3)
+### `@flow:ERR-6b` — Metadata mismatch verdict on the SafetyStrip (§8.3)
+> _**AMENDED 2026-07-12 (USER-DIRECTED §12.57 redesign) — RATIFIED (cosmetic surface rename; verdict + layers unchanged):** the deleted Trust panel's ⚠ MISMATCH verdict RELOCATES to the compact `SafetyStrip` (its `MetadataTick` renders "Metadata MISMATCH", red — verified in `SafetyStrip.tsx`). The indexer verdict, the never-override rule, and the layers (on-chain · indexed · UI) are unchanged — only the display surface's name moved. `RATIFIED-BY: robbed-architect  DATE: 2026-07-12`._
 - **Actors:** Visitor.
 - **Preconditions:** on-chain committed `metadataHash` ≠ indexer's keccak of the fetched canonical JSON (metadata changed after launch).
-- **Steps:** (1) Indexer emits the ⚠ MISMATCH verdict. (2) Trust panel row 7 renders the red prominent "MISMATCH — metadata changed after launch", linking both hashes + the R2 JSON. Frontend renders the indexer verdict, never recomputes-and-overrides.
+- **Steps:** (1) Indexer emits the ⚠ MISMATCH verdict. (2) The `SafetyStrip` metadata tick renders the red prominent "Metadata MISMATCH" state, linking both hashes + the R2 JSON. Frontend renders the indexer verdict, never recomputes-and-overrides.
 - **assertable-layers:** on-chain · indexed · UI.
 
 ### `@flow:ERR-7` — Graduating-window lock (ReadyToGraduate, §12.12)
@@ -337,10 +354,10 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 |---|---|
 | Live candles 1s→1h, venue-continuous across graduation | TD-1 (continuity also asserted in TD-6) |
 | Buy/Sell widget: curve pre-grad, V3 post-grad invisible switch; slippage 2% + deadline | TD-2, TD-3, TD-3b, TD-4, TD-5 |
-| Trust panel (7 rows) | TD-7 |
-| Organic-flow metrics: organic-holder range, flow quality, funding-cluster grouping | TD-8 |
-| Live trade feed (soft-confirmed badge) | TD-9 |
-| Holder distribution (top 20; creator/curve/vault flagged) | TD-10 |
+| Safety strip: relocated must-render floor (LP copy · graduation progress · live reserves) — §12.57 | TD-7 |
+| Advisory §8.5 flags on the Top Holders table (organic range/flow-quality blocks dropped → internal §12.54) | TD-8 |
+| Live trade feed (soft-confirmed chip removed §12.56; posted/finalized surface) | TD-9 |
+| Top Holders table: rank · address · label · amount · % — server-sorted + paginated (§12.58/§12.59) | TD-10 |
 | Token info, Blockscout links, creator profile | TD-11 |
 | SSR + per-token OG image (chart snapshot + mcap + progress) | TD-12 |
 
@@ -389,7 +406,7 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 | Sells-open-while-buys-paused | ERR-4 |
 | Sells-open-while-treasury-reverts (§12.25) | ERR-5 |
 | Metadata hash mismatch (client pre-sign) | ERR-6a |
-| Metadata mismatch verdict (Trust panel §8.3) | ERR-6b |
+| Metadata mismatch verdict (SafetyStrip §8.3) | ERR-6b |
 | Graduating-window lock (§12.12) | ERR-7 |
 | Launch blocked while creates paused | ERR-8 |
 | Wallet rejects tx | ERR-9 |

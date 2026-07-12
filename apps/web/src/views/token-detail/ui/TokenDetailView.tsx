@@ -45,7 +45,9 @@ export default async function TokenDetailView({ address }: { address: string }) 
     getCandles(lower, interval, win, { revalidate: 5 }),
   ]);
 
-  const initialTrades = tradesR.status === "fulfilled" ? tradesR.value.trades : undefined;
+  // §12.59: /trades + /holders return the shared `Paginated<T>` `{ items,
+  // nextCursor }` envelope. The default (page-1) window seeds the client island.
+  const initialTrades = tradesR.status === "fulfilled" ? tradesR.value.items : undefined;
   const initialHolders = holdersR.status === "fulfilled" ? holdersR.value : undefined;
   const initialCandles = candlesR.status === "fulfilled" ? candlesR.value : undefined;
 
@@ -59,10 +61,14 @@ export default async function TokenDetailView({ address }: { address: string }) 
           each region pads itself per the mockup. */}
       <main className="mx-auto flex max-w-6xl flex-col pb-24 md:pb-0">
         {/* TokenHeader renders inside the client island (still SSR-pre-rendered)
-            so the status pill/bonding cell track the LIVE token status (TD-6). */}
+            so the status pill/bonding cell track the LIVE token status (TD-6).
+            DATA-GAP (flagged): the "Holders" header count needs a `holderCount`
+            on `tokenDetailSchema` — the /holders `Paginated` envelope no longer
+            carries it (tokens.holder_count already exists indexer-side). Until
+            then the header shows "—" (graceful degradation, never faked). */}
         <TokenDetailClient
           token={token}
-          holderCount={initialHolders?.holderCount}
+          holderCount={undefined}
           initialTrades={initialTrades}
           initialHolders={initialHolders}
           initialCandles={initialCandles}

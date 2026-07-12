@@ -25,6 +25,7 @@ import {
   graduateOnChain,
   loadDeployedAddresses,
   publicClient,
+  readGraduationEth,
   readReserves,
   setPauseBuys,
   setPauseCreates,
@@ -45,6 +46,12 @@ export function deployFeeWei(): bigint {
   return BigInt(forkConstants().fees.creationFeeWei as string);
 }
 
+/**
+ * @deprecated Reads the STATIC M0 notebook (`constants.fork.json`), which can lag
+ * the deployed value — the graduation target moved 8.076869 → 7.916610 ETH.
+ * Prefer `readGraduationEth(curve)` (live `GRADUATION_ETH()`), which is what the
+ * deploy actually baked in. Retained only as an offline fallback / documentation.
+ */
 export function graduationEthWei(): bigint {
   return BigInt(forkConstants().curve.graduationEthWei as string);
 }
@@ -329,7 +336,9 @@ export async function pushCurveTowardGraduation(
   // Warp past the anti-sniper early window (windowSeconds) so the large buys
   // needed to reach graduation aren't clamped by MAX_EARLY_BUY (EarlyBuyCapExceeded).
   await warpTime(Number(forkConstants().antiSniper.windowSeconds) + 2);
-  const target = graduationEthWei();
+  // LIVE threshold from the deployed curve — never the (possibly-stale) notebook
+  // value (8.08 vs 7.92); the loop must target exactly what the contract graduates at.
+  const target = await readGraduationEth(curve);
   const buyer = ROLES.trader;
   for (let i = 0; i < 20; i++) {
     const { realEth } = await readReserves(curve);

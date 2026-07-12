@@ -6,7 +6,6 @@ import {
   assertUi,
   buyOnChain,
   connectAs,
-  copy,
   expect,
   publicClient,
   routes,
@@ -40,7 +39,8 @@ test(
       // bearing assertion is that the sell submits and soft-confirms from a
       // zero-allowance account (on-chain = sellWithPermit).
       await sel.submitTrade(page).click();
-      await expect(page.getByText(copy.softConfirmed).first()).toBeVisible({ timeout: 12_000 });
+      // §12.56: soft-confirmed chip removed — prove the optimistic row via the feed row.
+      await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 12_000 });
     });
 
     let indexedTrade: any;

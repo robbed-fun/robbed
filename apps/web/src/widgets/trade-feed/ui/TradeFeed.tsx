@@ -1,31 +1,38 @@
 "use client";
 
 import {
+  type Paginated,
   type TokenDetail,
   type TradeRow,
+  type TradeSortField,
   type WsTradeData,
   tokenTrades,
 } from "@robbed/shared";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  type ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
-import { Fragment, useMemo } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef, HeaderContext } from "@tanstack/react-table";
+import { useCallback, useMemo, useState } from "react";
 
 import { ConfirmationBadge, useOptimisticTradesContext } from "@/entities/trade";
 import {
   AddressLink,
+  DataTable,
   EthAmount,
   MonoLabel,
   MonoText,
   RelativeTime,
   SideBadge,
+  SortHeader,
 } from "@/shared/ui";
 import { getTrades } from "@/shared/api";
+import { TRADES_PAGE_SIZE } from "@/shared/config/tables";
 import { qk } from "@/shared/lib/query-keys";
+import {
+  type SortState,
+  type TableSortMeta,
+  isDefaultSort,
+  nextSort,
+  useCursorStack,
+} from "@/shared/lib/table";
 import { useWsChannel } from "@/shared/lib/ws";
 import { formatPriceEth, shortAddress } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
@@ -33,60 +40,66 @@ import { cn } from "@/shared/lib/utils";
 import { type FeedRow, buildFeedRows, prependTrade } from "../model/merge";
 
 /**
- * Live trade feed (§5.2/§2.1) — ROBBED_ terminal TRADES TABLE (docs/Robbed.html
- * "2a": AGE · SIDE · TRADER · AMOUNT · PRICE). Now driven by a headless
- * `@tanstack/react-table` model (v8, docs-first tanstack.com/table 2026-07-10):
- * typed `ColumnDef<FeedRow>[]` supply the header + cell renderers, and BOTH the
- * header row and each body row iterate the same table row model. The library is
- * headless — the mockup's CSS-grid container/classes are preserved verbatim
- * (`flexRender` emits the exact same cell spans as before → byte-identical DOM,
- * zero visual regression).
+ * Live trade feed (§5.2/§2.1) — ROBBED_ terminal TRADES TABLE (AGE · SIDE ·
+ * TRADER · AMOUNT · PRICE), now the common `DataTable` (§12.60) with SERVER-SIDE
+ * sort + keyset pagination (§12.59). Column headers dispatch `?sort=&dir=` and the
+ * browser NEVER re-ranks (`manualSorting`); the opaque forward cursor is a
+ * `useCursorStack`.
  *
- * DATA LAYER (§4, web.md §2.5): the indexed feed is a TanStack Query read
- * (`qk.trades`) seeded by the SSR `GET /trades` page (`initialData`, no
- * double-fetch flash) and LIVE-patched by writing WS `trade` messages into the
- * query cache with `setQueryData`. The user's own optimistic trades are merged
- * from the shared store — a buy placed in the widget appears here instantly as
- * soft-confirmed and reconciles in place. Every row shows the `ConfirmationBadge`;
- * a soft-confirmed row never renders as unqualified-final. On WS reconnect the
- * `trades` family is invalidated (LIVE_QUERY_PREFIXES) → resumable indexed truth.
+ * LIVE HEAD vs REST SNAPSHOT (§12.59): the DEFAULT window (age DESC, page 1) is
+ * the WS-live, SSR-seeded view — WS `trade` messages prepend into it and the
+ * user's optimistic trades merge + reconcile in place (§4, unchanged). Sorting or
+ * paging away makes it a plain REST snapshot (no WS prepend, no optimistic merge)
+ * — "sort/paginate beyond the live head is a REST query".
+ *
+ * §12.56: the soft-confirmed chip is gone — a fresh (soft-confirmed) row shows NO
+ * settlement badge; `ConfirmationBadge` surfaces only once it upgrades to
+ * posted-to-L1 / finalized as the §12.20 watermark advances.
  */
 
-type TradesPage = { trades: TradeRow[]; nextCursor: string | null };
+/** Default order = age DESC (newest first) — the WS-live, SSR-seeded window. */
+const DEFAULT_TRADE_SORT: SortState<TradeSortField> = { field: "age", dir: "desc" };
 
-/** Column model (AGE · SIDE · TRADER · AMOUNT · PRICE). Cells reproduce the exact
- *  mockup spans so `flexRender` output is byte-identical to the pre-refactor DOM. */
+const metaOf = (ctx: HeaderContext<FeedRow, unknown>): TableSortMeta<string> =>
+  (ctx.table.options.meta ?? {}) as TableSortMeta<string>;
+
+/** Shared grid for the header + every row (byte-identical alignment). */
+const GRID =
+  "grid grid-cols-[52px_52px_1fr_auto] items-center gap-3.5 sm:grid-cols-[70px_70px_minmax(0,1fr)_130px_140px]";
+
 const tradeColumns: ColumnDef<FeedRow>[] = [
   {
     id: "age",
-    header: () => <MonoLabel size="2xs">Age</MonoLabel>,
+    header: (ctx) => <SortHeader label="Age" field="age" meta={metaOf(ctx)} />,
     cell: ({ row }) => <AgeCell row={row.original} />,
   },
   {
     id: "side",
-    header: () => <MonoLabel size="2xs">Side</MonoLabel>,
+    header: (ctx) => <SortHeader label="Side" field="side" meta={metaOf(ctx)} />,
     cell: ({ row }) => <SideBadge side={row.original.isBuy ? "buy" : "sell"} />,
   },
   {
     id: "trader",
-    header: () => <MonoLabel size="2xs">Trader</MonoLabel>,
+    header: (ctx) => <SortHeader label="Trader" field="trader" meta={metaOf(ctx)} />,
     cell: ({ row }) => <TraderCell row={row.original} />,
   },
   {
     id: "amount",
-    header: () => (
-      <MonoLabel size="2xs" className="text-right">
-        Amount
-      </MonoLabel>
+    header: (ctx) => (
+      <SortHeader label="Amount" field="amount" align="right" meta={metaOf(ctx)} />
     ),
     cell: ({ row }) => <AmountCell row={row.original} />,
   },
   {
     id: "price",
-    header: () => (
-      <MonoLabel size="2xs" className="hidden text-right sm:block">
-        Price
-      </MonoLabel>
+    header: (ctx) => (
+      <SortHeader
+        label="Price"
+        field="price"
+        align="right"
+        meta={metaOf(ctx)}
+        className="hidden sm:inline-flex"
+      />
     ),
     cell: ({ row }) => <PriceCell row={row.original} />,
   },
@@ -101,84 +114,121 @@ export function TradeFeed({
 }) {
   const queryClient = useQueryClient();
   const optimistic = useOptimisticTradesContext();
-  const queryKey = qk.trades(token.address);
+  const [sort, setSort] = useState<SortState<TradeSortField>>(DEFAULT_TRADE_SORT);
+  const cursors = useCursorStack();
+  const isDefaultView =
+    isDefaultSort(sort, DEFAULT_TRADE_SORT) && cursors.cursor === null;
 
-  // Indexed feed as a TanStack Query read, SSR-seeded so there is no double-fetch
-  // flash; WS trade messages patch this same cache below.
-  const query = useQuery<TradesPage>({
+  // Bare key = WS-live default head; params key = a REST snapshot (§12.59).
+  const canonicalKey = qk.trades(token.address);
+  const queryKey = isDefaultView
+    ? canonicalKey
+    : qk.trades(token.address, {
+        sort: sort.field,
+        dir: sort.dir,
+        cursor: cursors.cursor,
+      });
+
+  const query = useQuery<Paginated<TradeRow>>({
     queryKey,
-    queryFn: ({ signal }) => getTrades(token.address, { limit: 50 }, { signal }),
-    initialData: initialTrades ? { trades: initialTrades, nextCursor: null } : undefined,
+    queryFn: ({ signal }) =>
+      getTrades(
+        token.address,
+        {
+          sort: sort.field,
+          dir: sort.dir,
+          cursor: cursors.cursor ?? undefined,
+          limit: TRADES_PAGE_SIZE,
+        },
+        { signal },
+      ),
+    initialData:
+      isDefaultView && initialTrades.length
+        ? { items: initialTrades, nextCursor: null }
+        : undefined,
+    placeholderData: keepPreviousData,
     staleTime: 5_000,
   });
-  const indexed = query.data?.trades ?? [];
+  const indexed = query.data?.items ?? [];
 
   useWsChannel(tokenTrades(token.address), (msg) => {
     if (msg.type !== "trade") return;
-    queryClient.setQueryData<TradesPage>(queryKey, (old) => ({
-      trades: prependTrade(old?.trades ?? [], wsTradeToRow(msg.data)),
+    // Patch ONLY the live default head; a sorted/paged REST snapshot is untouched.
+    queryClient.setQueryData<Paginated<TradeRow>>(canonicalKey, (old) => ({
+      items: prependTrade(old?.items ?? [], wsTradeToRow(msg.data), TRADES_PAGE_SIZE),
       nextCursor: old?.nextCursor ?? null,
     }));
-    // Reconcile any matching optimistic row to indexed truth (§4).
+    // Reconcile any matching optimistic row to indexed truth (§4) regardless of view.
     optimistic.applyWsTrade(msg.data);
   });
 
   const rows = useMemo(
     () =>
       buildFeedRows({
-        optimistic: optimistic.trades,
+        // Optimistic rows merge only into the live head (§12.59).
+        optimistic: isDefaultView ? optimistic.trades : [],
         indexed,
         creator: token.creator.address,
       }),
-    [optimistic.trades, indexed, token.creator.address],
+    [isDefaultView, optimistic.trades, indexed, token.creator.address],
   );
 
-  const table = useReactTable({
-    data: rows,
-    columns: tradeColumns,
-    getCoreRowModel: getCoreRowModel(),
-    getRowId: (row) => row.key,
-  });
+  const onSort = useCallback(
+    (field: string) => {
+      setSort((cur) =>
+        nextSort(cur, field as TradeSortField, field === "trader" ? "asc" : "desc"),
+      );
+      cursors.reset();
+    },
+    [cursors],
+  );
 
-  const headerCells = table.getHeaderGroups()[0]?.headers ?? [];
+  const meta: TableSortMeta<string> = { sort, onSort };
+
+  const pagination = {
+    hasPrev: cursors.hasPrev,
+    hasNext: query.data?.nextCursor != null,
+    onPrev: cursors.prev,
+    onNext: () => {
+      const nc = query.data?.nextCursor;
+      if (nc) cursors.next(nc);
+    },
+    isFetching: query.isFetching,
+    pageIndex: cursors.pageIndex,
+  };
 
   return (
-    // FLAT region (fidelity audit fix 1): no Card — the mockup tape sits under
-    // the chart inside the same column, delimited by a single `border-t` and
-    // 12px top padding (template 2a line 382).
-    <div className="flex flex-col border-t border-border pt-3">
-      {/* Column header — mockup grid: 70px 70px 1fr 130px 140px, gap 14px */}
-      <div className="grid grid-cols-[52px_52px_1fr_auto] items-center gap-3.5 border-b border-border-soft pb-2 sm:grid-cols-[70px_70px_minmax(0,1fr)_130px_140px]">
-        {headerCells.map((header) => (
-          <Fragment key={header.id}>
-            {flexRender(header.column.columnDef.header, header.getContext())}
-          </Fragment>
-        ))}
-      </div>
-
-      {rows.length === 0 ? (
-        <p className="py-6 text-center text-xs text-muted">No trades yet — be the first.</p>
-      ) : (
-        <div className="flex flex-col">
-          {table.getRowModel().rows.map((row) => (
-            <div
-              key={row.id}
-              className={cn(
-                // Data rows: 12px (`text-sm`), mockup grid 70/70/1fr/130/140 gap 14px.
-                "grid grid-cols-[52px_52px_1fr_auto] items-center gap-3.5 border-b border-border-soft py-[7px] text-sm last:border-b-0 sm:grid-cols-[70px_70px_minmax(0,1fr)_130px_140px]",
-                row.original.isOptimistic && "opacity-90",
-                row.original.justUpdated && "animate-pulse",
-              )}
-            >
-              {row.getVisibleCells().map((cell) => (
-                <Fragment key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </Fragment>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
+    // FLAT region (fidelity audit fix 1): the DataTable's TableLabel titles the
+    // feed; the mockup grid tracks are preserved on the header + each row.
+    <div className="border-t border-border pt-3">
+      <DataTable<FeedRow>
+        data={rows}
+        columns={tradeColumns}
+        getRowId={(row) => row.key}
+        aria-label="Trades"
+        meta={meta}
+        tableLabel={{
+          title: <MonoLabel size="2xs" className="text-text-tertiary">Trades</MonoLabel>,
+        }}
+        renderHeader={(cells) => (
+          <div className={`${GRID} border-b border-border-soft pb-2`}>{cells}</div>
+        )}
+        renderRow={({ row, cells }) => (
+          <div
+            className={cn(
+              `${GRID} border-b border-border-soft py-[7px] text-sm last:border-b-0`,
+              row.original.isOptimistic && "opacity-90",
+              row.original.justUpdated && "animate-pulse",
+            )}
+          >
+            {cells}
+          </div>
+        )}
+        empty={
+          <p className="py-6 text-center text-xs text-muted">No trades yet — be the first.</p>
+        }
+        pagination={pagination}
+      />
     </div>
   );
 }
@@ -220,8 +270,6 @@ function TraderCell({ row }: { row: FeedRow }) {
 }
 
 function AmountCell({ row }: { row: FeedRow }) {
-  // Shared EthAmount: 4-dec zero-padded and the unit INHERITS the row color
-  // (mockup "0.4200 ETH" is one color) — no local unit-color override.
   return (
     <span className="text-right text-text-secondary">
       <EthAmount wei={row.ethAmount} />
@@ -230,9 +278,6 @@ function AmountCell({ row }: { row: FeedRow }) {
 }
 
 function PriceCell({ row }: { row: FeedRow }) {
-  // Review fix (2026-07-11): `toPrecision(2)` emitted exponential notation for
-  // early curve prices ("9.3e-10") — route through the shared decimal formatter
-  // (2 sig digits, never e-notation).
   return (
     <span className="hidden text-right tabular-nums text-muted sm:block">
       {formatPriceEth(row.priceEth)}

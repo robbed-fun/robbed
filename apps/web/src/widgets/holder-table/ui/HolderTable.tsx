@@ -1,114 +1,177 @@
 "use client";
 
-import { type HolderRow, type TokenDetail, tokenTrades } from "@robbed/shared";
-import { useQuery } from "@tanstack/react-query";
 import {
-  type ColumnDef,
-  type Row,
-  type SortingFn,
-  flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
-import { Fragment, useRef } from "react";
+  type HolderRow,
+  type HolderSortField,
+  type Paginated,
+  type TokenDetail,
+  tokenTrades,
+} from "@robbed/shared";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import type { ColumnDef, HeaderContext } from "@tanstack/react-table";
+import { useCallback, useMemo, useRef, useState } from "react";
 
-import {
-  BOT_FLAG_LABELS,
-  HOLDER_FLAG_LABELS,
-  groupHoldersByCluster,
-} from "@/entities/holder";
-import { AddressLink, Badge, ProgressBar } from "@/shared/ui";
+import { BOT_FLAG_LABELS, HOLDER_FLAG_LABELS } from "@/entities/holder";
+import { AddressLink, Badge, DataTable, SortHeader } from "@/shared/ui";
 import { getHolders } from "@/shared/api";
+import { HOLDERS_PAGE_SIZE } from "@/shared/config/tables";
 import { qk } from "@/shared/lib/query-keys";
+import {
+  type SortState,
+  type TableSortMeta,
+  isDefaultSort,
+  nextSort,
+  useCursorStack,
+} from "@/shared/lib/table";
 import { useWsChannel } from "@/shared/lib/ws";
 import { formatPercent, formatTokenFromWei, shortAddress } from "@/shared/lib/format";
 
 /**
- * Holder distribution — top 20 (§5.2). Structural flags (creator / bonding curve /
- * LP pool / LP fee vault) plus the v1.2 funding-cluster grouping: rows sharing a
- * `clusterId` (same gas-funding source, §8.5) are visually grouped and `botFlags`
- * render as small ADVISORY badges — heuristic labels only, gating nothing (spec
- * §5.2/§8.5). Refreshes on WS trades, throttled ≥5s (web.md §3.2).
+ * Top Holders table (§5.2/§12.58) — the right-column table that REPLACES the
+ * deleted Trust panel (§12.57). RULED row shape: `rank · address · label · amount
+ * · percent`, where **label** is the account role (Bonding curve / Creator / LP
+ * fee vault, §12.16) PLUS the §8.5 advisory sniper / programmatic bot-flags —
+ * this is now the surviving PUBLIC organic-flow surface (the standalone
+ * organic-range / flow-quality blocks moved to the internal §12.54 endpoint).
  *
- * Driven by a headless `@tanstack/react-table` row model (v8, docs-first
- * tanstack.com/table 2026-07-10): typed `ColumnDef<HolderRow>[]` supply each
- * row's cells (address+flags+progress · balance+pct), the BALANCE column is
- * sortable (spec-directed "holders by balance"; default order = the API's
- * balance-DESC ranking, so no sort is applied and the DOM is unchanged), and the
- * funding-cluster grouping runs over the table's (sorted) row model. Cells
- * reproduce the mockup spans verbatim → byte-identical DOM.
+ * SERVER-AUTHORITATIVE (§12.59/§12.22): the DataTable is `manualSorting` — column
+ * headers dispatch a `?sort=&dir=` refetch, the browser NEVER re-ranks. Keyset
+ * pagination is an opaque forward cursor (`useCursorStack`). The bare query key is
+ * the WS-live default window (amount DESC ≡ rank ASC, page 1); a sorted/paginated
+ * view is a distinct REST snapshot. Balances are the indexer's Transfer-derived
+ * truth (§12.16) — no new on-chain surface. Refreshes on WS trades, throttled ≥5s.
  */
 
-/** Balance sort (wei decimal string). */
-const byBalance: SortingFn<HolderRow> = (a, b) => {
-  const d = BigInt(a.original.balance) - BigInt(b.original.balance);
-  return d > 0n ? 1 : d < 0n ? -1 : 0;
-};
+/** Default order = amount DESC (≡ rank ASC), the SSR-seeded live window. */
+const DEFAULT_HOLDER_SORT: SortState<HolderSortField> = { field: "amount", dir: "desc" };
 
-const holderColumns: ColumnDef<HolderRow>[] = [
+/** Row with a resolved rank (server `rank` when present, else page position). */
+interface HolderRowView extends HolderRow {
+  displayRank: number;
+}
+
+/** Text columns default to ASC on first click; magnitude columns to DESC. */
+function defaultDirFor(field: string): "asc" | "desc" {
+  return field === "address" || field === "label" || field === "rank" ? "asc" : "desc";
+}
+
+const metaOf = (ctx: HeaderContext<HolderRowView, unknown>): TableSortMeta<string> =>
+  (ctx.table.options.meta ?? {}) as TableSortMeta<string>;
+
+/** Shared 5-track grid for the header + every row (byte-identical alignment). */
+const GRID =
+  "grid grid-cols-[18px_minmax(0,1fr)_auto_64px_46px] items-center gap-x-2";
+
+const holderColumns: ColumnDef<HolderRowView>[] = [
   {
-    id: "distribution",
-    cell: ({ row }) => {
-      const holder = row.original;
-      return (
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <div className="flex flex-wrap items-center gap-1">
-            <AddressLink
-              address={holder.address}
-              kind="address"
-              label={shortAddress(holder.address)}
-            />
-            {holder.flags.map((f) => (
-              <Badge key={f} variant="outline" className="px-1 py-0 text-[10px]">
-                {HOLDER_FLAG_LABELS[f]}
-              </Badge>
-            ))}
-            {holder.botFlags?.map((b) => (
-              <Badge
-                key={b}
-                variant="soft-confirmed"
-                className="px-1 py-0 text-[10px]"
-                title="Advisory heuristic label (§8.5) — not a fact, gates nothing"
-              >
-                {BOT_FLAG_LABELS[b]}
-              </Badge>
-            ))}
-          </div>
-          <ProgressBar pct={holder.pct} showValue={false} />
-        </div>
-      );
-    },
+    id: "rank",
+    header: (ctx) => <SortHeader label="#" field="rank" meta={metaOf(ctx)} />,
+    cell: ({ row }) => (
+      <span className="tabular-nums text-text-tertiary">{row.original.displayRank}</span>
+    ),
   },
   {
-    id: "amounts",
-    enableSorting: true,
-    sortingFn: byBalance,
-    cell: ({ row }) => {
-      const holder = row.original;
-      return (
-        <div className="flex w-24 shrink-0 flex-col items-end">
-          <span className="tabular-nums text-foreground">
-            {formatTokenFromWei(holder.balance)}
-          </span>
-          <span className="tabular-nums text-muted-foreground">{formatPercent(holder.pct)}</span>
-        </div>
-      );
-    },
+    id: "address",
+    header: (ctx) => <SortHeader label="Holder" field="address" meta={metaOf(ctx)} />,
+    cell: ({ row }) => (
+      <AddressLink
+        address={row.original.address}
+        kind="address"
+        label={shortAddress(row.original.address)}
+        className="truncate text-muted"
+      />
+    ),
+  },
+  {
+    id: "label",
+    header: (ctx) => <SortHeader label="Label" field="label" meta={metaOf(ctx)} />,
+    cell: ({ row }) => <LabelCell holder={row.original} />,
+  },
+  {
+    id: "amount",
+    header: (ctx) => (
+      <SortHeader label="Amount" field="amount" align="right" meta={metaOf(ctx)} />
+    ),
+    cell: ({ row }) => (
+      <span className="text-right tabular-nums text-foreground">
+        {formatTokenFromWei(row.original.balance)}
+      </span>
+    ),
+  },
+  {
+    id: "percent",
+    header: (ctx) => (
+      <SortHeader label="%" field="percent" align="right" meta={metaOf(ctx)} />
+    ),
+    cell: ({ row }) => (
+      <span className="text-right tabular-nums text-muted-foreground">
+        {formatPercent(row.original.pct)}
+      </span>
+    ),
   },
 ];
+
+/** Structural role chips (creator/curve/vault) + advisory §8.5 bot-flag chips. */
+function LabelCell({ holder }: { holder: HolderRow }) {
+  const hasAny = holder.flags.length > 0 || (holder.botFlags?.length ?? 0) > 0;
+  if (!hasAny) return <span className="text-text-tertiary">—</span>;
+  return (
+    <span className="flex flex-wrap items-center justify-end gap-1">
+      {holder.flags.map((f) => (
+        <Badge key={f} variant="outline" className="px-1 py-0 text-[10px]">
+          {HOLDER_FLAG_LABELS[f]}
+        </Badge>
+      ))}
+      {holder.botFlags?.map((b) => (
+        <Badge
+          key={b}
+          variant="soft-confirmed"
+          className="px-1 py-0 text-[10px]"
+          title="Advisory heuristic label (§8.5) — not a fact, gates nothing"
+        >
+          {BOT_FLAG_LABELS[b]}
+        </Badge>
+      ))}
+    </span>
+  );
+}
 
 export function HolderTable({
   token,
   initialData,
 }: {
   token: TokenDetail;
-  initialData?: { holders: HolderRow[]; holderCount: number };
+  initialData?: Paginated<HolderRow>;
 }) {
-  const query = useQuery({
-    queryKey: qk.holders(token.address),
-    queryFn: ({ signal }) => getHolders(token.address, { limit: 20 }, { signal }),
-    initialData,
+  const [sort, setSort] = useState<SortState<HolderSortField>>(DEFAULT_HOLDER_SORT);
+  const cursors = useCursorStack();
+  const isDefaultView =
+    isDefaultSort(sort, DEFAULT_HOLDER_SORT) && cursors.cursor === null;
+
+  const canonicalKey = qk.holders(token.address);
+  const queryKey = isDefaultView
+    ? canonicalKey
+    : qk.holders(token.address, {
+        sort: sort.field,
+        dir: sort.dir,
+        cursor: cursors.cursor,
+      });
+
+  const query = useQuery<Paginated<HolderRow>>({
+    queryKey,
+    queryFn: ({ signal }) =>
+      getHolders(
+        token.address,
+        {
+          sort: sort.field,
+          dir: sort.dir,
+          cursor: cursors.cursor ?? undefined,
+          limit: HOLDERS_PAGE_SIZE,
+        },
+        { signal },
+      ),
+    initialData: isDefaultView ? initialData : undefined,
+    placeholderData: keepPreviousData,
     staleTime: 5_000,
   });
 
@@ -121,81 +184,62 @@ export function HolderTable({
     void query.refetch();
   });
 
-  const holders = query.data?.holders ?? [];
-
-  const table = useReactTable({
-    data: holders,
-    columns: holderColumns,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getRowId: (row) => row.address,
-  });
-
-  // Group the (sorted) row model by funding cluster, reusing the pure helper on
-  // the ordered originals, then render each holder from its table Row.
-  const orderedRows = table.getRowModel().rows;
-  const rowByAddress = new Map<string, Row<HolderRow>>(
-    orderedRows.map((r) => [r.original.address, r]),
+  const items = query.data?.items ?? [];
+  const offset = cursors.pageIndex * HOLDERS_PAGE_SIZE;
+  const rows = useMemo<HolderRowView[]>(
+    () => items.map((h, i) => ({ ...h, displayRank: h.rank ?? offset + i + 1 })),
+    [items, offset],
   );
-  const clusters = groupHoldersByCluster(orderedRows.map((r) => r.original));
-  let rank = 0;
+
+  const onSort = useCallback(
+    (field: string) => {
+      setSort((cur) => nextSort(cur, field as HolderSortField, defaultDirFor(field)));
+      cursors.reset();
+    },
+    [cursors],
+  );
+
+  const meta: TableSortMeta<string> = { sort, onSort };
+
+  const pagination = {
+    hasPrev: cursors.hasPrev,
+    hasNext: query.data?.nextCursor != null,
+    onPrev: cursors.prev,
+    onNext: () => {
+      const nc = query.data?.nextCursor;
+      if (nc) cursors.next(nc);
+    },
+    isFetching: query.isFetching,
+    pageIndex: cursors.pageIndex,
+  };
 
   return (
-    // FLAT region (fidelity audit fix 1): no Card border/fill — the token-detail
-    // left column supplies padding; sections separate by their headings.
-    <div className="flex flex-col">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-foreground">Top holders</h3>
-        {query.data?.holderCount !== undefined && (
-          <span className="text-xs text-muted-foreground">
-            {query.data.holderCount.toLocaleString("en-US")} holders
-          </span>
-        )}
-      </div>
-
-      {holders.length === 0 ? (
+    // FLAT region (fidelity audit fix 1): no Card — the token-detail column
+    // supplies padding; the DataTable's TableLabel titles the table.
+    <DataTable<HolderRowView>
+      data={rows}
+      columns={holderColumns}
+      getRowId={(h) => h.address}
+      aria-label="Top holders"
+      meta={meta}
+      tableLabel={{ title: "Top holders" }}
+      renderHeader={(cells) => (
+        <div className={`${GRID} border-b border-border-soft pb-2 text-[11px]`}>
+          {cells}
+        </div>
+      )}
+      renderRow={({ cells }) => (
+        <div className={`${GRID} border-b border-border-soft py-1.5 text-xs last:border-b-0`}>
+          {cells}
+        </div>
+      )}
+      empty={
         <p className="py-6 text-center text-xs text-muted-foreground">
           No holders yet — the bonding curve holds the full supply until the first
           trade.
         </p>
-      ) : (
-        <div className="flex flex-col gap-1">
-          {clusters.map((cluster) =>
-            cluster.clusterId ? (
-              <div
-                key={`cluster-${cluster.clusterId}`}
-                className="rounded-md border border-soft-confirmed/30 bg-soft-confirmed/5 p-1"
-              >
-                <div className="px-1 pb-0.5 text-[10px] uppercase tracking-wide text-soft-confirmed">
-                  Funding cluster · {cluster.rows.length} addresses (heuristic)
-                </div>
-                {cluster.rows.map((h) => (
-                  <HolderRowItem key={h.address} row={rowByAddress.get(h.address)!} rank={++rank} />
-                ))}
-              </div>
-            ) : (
-              <HolderRowItem
-                key={cluster.rows[0]!.address}
-                row={rowByAddress.get(cluster.rows[0]!.address)!}
-                rank={++rank}
-              />
-            ),
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function HolderRowItem({ row, rank }: { row: Row<HolderRow>; rank: number }) {
-  return (
-    <div className="flex items-center gap-2 px-1 py-1 text-xs">
-      <span className="w-5 shrink-0 tabular-nums text-muted-foreground">{rank}</span>
-      {row.getVisibleCells().map((cell) => (
-        <Fragment key={cell.id}>
-          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-        </Fragment>
-      ))}
-    </div>
+      }
+      pagination={pagination}
+    />
   );
 }

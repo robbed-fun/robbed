@@ -54,7 +54,7 @@ const sharedAddrFile = join(repoRoot, "packages", "shared", "src", "addresses.ts
 /** Flat artifact shape written by `Deploy.s.sol._writeArtifact`. */
 type Artifact = {
   chainId: number;
-  mode: "local" | "testnet" | "live";
+  mode: "local" | "testnet" | "live" | "fork";
   deployedAt: number;
   curveFactory: string;
   router: string;
@@ -98,6 +98,28 @@ const ADDR_KEYS: (keyof Artifact)[] = [
   "swapRouter02",
   "quoterV2",
 ];
+// ── §12.55 / T-5 registry-mode invariant (fail-closed) ───────────────────────
+// The registry is the thing downstream services (indexer §12.55 chain-identity
+// gate) assert against, so codegen is the last line that can refuse to MINT a
+// bad `mode:"live"` entry. Two rules, both fail the whole codegen loudly:
+//   1. Only chain 4663 may ever be `mode:"live"` (mainnet is the sole live chain);
+//      46630 is `testnet`, 31337 is `local`, a 4663 fork is `fork`.
+//   2. A `live` entry may NOT carry a well-known ANVIL dev-account treasury — that
+//      is exactly the fork-artifact-mislabeled-live defect §12.55 flagged (the old
+//      4663.json had the anvil account-1 treasury under `mode:"live"`). A real
+//      Phase-B treasury is a Gnosis Safe (§6.6), never a deterministic dev key.
+// Together with Deploy.s.sol's fail-safe live-affirmation (decision #5), a fork
+// run cannot produce a `mode:"live"` 4663 registry entry through this pipeline.
+const VALID_MODES = new Set(["local", "testnet", "live", "fork"]);
+const LIVE_CHAIN_ID = 4663;
+// Anvil's default-mnemonic accounts 0 & 1 (public dev keys — NOT secrets). Any of
+// these as a `live` treasury proves the artifact is a dev/fork run, not mainnet.
+const ANVIL_DEV_ACCOUNTS = new Set(
+  ["0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"].map((a) =>
+    a.toLowerCase(),
+  ),
+);
+
 const artifacts: Artifact[] = [];
 for (const f of files) {
   const a = JSON.parse(readFileSync(join(deploymentsDir, f), "utf8")) as Artifact;
@@ -107,6 +129,22 @@ for (const f of files) {
       console.error(`[codegen-addresses] ${f}: field ${k} is not a valid address: ${String(v)}`);
       process.exit(1);
     }
+  }
+  if (!VALID_MODES.has(a.mode)) {
+    console.error(`[codegen-addresses] ${f}: unknown mode ${JSON.stringify(a.mode)} (expected one of ${[...VALID_MODES].join(", ")}).`);
+    process.exit(1);
+  }
+  if (a.mode === "live" && a.chainId !== LIVE_CHAIN_ID) {
+    console.error(`[codegen-addresses] ${f}: mode:"live" is only valid for chain ${LIVE_CHAIN_ID}, got ${a.chainId} (§12.55).`);
+    process.exit(1);
+  }
+  if (a.mode === "live" && ANVIL_DEV_ACCOUNTS.has(a.treasury.toLowerCase())) {
+    console.error(
+      `[codegen-addresses] ${f}: mode:"live" with an anvil dev-account treasury ${a.treasury} — this is a ` +
+        `mainnet-FORK artifact mislabeled live (§12.55). A real deploy sets ROBBED_DEPLOY_ENV=mainnet and a ` +
+        `Gnosis Safe treasury; a fork run yields mode:"fork". Refusing to mint a false-live registry entry.`,
+    );
+    process.exit(1);
   }
   artifacts.push(a);
 }
@@ -159,7 +197,13 @@ const sharedBanner = `/**
  */
 import type { Address } from "viem";
 
-export type DeploymentMode = "local" | "testnet" | "live";
+/**
+ * A 4663 \`fork\` is a mainnet-FORK pipeline run (anvil --fork-url): same chainid as
+ * \`live\` but deliberately NOT live so a fork can never masquerade as a real mainnet
+ * deployment (§12.55). Consumers that require a canonical mainnet entry MUST assert
+ * \`mode === "live"\`; the indexer's chain-identity gate does exactly this.
+ */
+export type DeploymentMode = "local" | "testnet" | "live" | "fork";
 
 /** The six-contract robbed topology + treasury for one chain (spec §6, §6.6). */
 export interface Deployment {

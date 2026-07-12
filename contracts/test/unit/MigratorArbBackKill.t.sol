@@ -54,31 +54,31 @@ abstract contract MigratorArbBackKillBase is Test, V3Fixture {
     }
 
     // ────────────────────── exact tick-boundary sqrt prices ──────────────────────
-    // getSqrtRatioAtTick(t) for the M0 graduation targets ±170600 (TestConstants) at the O-8
-    // tolerance boundary ±100 and one tick beyond (spec §12.33: TOLERANCE_TICKS = 100). Pure
-    // tick↔sqrt math — NOT market data — computed offline with a bit-exact port of v3-core
-    // TickMath.getSqrtRatioAtTick (the port reproduces SQRT_PRICE_TOKEN0/1_X96 at ±170600
-    // exactly). Each use is self-validating: the test asserts slot0.tick equals the intended
-    // boundary tick right after setting the price, so a stale constant fails loudly here and
-    // never silently weakens a kill.
-    uint160 internal constant SQRT_T0_UP_TOL = 15_729_112_953_887_499_647_648_409; // tick −170500
-    uint160 internal constant SQRT_T0_DN_TOL = 15_572_613_450_803_935_561_568_679; // tick −170700
-    uint160 internal constant SQRT_T0_UP_TOL1 = 15_729_899_389_874_785_838_393_488; // tick −170499
-    uint160 internal constant SQRT_T0_DN_TOL1 = 15_571_834_878_523_829_789_377_312; // tick −170701
-    uint160 internal constant SQRT_T1_UP_TOL = 403_085_953_120_002_836_245_435_337_839_978; // tick 170700
-    uint160 internal constant SQRT_T1_DN_TOL = 399_075_380_397_422_561_782_522_804_600_636; // tick 170500
-    uint160 internal constant SQRT_T1_UP_TOL1 = 403_106_106_913_826_586_284_869_770_651_875; // tick 170701
-    uint160 internal constant SQRT_T1_DN_TOL1 = 399_055_428_124_810_666_999_629_513_784_821; // tick 170499
+    // getSqrtRatioAtTick(t) for the M0 graduation targets ±170800 (TestConstants; the 2026-07-12
+    // real-gas re-derivation moved the target from ±170600 → ±170800) at the O-8 tolerance boundary
+    // ±100 and one tick beyond (spec §12.33: TOLERANCE_TICKS = 100). Pure tick↔sqrt math — NOT market
+    // data — computed offline with the bit-exact port of v3-core TickMath.getSqrtRatioAtTick in
+    // tools/m0/lib/v3tick.ts (the port reproduces SQRT_PRICE_TOKEN0/1_X96 at ±170800 exactly). Each
+    // use is self-validating: the test asserts slot0.tick equals the intended boundary tick right
+    // after setting the price, so a stale constant fails loudly here and never silently weakens a kill.
+    uint160 internal constant SQRT_T0_UP_TOL = 15_572_613_450_803_935_561_568_679; // tick −170700
+    uint160 internal constant SQRT_T0_DN_TOL = 15_417_671_066_328_217_011_167_927; // tick −170900
+    uint160 internal constant SQRT_T0_UP_TOL1 = 15_573_392_062_011_682_172_356_250; // tick −170699
+    uint160 internal constant SQRT_T0_DN_TOL1 = 15_416_900_240_586_349_498_378_959; // tick −170901
+    uint160 internal constant SQRT_T1_UP_TOL = 407_136_830_743_243_950_468_184_160_899_421; // tick 170900
+    uint160 internal constant SQRT_T1_DN_TOL = 403_085_953_120_002_836_245_435_337_839_978; // tick 170700
+    uint160 internal constant SQRT_T1_UP_TOL1 = 407_157_187_075_885_518_698_307_157_806_670; // tick 170901
+    uint160 internal constant SQRT_T1_DN_TOL1 = 403_065_800_333_793_206_964_173_353_316_543; // tick 170699
 
     /// @dev (`sqrtPriceX96`, tick) of the tolerance boundary: `up` = higher-tick side, `beyond` =
     ///      one tick past the boundary.
     function _boundary(bool up, bool beyond) internal pure returns (uint160 sqrtP, int24 tick) {
         if (_expectToken0()) {
-            if (up) return beyond ? (SQRT_T0_UP_TOL1, int24(-170_499)) : (SQRT_T0_UP_TOL, int24(-170_500));
-            return beyond ? (SQRT_T0_DN_TOL1, int24(-170_701)) : (SQRT_T0_DN_TOL, int24(-170_700));
+            if (up) return beyond ? (SQRT_T0_UP_TOL1, int24(-170_699)) : (SQRT_T0_UP_TOL, int24(-170_700));
+            return beyond ? (SQRT_T0_DN_TOL1, int24(-170_901)) : (SQRT_T0_DN_TOL, int24(-170_900));
         }
-        if (up) return beyond ? (SQRT_T1_UP_TOL1, int24(170_701)) : (SQRT_T1_UP_TOL, int24(170_700));
-        return beyond ? (SQRT_T1_DN_TOL1, int24(170_499)) : (SQRT_T1_DN_TOL, int24(170_500));
+        if (up) return beyond ? (SQRT_T1_UP_TOL1, int24(170_901)) : (SQRT_T1_UP_TOL, int24(170_900));
+        return beyond ? (SQRT_T1_DN_TOL1, int24(170_699)) : (SQRT_T1_DN_TOL, int24(170_700));
     }
 
     // ── helpers (conventions mirror test/unit/Migrator.t.sol) ────────────────────
@@ -205,7 +205,7 @@ abstract contract MigratorArbBackKillBase is Test, V3Fixture {
     // ────────────────────────────── kill-test 2 ──────────────────────────────
     // Ordering mirror of the CLEAN path. In the token0 ordering the final tolerance check's LOWER
     // bound goes hugely wrong under survivors 6 (`targetTick / TOLERANCE_TICKS`), 7 (`%`) and 19
-    // (dropped `c.targetTick`): with target −170600 every graduation then reverts
+    // (dropped `c.targetTick`): with target −170800 every graduation then reverts
     // PoolPriceUnrecoverable. The legacy suite never ran token0, so they lived. Kills: 6, 7, 19.
 
     function test_ordering_cleanGraduation_mintsExactlyAtTarget() public {

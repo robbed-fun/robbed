@@ -19,7 +19,9 @@ contract CalibrationHarness is Deploy {
     }
 
     function loadFrom(string memory path) external {
-        mode = _selectMode(block.chainid);
+        // Calibration guard runs on any chain id; the fork/live split is immaterial here, so pass
+        // the affirmation through faithfully (default false ⇒ 4663 resolves to Fork, still non-Local).
+        mode = _selectMode(block.chainid, _isMainnetAffirmed());
         _loadConstantsFrom(path);
     }
 }

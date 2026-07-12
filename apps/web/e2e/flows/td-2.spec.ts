@@ -4,7 +4,6 @@ import {
   assertOnChain,
   assertUi,
   connectAs,
-  copy,
   expect,
   publicClient,
   routes,
@@ -38,8 +37,9 @@ test(
       await expect(sel.feeRow(page)).toContainText(tradeFeeLabel());
       await expect(sel.minReceivedRow(page)).toBeVisible();
       await sel.submitTrade(page).click();
-      // Never rendered final while soft-confirmed (§2.1 rule 3).
-      await expect(page.getByText(copy.softConfirmed).first()).toBeVisible({ timeout: 10_000 });
+      // §12.56: the soft-confirmed chip is removed — the optimistic row landing
+      // is proven by the feed ROW appearing (never rendered final; §2.1 rule 3).
+      await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 10_000 });
     });
 
     let indexedTrade: any;

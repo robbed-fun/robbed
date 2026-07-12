@@ -6,7 +6,6 @@ import {
   assertUi,
   buyOnChain,
   connectAs,
-  copy,
   expect,
   publicClient,
   routes,
@@ -35,7 +34,8 @@ test(
       await sel.sellTab(page).click();
       await sel.maxButton(page).click();
       await sel.submitTrade(page).click();
-      await expect(page.getByText(copy.softConfirmed).first()).toBeVisible({ timeout: 10_000 });
+      // §12.56: soft-confirmed chip removed — prove the optimistic row via the feed row.
+      await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 10_000 });
     });
 
     let indexedTrade: any;

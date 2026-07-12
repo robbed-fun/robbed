@@ -87,7 +87,7 @@ export function LaunchProgress({
       {step === "live-unindexed" && tokenAddress && (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-muted-foreground">
-            Your token is soft-confirmed and tradeable. The indexer is still catching
+            Your token is live and tradeable. The indexer is still catching
             up — open it directly:
           </p>
           <Button asChild size="sm" variant="outline">

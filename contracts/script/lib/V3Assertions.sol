@@ -11,7 +11,7 @@ import {INonfungiblePositionManager} from "../../src/interfaces/external/INonfun
 ///         against that same Factory/WETH. This library runtime-asserts exactly those three facts so
 ///         `Deploy.s.sol` (M1-14) fails closed if the wired addresses are wrong for this chain —
 ///         rather than silently deploying a migrator that will only revert at the first graduation.
-/// @dev  Design decision (owned by hoodpad-contracts, not a product question):
+/// @dev  Design decision (owned by robbed-contracts, not a product question):
 ///       - `internal` library, not an abstract contract or free function: it inlines into the deploy
 ///         script with zero deployed bytecode and no extra address to trust, while staying unit-
 ///         testable in isolation (a `Test` contract can wrap it). Options weighed: (1) inline the

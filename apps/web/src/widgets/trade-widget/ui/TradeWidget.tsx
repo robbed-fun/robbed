@@ -459,10 +459,14 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 /**
- * §12.47 large-value disclosure (task B). Above the ETH threshold, a trade's
- * confirmation tiers matter: it renders soft-confirmed NOW, then posts to L1,
- * then finalizes — settlement finality follows L1 posting on this single-
- * sequencer L2. We surface that here rather than implying instant settlement.
+ * §12.47 large-value disclosure. Above the ETH threshold, a trade's confirmation
+ * tiers matter: the sequencer includes it NOW, then it posts to L1, then it
+ * finalizes — settlement finality follows L1 posting on this single-sequencer L2.
+ * We surface that here rather than implying instant settlement.
+ *
+ * §12.56: this KEEPS the posted-to-L1 / finalized escalation (the whole point of
+ * the disclosure) but drops the "soft-confirmed" chip framing — it now leads with
+ * "wait for posted/finalized", not a soft-confirmed label.
  */
 function LargeValueDisclosure({
   ethWei,
@@ -483,9 +487,8 @@ function LargeValueDisclosure({
         </MonoText>
       </div>
       <p className="text-muted">
-        This {noun} is <span className="text-soft-confirmed">soft-confirmed</span> the
-        instant the sequencer includes it, then upgrades to{" "}
-        <span className="text-posted">posted to L1</span> and{" "}
+        This {noun} is included the instant the sequencer picks it up, then upgrades
+        to <span className="text-posted">posted to L1</span> and{" "}
         <span className="text-finalized">finalized</span>. At this size, wait for the
         posted/finalized tier in the trades feed before treating it as settled.
       </p>

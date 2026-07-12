@@ -6,7 +6,6 @@ import {
   assertUi,
   buyOnChain,
   connectAs,
-  copy,
   expect,
   makeTreasuryRevert,
   publicClient,
@@ -46,7 +45,8 @@ test(
       await sel.sellTab(page).click();
       await sel.maxButton(page).click();
       await sel.submitTrade(page).click();
-      await expect(page.getByText(copy.softConfirmed).first()).toBeVisible({ timeout: 15_000 });
+      // §12.56: soft-confirmed chip removed — prove the sell landed via the feed row.
+      await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 15_000 });
     });
 
     let indexedSell: any;
@@ -62,7 +62,8 @@ test(
     });
 
     await assertUi("the sell row reconciles to indexed truth (never dropped)", async () => {
-      await expect(page.getByText(copy.softConfirmed).first()).toBeVisible();
+      // §12.56: soft-confirmed chip removed — the reconciled row is proven present.
+      await expect(sel.tradeRows(page).first()).toBeVisible();
     });
   },
 );

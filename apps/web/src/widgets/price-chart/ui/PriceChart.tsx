@@ -174,8 +174,19 @@ export function PriceChart({
     // UPPERCASE mockup-style (1H, 4H, 1D…) in the terminal tab strip.
     // FLAT region (fidelity audit fix 1): no Card border/fill — the page column
     // supplies padding; the mockup panel sits directly on the page background.
-    <div className="flex flex-col gap-3.5">
-      <div className="flex items-center justify-between gap-2">
+    //
+    // FILL-CONTAINER (layout revision 2026-07-12): the root is a FULL-HEIGHT flex
+    // column (`h-full min-h-0`) that fills whatever height its parent gives it —
+    // now the FIXED `--td-hero-h` box on lg (see views/token-detail config/hero),
+    // a `56vh` box on mobile. The compact header row (interval tabs + `price /
+    // ETH`) stays `shrink-0` while the chart wrapper takes ALL remaining height
+    // via `flex-1 min-h-0` — the classic flexbox min-height:auto trap is defused
+    // by `min-h-0` on every column in the chain (root → wrapper) so the canvas
+    // tracks the container instead of intrinsic content height. The chart element
+    // sizes to that wrapper through lightweight-charts' own `autoSize`
+    // ResizeObserver (v5, above) — this component sets no pixel height itself.
+    <div className="flex h-full min-h-0 flex-col gap-3.5">
+      <div className="flex shrink-0 items-center justify-between gap-2">
         <TabBar>
           {CANDLE_INTERVALS.map((iv) => (
             <Tab
@@ -192,8 +203,11 @@ export function PriceChart({
             uppercased MonoLabel micro-label. */}
         <span className="text-xs text-faint">price / ETH</span>
       </div>
-      <div className="relative h-[210px] w-full">
-        <div ref={containerRef} className="h-full w-full" />
+      <div className="relative w-full flex-1 min-h-0">
+        {/* `absolute inset-0` decouples the chart element's size from percentage-
+            height resolution — it fills the flex-sized wrapper exactly, and
+            `autoSize` (ResizeObserver) drives the canvas to match. */}
+        <div ref={containerRef} className="absolute inset-0" />
         {empty && (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-muted">
             First trades incoming — the chart fills as the curve trades.

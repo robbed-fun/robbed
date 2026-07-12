@@ -13,11 +13,30 @@ export const qk = {
   tokens: (params?: Record<string, unknown>) =>
     params ? (["tokens", params] as const) : (["tokens"] as const),
   token: (address: string) => ["token", address.toLowerCase()] as const,
-  trades: (address: string) => ["trades", address.toLowerCase()] as const,
+  /**
+   * Trades feed. The bare key is the WS-live, SSR-seeded DEFAULT window (age
+   * DESC, page 1) — the only key WS patches. A sorted/paginated view (§12.59) is
+   * a distinct REST snapshot keyed by its params, so it never collides with the
+   * live head; `LIVE_QUERY_PREFIXES` still invalidates ALL "trades" on reconnect.
+   */
+  trades: (
+    address: string,
+    params?: { sort: string; dir: string; cursor: string | null },
+  ) =>
+    params
+      ? (["trades", address.toLowerCase(), params] as const)
+      : (["trades", address.toLowerCase()] as const),
   txTrades: (txHash: string) => ["trades", "tx", txHash.toLowerCase()] as const,
   candles: (address: string, interval: CandleInterval) =>
     ["candles", address.toLowerCase(), interval] as const,
-  holders: (address: string) => ["holders", address.toLowerCase()] as const,
+  /** Holders — bare key = default RANK/amount-DESC page 1; params = sorted view. */
+  holders: (
+    address: string,
+    params?: { sort: string; dir: string; cursor: string | null },
+  ) =>
+    params
+      ? (["holders", address.toLowerCase(), params] as const)
+      : (["holders", address.toLowerCase()] as const),
   search: (q: string) => ["search", q] as const,
   confirmations: () => ["confirmations"] as const,
   ethUsd: () => ["eth-usd"] as const,

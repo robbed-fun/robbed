@@ -26,7 +26,8 @@ Non-goals: no chain writes ever (all transactions are wallet-signed client-side,
 - All uint256 values serialized as decimal strings.
 - Every event-derived object includes `confirmationState` (§2.1).
 - Every USD-derived field ships as `{ usd: string, ethUsd: string, asOf: string }` — computed at request time from the latest `eth_usd_snapshots` row, never a constant (§2). If the snapshot is older than 5 minutes, `stale: true` is added.
-- All list endpoints: cursor pagination (`?cursor=&limit=`, limit ≤ 100, default 50), stable ordering with `(sort_key, id)` tiebreak.
+- All list endpoints: cursor pagination (`?cursor=&limit=`, limit ≤ 100, default 50), stable ordering with `(sort_key, id)` tiebreak. `limit` **clamps** to `[1, 100]` (never 400s) via the shared `clampListLimit`.
+- Server-sorted tables (`/tokens/:address/trades`, `/tokens/:address/holders` — §12.59): additionally accept `?sort=<field>&dir=asc|desc`. The `sort` field comes from a **closed allowlist** (robbed-shared `TRADE_SORT_FIELDS` / `HOLDER_SORT_FIELDS`) mapped API-side to a fixed column — a value outside the allowlist (or a `dir` other than `asc|desc`) is `400 invalid_request`. This is the ORDER BY security boundary: no caller string ever reaches SQL. These endpoints return the uniform `{ items, nextCursor }` envelope (shared `paginatedTradesResponseSchema` / `paginatedHoldersResponseSchema`), keyset-paginated over the active `(sort_col, tiebreak)` — never client-side sort/rank (server-authoritative, §12.22/§12.59).
 - Listing-gated endpoints (`/tokens` list, `/search`) exclude `moderation_status.visibility = 'hidden'`; `pending_review` behavior per §4.5. Direct fetch by address (`/tokens/:address`) returns hidden tokens with `moderation: { visibility }` populated so the frontend can render a "hidden by moderators" state instead of a 404 — hiding is a listing concern, the token exists on-chain regardless (§8.4). *(Ratified — spec §12.21.)*
 - Response DTO types all live in `packages/shared` (§5 below); the frontend imports them, never redeclares.
 
@@ -143,9 +144,18 @@ GET /v1/tokens/:address                                         (§5.2 detail + 
     creator: { address, tokensCreated }
     moderation: { visibility, impersonationFlag, impersonationTicker? }
 
-GET /v1/tokens/:address/trades?since=<ts|blockNumber>&cursor=&limit=
-  Trade feed (§5.2) + WS reconnect backfill (indexer.md §8.4). Each row includes venue + confirmationState.
-  200 → { trades: TradeRow[], nextCursor }
+GET /v1/tokens/:address/trades
+  ?since=<ts|blockNumber>                                        -- WS reconnect backfill floor (indexer.md §8.4)
+  &sort = age | side | trader | amount | price                  (§12.59 allowlist; DEFAULT age)
+  &dir  = asc | desc                                            (DEFAULT desc — newest-first)
+  &cursor=&limit=                                               -- keyset cursor + page size (config PAGE_LIMIT_DEFAULT=50)
+  Trade feed (§5.2) + WS reconnect backfill (indexer.md §8.4). SERVER-side sorted + keyset-paginated
+  (§12.59; server-authoritative, never client sort). Each row includes venue + confirmationState.
+  sort ∉ allowlist OR dir ∉ {asc,desc} ⇒ 400 invalid_request (closed allowlist = the ORDER BY security boundary).
+  sort→column (API-local map, enum→fixed identifier): age→block_timestamp (block_number correlated),
+    side→is_buy, trader→trader, amount→eth_amount::numeric, price→price_eth; tiebreak id=`${txHash}-${logIndex}`.
+  Keyset composes with sort: `(sort_col, id) < (k,i)` for desc / `>` for asc, cursor {k,i} HMAC-signed.
+  200 → { items: TradeRow[], nextCursor }                       -- uniform {items,nextCursor} envelope (paginatedTradesResponseSchema)
 
 GET /v1/trades/:txHash
   Optimistic-UI reconciliation lookup (web.md §4.1: RPC said success but no WS event yet).
@@ -156,13 +166,25 @@ GET /v1/tokens/:address/candles?interval=1s|15s|1m|5m|15m|1h&from=<ts>&to=<ts>
   Bucket-aligned range; max 5000 buckets per request; feeds lightweight-charts (§5.2).
   200 → { candles: Candle[] }   -- venue-continuous by construction (indexer.md §4.3)
 
-GET /v1/tokens/:address/holders?limit=20
-  Top holders (§5.2 top-20), flags computed by joining creator/curve/pool/vault addresses:
-  200 → { holders: [{ address, balance, pct,
-                      flags: ('creator'|'curve'|'lp_pool'|'vault')[],
-                      botFlags?: ('farm'|'sniper'|'programmatic'|'wash'|'arb_exit')[],  -- (v1.2) advisory, from indexer §8.5 address_flags
-                      clusterId?: string }],                                             -- shared gas-funder → grouped on the list (§5.2)
-          holderCount }
+GET /v1/tokens/:address/holders
+  ?sort = rank | address | label | amount | percent             (§12.59 allowlist; DEFAULT rank ≡ balance)
+  &dir  = asc | desc                                            (DEFAULT desc — biggest balance first)
+  &cursor=&limit=                                               -- keyset cursor + page size (config PAGE_LIMIT_DEFAULT=50)
+  Top-holders table (§5.2/§12.58), SERVER-side sorted + keyset-paginated (§12.59). First page (default
+  limit) IS the top-N view. Flags computed at query time by joining creator/curve/pool/vault addresses.
+  sort ∉ allowlist OR dir ∉ {asc,desc} ⇒ 400 invalid_request (closed allowlist = the ORDER BY security boundary).
+  sort→column (API-local map): rank/amount/percent→balance::numeric (per-token supply fixed ⇒ ONE physical
+    key), address→holder, label→CASE over creator/curve/lp_pool/vault + §8.5 flags (deterministic order);
+    tiebreak holder. Keyset: `(sort_col, holder) < (k,i)` for desc / `>` for asc.
+  Each row carries `rank` = true balance-desc rank (ROW_NUMBER over the WHOLE token), stable even when the
+  page is sorted by address/label (position ≠ rank there).
+  200 → { items: [{ address, balance, pct, rank,                -- uniform {items,nextCursor} (paginatedHoldersResponseSchema)
+                    flags: ('creator'|'curve'|'lp_pool'|'vault')[],
+                    botFlags?: ('farm'|'sniper'|'programmatic'|'wash'|'arb_exit')[],   -- (v1.2) advisory, indexer §8.5 address_flags
+                    clusterId?: string }],                                             -- shared gas-funder → grouped on the list (§5.2)
+          nextCursor }
+  BREAKING (§12.59): the pre-redesign { holders, holderCount } envelope is REPLACED by { items, nextCursor }.
+    `holderCount` is no longer returned by this endpoint (paginatedHoldersResponseSchema is { items, nextCursor }).
 
 GET /v1/tokens/:address/fees                                    (§6.4 treasury fee dashboard)
   200 → { collected: { token, weth, byCollection[] },           -- from fee_collections

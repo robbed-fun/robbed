@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
+import {console2} from "forge-std/console2.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
@@ -279,6 +280,8 @@ contract LifecycleForkTest is Test {
         assertEq(bob.balance - bobEthBefore, ethOut, "sell proceeds paid");
         assertEq(curve.accruedFees() - feesBefore, quotedFee, "sell fee exact");
 
+        _tmT1_sellClearsWhileTreasuryReverts();
+
         // k non-decreasing across the sequence (gate-2 invariant 1, re-checked on fork).
         (uint256 vE, uint256 vT,, uint256 realToken) = curve.reserves();
         assertGe(vE * vT, vE0 * vT0, "k decreased across fork trade sequence");
@@ -287,6 +290,58 @@ contract LifecycleForkTest is Test {
         // Curve solvency snapshot: balance covers reserves + fee escrow (§12.25).
         (,, uint256 realEth,) = curve.reserves();
         assertGe(address(curve).balance, realEth + curve.accruedFees(), "solvency violated");
+    }
+
+    // ── TM-T1 (§12.25): a hostile/reverting treasury can never freeze a curve sell ──
+
+    /// @notice Live-conditions proof of the no-pause-authority guarantee's treasury leg (CLAUDE.md
+    ///         hard rule; threat-model TM-T1): trade fees accrue in-contract and are NEVER pushed to
+    ///         the treasury on any trade path (§12.25), so a treasury pointed at a reverting contract
+    ///         — an owner/compromised-signer griefing vector — cannot block exits. We etch code that
+    ///         reverts on ANY call at the live treasury address, then a curve SELL must still clear,
+    ///         crediting the seller and accruing the fee in-contract; a BUY likewise clears. The
+    ///         codeless treasury is restored so the later graduation/sweep pushes succeed. Proven by
+    ///         construction in BondingCurve.sell (no treasury call, no pause read) — this exercises it
+    ///         against the real chain fork.
+    function _tmT1_sellClearsWhileTreasuryReverts() internal {
+        // PUSH1 0x00 PUSH1 0x00 REVERT — reverts on every call, with or without value.
+        vm.etch(treasury, hex"60006000fd");
+
+        // A SELL clears while the treasury reverts.
+        uint256 sellAmt = token.balanceOf(bob);
+        require(sellAmt > 0, "TM-T1: bob has no tokens to sell");
+        (uint256 qEth, uint256 qFee) = router.quoteSell(address(token), sellAmt);
+        uint256 feesBefore = curve.accruedFees();
+        uint256 bobEthBefore = bob.balance;
+        vm.startPrank(bob);
+        token.approve(address(router), sellAmt);
+        uint256 out = router.sell(address(token), sellAmt, bob, qEth, block.timestamp);
+        vm.stopPrank();
+        assertEq(out, qEth, "TM-T1: sell did not clear against a reverting treasury");
+        assertEq(bob.balance - bobEthBefore, out, "TM-T1: seller not paid");
+        assertEq(curve.accruedFees() - feesBefore, qFee, "TM-T1: sell fee not accrued in-contract");
+
+        // A BUY also clears (buy fee accrues in-contract too; no push, so the reverting treasury is
+        // irrelevant to the trade path). NOTE: hold the value in a uint256 local — a bare
+        // `0.05 ether * TRADE_FEE_BPS()` computes in the literal's narrow mobile type and overflows.
+        uint256 buyValue = 0.05 ether;
+        uint256 expectedBuyFee = (buyValue * uint256(curve.TRADE_FEE_BPS())) / 10_000;
+        vm.deal(bob, buyValue);
+        feesBefore = curve.accruedFees();
+        vm.prank(bob);
+        uint256 bought = router.buy{value: buyValue}(address(token), bob, 0, block.timestamp);
+        assertGt(bought, 0, "TM-T1: buy did not clear against a reverting treasury");
+        assertEq(curve.accruedFees() - feesBefore, expectedBuyFee, "TM-T1: buy fee accrued in-contract");
+
+        // A permissionless sweep to the STILL-reverting treasury reverts, but the escrow is retriable
+        // (CEI restores accruedFees) — the frozen party is the treasury's own revenue, never the
+        // trader's exit. Then restore a codeless treasury so graduation + the eventual sweep land.
+        vm.prank(collector);
+        vm.expectRevert(); // _sendEth bubbles the treasury revert (EthTransferFailed)
+        curve.sweepFees();
+        assertGt(curve.accruedFees(), 0, "TM-T1: escrow must remain after a failed sweep (retriable)");
+
+        vm.etch(treasury, ""); // restore codeless treasury for the rest of the lifecycle
     }
 
     // ── Stage 4: pollute the REAL pool — donation + hostile band + price-limited swap ──
@@ -357,6 +412,10 @@ contract LifecycleForkTest is Test {
         vm.recordLogs();
         vm.prank(grad);
         curve.graduate();
+        // §12.26/§12.34 gas evidence — graduate()+V3 migration through the WORST-CASE arb-back loop
+        // (stage 4 polluted the pool), the conservative upper bound the caller reward must cover.
+        uint256 graduateGasPolluted = vm.lastCallGas().gasTotalUsed;
+        console2.log("[fork][gas] graduate()+V3 migration (WITH arb-back, polluted pool):", graduateGasPolluted);
         assertEq(grad.balance - gradEthBefore, curve.CALLER_REWARD(), "caller reward not paid");
         assertEq(uint8(curve.phase()), uint8(IBondingCurve.Phase.Graduated), "phase not Graduated");
 
@@ -436,6 +495,80 @@ contract LifecycleForkTest is Test {
         assertGt(tokenFees, 0, "no token fees accrued to the LP position");
         assertEq(IERC20(WETH).balanceOf(treasury) - treasuryWethBefore, wethFees, "treasury WETH fee delta");
         assertEq(token.balanceOf(treasury) - treasuryTokenBefore, tokenFees, "treasury token fee delta");
+    }
+
+    // ═════════════════════════ REAL-GAS MEASUREMENT (§12.26/§12.34) ═════════════════════════
+    // The M1 re-validation obligation the M0 constants carry (graduationFeeModel.status +
+    // reviewRequired callerReward row): the cost-based graduation fee and the ≥10×-graduate()-gas
+    // caller-reward floor must be re-measured against REAL gas. Testnet is faucet-limited, so this
+    // is the live-conditions measurement, taken through the real §12.28 V3 factory/NPM on a fork of
+    // 4663 at the LATEST block. It emits the numbers via console2 (`forge test -vv`); tools/m0 folds
+    // them (plus a fresh live `eth_gasPrice`) into constants.json — no bytecode changes.
+
+    /// @notice Self-contained CLEAN-path gas: create → representative buy → clamped fill →
+    ///         graduate()+V3 migration with the pre-seed pool still exactly at target (no arb-back,
+    ///         the typical case). This is the cost basis the §12.26 graduation fee is sized against;
+    ///         the polluted (arb-back) upper bound is logged by {test_fork_fullLifecycle}.
+    function test_fork_lifecycleGas() public {
+        if (!forked) vm.skip(true);
+        _stage0_configAndRuntimeAsserts();
+        _stage1_deployStack();
+
+        // create()
+        uint256 creationFee = factory.creationFee();
+        vm.deal(creator, creationFee);
+        vm.prank(creator);
+        (address t, address c,) = router.createToken{value: creationFee}(
+            "GasSubject", "GAS", META_HASH, "ipfs://robbed-gas", 0, block.timestamp
+        );
+        uint256 createGas = vm.lastCallGas().gasTotalUsed;
+        token = LaunchToken(t);
+        curve = BondingCurve(payable(c));
+        tokenIs0 = t < WETH;
+        pool = IUniswapV3Factory(v3FactoryAddr).getPool(t, WETH, migrator.FEE_TIER());
+
+        // A representative post-window buy (anti-sniper cap lifted).
+        vm.warp(uint256(curve.EARLY_WINDOW_END()));
+        vm.deal(alice, 1 ether);
+        vm.prank(alice);
+        router.buy{value: 1 ether}(address(token), alice, 0, block.timestamp);
+        uint256 buyGas = vm.lastCallGas().gasTotalUsed;
+
+        // A representative sell (never pausable path).
+        uint256 half = token.balanceOf(alice) / 2;
+        vm.startPrank(alice);
+        token.approve(address(router), half);
+        router.sell(address(token), half, alice, 0, block.timestamp);
+        vm.stopPrank();
+        uint256 sellGas = vm.lastCallGas().gasTotalUsed;
+
+        // Clamped fill to graduation — pool untouched, so graduate() runs the no-arb path.
+        uint256 gross = _grossToGraduate() + 1 ether;
+        vm.deal(bob, gross);
+        vm.prank(bob);
+        router.buy{value: gross}(address(token), bob, 0, block.timestamp);
+        assertEq(uint8(curve.phase()), uint8(IBondingCurve.Phase.ReadyToGraduate), "not ReadyToGraduate");
+
+        vm.prank(grad);
+        curve.graduate();
+        uint256 graduateGasClean = vm.lastCallGas().gasTotalUsed;
+        assertEq(uint8(curve.phase()), uint8(IBondingCurve.Phase.Graduated), "not Graduated");
+
+        console2.log("[fork][gas] create():", createGas);
+        console2.log("[fork][gas] buy():", buyGas);
+        console2.log("[fork][gas] sell():", sellGas);
+        console2.log("[fork][gas] graduate()+V3 migration (CLEAN, no arb-back):", graduateGasClean);
+        console2.log(
+            "[fork][gas] full lifecycle create+buy+sell+graduate:", createGas + buyGas + sellGas + graduateGasClean
+        );
+        // forkBlock: the pinned height, or 0 when ROBINHOOD_FORK_BLOCK=0 selected LATEST (never
+        // read via block.number — that is an L1 estimate on Orbit, §2).
+        console2.log("[fork][gas] fork block pin (0 = latest):", forkBlock);
+
+        // Sanity floors: the clean migration is a real, non-trivial cost (guards a silent regression
+        // that would under-size the fee/reward re-derivation), and comfortably under the block limit.
+        assertGt(graduateGasClean, 200_000, "clean graduate() gas implausibly low");
+        assertLt(graduateGasClean, 6_000_000, "clean graduate() gas implausibly high");
     }
 
     // ═══════════════════════════ REAL-ARBSYS SMOKE ═════════════════════════════

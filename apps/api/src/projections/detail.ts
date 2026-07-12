@@ -56,5 +56,8 @@ export function toTokenDetail(
         ? { impersonationTicker: row.m_impersonation_ticker }
         : {}),
     },
+    // Restores the TokenHeader "Holders" stat dropped by the /holders
+    // {items,nextCursor} migration (`tokens.holder_count`, indexer.md §3.6).
+    holderCount: row.holder_count,
   };
 }

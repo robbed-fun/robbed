@@ -52,3 +52,6 @@ export * from "./ExtLink";
 
 // reusable headless table (TanStack Table v8 wrapper — stable-ref contract)
 export * from "./DataTable";
+// server-sortable + keyset-paginated table chrome (§12.59/§12.60)
+export * from "./SortHeader";
+export * from "./Pagination";

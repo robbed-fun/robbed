@@ -20,6 +20,8 @@ import {
   METADATA_DESCRIPTION_MAX,
   METADATA_NAME_MAX,
   METADATA_TICKER_MAX,
+  PAGE_LIMIT_DEFAULT,
+  PAGE_LIMIT_MAX,
 } from "./constants";
 import { byteBoundedString } from "./text";
 import {
@@ -242,6 +244,16 @@ export const tokenDetailSchema = tokenCardSchema.extend({
     impersonationFlag: z.boolean(),
     impersonationTicker: z.string().optional(),
   }),
+  /**
+   * Distinct holder count for the token (`tokens.holder_count`, indexer.md §3.6)
+   * — the TokenHeader "Holders" stat (§5.2). Additive + `.optional()`
+   * (2026-07-12, robbed-indexer; robbed-shared-reviewable — same discipline as
+   * `mcapEth` / `lpTokenId`): non-breaking restoration of the aggregate the
+   * `/holders` `{ items, nextCursor }` migration dropped from the paged list
+   * response. The detail projection always populates it; when present it is
+   * authoritative. Not part of the OpenAPI `required` set for the same reason.
+   */
+  holderCount: z.number().int().nonnegative().optional(),
 });
 export type TokenDetail = z.infer<typeof tokenDetailSchema>;
 
@@ -308,6 +320,18 @@ export const holderRowSchema = z.object({
   address: addressSchema,
   balance: decimalStringSchema,
   pct: z.number(),
+  /**
+   * 1-based balance-descending rank of this holder within the token — DERIVED at
+   * read time like `pct` (`ROW_NUMBER() OVER (ORDER BY balance::numeric DESC)`),
+   * not a stored column. OPTIONAL + additive (2026-07-12, robbed-shared;
+   * architect-reviewable — same additive-optional discipline as `mcapEth` /
+   * `lpTokenId` / `botFlags`): the redesign's sortable HOLDERS table shows a
+   * STABLE rank column even when a page is sorted by a non-balance field
+   * (`address` / `label`), where the row's position on the page no longer equals
+   * its rank. Absent until an endpoint populates it (the legacy top-20 holders
+   * response never sorted by anything but balance, so position == rank there).
+   */
+  rank: z.number().int().positive().optional(),
   flags: z.array(holderFlagSchema),
   /** v1.2 advisory §8.5 labels; absent when the address carries no bot flag. */
   botFlags: z.array(botFlagSchema).optional(),
@@ -624,3 +648,164 @@ export const tokenSortSchema = z.enum([
   "progress",
 ]);
 export const tokenFilterSchema = z.enum(["pregrad", "graduated", "all"]);
+
+// ── Sortable + keyset-paginated list tables (api.md §3.4; token-detail redesign) ─
+//
+// Contract-first shared shapes for SERVER-SIDE sorted, keyset-paginated tables
+// consumed by BOTH apps/api (which builds a safe ORDER BY + keyset WHERE) and
+// apps/web (the common DataTable + Pagination components). Defined ONCE here so
+// the two services build against identical shapes (anti-drift — CLAUDE.md /
+// CONTRIBUTING §8). The field allowlists + api.md §3 wording are flagged for
+// architect ratification in the change report; nothing shared is redeclared.
+//
+// Decisions owned per robbed-shared "decide-it-yourself" (basis recorded inline):
+//  1. REUSES the existing keyset cursor mechanism (apps/api/src/lib/pagination.ts —
+//     HMAC-signed base64url `{ k, i }`); `keysetCursorSchema` below is the LOGICAL
+//     payload that file already encodes, NOT a parallel cursor. The API keeps
+//     ownership of the HMAC signing/verification.
+//  2. Sort fields are CLOSED enums = the security boundary: the API rejects any
+//     value not in the enum, so no caller-chosen string reaches the ORDER BY (no
+//     arbitrary-column SQL). label→column maps live in comments so the API
+//     transcribes safe column names; the runtime column map stays API-local (one
+//     consumer — the SQL builder — §12.40c single-consumer precedent).
+//  3. `limit` CLAMPS (never rejects) to mirror the existing `clampLimit` behaviour
+//     byte-for-byte — the friendlier existing contract, not a stricter fork.
+//     `clampListLimit` is the extracted single source (apps/api `clampLimit`
+//     should delegate to it — report note).
+//  4. The `{ items, nextCursor }` envelope MATCHES the shape already used by
+//     `moderationQueueResponseSchema` (and openapi.yaml) — a uniform key so the
+//     DataTable never switches on a per-endpoint array name; not a new convention.
+
+/** Sort direction — the only two values any sortable endpoint accepts. */
+export const sortDirSchema = z.enum(["asc", "desc"]);
+export type SortDir = z.infer<typeof sortDirSchema>;
+
+/**
+ * Trade-feed sort allowlist (GET /v1/tokens/:address/trades — token-detail TRADES
+ * table). Each label → the indexed `trades` column the API builds ORDER BY over
+ * (db-rows.ts `TradeRowDb`; indexer.md §3.2). The API MUST reject anything
+ * outside this enum (no arbitrary-column SQL):
+ *   age    → block_timestamp   (DESC = newest; block_number is the correlated fallback)
+ *   side   → is_buy            (the DTO's `isBuy`; buy sorts vs sell)
+ *   trader → trader            (address text)
+ *   amount → eth_amount        (ETH notional; cast ::numeric to order as a number)
+ *   price  → price_eth         (display float column)
+ * Tiebreak for EVERY trade sort is the row `id` (`${tx_hash}-${log_index}`), the
+ * keyset cursor's `i` — see keysetCursorSchema.
+ */
+export const TRADE_SORT_FIELDS = ["age", "side", "trader", "amount", "price"] as const;
+export const tradeSortFieldSchema = z.enum(TRADE_SORT_FIELDS);
+export type TradeSortField = z.infer<typeof tradeSortFieldSchema>;
+
+/**
+ * Holder-list sort allowlist (GET /v1/tokens/:address/holders — token-detail
+ * HOLDERS table). Each label → its source (balances, indexer.md §3.6; address_flags,
+ * §8.5). The API MUST reject anything outside this enum:
+ *   rank    → balance   (rank = ROW_NUMBER() OVER (ORDER BY balance::numeric DESC))
+ *   address → holder    (the DTO exposes this column as `address`)
+ *   label   → DERIVED    (creator/curve/lp_pool/vault flag-join precedence +
+ *                         address_flags.flags — NO physical column; the API builds a
+ *                         CASE ORDER BY from the SAME join `toHolderRow` uses, and the
+ *                         FE renders the label from `flags`/`botFlags`)
+ *   amount  → balance    (balance::numeric)
+ *   percent → balance    (pct = balance/total_supply; total_supply is constant per
+ *                         token ⇒ percent order == balance order)
+ * NOTE: for a single token `rank`, `amount`, and `percent` all resolve to the SAME
+ * `balance::numeric` ordering — distinct UI columns, one physical sort key. Tiebreak
+ * for every holder sort is the `holder` address (the keyset cursor's `i`).
+ */
+export const HOLDER_SORT_FIELDS = ["rank", "address", "label", "amount", "percent"] as const;
+export const holderSortFieldSchema = z.enum(HOLDER_SORT_FIELDS);
+export type HolderSortField = z.infer<typeof holderSortFieldSchema>;
+
+/**
+ * Logical keyset-cursor payload — the shape apps/api HMAC-signs into the opaque
+ * base64url cursor string (apps/api/src/lib/pagination.ts `Cursor`, which should
+ * import THIS type rather than redeclare it — report note). Defined here so the
+ * "sort key + stable tiebreak" contract that lets sort AND paginate COMPOSE is
+ * single-sourced. The cursor stays OPAQUE to apps/web — the FE only echoes the
+ * signed string back; it never parses this shape (so the API remains the sole
+ * signer/decoder).
+ *   k = string form of the ACTIVE sort column's value on the last row returned
+ *       (e.g. `block_timestamp` for trades `age`, `balance` for holders `amount`).
+ *   i = stable unique tiebreak of the last row — trades: `id` (`${tx}-${logIndex}`);
+ *       holders: `holder` address. Guarantees a total order so no row is skipped or
+ *       duplicated across pages under concurrent inserts.
+ * dir-agnostic: the API applies `(sort_col, id) < (k, i)` for `desc`, `>` for `asc`.
+ */
+export const keysetCursorSchema = z.object({ k: z.string(), i: z.string() });
+export type KeysetCursorPayload = z.infer<typeof keysetCursorSchema>;
+
+/**
+ * Canonical page-limit clamp — SINGLE SOURCE for the `[1, PAGE_LIMIT_MAX]` bound
+ * with `PAGE_LIMIT_DEFAULT` fallback (constants.ts; api.md §2). CLAMPS and never
+ * throws, so an over-large or malformed `?limit=` degrades to a valid page
+ * instead of a 400 — byte-identical to the existing apps/api `clampLimit`, which
+ * should delegate to this to kill the duplicate (report note).
+ */
+export function clampListLimit(raw: unknown): number {
+  const n = typeof raw === "string" ? Number.parseInt(raw, 10) : Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return PAGE_LIMIT_DEFAULT;
+  return Math.min(Math.floor(n), PAGE_LIMIT_MAX);
+}
+
+/**
+ * `limit` field schema: accepts a query-string or a number and always resolves to
+ * a bounded `number` via `clampListLimit`; absent `?limit=` → `PAGE_LIMIT_DEFAULT`.
+ * `.default()` (not `.optional()`) is what makes the object key omittable in Zod 4
+ * AND applies the default — a bare `z.undefined()` union member is still rejected
+ * as `nonoptional` when the key is missing, and `.optional().transform()` lets
+ * `undefined` bypass the transform (both verified against zod@4.4.3 / zod.dev).
+ * A malformed present value (e.g. "abc") clamps to the default too — the clamp
+ * never throws, so the endpoint never 400s on a bad limit.
+ */
+export const listLimitSchema = z
+  .union([z.string(), z.number()])
+  .transform(clampListLimit)
+  .default(PAGE_LIMIT_DEFAULT);
+
+/**
+ * Generic list-query factory, parameterized by a per-table sort-field enum.
+ * `sort`/`dir`/`cursor` optional; `limit` always bounded + defaulted. ONE factory
+ * ⇒ every sortable endpoint shares the exact query grammar (fewer ways to diverge).
+ */
+export function listQueryParamsSchema<F extends z.ZodType>(sortField: F) {
+  return z.object({
+    sort: sortField.optional(),
+    dir: sortDirSchema.optional(),
+    cursor: z.string().optional(),
+    limit: listLimitSchema,
+  });
+}
+
+/** Concrete per-table query schemas — both services import THESE (identical shape). */
+export const tradeListQuerySchema = listQueryParamsSchema(tradeSortFieldSchema);
+export type TradeListQuery = z.infer<typeof tradeListQuerySchema>;
+export const holderListQuerySchema = listQueryParamsSchema(holderSortFieldSchema);
+export type HolderListQuery = z.infer<typeof holderListQuerySchema>;
+
+/**
+ * Generic keyset-paginated response envelope `{ items, nextCursor }` — the uniform
+ * shape the redesign's common DataTable consumes for EVERY sortable table, so the
+ * component never switches on a per-endpoint array key. Reuses `nextCursorSchema`
+ * (string | null) — the same pagination convention as the existing named-key list
+ * responses and `moderationQueueResponseSchema`, not a fork. `T` is the shared row
+ * schema.
+ */
+export function paginatedResponseSchema<T extends z.ZodType>(item: T) {
+  return z.object({ items: z.array(item), nextCursor: nextCursorSchema });
+}
+export type Paginated<T> = { items: T[]; nextCursor: string | null };
+
+/**
+ * Concrete redesign envelopes — apps/api shapes the response with THESE and
+ * apps/web types its data as `Paginated<TradeRow>` / `Paginated<HolderRow>`, so
+ * the wire shape is provably identical on both sides. These do NOT replace the
+ * legacy `tradesResponseSchema` / `holdersResponseSchema` (which stay for the
+ * existing endpoints); the /trades + /holders migration to `{ items, nextCursor }`
+ * + sort/dir params is a ratified doc change — see the change report.
+ */
+export const paginatedTradesResponseSchema = paginatedResponseSchema(tradeRowSchema);
+export type PaginatedTradesResponse = z.infer<typeof paginatedTradesResponseSchema>;
+export const paginatedHoldersResponseSchema = paginatedResponseSchema(holderRowSchema);
+export type PaginatedHoldersResponse = z.infer<typeof paginatedHoldersResponseSchema>;

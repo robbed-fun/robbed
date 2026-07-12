@@ -28,11 +28,20 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 ///         self-describing deploy artifact (`deployments/<chainId>.json`) for the addresses codegen,
 ///         and (public modes only) hands ownership to the treasury Safe (Ownable2Step step 7).
 ///
-/// @dev  ── Three modes, auto-selected by `block.chainid` (no env flag needed so the bare
-///          `forge script … --broadcast` verify command works out of the box):
-///        - LIVE (`block.chainid == 4663`, real chain or fork): the four V3 addresses + WETH come
-///          from `constants.json.external.*`; `require(weth == 0x0Bd7…AD73)` (F-2) and non-zero
-///          treasury Safe (O-6 fail-closed) are enforced.
+/// @dev  ── Four modes, auto-selected by `block.chainid` (+ one env AFFIRMATION on 4663 — the bare
+///          `forge script … --broadcast` verify command still works out of the box for the dev
+///          contexts; only a real mainnet deploy needs the affirmation, decision #5):
+///        - LIVE (`block.chainid == 4663` AND `ROBBED_DEPLOY_ENV == "mainnet"`): the four V3
+///          addresses + WETH come from `constants.json.external.*`; `require(weth == 0x0Bd7…AD73)`
+///          (F-2), a real `DEPLOYER_PRIVATE_KEY`, and a non-zero treasury Safe (O-6 fail-closed) are
+///          enforced; the artifact is written to the canonical `deployments/4663.json` with
+///          `mode:"live"`.
+///        - FORK (`block.chainid == 4663`, affirmation ABSENT — the default): a mainnet-fork run
+///          (anvil `--fork-url`, the docker `deploychain` one-shot / I-2 dev stack). Same 4663
+///          chainid and the same external-address + F-2 canonical-WETH discipline as LIVE, but the
+///          keyless anvil signer fallback is allowed and the artifact is labeled `mode:"fork"` so a
+///          fork pipeline can NEVER produce a `mode:"live"` 4663 registry entry (§12.55 / T-5). A
+///          real deploy later overwrites `4663.json` with `mode:"live"`.
 ///        - TESTNET (`block.chainid == 46630`, official Robinhood Chain testnet — chain id per
 ///          docs.robinhood.com/chain/connecting, recorded in docs/runbooks/testnet.md §1): public-
 ///          chain discipline, exactly like LIVE — a real `DEPLOYER_PRIVATE_KEY` is REQUIRED (the
@@ -51,7 +60,7 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 ///          canary exercises the real pool-init math. The F-2 canonical-WETH require is skipped
 ///          locally BY DESIGN (the mock is not `0x0Bd7…AD73`); every OTHER assertion still runs.
 ///
-///       ── Design decisions (owned by hoodpad-contracts; recorded here + in the final report):
+///       ── Design decisions (owned by robbed-contracts; recorded here + in the final report):
 ///        1. Deploy artifact is written by the SCRIPT via `vm.serialize*`/`vm.writeJson`, NOT parsed
 ///           by the codegen from `broadcast/…/run-latest.json`. Options weighed: (a) parse the
 ///           broadcast receipt — rejected: the six contracts include a CREATE2 curve + CREATE token
@@ -60,20 +69,35 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 ///           emits an authoritative, flat, deterministic JSON. Simulation and on-chain nonces match,
 ///           so the recorded addresses equal the broadcast addresses. Basis: Foundry JSON cheatcodes
 ///           (getfoundry.sh/cheatcodes — `serialize*`/`writeJson`).
-///        2. `block.chainid`, not an env flag, selects mode — matches the exact task verify command
-///           (`forge script … --rpc-url http://localhost:8545 --broadcast`, no extra flags). 4663 is
-///           the real chain AND the fork profile, so live/local split cleanly; 46630 is the official
-///           testnet id and gets the public-chain (testnet) branch — before this three-way split it
-///           would have wrongly taken the local mock-V3/dev-key branch (Phase-T prep).
-///        3. Local-only signer fallback to the PUBLIC anvil account-0 key when `DEPLOYER_PRIVATE_KEY`
-///           is unset — never on a public chain (live OR testnet: `revert MissingDeployerKey`).
-///           Keeps the bare smoke command keyless while never risking a real deploy without an
+///        2. `block.chainid` (+ the decision-#5 affirmation for the live/fork split of 4663) selects
+///           mode — the bare `forge script … --rpc-url http://localhost:8545 --broadcast` still works
+///           for local + fork. 46630 is the official testnet id and gets the public-chain (testnet)
+///           branch — before this split it would have wrongly taken the local mock-V3/dev-key branch.
+///        3. Local/fork signer fallback to the PUBLIC anvil account-0 key when `DEPLOYER_PRIVATE_KEY`
+///           is unset — never on a PUBLIC chain (live OR testnet: `revert MissingDeployerKey`).
+///           Keeps the bare smoke/fork command keyless while never risking a real deploy without an
 ///           explicit key.
 ///        4. Public modes cross-check `constants.chainId == block.chainid` (`ConstantsChainIdMismatch`)
 ///           so mainnet constants can never be broadcast to testnet or vice versa — the constants
 ///           file is the single source of externals (§2/§6.4), so a chain/file mix-up must fail
 ///           closed BEFORE any spend. Local mode skips it (the 31337 smoke legitimately reuses the
-///           4663-derived economics; a 4663 anvil FORK takes the live branch and still matches).
+///           4663-derived economics; a 4663 fork loads the fork fixture whose `chainId` is 4663 too).
+///        5. FORK vs LIVE split of chain 4663 is an env AFFIRMATION (`ROBBED_DEPLOY_ENV == "mainnet"`),
+///           fail-SAFE by construction — §12.55 / the T-5 chain-identity gate. Options weighed:
+///           (a) auto-detect a fork in-EVM — REJECTED: no cheatcode/opcode distinguishes a fork of
+///           4663 from real 4663 (both report chainid 4663, `arbBlockNumber`/`block.timestamp` track
+///           the forked chain), the exact ambiguity §12.55 records; (b) treat 4663 as live by default
+///           and require a `ROBBED_FORK` opt-OUT — REJECTED: fail-DANGEROUS (forgetting the flag mints
+///           a false `mode:"live"` fork artifact, precisely the defect that motivated §12.55, whose
+///           anvil-treasury `4663.json` was already mislabeled `live`); (c) CHOSEN: live is opt-IN via
+///           an explicit affirmation, so the default 4663 run is a `Fork` and only a deliberate
+///           `ROBBED_DEPLOY_ENV=mainnet` produces a `mode:"live"` canonical entry. The dangerous state
+///           requires affirmative intent; the common (fork) path is safe by omission. Basis: Foundry
+///           `vm.envOr` (getfoundry.sh cheatcodes); protects the §12.55 registry-mode invariant.
+///           The label is the sole distinguisher — the fork artifact still lands at `4663.json` (a
+///           real deploy overwrites it) because the LOCAL fork stack's indexer resolves its externals
+///           from the `"4663"` registry entry, so that key must exist; `mode:"fork"` keeps it
+///           unambiguous and lets the indexer assert `mode == "live"` for a genuine mainnet entry.
 contract Deploy is Script {
     /// @notice Canonical WETH9 on chain 4663 (CLAUDE.md / spec §12.28). The ONLY address literal
     ///         allowed in the codebase; asserted equal to `constants.json.external.weth` on live.
@@ -112,13 +136,18 @@ contract Deploy is Script {
     error CreateFailed();
     error MinFloorToleranceBandViolated(int24 toleranceTicks, uint16 migrationSlippageBps);
 
-    /// @notice Deploy mode, auto-selected from `block.chainid` (decision #2). `Live` and `Testnet`
-    ///         are the PUBLIC modes (identical discipline except the F-2 canonical-WETH literal);
-    ///         `Local` is the keyless anvil smoke with a locally-deployed V3 + MockWETH9.
+    /// @notice Deploy mode, auto-selected from `block.chainid` (decision #2) + the mainnet-live
+    ///         affirmation (decision #5). `Live` and `Testnet` are the PUBLIC modes (identical
+    ///         discipline except the F-2 canonical-WETH literal); `Fork` is a chain-4663 MAINNET-FORK
+    ///         run (anvil `--fork-url`) — same chainid as `Live` but deliberately NOT `Live` so a
+    ///         fork pipeline can never mint a `mode:"live"` registry entry (§12.55); `Local` is the
+    ///         keyless anvil smoke with a locally-deployed V3 + MockWETH9. New variants are appended
+    ///         so the existing enum ordinals (and the unit suite that pins them) stay stable.
     enum Mode {
         Live,
         Testnet,
-        Local
+        Local,
+        Fork
     }
 
     // ── resolved environment (script contract state → keeps run() off the stack) ──
@@ -144,11 +173,13 @@ contract Deploy is Script {
 
     function run() external {
         // 0. Resolve signer + mode (pre-broadcast; no state writes on chain here).
-        mode = _selectMode(block.chainid);
+        mode = _selectMode(block.chainid, _isMainnetAffirmed());
         uint256 pk = vm.envOr("DEPLOYER_PRIVATE_KEY", uint256(0));
         if (pk == 0) {
-            if (mode != Mode.Local) revert MissingDeployerKey(); // any PUBLIC chain needs a real key
-            pk = ANVIL_ACCOUNT0_PK; // local-only public fallback (decision #3)
+            // Only the PUBLIC chains (real mainnet + testnet) demand a real key. `Local` and a 4663
+            // `Fork` are dev contexts, so they fall back to the well-known anvil account-0 key.
+            if (mode == Mode.Live || mode == Mode.Testnet) revert MissingDeployerKey();
+            pk = ANVIL_ACCOUNT0_PK; // local/fork keyless fallback (decision #3/#5)
         }
         deployer = vm.addr(pk);
 
@@ -159,9 +190,14 @@ contract Deploy is Script {
 
         _resolveExternals(); // live/testnet: read `external.*`; local: deploy real V3 + MockWETH9
 
-        // 2. §12.28 V3 runtime sanity (all modes) + F-2 canonical-WETH (live only — 4663 fact).
+        // 2. §12.28 V3 runtime sanity (all modes) + F-2 canonical-WETH. Enforced on `Live` AND
+        //    `Fork`: a real fork of chain 4663 carries the genuine `0x0Bd7…AD73` WETH (and the
+        //    dev-fork constants fixture records it), so the literal check catches a misconfigured
+        //    fork exactly as it would a mainnet deploy. Skipped only for `Testnet`/`Local`.
         V3Assertions.assertV3Wiring(v3Factory, npm, weth);
-        if (mode == Mode.Live && weth != CANONICAL_WETH) revert WethMismatch(CANONICAL_WETH, weth);
+        if ((mode == Mode.Live || mode == Mode.Fork) && weth != CANONICAL_WETH) {
+            revert WethMismatch(CANONICAL_WETH, weth);
+        }
 
         // 3. Deploy topology in contracts.md §7.2 order.
         _deployTopology();
@@ -184,12 +220,27 @@ contract Deploy is Script {
         _logVerifyHints();
     }
 
-    /// @dev Chain-id → mode (decision #2): 4663 live, 46630 testnet (official id — testnet.md §1),
-    ///      anything else local anvil smoke.
-    function _selectMode(uint256 chainId) internal pure returns (Mode) {
-        if (chainId == LIVE_CHAIN_ID) return Mode.Live;
+    /// @dev Chain-id → mode (decision #2 + #5): 46630 testnet (official id — testnet.md §1), 4663
+    ///      MAINNET which is `Live` ONLY when the deploy is explicitly affirmed as a real Phase-B
+    ///      broadcast (`mainnetAffirmed`) and otherwise a `Fork` (a mainnet-fork run shares the 4663
+    ///      chainid but must never be labeled `live`), anything else local anvil smoke. Pure: the
+    ///      env read that produces `mainnetAffirmed` lives in {_isMainnetAffirmed} so this stays
+    ///      deterministically unit-testable for both affirmation values.
+    function _selectMode(uint256 chainId, bool mainnetAffirmed) internal pure returns (Mode) {
+        if (chainId == LIVE_CHAIN_ID) return mainnetAffirmed ? Mode.Live : Mode.Fork;
         if (chainId == TESTNET_CHAIN_ID) return Mode.Testnet;
         return Mode.Local;
+    }
+
+    /// @notice TRUE iff this chain-4663 broadcast is an explicitly-affirmed REAL mainnet deploy —
+    ///         `ROBBED_DEPLOY_ENV == "mainnet"` (decision #5). Fail-SAFE by construction: the
+    ///         DANGEROUS state (`mode:"live"`, canonical registry entry) is opt-in and requires a
+    ///         deliberate env affirmation, so forgetting the flag — or any mainnet-FORK pipeline that
+    ///         simply never sets it — yields `Mode.Fork` and a `mode:"fork"` artifact, never a
+    ///         false-live 4663 registry entry (§12.55 / the T-5 chain-identity gate). `virtual` so
+    ///         the unit harness can pin the affirmation without racing on process-global env state.
+    function _isMainnetAffirmed() internal view virtual returns (bool) {
+        return keccak256(bytes(vm.envOr("ROBBED_DEPLOY_ENV", string("")))) == keccak256(bytes("mainnet"));
     }
 
     /// @dev Default constants file per mode (`ROBBED_CONSTANTS` env overrides). Testnet defaults to
@@ -467,9 +518,14 @@ contract Deploy is Script {
     }
 
     /// @dev Artifact `mode` label (consumed by the addresses codegen + the testnet.env emitter).
+    ///      A 4663 FORK run resolves to `"fork"` — the single, authoritative distinguisher between a
+    ///      mainnet-fork artifact and a real Phase-B deploy (§12.55): the codegen/registry and the
+    ///      indexer assert `mode == "live"` for a canonical mainnet entry, so a fork can never
+    ///      masquerade as live even though it shares the 4663 chainid.
     function _modeString() internal view returns (string memory) {
         if (mode == Mode.Live) return "live";
         if (mode == Mode.Testnet) return "testnet";
+        if (mode == Mode.Fork) return "fork";
         return "local";
     }
 
@@ -478,7 +534,8 @@ contract Deploy is Script {
     ///      settled bytecode). Documented, not executed. Testnet additionally points at the
     ///      testnet.env emitter (docker-compose.testnet.yml contract — docs/runbooks/docker.md).
     function _logVerifyHints() internal view {
-        if (mode == Mode.Local) return;
+        // No Blockscout verification for the dev contexts (local anvil smoke OR a 4663 fork).
+        if (mode == Mode.Local || mode == Mode.Fork) return;
         console2.log("[deploy] verify (contracts.md section 7.2 step 8):");
         if (mode == Mode.Live) {
             console2.log(

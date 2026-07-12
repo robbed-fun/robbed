@@ -1,19 +1,22 @@
 import {
   type Candle,
+  type HolderListQuery,
   type HolderRow,
   type MetadataRequest,
+  type Paginated,
   type TokenCard,
   type TokenDetail,
+  type TradeListQuery,
   type TradeRow,
   candlesResponseSchema,
   confirmationsResponseSchema,
   ethUsdResponseSchema,
-  holdersResponseSchema,
   metadataResponseSchema,
+  paginatedHoldersResponseSchema,
+  paginatedTradesResponseSchema,
   searchResponseSchema,
   tokenDetailSchema,
   tokensResponseSchema,
-  tradesResponseSchema,
   txTradesResponseSchema,
   uploadImageResponseSchema,
 } from "@robbed/shared";
@@ -136,18 +139,31 @@ export function searchTokens(
   return apiGet(`/v1/search?q=${encodeURIComponent(q)}`, searchResponseSchema, opts);
 }
 
+/**
+ * GET /v1/tokens/:address/trades — SERVER-SORTED, keyset-paginated (§12.59). The
+ * response is the shared `Paginated<TradeRow>` `{ items, nextCursor }` envelope;
+ * `sort`/`dir` are the `tradeListQuerySchema` allowlist (API validates + 400s on
+ * out-of-allowlist), `cursor` is the OPAQUE keyset cursor echoed back verbatim.
+ */
 export function getTrades(
   address: string,
-  query: { cursor?: string; limit?: number } = {},
+  query: {
+    sort?: TradeListQuery["sort"];
+    dir?: TradeListQuery["dir"];
+    cursor?: string;
+    limit?: number;
+  } = {},
   opts?: FetchOpts,
-): Promise<{ trades: TradeRow[]; nextCursor: string | null }> {
+): Promise<Paginated<TradeRow>> {
   const qs = new URLSearchParams();
+  if (query.sort) qs.set("sort", query.sort);
+  if (query.dir) qs.set("dir", query.dir);
   if (query.cursor) qs.set("cursor", query.cursor);
   if (query.limit) qs.set("limit", String(query.limit));
   const q = qs.toString();
   return apiGet(
     `/v1/tokens/${address.toLowerCase()}/trades${q ? `?${q}` : ""}`,
-    tradesResponseSchema,
+    paginatedTradesResponseSchema,
     opts,
   );
 }
@@ -175,17 +191,33 @@ export function getCandles(
   );
 }
 
+/**
+ * GET /v1/tokens/:address/holders — SERVER-SORTED, keyset-paginated (§12.59). The
+ * response is the shared `Paginated<HolderRow>` `{ items, nextCursor }` envelope
+ * (the legacy `{ holders, holderCount }` shape is retired for this endpoint —
+ * DATA-GAP flagged: the header "Holders" count needs a `holderCount` on
+ * `tokenDetailSchema`, since `tokens.holder_count` already exists indexer-side).
+ * `sort`/`dir` are the `holderListQuerySchema` allowlist; `cursor` is opaque.
+ */
 export function getHolders(
   address: string,
-  query: { limit?: number } = {},
+  query: {
+    sort?: HolderListQuery["sort"];
+    dir?: HolderListQuery["dir"];
+    cursor?: string;
+    limit?: number;
+  } = {},
   opts?: FetchOpts,
-): Promise<{ holders: HolderRow[]; holderCount: number }> {
+): Promise<Paginated<HolderRow>> {
   const qs = new URLSearchParams();
+  if (query.sort) qs.set("sort", query.sort);
+  if (query.dir) qs.set("dir", query.dir);
+  if (query.cursor) qs.set("cursor", query.cursor);
   if (query.limit) qs.set("limit", String(query.limit));
   const q = qs.toString();
   return apiGet(
     `/v1/tokens/${address.toLowerCase()}/holders${q ? `?${q}` : ""}`,
-    holdersResponseSchema,
+    paginatedHoldersResponseSchema,
     opts,
   );
 }

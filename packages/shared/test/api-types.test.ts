@@ -3,28 +3,39 @@ import { describe, expect, it } from "bun:test";
 import {
   apiEnvelopeSchema,
   candleSchema,
+  clampListLimit,
   confirmationsResponseSchema,
   ERROR_CODE_VALUES,
   ERROR_CODES,
   errorCodeSchema,
   ethPnlRangeSchema,
   ethUsdResponseSchema,
+  holderListQuerySchema,
   holderRowSchema,
+  holderSortFieldSchema,
+  keysetCursorSchema,
+  listQueryParamsSchema,
   metadataRequestSchema,
+  paginatedHoldersResponseSchema,
+  paginatedResponseSchema,
+  paginatedTradesResponseSchema,
   portfolioActivityResponseSchema,
   portfolioCreatedResponseSchema,
   portfolioHoldingSchema,
   portfolioHoldingsResponseSchema,
   portfolioSummarySchema,
+  sortDirSchema,
   tokenCardSchema,
   tokenDetailSchema,
   tokenFilterSchema,
   tokenRefSchema,
   tokenSortSchema,
+  tradeListQuerySchema,
   tradeRowSchema,
+  tradeSortFieldSchema,
   usdValueSchema,
 } from "../src/api-types";
-import { LP_COPY } from "../src/constants";
+import { LP_COPY, PAGE_LIMIT_DEFAULT, PAGE_LIMIT_MAX } from "../src/constants";
 
 const ADDR = "0x" + "ab".repeat(20);
 const HASH = "0x" + "cd".repeat(32);
@@ -194,6 +205,113 @@ describe("TradeRow / Candle / HolderRow", () => {
     expect(
       holderRowSchema.safeParse({ address: ADDR, balance: "1", pct: 0.1, flags: [], botFlags: ["bot"] }).success,
     ).toBe(false);
+  });
+
+  it("holder rank is optional, 1-based positive int (additive; stable under any sort)", () => {
+    // absent rank stays valid (legacy top-20 projection never sets it)
+    expect(holderRowSchema.safeParse({ address: ADDR, balance: "1", pct: 0.1, flags: [] }).success).toBe(true);
+    expect(holderRowSchema.safeParse({ address: ADDR, balance: "1", pct: 0.1, flags: [], rank: 3 }).success).toBe(true);
+    // 1-based positive integer only
+    expect(holderRowSchema.safeParse({ address: ADDR, balance: "1", pct: 0.1, flags: [], rank: 0 }).success).toBe(false);
+    expect(holderRowSchema.safeParse({ address: ADDR, balance: "1", pct: 0.1, flags: [], rank: -1 }).success).toBe(false);
+    expect(holderRowSchema.safeParse({ address: ADDR, balance: "1", pct: 0.1, flags: [], rank: 1.5 }).success).toBe(false);
+  });
+});
+
+describe("Sortable + keyset-paginated list tables (api.md §3.4; redesign)", () => {
+  const tradeRow = {
+    id: `${"0x" + "12".repeat(32)}-1`,
+    token: ADDR, trader: ADDR, venue: "curve", isBuy: true,
+    ethAmount: "1000000000000000000", tokenAmount: "5", feeEth: "10000000000000000",
+    priceEth: 1.2e-8, blockNumber: 100, blockTimestamp: 1767950000,
+    txHash: "0x" + "12".repeat(32), logIndex: 1, confirmationState: "soft_confirmed",
+  };
+  const holderRow = { address: ADDR, balance: "1", pct: 0.1, flags: [], rank: 1 };
+
+  it("SortDir is the closed asc|desc enum", () => {
+    expect(sortDirSchema.safeParse("asc").success).toBe(true);
+    expect(sortDirSchema.safeParse("desc").success).toBe(true);
+    expect(sortDirSchema.safeParse("ascending").success).toBe(false);
+    expect(sortDirSchema.safeParse("up").success).toBe(false);
+  });
+
+  it("TradeSortField allowlist = age|side|trader|amount|price (rejects arbitrary columns)", () => {
+    for (const f of ["age", "side", "trader", "amount", "price"]) {
+      expect(tradeSortFieldSchema.safeParse(f).success).toBe(true);
+    }
+    // the security boundary: nothing outside the enum reaches ORDER BY
+    expect(tradeSortFieldSchema.safeParse("id").success).toBe(false);
+    expect(tradeSortFieldSchema.safeParse("block_timestamp").success).toBe(false);
+    expect(tradeSortFieldSchema.safeParse("eth_amount; DROP TABLE trades").success).toBe(false);
+  });
+
+  it("HolderSortField allowlist = rank|address|label|amount|percent (rejects columns)", () => {
+    for (const f of ["rank", "address", "label", "amount", "percent"]) {
+      expect(holderSortFieldSchema.safeParse(f).success).toBe(true);
+    }
+    // `balance` is the physical column, NOT a sort-field label — must be rejected
+    expect(holderSortFieldSchema.safeParse("balance").success).toBe(false);
+    expect(holderSortFieldSchema.safeParse("holder").success).toBe(false);
+  });
+
+  it("keyset cursor payload = { k, i } strings (sort key + stable tiebreak)", () => {
+    expect(keysetCursorSchema.safeParse({ k: "1767950000", i: `${"0x" + "12".repeat(32)}-1` }).success).toBe(true);
+    expect(keysetCursorSchema.safeParse({ k: "1", i: ADDR }).success).toBe(true);
+    // both members required; both strings (opaque transport form)
+    expect(keysetCursorSchema.safeParse({ k: "1" }).success).toBe(false);
+    expect(keysetCursorSchema.safeParse({ k: 1, i: "x" }).success).toBe(false);
+  });
+
+  it("clampListLimit mirrors apps/api clampLimit: clamps, never throws, defaults", () => {
+    expect(clampListLimit(undefined)).toBe(PAGE_LIMIT_DEFAULT);
+    expect(clampListLimit("abc")).toBe(PAGE_LIMIT_DEFAULT);
+    expect(clampListLimit("0")).toBe(PAGE_LIMIT_DEFAULT);
+    expect(clampListLimit("-3")).toBe(PAGE_LIMIT_DEFAULT);
+    expect(clampListLimit(0)).toBe(PAGE_LIMIT_DEFAULT);
+    expect(clampListLimit("20")).toBe(20);
+    expect(clampListLimit(20)).toBe(20);
+    // over-large clamps DOWN (never a 400)
+    expect(clampListLimit("200")).toBe(PAGE_LIMIT_MAX);
+    expect(clampListLimit(10_000)).toBe(PAGE_LIMIT_MAX);
+    // fractional floors
+    expect(clampListLimit("20.9")).toBe(20);
+  });
+
+  it("list query: sort/dir/cursor optional, limit always a bounded number", () => {
+    // empty query → only the defaulted limit; optionals absent
+    const empty = tradeListQuerySchema.parse({});
+    expect(empty).toEqual({ limit: PAGE_LIMIT_DEFAULT });
+    // full query, limit as a string (query params arrive as strings) → clamped number
+    const full = tradeListQuerySchema.parse({ sort: "amount", dir: "asc", cursor: "c1", limit: "20" });
+    expect(full).toEqual({ sort: "amount", dir: "asc", cursor: "c1", limit: 20 });
+    // over-large limit clamps rather than 400s
+    expect(tradeListQuerySchema.parse({ limit: "999" }).limit).toBe(PAGE_LIMIT_MAX);
+    // allowlist enforced through the factory (rejects arbitrary sort / dir)
+    expect(tradeListQuerySchema.safeParse({ sort: "bogus" }).success).toBe(false);
+    expect(tradeListQuerySchema.safeParse({ dir: "up" }).success).toBe(false);
+  });
+
+  it("holder list query uses the holder field enum (rank ok, balance rejected)", () => {
+    expect(holderListQuerySchema.parse({ sort: "rank", dir: "desc" })).toEqual({
+      sort: "rank", dir: "desc", limit: PAGE_LIMIT_DEFAULT,
+    });
+    expect(holderListQuerySchema.safeParse({ sort: "balance" }).success).toBe(false);
+  });
+
+  it("generic factory + concrete envelopes are structurally identical", () => {
+    // the factory called ad-hoc equals the exported concrete schema
+    const adhoc = listQueryParamsSchema(tradeSortFieldSchema);
+    expect(adhoc.safeParse({ sort: "price", limit: "5" }).success).toBe(true);
+    // { items, nextCursor } envelope over the shared row schemas
+    expect(paginatedTradesResponseSchema.safeParse({ items: [tradeRow], nextCursor: null }).success).toBe(true);
+    expect(paginatedHoldersResponseSchema.safeParse({ items: [holderRow], nextCursor: "c1" }).success).toBe(true);
+    // wrong row type is rejected by the item schema
+    expect(paginatedTradesResponseSchema.safeParse({ items: [holderRow], nextCursor: null }).success).toBe(false);
+    // nextCursor is string | null, never absent
+    expect(paginatedTradesResponseSchema.safeParse({ items: [tradeRow] }).success).toBe(false);
+    // generic factory works over any shared row schema
+    const generic = paginatedResponseSchema(tradeRowSchema);
+    expect(generic.safeParse({ items: [tradeRow], nextCursor: "next" }).success).toBe(true);
   });
 });
 

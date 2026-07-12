@@ -154,6 +154,22 @@ export async function readReserves(curve: Address): Promise<{
   return { virtualEth: res[0]!, realEth: res[2]! };
 }
 
+/**
+ * LIVE graduation threshold from the DEPLOYED curve — `BondingCurve.GRADUATION_ETH()`
+ * (§6.2). ALWAYS read on-chain, never the static M0 notebook: the target moved
+ * 8.076869 → 7.916610 ETH and the `constants.fork.json` fixture can lag whatever
+ * the deploy actually baked in. Mirrors the frontend's SafetyStrip live read
+ * (`entities/curve/model/reads.ts` reads the same immutable getter). This is the
+ * authoritative source for "how much ETH graduates this curve".
+ */
+export async function readGraduationEth(curve: Address): Promise<bigint> {
+  return (await publicClient.readContract({
+    address: curve,
+    abi: bondingCurveAbi,
+    functionName: "GRADUATION_ETH",
+  })) as bigint;
+}
+
 // ── transactions used to SEED fixtures (server-side, not via the UI) ─────────
 
 export interface CreatedToken {
