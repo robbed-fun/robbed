@@ -1,6 +1,6 @@
 # Runbook — Environment Variable Inventory (all services)
 
-**Status:** v1.2, 2026-07-12. Authored by robbed-architect (plan item **P-1**). Inputs: indexer.md §2, api.md §2/§4/§5, web.md §2.3/§9.6, `.env.example`, deploy-komodo-cloudflare.md A.3/B.2. v1.1: table re-verified against a full `process.env`/`vm.env` grep of `apps/` + `tools/` + `contracts/script` (2026-07-11) — API section rewritten from `apps/api/src/config.ts` (role-split DB URLs, `API_PORT`, NSFW thresholds, `TRUSTED_PROXY_HEADER`), indexer sidecar/flow/metrics vars added, §12.51 Chainlink rows kept, dev/test tooling section (§5) added. v1.2 (2026-07-12): re-verified against the testnet-deployed tree (chain 46630 live; `contracts/deployments/46630.json`). **§12.55 gap CLOSED (2026-07-12, robbed-indexer):** `INDEXER_CHAIN_ID` (+ the `INDEXER_ALLOW_FORK_4663` opt-in) are now rows below and keys in `apps/indexer/.env.example` (added in one change so the env-sync gate stays green both directions).
+**Status:** v1.2, 2026-07-12. Authored by robbed-architect (plan item **P-1**). Inputs: indexer.md §2, api.md §2/§4/§5, web.md §2.3/§9.6, `.env.example`, the compose stacks (`docker-compose.{testnet,mainnet}.yml`) + `apps/web/wrangler.jsonc`. v1.1: table re-verified against a full `process.env`/`vm.env` grep of `apps/` + `tools/` + `contracts/script` (2026-07-11) — API section rewritten from `apps/api/src/config.ts` (role-split DB URLs, `API_PORT`, NSFW thresholds, `TRUSTED_PROXY_HEADER`), indexer sidecar/flow/metrics vars added, §12.51 Chainlink rows kept, dev/test tooling section (§5) added. v1.2 (2026-07-12): re-verified against the testnet-deployed tree (chain 46630 live; `contracts/deployments/46630.json`). **§12.55 gap CLOSED (2026-07-12, robbed-indexer):** `INDEXER_CHAIN_ID` (+ the `INDEXER_ALLOW_FORK_4663` opt-in) are now rows below and keys in `apps/indexer/.env.example` (added in one change so the env-sync gate stays green both directions).
 
 This is the **authoritative per-variable table** for every service. It is the source `.env.example` and the Komodo/Workers secret stores are populated from.
 
@@ -20,7 +20,7 @@ This is the **authoritative per-variable table** for every service. It is the so
 
 ## 1. Indexer (`apps/indexer` — Node/Ponder container, Komodo Stack)
 
-Source: indexer.md §2 + `apps/indexer/src/config.ts` / `src/sidecar.ts` / `src/jobs/*` (grep-verified 2026-07-11). Runs in the Komodo Stack (deploy-komodo-cloudflare.md Part A); secrets are Komodo-managed.
+Source: indexer.md §2 + `apps/indexer/src/config.ts` / `src/sidecar.ts` / `src/jobs/*` (grep-verified 2026-07-11). Runs in the backend compose stack (`docker.md`); secrets are stack-managed.
 
 <!-- env-sync file=apps/indexer/.env.example -->
 
@@ -117,7 +117,7 @@ Note: the API's R2 credentials are the **write** leg (uploads, §12.19) and are 
 
 ## 3. Web (`apps/web` — Next.js 16 on Cloudflare Workers)
 
-Source: web.md §2.3/§9.6, `.env.example`, deploy-komodo-cloudflare.md B.2. **`NEXT_PUBLIC_*` are inlined by Next at BUILD time**, so on Cloudflare Workers they are **Workers-Builds build variables**, not runtime secrets (a missing var does not crash the build; the app is only functional once they point at the live Komodo Stack). **Do not put secrets in `NEXT_PUBLIC_*`** — everything here is public-by-design (shipped to the browser). One row is deliberately **not** `NEXT_PUBLIC_`-prefixed: `API_BASE_URL_INTERNAL` is server-only (never inlined into the client bundle, runtime-read on the server — web.md §2.3 split-horizon), still not a secret.
+Source: web.md §2.3/§9.6, `.env.example`, `apps/web/wrangler.jsonc`. **`NEXT_PUBLIC_*` are inlined by Next at BUILD time**, so on Cloudflare Workers they are **Workers-Builds build variables**, not runtime secrets (a missing var does not crash the build; the app is only functional once they point at the live backend stack). **Do not put secrets in `NEXT_PUBLIC_*`** — everything here is public-by-design (shipped to the browser). One row is deliberately **not** `NEXT_PUBLIC_`-prefixed: `API_BASE_URL_INTERNAL` is server-only (never inlined into the client bundle, runtime-read on the server — web.md §2.3 split-horizon), still not a secret.
 
 > The Workers adaptation has **landed** (v1.0's "in-flight" note is obsolete) — `apps/web/.env.example` is the per-app mirror this table is synced against; the root `.env.example` "apps/web BUILD VARS" block duplicates it for the workspace template.
 
@@ -139,7 +139,7 @@ Source: web.md §2.3/§9.6, `.env.example`, deploy-komodo-cloudflare.md B.2. **`
 
 ### 3a. Cloudflare Workers bindings (not `NEXT_PUBLIC_*`)
 
-Set in `apps/web/wrangler.jsonc` (deploy-komodo-cloudflare.md B.2), not `.env`:
+Set in `apps/web/wrangler.jsonc`, not `.env`:
 
 | Binding | Purpose | Source | Owner |
 |---|---|---|---|

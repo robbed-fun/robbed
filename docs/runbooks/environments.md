@@ -4,7 +4,7 @@
 
 Cross-references:
 - **`docs/runbooks/env-inventory.md`** — the authoritative per-*variable* table (dev/testnet/prod columns). This runbook maps those columns onto the named environments; env-inventory.md owns each variable's secret-class/source/owner.
-- **`docs/runbooks/deploy-komodo-cloudflare.md`** — the hosting split (backend → Komodo Stack, frontend → Cloudflare Workers via OpenNext). This runbook adds the *per-env* layer on top of that single-target runbook.
+- **Hosting (spec §12.45)** — backend on the compose stacks (`docker.md`, `deploy.md` §3) fronted by Cloudflare Tunnels; frontend on Cloudflare Workers via OpenNext. (The former Komodo runbook is retired, 2026-07-12.) This runbook adds the *per-env* layer on top.
 - **spec §12.49** (decision), **§14** (Phase A / Gate G-A / Phase B), **§2** (never hardcode chain facts), **§12.45** (hosting split), **§12.29** (pnpm workspaces).
 
 > **Docs-first rule (mandatory every iteration).** Before changing any endpoint/chain fact/config convention here, consult current official docs — never work from memory. Primary: context7 MCP (`resolve-library-id` → `get-library-docs`); fallback: WebFetch of the canonical pages below. Docs beat assumptions; the spec beats docs (flag the conflict, do not silently diverge).
@@ -106,7 +106,7 @@ This maps `env-inventory.md`'s dev/testnet/prod columns onto the three envs. `en
 |---|---|---|---|
 | `NEXT_PUBLIC_RPC_HTTP` | `http://localhost:8545` | `https://rpc.testnet.chain.robinhood.com` (or Alchemy) | `https://rpc.mainnet.chain.robinhood.com` (or Alchemy) |
 | `NEXT_PUBLIC_RPC_WS` | `ws://localhost:8545` | `wss://feed.testnet.chain.robinhood.com` | `wss://feed.mainnet.chain.robinhood.com` |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:3001` | `https://api.testnet.robbed.fun` (testnet Stack endpoint) | `https://api.robbed.fun` (Stack endpoint) |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:3001` | `https://api-testnet.robbed.fun` (testnet Stack endpoint) | `https://api.robbed.fun` (Stack endpoint) |
 | `NEXT_PUBLIC_WS_URL` | `ws://localhost:3002/v1/ws` | `wss://ws.testnet.robbed.fun/v1/ws` | `wss://ws.robbed.fun/v1/ws` |
 | `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` | MinIO public URL | R2 CDN base | R2 CDN base |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | unset (injected wallets only) | project id (web-6, §13) | project id (web-6, NEEDS-USER) |

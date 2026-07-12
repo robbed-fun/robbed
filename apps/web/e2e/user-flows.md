@@ -432,7 +432,7 @@ See `user-flows-waivers.md` for every flow declaring fewer than three assertable
 
 ## 8. Redesign reconciliation — ratification addendum (robbed-architect, 2026-07-11)
 
-The ratified four-page redesign (**spec §12.50**, `docs/design/robbed-redesign-plan.md`) landed after this catalog was authored against the three-page §5 baseline. Reconciliation record:
+The ratified four-page redesign (**spec §12.50**; planning doc retired 2026-07-12, history: git) landed after this catalog was authored against the three-page §5 baseline. Reconciliation record:
 
 - **`/launch` → `/create` rename (§12.50b):** applied throughout this catalog (§3 heading). `LAUNCH-*` flow IDs are **retained** — the stable-ID rule means IDs never encode routes; re-IDing to `CREATE-*` would churn every `@flow:` tag for zero information. New Create-page-specific flows (if any) may use either prefix; extend `LAUNCH-*` for continuity.
 - **Portfolio `/portfolio` (§12.50a) — coverage gap CLOSED (authored + ratified 2026-07-11):** the original gap record (this catalog contained no `PORT-*` flows; required addendum, owner robbed-frontend → architect, due before the I-5a `e2e:coverage` baseline is frozen; minimum expected flows: header stats render — TOTAL VALUE / LOOT ALL-TIME / WALLET ETH, indexer/API-sourced, never client price math, no USD literals per §2 — HOLDINGS / ACTIVITY / CREATED tabs, disconnected-wallet + empty states, and live-patch behavior) is discharged. Portfolio is **read-only**: it adds **no transaction types** (the 9-type table above stays exhaustive) and **no `collect()` surface** (COLLECT-1 waiver unchanged).

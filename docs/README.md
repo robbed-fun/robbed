@@ -18,16 +18,21 @@ CLAUDE.md                       distilled hard rules + stack facts for AI-assist
 docs/
 ├── spec.md                     THE protocol spec (single source of truth; §12 resolved decisions, §13 open items)
 ├── architecture.md             system overview: contracts ↔ indexer ↔ API ↔ web, data flows, infra
-├── how-it-works/
-│   ├── contracts.md            the six contracts: curve math, graduation, fee escrow, deploy
-│   ├── indexer.md              event families, tables, candles, confirmation watermarks, WS channels
-│   ├── api.md                  REST/WS surface, uploads, canonicalization, moderation, auth
-│   └── web.md                  pages, trade lifecycle, copy rules, OG, wallet integration
+├── how-it-works/               two tiers: user-facing pages first, engineer references after
+│   ├── overview.md             user-facing: the token lifecycle (create → curve → graduate) — start here
+│   ├── token-creation.md       user-facing: launching a token — inputs, costs, what deploys, creator limits
+│   ├── trading.md              user-facing: curve pricing, slippage, anti-snipe, sells-always-open, confirmations
+│   ├── fees.md                 user-facing: every fee with numbers + recipients; creator fees (0 in v1, §7)
+│   ├── graduation.md           user-facing: threshold, ReadyToGraduate, permissionless graduate(), the V3 pool
+│   ├── contracts.md            engineer reference: the six contracts — curve math, graduation, fee escrow, deploy
+│   ├── indexer.md              engineer reference: event families, tables, candles, watermarks, WS channels
+│   ├── api.md                  engineer reference: REST/WS surface, uploads, canonicalization, moderation, auth
+│   └── web.md                  engineer reference: pages, trade lifecycle, copy rules, OG, wallet integration
 ├── security-properties.md      the protocol invariants + 10-gate program (points at the test suites)
 ├── threat-model.md             design-time threat model (adversaries, attack trees, obligations)
-├── runbooks/                   operational procedures: docker, testnet, deploy, environments,
-│                               toolchain, prod-images, env-inventory (machine-checked, see below)
-├── design/                     product/visual design rationale (redesign directive)
+├── runbooks/                   operational procedures: docker, testnet, testnet-lifecycle
+│                               (on-chain tx-hash evidence record), deploy, environments,
+│                               toolchain, prod-images, env-inventory (machine-checked)
 └── Robbed.html                 design mockup — PATH FROZEN (40+ code comments cite docs/Robbed.html)
 
 audits/
@@ -52,7 +57,7 @@ apps/web/e2e/
 | How to use one package/app | a colocated `README.md` in that package |
 | A plan, progress tracker, status report, decision ledger, traceability matrix | **nowhere — do not commit it.** No flagship public DeFi repo ships these (survey 2026-07-12); they live in issues/PRs/project tools. Removed from this repo 2026-07-12; history is in git. |
 
-The `docs-placement` check in `scripts/doc-check.ts` enforces this mechanically: forbidden tracker-style files fail CI, and any `.md` under `docs/` outside the sanctioned set (`README.md`, `spec.md`, `architecture.md`, `security-properties.md`, `threat-model.md`, `how-it-works/`, `runbooks/`, `design/`) is rejected with a pointer to this table.
+The `docs-placement` check in `scripts/doc-check.ts` enforces this mechanically: forbidden tracker-style files fail CI, and any `.md` under `docs/` outside the sanctioned set (`README.md`, `spec.md`, `architecture.md`, `security-properties.md`, `threat-model.md`, `how-it-works/`, `runbooks/`) is rejected with a pointer to this table.
 
 ## Machine-consumed files — do not move these blindly
 

@@ -1,6 +1,6 @@
 # Runbook — Production images + gate-7 monitoring configs (P-3)
 
-**Status:** v1.0, 2026-07-11. Owner: robbed-indexer (infra runbooks per plan item P-9). Companion to `deploy-komodo-cloudflare.md` (the hosting plan, spec §12.45) — this file records what P-3 actually **built and verified**: the production container images, the prod compose set, and the gate-7 monitoring/alert configs (spec §10 gate 7, `docs/how-it-works/indexer.md` §9.4).
+**Status:** v1.0, 2026-07-11 (hosting refs updated 2026-07-12: the Komodo runbook is retired, §12.45). Owner: robbed-indexer (infra runbooks per plan item P-9). The hosting split is spec §12.45 (backend on the compose stacks + Cloudflare Tunnels; web on Cloudflare Workers) — this file records what P-3 actually **built and verified**: the production container images, the prod compose set, and the gate-7 monitoring/alert configs (spec §10 gate 7, `docs/how-it-works/indexer.md` §9.4).
 
 ## 1. Image inventory + path decision
 
@@ -10,9 +10,9 @@
 | `robbed-api` (serves both `api` and `ws`) | `apps/api/Dockerfile` | build `node:22.22.0-bookworm-slim` (pnpm install), runtime `oven/bun:1.3.14` | **Bun** (Hono API + WS fanout, spec §8/§9) | `bun` |
 | web | **no image — N/A** | — | Cloudflare Workers | — |
 
-**Decision — Dockerfiles stay at `apps/*/Dockerfile`, not `docker/`.** They landed there at d8f7c20 and are load-bearing references in `tools/deploy/komodo/compose.yaml` (`build.dockerfile`) and `deploy-komodo-cloudflare.md` A.5/A.6b. Moving them to `docker/` would churn three consumers for zero behavior; `docker/` keeps the shared dev image, postgres init SQL, and (new) `monitoring/`. Build context for both prod images is the **repo root** (pnpm workspace + lockfile + `packages/shared`).
+**Decision — Dockerfiles stay at `apps/*/Dockerfile`, not `docker/`.** They landed there at d8f7c20 and are load-bearing `build.dockerfile` references in the prod compose set. Moving them to `docker/` would churn consumers for zero behavior; `docker/` keeps the shared dev image, postgres init SQL, and (new) `monitoring/`. Build context for both prod images is the **repo root** (pnpm workspace + lockfile + `packages/shared`).
 
-**Decision — no web container.** `deploy-komodo-cloudflare.md` Part B + spec §12.45 establish Cloudflare Workers (OpenNext) as the canonical web deploy; `apps/web/wrangler.jsonc` + `apps/web/open-next.config.ts` exist and the Worker is deployed (robbed.fun, d8f7c20). The old P-3 wording's "web on Bun" container is **moot** (A.1: "There is no `web` service here"); building one anyway would create an unmaintained second prod path. The web "manifest" is Part B (B.2 wrangler + B.5 deploy scripts).
+**Decision — no web container.** spec §12.45 establishes Cloudflare Workers (OpenNext) as the canonical web deploy; `apps/web/wrangler.jsonc` + `apps/web/open-next.config.ts` exist and the Worker is deployed (robbed.fun, d8f7c20). The old P-3 wording's "web on Bun" container is **moot** (there is no `web` service in the backend stack); building one anyway would create an unmaintained second prod path. The web "manifest" is `apps/web/wrangler.jsonc` + the `deploy:cf` scripts.
 
 **Pinned bases** (docs-first, tags verified against the registry 2026-07-11): `node:22.22.0-bookworm-slim` — exact pin = the recorded toolchain Node (`toolchain.md`); `oven/bun:1.3.14` — the repo toolchain Bun pin; `prom/prometheus:v3.5.0` (LTS line); `prom/alertmanager:v0.28.1`; `postgres:17` / `redis:7-alpine` unchanged from the Stack.
 
@@ -60,6 +60,6 @@ indexer.md §9.4 series **not yet emitted** (config cannot alert on them; flagge
 
 ## 6. Cross-references
 
-- Hosting plan + deploy sequences: `docs/runbooks/deploy-komodo-cloudflare.md` (Part A backend, Part B web/Workers). Its A.6b "docker build … DEFERRED" note is superseded by §3 above.
+- Hosting (§12.45): backend on the compose stacks (`docker.md`, `deploy.md` §3) + Cloudflare Tunnels; web on Cloudflare Workers (OpenNext). The former Komodo runbook is retired; its "docker build … DEFERRED" note is superseded by §3 above.
 - Mainnet-prep checklist: `docs/runbooks/deploy.md` §3 (hosting) and §3.2 (monitoring bring-up — now satisfiable with the §4 files).
 - Env vars: `docs/runbooks/env-inventory.md`; dev stack: `docs/runbooks/docker.md`.

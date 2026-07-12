@@ -433,13 +433,13 @@ The per-token OG image is **the viral share unit** — a link paste into X/Teleg
 - **The test** — `tests/token-detail-og.test.ts` proves: textual OG/Twitter metadata is SSR-produced; the image URL is absolute, API-origin, lowercased-address, `1200×630`; a 404 degrades without throwing. The `javaScriptEnabled:false` DOM-level assertion (OG meta present with no client JS) lives in the Playwright TD-12 scenario.
 - **SSR of the page itself** (§5.2): Token Detail's server-rendered HTML includes title/description/OG tags and the meaningful above-the-fold content (name, ticker, mcap, progress, trust summary) so crawlers and JS-off clients get the pitch — the interactive chart/widget hydrate on top.
 
-**Deploy target (unchanged):** Cloudflare Workers via OpenNext (`@opennextjs/cloudflare`, spec §12.45 / deploy-komodo-cloudflare.md Part B; NOT Bun self-host, NOT Pages-edge). `apps/web/wrangler.jsonc` (`name: robbed`, `nodejs_compat` + `global_fetch_strictly_public`, `ASSETS` + R2 `ASSETS_BUCKET`/`NEXT_INC_CACHE_R2_BUCKET` → `robbed-assets`), `apps/web/open-next.config.ts` (`r2IncrementalCache`, ISR day one), `next.config.ts` dev hook `initOpenNextCloudflareForDev()`. Scripts: `build:cf` / `deploy:cf` / `preview:cf` / `cf-typegen`. All `NEXT_PUBLIC_*` are build-inlined → set as Workers **build vars** (root `.env.example`); the env reads (`shared/lib/env.ts`) tolerate missing vars during `next build` (placeholder, no hard-fail) but still fail loud at runtime.
+**Deploy target (unchanged):** Cloudflare Workers via OpenNext (`@opennextjs/cloudflare`, spec §12.45; NOT Bun self-host, NOT Pages-edge). `apps/web/wrangler.jsonc` (`name: robbed`, `nodejs_compat` + `global_fetch_strictly_public`, `ASSETS` + R2 `ASSETS_BUCKET`/`NEXT_INC_CACHE_R2_BUCKET` → `robbed-assets`), `apps/web/open-next.config.ts` (`r2IncrementalCache`, ISR day one), `next.config.ts` dev hook `initOpenNextCloudflareForDev()`. Scripts: `build:cf` / `deploy:cf` / `preview:cf` / `cf-typegen`. All `NEXT_PUBLIC_*` are build-inlined → set as Workers **build vars** (root `.env.example`); the env reads (`shared/lib/env.ts`) tolerate missing vars during `next build` (placeholder, no hard-fail) but still fail loud at runtime.
 
 ---
 
 ## 7. Design system (§9: dark, dense, fast) — **ROBBED_ terminal skin (redesign Phase F, 2026-07-10)**
 
-> **SUPERSEDES the M3-2 look** (user-directed redesign; see `docs/design/robbed-redesign-plan.md`).
+> **SUPERSEDES the M3-2 look** (user-directed redesign — spec §12.50; planning doc retired 2026-07-12, history: git).
 > Brand: **`ROBBED_`** (blinking green `_` cursor motif — `<Wordmark/>`/`<CursorTag/>`; `BRAND` constant
 > in `shared/config/copy.ts`). Deviations recorded for robbed-architect §12: (1) four pages incl.
 > Portfolio (overrides §5 "exactly three" / §5.4 Phase-2); (2) `/launch`→`/create`; (3) brand

@@ -60,9 +60,7 @@ export function TokenHeader({
             <StatusTag status={token.status} />
           </div>
           <MonoText tone="faint" size="xs" className="truncate">
-            {shortAddress(token.address)} · created{" "}
-            <RelativeTime unixSeconds={token.createdAt} /> ago by{" "}
-            {shortAddress(token.creator.address)}
+            {shortAddress(token.address)}
           </MonoText>
         </div>
       </div>

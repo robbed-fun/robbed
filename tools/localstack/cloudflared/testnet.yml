@@ -13,9 +13,18 @@
 # inside this container is the cloudflared container itself and would be wrong.
 #
 # Hostnames are canonical per docs/runbooks/docker.md "Public exposure":
-#   https://testnet.robbed.fun          → web
-#   https://api.testnet.robbed.fun      → api   (REST)
-#   wss://api.testnet.robbed.fun/ws     → ws    (Bun WS fanout)
+#   https://testnet.robbed.fun          → web   (STANDBY since 2026-07-12: DNS points at the
+#                                                robbed-testnet Worker custom domain; flips
+#                                                back to this tunnel if DNS moves off it)
+#   https://api-testnet.robbed.fun      → api   (REST)
+#   wss://api-testnet.robbed.fun/ws     → ws    (Bun WS fanout)
+#
+# RENAMED 2026-07-12: api.testnet.robbed.fun → api-testnet.robbed.fun. The old host is a
+# SECOND-level subdomain, outside Universal SSL's `robbed.fun`/`*.robbed.fun` coverage — the
+# edge fails TLS (alert 40) without a paid Advanced Certificate / Total TLS cert. The
+# first-level `api-testnet.robbed.fun` is covered by the existing Universal SSL wildcard.
+# The stale `api.testnet.robbed.fun` CNAME still exists in the zone (cloudflared can only
+# add DNS routes); zone-owner cleanup is cosmetic — it now falls to the 404 catch-all.
 #
 # Supersedes the host systemd user unit cloudflared-robbed-testnet.service
 # (~/.cloudflared/robbed-testnet.yml) — decommissioned once this connector verified serving.
@@ -25,19 +34,19 @@ tunnel: 15ec4e57-6998-4da2-8a5b-ca45c10eecba
 credentials-file: /etc/cloudflared/creds.json
 
 ingress:
-  # 1) Testnet web (Next.js dev server in the `web` service).
+  # 1) Testnet web (Next.js dev server in the `web` service). STANDBY — see header.
   - hostname: testnet.robbed.fun
     service: http://web:3000
 
   # 2) WebSocket fanout (Bun WS). Path is a Go regexp; matches /ws and /ws/*.
   #    cloudflared proxies WebSocket upgrades natively.
-  - hostname: api.testnet.robbed.fun
+  - hostname: api-testnet.robbed.fun
     path: ^/ws(/.*)?$
     service: ws://ws:3002
 
   # 3) REST API (Hono on Bun) — catch-all for the api host (order matters:
   #    must come AFTER the /ws path rule).
-  - hostname: api.testnet.robbed.fun
+  - hostname: api-testnet.robbed.fun
     service: http://api:3001
 
   # 4) Mandatory final catch-all.

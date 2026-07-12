@@ -16,7 +16,7 @@
 > - Safe deployments + Safe{Wallet} — https://docs.safe.global · https://github.com/safe-global/safe-deployments
 > - Robinhood Blockscout verifier — https://robinhoodchain.blockscout.com
 > - OpenZeppelin Ownable2Step — https://docs.openzeppelin.com/contracts/5.x/api/access
-> - Komodo + Cloudflare Workers/OpenNext — see `deploy-komodo-cloudflare.md` doc-link header
+> - Cloudflare Workers / OpenNext — https://developers.cloudflare.com/workers · https://opennext.js.org/cloudflare ; backend compose stacks + Cloudflare Tunnels → `docker.md` + `docker-compose.{testnet,mainnet}.yml`
 >
 > Docs beat assumptions; the spec beats docs (flag the conflict).
 
@@ -105,19 +105,19 @@ The LPFeeVault has **no owner** and nothing to hand over (§6.3/§6.6). The Migr
 
 ---
 
-## 3. Off-chain hosting bring-up — see `deploy-komodo-cloudflare.md`
+## 3. Off-chain hosting bring-up
 
-Hosting is fully specified in **`docs/runbooks/deploy-komodo-cloudflare.md`** (spec §12.45). Do **not** duplicate it here — cross-reference:
+**Hosting reality (2026-07-12; the former Komodo runbook is retired — §12.45 disposition, spec §12.45):** the backend runs from the **compose stacks** and the web app on **Cloudflare Workers**; there is no Komodo anymore.
 
-- **Indexer + API + WS → Komodo Stack** (Postgres+`pg_trgm`, Redis, Ponder Node container, Hono/Bun API + Bun WS fanout co-located with Redis for the <500ms budget). Follow **Part A** (A.5 Dockerfiles, A.6 deploy sequence). Secrets are Komodo-managed from `env-inventory.md` (P-1).
-- **Web → Cloudflare Workers** via OpenNext (`@opennextjs/cloudflare`, `nodejs_compat`), OG on the WASM raster backend (native `@resvg/resvg-js` removed for this target). Follow **Part B** (B.2 `wrangler.jsonc`, B.6 OG→WASM, B.7 deploy sequence).
+- **Indexer + API + WS → compose stack** (`docker-compose.testnet.yml` / `docker-compose.mainnet.yml`, `docker.md`): Postgres+`pg_trgm`, Redis, Ponder Node container, Hono/Bun API + Bun WS fanout co-located with Redis for the <500ms budget (§8). The stack is exposed publicly via a **Cloudflare Tunnel** (`cloudflared` service in each compose file — no inbound ports). Secrets are stack-managed from `env-inventory.md` (P-1).
+- **Web → Cloudflare Workers** via OpenNext (`@opennextjs/cloudflare`, `nodejs_compat`). OG rendering was relocated web→API (§12.53), so the Worker ships no raster dependency. `apps/web/wrangler.jsonc` + `open-next.config.ts` + the `deploy:cf` scripts (web.md "Deploy target"); custom domains attach once DNS is on Cloudflare (§3.1).
 
 ### 3.1 DNS / CDN / R2
 
 - [ ] R2 bucket `robbed-assets` (account `0b1b0b8753489a11d35ee922961f6b72`, §12.45) — pre-created; confirm the API write credentials and the public CDN base (`R2_PUBLIC_BASE_URL` / `NEXT_PUBLIC_R2_PUBLIC_BASE_URL`, env-inventory §2/§3).
 - [ ] Domains are **DECIDED (§12.49):** `robbed.fun` (mainnet) / `testnet.robbed.fun` (testnet). **DNS cutover DONE (2026-07-12):** both are on Cloudflare (account `0b1b0b8753489a11d35ee922961f6b72`) and currently **served via Cloudflare Tunnel** from the compose stacks (`cloudflared` service in each compose file) — the "mainnet" tunnel fronts the 46630-interim stack until a real 4663 deploy exists. Worker custom-domain attach is now unblocked; the interim tunnel path vs a final Worker custom-domain is an ops choice (still a §13 brand residual for OG mark + wordmark, H.2). *(Spec §12.55's DNS bullet was updated 2026-07-12 to "DNS cutover DONE — tunnel-served" to match this state.)*
-- [ ] Custom domain for the Workers frontend (`robbed-web`) + TLS/CDN route (deploy-komodo-cloudflare.md B.7 step 5).
-- [ ] Public TLS endpoints for the Komodo API + WS (`NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_WS_URL`) behind a reverse proxy/CDN; wire the Workers build vars to these (A.6 step 6).
+- [ ] Custom domain for the Workers frontend (`robbed-web`) + TLS/CDN route.
+- [ ] Public TLS endpoints for the backend API + WS (`NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_WS_URL`) via the Cloudflare Tunnel; wire the Workers build vars to these.
 - [ ] `CORS_ALLOWED_ORIGINS` (API) set to the Workers web origin (env-inventory §2). **Gap closed 2026-07-12:** the API now reads it (`apps/api/src/mw/cors.ts`, api.md §6.1 — public `/v1` only, admin/internal never opened; prod boot fails when unset). No reverse-proxy CORS layer needed.
 
 ### 3.2 Monitoring bring-up (indexer.md §9.4, gate 7)
@@ -135,7 +135,7 @@ Contracts are **immutable, no proxies** (§6) — there is no contract "rollback
 
 - **Kill-switch (config only):** `pauseCreates` and/or `pauseBuys` via the admin Safe. **Sells are never pausable** (§6.5) — do not attempt; there is no such flag. Curve `ReadyToGraduate` lock is deterministic (§12.12), not a pause.
 - **Bad factory version → new factory:** an upgrade is a *new* factory deploy (§6). Point the indexer/UI at the new factory addresses (codegen re-run); the old factory's live curves keep functioning (sells always open, graduation permissionless).
-- **Off-chain rollback:** Komodo redeploys by git ref / image digest (deploy-komodo-cloudflare.md A.4 prebuilt-image model for rollback-by-digest); Workers rolls back to a prior deployment/version. These never touch chain state.
+- **Off-chain rollback:** the compose stack redeploys by git ref / image digest (`docker.md` prebuilt-image model for rollback-by-digest); Workers rolls back to a prior deployment/version. These never touch chain state.
 - **Data rollback:** Ponder re-index from `START_BLOCK` on schema change (see the Ponder re-index runbook in the handoff register below). Indexer owns writes; API has read-only role on indexer tables, so an indexer rollback cannot corrupt API-owned moderation tables.
 
 ---
@@ -160,15 +160,15 @@ Contracts are **immutable, no proxies** (§6) — there is no contract "rollback
 
 **Where we actually are (2026-07-12):**
 - **Testnet (chain 46630): DEPLOYED, all six contracts Blockscout-verified** (`contracts/deployments/46630.json`; O-5 pin `v0.8.35+commit.47b9dedd` + `cancun` proven on the testnet Blockscout). Off-chain testnet stack live via Cloudflare Tunnel (`testnet.robbed.fun`).
-- **On-chain lifecycle PARTIALLY validated on a live chain:** creation, 6 trades (exact 1% fee, curve math, sells), and fee accrual to treasury (§12.25) — confirmed on-chain. *(Owed artifact: `docs/runbooks/testnet.md` §7 points at a `testnet-lifecycle.md` tx-hash log that is not yet written — capture the tx hashes there so the evidence is reproducible.)* **A real `graduate()` has NEVER run on any live chain** (faucet-limited) — this is the single largest untested path (**B1**).
-- **Mainnet (chain 4663): NOT deployed.** The registry's `4663.json` is a **mainnet-fork artifact mislabeled `mode:"live"` with an Anvil dev-account treasury** (`0x7099…79C8`) — §12.55 known limit (**B2**). The "mainnet" compose stack currently boots against 46630 as an interim precisely because no real 4663 deploy exists; `robbed.fun` is on Cloudflare (tunnel-served interim) but points at that interim, not a real mainnet.
+- **On-chain lifecycle PARTIALLY validated on a live chain:** creation, 6 trades (exact 1% fee, curve math, sells), and fee accrual to treasury (§12.25) — confirmed on-chain, **tx-hash record DELIVERED in `docs/runbooks/testnet-lifecycle.md`** (token XROB on 46630; referenced by `testnet.md` §7). **A real `graduate()` has NEVER run on any live chain** (faucet-limited — `testnet-lifecycle.md` §3 records it as not-yet-exercised) — this is the single largest untested path (**B1**).
+- **Mainnet (chain 4663): NOT deployed.** The registry's `4663.json` is now correctly a **`mode:"fork"` mainnet-fork artifact** — the §12.55 mislabel is **FIXED (B2 resolved)**. It carries an Anvil dev-account treasury (`0x7099…79C8`), which is precisely why it is `fork`, not `live`; the codegen fail-closes on any live+anvil-treasury artifact so a fork can never masquerade as mainnet. The "mainnet" compose stack still boots against 46630 as an interim because no real 4663 deploy exists; `robbed.fun` is on Cloudflare (tunnel-served interim) but points at that interim, not a real mainnet.
 
 **BLOCKING before a real chain-4663 mainnet deploy (agent-owned, no user decision required to start):**
 
 | ID | Item | Why blocking | Owner |
 |---|---|---|---|
 | **B1** | **Real graduation dry-run → funded-testnet graduation → mainnet canary.** `graduate()` + V3Migrator arb-back + `LPFeeVault.collect()` + `sweepFees()` end-to-end have never executed on a live chain. Sequence: (1) **fork-dry-run** on a mainnet-fork (deterministic, unlimited); (2) **funded-testnet graduation** (needs faucet top-ups past one drip — §12.52 gives 0.05 ETH/24h, GRADUATION_ETH ≈ 8.08 ETH, so multiple drips or a funded key); (3) **mainnet canary** in §1 step 7 + §5. Nothing else exercises the pre-seeded-pool defense (gate-2 invariant 6) against real chain state. | Largest untested path; graduation is single-fire, permissionless, and irreversible | robbed-contracts + robbed-security |
-| **B2** | **§12.55 fork-artifact `mode` labeling.** `Deploy.s.sol` / `codegen-addresses.ts` must make fork-run artifacts distinguishable from live ones (a `mode` that is not `"live"`, or fork artifacts never landing under the canonical mainnet key) so the indexer's §12.55 chain-identity gate can assert mode against the declared environment. Today `4663.json` still reads `mode:"live"` with a dev-account treasury. | An artifact that lies about being live can pollute a real deploy/indexer wiring; blocks trusting the 4663 key | robbed-contracts (in progress) |
+| ~~**B2**~~ **RESOLVED 2026-07-12** | **§12.55 fork-artifact `mode` labeling — DONE.** `Deploy.s.sol` `_selectMode(chainId, mainnetAffirmed)` defaults chain 4663 to `Mode.Fork` and emits `Mode.Live` only on an explicit `ROBBED_DEPLOY_ENV=="mainnet"` affirmation; `codegen-addresses.ts` fail-closes if any artifact is `mode:"live"` on a non-4663 chain OR carries a well-known Anvil dev-account treasury; `packages/shared/src/addresses.ts` now carries 4663 as `mode:"fork"` — no false live entry. The indexer's §12.55 chain-identity gate asserts `mode == "live"` for a canonical mainnet, so a fork cannot masquerade. **Accurate residual: mainnet still not deployed — but the artifact no longer lies.** | was: an artifact that lies about being live could pollute a real deploy/indexer wiring | robbed-contracts (DONE) |
 | **B3** | **Economics re-derivation — gas-model DONE (§12.62); ETH-peg RE-LOCK at deploy.** DONE 2026-07-12 on a mainnet-fork (real §12.28 V3, gate-2 green 182 pass): gas-model fixed (`3M→1.5M` fork-measured `817,845` gas, cost-based `graduationFee` §12.26, `callerReward` 6.2× ≥ the §12.34 10×-gas floor) — **durable**. **RESIDUAL (a durable requirement, not a one-time task):** the ETH-pegged constants (`GRADUATION_ETH` / `VIRTUAL_ETH_0` / `CREATION_FEE` / `MAX_EARLY_BUY` / `CALLER_REWARD` / floor / tick) are a snapshot at `$1817.62115697` and MUST be **re-derived + re-locked against fresh sourced ETH/USD immediately before the mainnet deploy tx** (§0 / §1). Constants never inlined (§2). | Gas-model was a placeholder (now fixed); the ETH peg drifts continuously → must be current at the deploy tx | robbed-contracts + robbed-security |
 | **B4** | **Mainnet Blockscout O-5 round-trip.** Verify pin `0.8.35` + `cancun` against `robinhoodchain.blockscout.com` (throwaway-contract check). Testnet Blockscout proved it; the mainnet verifier is a distinct instance and still owed. | The §0 precondition; a pin the mainnet verifier rejects fails every contract verification at deploy | robbed-contracts |
 

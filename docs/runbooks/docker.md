@@ -270,7 +270,7 @@ defaults are re-based to the 41XX block (table above). `web` runs with
 
 ### Public exposure (Cloudflare Tunnel) — compose-managed connector + browser-visible URL overrides
 
-`testnet.robbed.fun` → `web`, `api.testnet.robbed.fun` → `api` (with `/ws` → `ws`) are published
+`testnet.robbed.fun` → `web` (STANDBY — see below), `api-testnet.robbed.fun` → `api` (with `/ws` → `ws`) are published
 via Cloudflare Tunnel `robbed_testnet` (UUID `15ec4e57-6998-4da2-8a5b-ca45c10eecba`) by the
 **`cloudflared` compose service** inside `docker-compose.testnet.yml` — the connector starts and
 stops with the stack (2026-07-12; it supersedes the host systemd user units
@@ -292,11 +292,24 @@ but the compose services are canonical). How it is wired:
   `restart: unless-stopped`, `depends_on` web/api/ws healthy. Verify with
   `docker logs <stack>-cloudflared-1` — expect 4 × "Registered tunnel connection" and
   `Settings: map[config:/etc/cloudflared/config.yml …]`.
-- **Known edge limitation (zone-owner action, not a connector issue):** `api.testnet.robbed.fun`
-  is a *second-level* subdomain, outside Universal SSL's `robbed.fun`/`*.robbed.fun` coverage —
-  the edge answers TLS with handshake-failure (alert 40) until an Advanced Certificate /
-  Total TLS cert covering `*.testnet.robbed.fun` exists. Routing itself is proven (edge :80 →
-  tunnel → api returns 200).
+- **API hostname RENAMED 2026-07-12: `api.testnet.robbed.fun` → `api-testnet.robbed.fun`.**
+  The old host is a *second-level* subdomain, outside Universal SSL's
+  `robbed.fun`/`*.robbed.fun` coverage — the edge answered TLS with handshake-failure
+  (alert 40); fixing it in place needed a paid Advanced Certificate / Total TLS cert. The
+  first-level `api-testnet.robbed.fun` is covered by the existing Universal SSL wildcard, so
+  HTTPS + WSS work with zero cert changes. The stale `api.testnet.robbed.fun` CNAME still
+  exists in the zone (cloudflared can only add DNS routes) — zone-owner cleanup is cosmetic;
+  it now falls to the connector's 404 catch-all.
+- **`testnet.robbed.fun` → Worker flip (2026-07-12, mirroring `robbed.fun`):** the hostname is
+  being moved off the tunnel onto the `robbed-testnet` Worker as a Workers **Custom Domain**
+  (declared in `apps/web/wrangler.testnet.jsonc` `routes`). ⚠ PENDING zone-owner action: the
+  attach is blocked by the tunnel-created `testnet.robbed.fun` CNAME — the Workers API refuses
+  to override "externally managed" DNS records (error 100117), and no local credential can
+  delete DNS (wrangler OAuth = zone:read). **Delete that CNAME in the dashboard (robbed.fun
+  zone → DNS), then re-run `pnpm run deploy:cf:testnet`** — the config-declared custom domain
+  attaches automatically (non-TTY wrangler auto-confirms the override). The tunnel keeps the
+  `testnet.robbed.fun → web` ingress rule as STANDBY, same convention as mainnet's `robbed.fun`
+  rule (flips back if DNS ever moves off the Worker).
 
 External visitors' browsers cannot reach `http://localhost:4101`,
 so the web service's three browser-visible URLs are override-able with localhost defaults
@@ -304,8 +317,8 @@ so the web service's three browser-visible URLs are override-able with localhost
 
 | Override (root `.env`) | Wired to | Live value |
 |---|---|---|
-| `TESTNET_PUBLIC_API_BASE_URL` | `NEXT_PUBLIC_API_BASE_URL` | `https://api.testnet.robbed.fun` |
-| `TESTNET_PUBLIC_WS_URL` | `NEXT_PUBLIC_WS_URL` | `wss://api.testnet.robbed.fun/ws` |
+| `TESTNET_PUBLIC_API_BASE_URL` | `NEXT_PUBLIC_API_BASE_URL` | `https://api-testnet.robbed.fun` |
+| `TESTNET_PUBLIC_WS_URL` | `NEXT_PUBLIC_WS_URL` | `wss://api-testnet.robbed.fun/ws` |
 | `TESTNET_PUBLIC_R2_BASE_URL` | `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` | *(unset — see limitation)* |
 
 **Known limitation:** R2 stays on the `http://localhost:4190/robbed-assets` default, so
@@ -400,7 +413,7 @@ Host ports — **42XX block** (dev 40XX/44XX, testnet 41XX; all three stacks can
 
 ## Not in this file (deferred)
 
-- **Production images** — these are dev-mode containers (bind mount + watchers). The prod build/deploy landed at **P-3**: `apps/indexer/Dockerfile` + `apps/api/Dockerfile` (multi-stage, non-root, pnpm-workspace-correct) and the Komodo backend Stack at `tools/deploy/komodo/` (see `deploy-komodo-cloudflare.md` A.6b). Those images reuse this file's `postgres:17` (+`pg_trgm` init) and `redis:7` choices; there is **no prod `web` image** (frontend → Cloudflare Workers, §12.45).
+- **Production images** — these are dev-mode containers (bind mount + watchers). The prod build/deploy landed at **P-3**: `apps/indexer/Dockerfile` + `apps/api/Dockerfile` (multi-stage, non-root, pnpm-workspace-correct) and the backend **compose stacks** (`docker-compose.{testnet,mainnet}.yml`, fronted by Cloudflare Tunnels). Those images reuse this file's `postgres:17` (+`pg_trgm` init) and `redis:7` choices; there is **no prod `web` image** (frontend → Cloudflare Workers, §12.45).
 - **Seed data** — deploychain deploys contracts (with the Deploy.s.sol canary create+buy) but no
   richer demo dataset; `NEXT_PUBLIC_MOCK_DATA=true` covers demo needs today. (`dev:stack` /
   `dev:health` wiring landed at I-3 — see "Bring the stack up".)

@@ -477,7 +477,7 @@ for (const p of walkMd(ROOT, [])) {
 const DOCS_ROOT_MD_ALLOWLIST = new Set([
   "README.md", "spec.md", "architecture.md", "security-properties.md", "threat-model.md",
 ]);
-const DOCS_SANCTIONED_SUBDIRS = new Set(["how-it-works", "runbooks", "design"]);
+const DOCS_SANCTIONED_SUBDIRS = new Set(["how-it-works", "runbooks"]);
 for (const p of docsMd) {
   const r = rel(p); // docs/...
   const parts = r.split("/"); // ["docs", ...]

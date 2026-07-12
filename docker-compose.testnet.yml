@@ -385,7 +385,7 @@ services:
       <<: *dev-env
       NEXT_PUBLIC_CHAIN_ID: "46630"
       # Public-origin overrides (Cloudflare Tunnel: testnet.robbed.fun → :4100,
-      # api.testnet.robbed.fun → :4101 with /ws → :4102): browser-visible URLs must be
+      # api-testnet.robbed.fun → :4101 with /ws → :4102): browser-visible URLs must be
       # reachable from EXTERNAL browsers, so the TESTNET_PUBLIC_* env (root .env) overrides
       # the host-mapped localhost defaults. The public URLs also work for local browsing;
       # unset ⇒ localhost defaults, and port re-bases still flow via the nested ${*_PORT}.
@@ -427,7 +427,7 @@ services:
       start_period: 60s
 
   # ── TESTNET: cloudflared — Cloudflare Tunnel connector AS A COMPOSE SERVICE ──
-  # Publishes testnet.robbed.fun / api.testnet.robbed.fun (+/ws) from INSIDE the stack
+  # Publishes testnet.robbed.fun / api-testnet.robbed.fun (+/ws) from INSIDE the stack
   # network, so it starts/stops with the stack (supersedes the host systemd user unit
   # cloudflared-robbed-testnet.service). Ingress lives in-repo (NO secrets — the tunnel
   # UUID is routing metadata): tools/localstack/cloudflared/testnet.yml, targeting

@@ -35,7 +35,7 @@ export * from "./ErrorState";
 export * from "./AddressLink";
 export * from "./TokenAvatar";
 
-// ROBBED_ terminal atoms (redesign Phase F — docs/design/robbed-redesign-plan.md)
+// ROBBED_ terminal atoms (redesign Phase F — spec §12.50)
 export * from "./MonoText";
 export * from "./Chip";
 export * from "./TabBar";

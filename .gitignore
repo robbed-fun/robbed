@@ -72,6 +72,7 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+apps/web/e2e/.report/
 
 # ── Turbo / tool caches ──────────────────────────────────────────────────────
 .turbo/

@@ -78,6 +78,7 @@ Prerequisites: Bun ≥ 1.3, pnpm ≥ 10, Foundry (`foundryup`), Docker (for the 
 
 ## Documentation
 
+- [docs/how-it-works/overview.md](docs/how-it-works/overview.md) — **new to ROBBED_? start here** — the token lifecycle in plain language, with [token-creation](docs/how-it-works/token-creation.md), [trading](docs/how-it-works/trading.md), [fees](docs/how-it-works/fees.md), and [graduation](docs/how-it-works/graduation.md)
 - [docs/spec.md](docs/spec.md) — the protocol specification (single source of truth)
 - [docs/how-it-works/](docs/how-it-works) — per-component design docs: [contracts](docs/how-it-works/contracts.md), [indexer](docs/how-it-works/indexer.md), [api](docs/how-it-works/api.md), [web](docs/how-it-works/web.md)
 - [docs/security-properties.md](docs/security-properties.md) — protocol invariants + the security-gate program
