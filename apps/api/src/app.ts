@@ -12,6 +12,7 @@ import type { Context } from "hono";
 import type { AppDeps } from "./deps";
 import { errBody, toErrorResponse } from "./lib/envelope";
 import { ERROR_CODES } from "@robbed/shared";
+import { publicCors } from "./mw/cors";
 import { ROUTE_LIMITS, rateLimit } from "./mw/ratelimit";
 import { adminRoutes } from "./admin/routes";
 import { candleRoutes } from "./routes/candles";
@@ -46,6 +47,12 @@ export function createApp(deps: AppDeps) {
     connInfoIp: connIp,
     now: deps.now,
   };
+
+  // ── CORS — public /v1 surface only (api.md §6.1) ──────────────────────────
+  // BEFORE the rate limiters: preflights are answered here (204, no rate
+  // budget) and 429s on actual requests still carry CORS headers. The
+  // middleware itself skips /v1/admin/*; /internal/* never mounts it.
+  app.use("/v1/*", publicCors(deps.config.corsAllowedOrigins));
 
   // ── rate limits per route class (§6.3) ────────────────────────────────────
   app.use("/v1/uploads/*", rateLimit(rlDeps, ROUTE_LIMITS.uploadsHour, ROUTE_LIMITS.uploadsMin));

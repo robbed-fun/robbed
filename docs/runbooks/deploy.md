@@ -105,7 +105,7 @@ Hosting is fully specified in **`docs/runbooks/deploy-komodo-cloudflare.md`** (s
 - [ ] Domains are **DECIDED (§12.49):** `robbed.fun` (mainnet) / `testnet.robbed.fun` (testnet). **DNS prerequisite (§13, still open):** `robbed.fun` is registered but not yet on Cloudflare DNS — point its nameservers at account `0b1b0b8753489a11d35ee922961f6b72` before Worker custom domains can attach (`*.workers.dev` interim until then).
 - [ ] Custom domain for the Workers frontend (`robbed-web`) + TLS/CDN route (deploy-komodo-cloudflare.md B.7 step 5).
 - [ ] Public TLS endpoints for the Komodo API + WS (`NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_WS_URL`) behind a reverse proxy/CDN; wire the Workers build vars to these (A.6 step 6).
-- [ ] `CORS_ALLOWED_ORIGINS` (API) set to the Workers web origin (env-inventory §2). **Gap noted 2026-07-11:** the API does not read this key yet (no CORS middleware in `apps/api/src` — wiring routed to robbed-indexer); until that lands, enforce CORS at the reverse-proxy/CDN in front of the API.
+- [ ] `CORS_ALLOWED_ORIGINS` (API) set to the Workers web origin (env-inventory §2). **Gap closed 2026-07-12:** the API now reads it (`apps/api/src/mw/cors.ts`, api.md §6.1 — public `/v1` only, admin/internal never opened; prod boot fails when unset). No reverse-proxy CORS layer needed.
 
 ### 3.2 Monitoring bring-up (indexer.md §9.4, gate 7)
 

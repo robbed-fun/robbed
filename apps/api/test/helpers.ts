@@ -374,6 +374,8 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     databaseUrlRo: "",
     databaseUrlRw: "",
     adminAllowlist: new Set<string>(),
+    // Public-CORS allowlist (api.md §6.1) — cors.test.ts uses this origin.
+    corsAllowedOrigins: new Set<string>(["https://web.test"]),
     ...overrides,
   } as Config;
 }

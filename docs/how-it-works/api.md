@@ -388,6 +388,26 @@ Canonicalization is defined once, here, RFC-8785-style (UTF-8, sorted keys at ev
 
 No auth (reads + upload/metadata). Anonymous uploads are inherent to the product (launch flow precedes any tx).
 
+**CORS (2026-07-12, closes the env-inventory `CORS_ALLOWED_ORIGINS` audit gap).** Browsers fetch the
+public surface cross-origin (web origin ≠ api origin per env), so the API applies Hono's `cors()`
+(`apps/api/src/mw/cors.ts`) to **`/v1/*` excluding `/v1/admin/*`** — and never to `/internal/*`:
+
+- **Origins** from `CORS_ALLOWED_ORIGINS` (comma-separated env; **production refuses to boot when
+  unset** — mirrors the DB-role guard; dev default = local web origins). Function-form origin:
+  exact match (case-insensitive) echoes the request origin; a disallowed origin gets **no** CORS
+  headers. Never `*`.
+- `allowMethods: GET, POST, OPTIONS`; `allowHeaders: Content-Type` (metadata POST is
+  `application/json` → preflighted; multipart upload is safelisted but preflight still succeeds);
+  `exposeHeaders: Retry-After` (the browser client's 429 backoff, §6.3, needs to read it);
+  `maxAge` 24 h; `Vary: Origin`; **no credentials** — the public surface is cookie-less.
+- Registered **before** the rate limiters, so `OPTIONS` preflights are answered by the middleware
+  (204; no OPTIONS routes exist) and never consume rate budget, while a 429 on the actual request
+  still carries CORS headers (readable failure instead of an opaque network error).
+- **Scoping decision:** `/v1/admin/*` and `/internal/*` are the cookie+CSRF SIWE surface (§6.2) and
+  stay **same-origin only** — opening them cross-origin would widen the CSRF/session attack
+  surface for zero product need (the admin surface is operated same-origin). The middleware
+  explicitly skips them; tests assert no `Access-Control-Allow-Origin` ever appears there.
+
 ### 6.2 Admin auth
 
 **SIWE (EIP-4361) against an address allowlist** (the ops/Safe signer set is a §13 open item; allowlist is config) → short-lived signed session cookie (HttpOnly, SameSite=strict, 12h) + CSRF token on mutations. No passwords, no third-party IdP dependency, key custody matches the rest of the project's trust model. All admin mutations audit-logged.

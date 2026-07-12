@@ -46,6 +46,15 @@ const rawSchema = z.object({
    */
   TRUSTED_PROXY_HEADER: z.string().default(""),
 
+  /**
+   * Comma-separated browser origins allowed on the PUBLIC /v1 surface (api.md
+   * §6.1 CORS; env-inventory §2 — this key is now READ, closing the 2026-07-11
+   * audit gap). Production refuses to boot when unset (mirrors the DB-role
+   * guard); dev/test default to the local web origins. Admin/internal routes
+   * are never opened cross-origin regardless of this list (api.md §6.1).
+   */
+  CORS_ALLOWED_ORIGINS: z.string().optional(),
+
   // ── Moderation (§4.3) ───────────────────────────────────────────────────────
   /**
    * Production refuses to boot on stub vendors unless this is true (§4.3 boot
@@ -87,7 +96,12 @@ export interface Config extends RawConfig {
   adminAllowlist: Set<string>; // lowercased addresses
   /** §12.47 threshold parsed to wei; falls back to the 1.0 ETH default on a malformed value. */
   largeValueEthThresholdWei: bigint;
+  /** Lowercased browser origins for the public-/v1 CORS middleware (api.md §6.1). */
+  corsAllowedOrigins: Set<string>;
 }
+
+/** Dev/test fallback: the compose web port (4000) + bare `next dev` (3000). */
+const DEV_CORS_DEFAULT = "http://localhost:4000,http://localhost:3000";
 
 let cached: Config | null = null;
 
@@ -103,6 +117,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       );
     }
   }
+  const corsRaw = raw.CORS_ALLOWED_ORIGINS?.trim();
+  if (!corsRaw && raw.API_ENV === "production") {
+    // Fail-loud (api.md §6.1): a prod API without an explicit origin list would
+    // either silently block every browser fetch or tempt a `*` hack. Never default.
+    throw new Error("CORS_ALLOWED_ORIGINS required in production (api.md §6.1; env-inventory §2)");
+  }
+  const corsAllowedOrigins = new Set(
+    (corsRaw || DEV_CORS_DEFAULT)
+      .split(",")
+      .map((o) => o.trim().toLowerCase().replace(/\/+$/, "")) // origins have no trailing slash
+      .filter((o) => o.length > 0),
+  );
   let largeValueEthThresholdWei: bigint;
   try {
     largeValueEthThresholdWei = parseEther(raw.LARGE_VALUE_ETH_THRESHOLD);
@@ -122,6 +148,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         .filter((a) => a.length > 0),
     ),
     largeValueEthThresholdWei,
+    corsAllowedOrigins,
   };
 }
 

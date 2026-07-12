@@ -237,6 +237,9 @@ services:
       R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4190}/${R2_BUCKET:-robbed-assets}
       # Moderation vendors are a §13 open item — stubs stay allowed outside production (§4.3).
       MODERATION_ALLOW_STUBS: "true"
+      # Public-/v1 CORS (api.md §6.1): the public tunnel web origin + local browsing.
+      # Override seam consistent with the TESTNET_PUBLIC_* pattern above.
+      CORS_ALLOWED_ORIGINS: ${TESTNET_CORS_ALLOWED_ORIGINS:-https://testnet.robbed.fun,http://localhost:${WEB_PORT:-4100}}
       # TESTNET: cold `tokensOwed` read (api.md §3.4) against the remote testnet RPC. Required, no default (§13).
       ROBINHOOD_RPC_URL: ${TESTNET_RPC_URL:?TESTNET_RPC_URL is required — official Robinhood testnet RPC (spec §13 / Phase T; never invented). See docs/runbooks/docker.md 'Testnet stack'.}
     ports:
