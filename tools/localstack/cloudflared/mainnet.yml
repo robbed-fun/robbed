@@ -1,0 +1,49 @@
+# ── Cloudflare Tunnel ingress: robbed-mainnet (c80870d9…) — COMPOSE-MANAGED connector ──
+# Consumed by the `cloudflared` service in docker-compose.mainnet.yml, which mounts this
+# file at /etc/cloudflared/config.yml (read-only) and runs
+#   cloudflared tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+# inside the robbed-mainnet compose network.
+#
+# NO SECRETS live here: the tunnel UUID is public routing metadata. The run credentials
+# stay on the host (${CLOUDFLARED_DIR:-~/.cloudflared}/c80870d9-….json) and are bind-mounted
+# read-only to /etc/cloudflared/creds.json by compose — never committed.
+#
+# Service targets are COMPOSE-INTERNAL DNS names (the connector joins the stack network):
+#   web:3000  api:3001  ws:3002   — container ports, NOT the 42XX host maps; `localhost`
+# inside this container is the cloudflared container itself and would be wrong.
+#
+# Hostnames are canonical per docs/runbooks/docker.md "Public exposure":
+#   https://robbed.fun          → web   (apex flips to this tunnel when the coordinator
+#                                        moves DNS off the Cloudflare Worker)
+#   https://api.robbed.fun      → api   (REST)
+#   wss://api.robbed.fun/ws     → ws    (Bun WS fanout)
+#
+# NOTE: the mainnet stack currently boots in the INTERIM testnet-values state (46630) —
+# see the docker-compose.mainnet.yml header. This ingress is chain-agnostic and does not
+# change at the Phase-B swap.
+#
+# Supersedes the host systemd user unit cloudflared-robbed-mainnet.service
+# (~/.cloudflared/robbed-mainnet.yml) — decommissioned once this connector verified serving.
+# Account: 0b1b0b8753489a11d35ee922961f6b72 (spec §12.45)
+
+tunnel: c80870d9-6ce5-40b6-a0d4-3e8e19b537b5
+credentials-file: /etc/cloudflared/creds.json
+
+ingress:
+  # 1) Mainnet web (Next.js dev server in the `web` service).
+  - hostname: robbed.fun
+    service: http://web:3000
+
+  # 2) WebSocket fanout (Bun WS). Path is a Go regexp; matches /ws and /ws/*.
+  #    cloudflared proxies WebSocket upgrades natively.
+  - hostname: api.robbed.fun
+    path: ^/ws(/.*)?$
+    service: ws://ws:3002
+
+  # 3) REST API (Hono on Bun) — catch-all for the api host (order matters:
+  #    must come AFTER the /ws path rule).
+  - hostname: api.robbed.fun
+    service: http://api:3001
+
+  # 4) Mandatory final catch-all.
+  - service: http_status:404

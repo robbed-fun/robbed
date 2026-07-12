@@ -3,22 +3,37 @@
 # REAL Robinhood Chain MAINNET (4663). NO anvil, NO deploychain — the chain is remote and contracts
 # deploy only through the ratified Phase-B pipeline (Gate G-A governs), never via compose.
 #
-# ── STATUS: STAGED for Phase B — this stack FAILS CLOSED by design until a REAL 4663 deploy ──
-# There is NO real mainnet deployment today. Two independent gates keep this stack from coming
-# alive prematurely (verify both stay in place; neither may be "fixed" locally):
-#   1. `tools/localstack/out/mainnet.env` does not exist — api + indexer refuse to start without
-#      it (same fail-closed contract as the testnet stack pre-T-3). Only a real future mainnet
-#      deploy (the T-3 equivalent, Gate G-A passed) emits it.
-#   2. §12.55 known limit: the shared registry's "4663" entry is currently a mainnet-FORK
-#      pipeline artifact, so the indexer's chain-identity gate REFUSES INDEXER_CHAIN_ID=4663
-#      unless the stack declares itself a LOCAL fork via INDEXER_ALLOW_FORK_4663=1 — which this
-#      file deliberately does NOT set (only docker-compose.yml, the fork stack, does).
-# The stack comes alive when a real 4663 deploy lands `contracts/deployments/4663.json`
-# (replacing the fork artifact; registry re-codegen'd via robbed-shared) + `mainnet.env`, and
-# robbed-contracts' §12.55 follow-up makes fork artifacts distinguishable so the interim env
-# opt-in is replaced by a registry-mode assertion. NOTE: this compose file is the local
-# staging/dry-run shape — the REAL production deploy is the P-3 images on Komodo
-# (docs/runbooks/prod-images.md), where API_ENV=production forbids moderation stubs (§4.3).
+# ── STATUS (2026-07-12): INTERIM — this stack RUNS, pointed at TESTNET (46630) values ──
+# robbed.fun must be alive before a real 4663 deploy exists, so this stack currently boots
+# with TESTNET parameters supplied via env ("later we will replace testnet by mainnet"):
+#   • root `.env` (gitignored):  MAINNET_RPC_URL=https://rpc.testnet.chain.robinhood.com,
+#     MAINNET_CHAIN_ID=46630, MAINNET_INDEXER_CHAIN_ID=46630, plus the public-URL overrides
+#     (https://api.robbed.fun / wss://api.robbed.fun/ws) — each marked INTERIM there.
+#   • `tools/localstack/out/mainnet.env` — INTERIM copy of the 46630 (testnet) deploy artifact
+#     set (same addresses + START_BLOCK as testnet.env); regenerate from the real 4663 deploy
+#     at Phase B.
+# §12.55 STAYS HONEST — nothing is bypassed: `chaincheck` asserts the live RPC serves the
+# DECLARED MAINNET_CHAIN_ID (46630 today), the indexer's chain-identity gate resolves
+# INDEXER_CHAIN_ID=46630 against the shared registry's REAL testnet entry, and there is NO
+# INDEXER_ALLOW_FORK_4663 here (the compose default INDEXER_CHAIN_ID=4663 below is still
+# refused by the registry gate until a real deploy replaces the fork artifact — that refusal
+# is exactly why the interim uses 46630, not a weakened gate).
+#
+# ── PHASE-B SWAP CHECKLIST (replace testnet by mainnet; nothing else changes) ──
+#   1. Real 4663 deploy lands `contracts/deployments/4663.json` (replacing the fork artifact;
+#      registry re-codegen'd via robbed-shared; Gate G-A governs — spec §14).
+#   2. Emit `tools/localstack/out/mainnet.env` from that artifact (CURVE_FACTORY_ADDRESS,
+#      ROUTER_ADDRESS, MIGRATOR_ADDRESS, TREASURY_ADDRESS, LP_FEE_VAULT_ADDRESS, START_BLOCK),
+#      replacing the INTERIM testnet copy.
+#   3. Root `.env`: MAINNET_RPC_URL=https://rpc.mainnet.chain.robinhood.com,
+#      MAINNET_CHAIN_ID=4663; DELETE MAINNET_INDEXER_CHAIN_ID (compose default 4663 takes over).
+#      Public-URL overrides stay as-is (api.robbed.fun does not change).
+#   4. `docker compose -f docker-compose.mainnet.yml down` + wipe volumes (`down -v` — the DB
+#      holds 46630 backfill state) + `up -d`; chaincheck/registry gates re-assert 4663 live.
+#   5. Tunnel ingress (tools/localstack/cloudflared/mainnet.yml) is chain-agnostic — no change.
+# NOTE: this compose file is the local staging/dry-run shape — the REAL production deploy is
+# the P-3 images on Komodo (docs/runbooks/prod-images.md), where API_ENV=production forbids
+# moderation stubs (§4.3).
 #
 # ── HARD RULE: no invented parameters (spec §2/§13) ──
 # Mainnet chain facts are ratified (CLAUDE.md chain facts; docs/runbooks/environments.md):
@@ -27,17 +42,24 @@
 # testnet discipline, this file still carries NO silent defaults — required values arrive via
 # env (`:?` aborts loud), so a mistyped/absent value can never fall back unnoticed:
 #
-#   MAINNET_RPC_URL       required — official mainnet JSON-RPC (value above)
+#   MAINNET_RPC_URL       required — official mainnet JSON-RPC (value above; INTERIM: the
+#                         official testnet RPC — see STATUS)
 #   MAINNET_RPC_WS_URL    OPTIONAL — WS JSON-RPC (Alchemy wss, key-gated). Empty/unset ⇒ the
 #                         indexer falls back to HTTP polling (INDEXER_RPC_WS optional in
 #                         apps/indexer/src/config.ts). NEVER a sequencer feed wss.
-#   MAINNET_CHAIN_ID      required — 4663; asserted against the live RPC by `chaincheck`
+#   MAINNET_CHAIN_ID      required — asserted against the live RPC by `chaincheck` AND
+#                         advertised to wallets as NEXT_PUBLIC_CHAIN_ID (one source of truth;
+#                         4663 at Phase B, INTERIM 46630)
+#   MAINNET_INDEXER_CHAIN_ID  OPTIONAL — indexer chain selection seam; default 4663 (Phase-B
+#                         value). INTERIM: root .env sets 46630 so the §12.55 registry gate
+#                         resolves the REAL testnet entry (see STATUS; no gate is bypassed).
 #
 # ── Contract addresses + START_BLOCK: fail-closed on tools/localstack/out/mainnet.env ──
 # Same key contract as testnet.env / the local deploychain local.env (CURVE_FACTORY_ADDRESS,
-# ROUTER_ADDRESS, MIGRATOR_ADDRESS, TREASURY_ADDRESS, LP_FEE_VAULT_ADDRESS, START_BLOCK), to be
-# emitted from the real Phase-B deploy artifact. api + indexer refuse to start without it; there
-# is no best-effort mode (no local deploy one-shot can fill the gap).
+# ROUTER_ADDRESS, MIGRATOR_ADDRESS, TREASURY_ADDRESS, LP_FEE_VAULT_ADDRESS, START_BLOCK).
+# INTERIM: the file exists as a loudly-marked copy of the 46630 testnet artifact set (see
+# STATUS); at Phase B it is regenerated from the real 4663 deploy artifact. api + indexer
+# still refuse to start without it; there is no best-effort mode.
 #
 # ── ANTI-DRIFT: deliberate self-contained MIRROR of docker-compose.testnet.yml ──
 # Same rationale as the testnet file (compose merge cannot delete services/edges). Discipline:
@@ -209,11 +231,11 @@ services:
       - |
         if [ ! -f tools/localstack/out/mainnet.env ]; then
           echo "FATAL: tools/localstack/out/mainnet.env not found." >&2
-          echo "  There is NO real mainnet deployment yet (Gate G-A governs; spec §14). This stack is" >&2
-          echo "  STAGED for Phase B and fails closed by design: contract addresses + START_BLOCK come" >&2
-          echo "  only from the real Phase-B deploy artifact (contracts/deployments/4663.json replacing" >&2
-          echo "  the fork artifact), emitted to tools/localstack/out/mainnet.env with the same keys as" >&2
-          echo "  testnet.env. See docs/runbooks/docker.md 'Mainnet stack'." >&2
+          echo "  INTERIM state (see file header STATUS): recreate it as a loudly-marked copy of the" >&2
+          echo "  46630 testnet artifact set (tools/localstack/out/testnet.env keys). At Phase B it is" >&2
+          echo "  emitted from the real 4663 deploy artifact (contracts/deployments/4663.json replacing" >&2
+          echo "  the fork artifact; Gate G-A governs, spec §14). Same keys as testnet.env. See" >&2
+          echo "  docs/runbooks/docker.md 'Mainnet stack'." >&2
           exit 1
         fi
         set -a; . ./tools/localstack/out/mainnet.env; set +a
@@ -277,15 +299,17 @@ services:
       retries: 5
       start_period: 15s
 
-  # ── indexer — Ponder. MAINNET deltas: real mainnet RPC (http required, ws OPTIONAL —
+  # ── indexer — Ponder. MAINNET deltas: remote RPC (http required, ws OPTIONAL —
   # HTTP-polling fallback), addresses + START_BLOCK from the REQUIRED mainnet.env
   # (fail-closed — see header STATUS).
   #
-  # §12.55 chain-identity gate: INDEXER_CHAIN_ID=4663 below is DELIBERATELY left without
-  # INDEXER_ALLOW_FORK_4663 — the registry's 4663 entry is still the mainnet-FORK pipeline
-  # artifact, so loadConfig REFUSES to boot this indexer (the ruling forbids 4663 outside a
-  # LOCAL fork stack until a real deploy replaces the entry). That refusal is this stack's
-  # second fail-closed gate; never set the fork opt-in here. ──
+  # §12.55 chain-identity gate: INDEXER_CHAIN_ID is a SEAM (${MAINNET_INDEXER_CHAIN_ID:-4663})
+  # whose default is the Phase-B value. INTERIM: root .env sets 46630, which the registry gate
+  # resolves against the REAL testnet entry and asserts against the live RPC — honest, nothing
+  # bypassed. The 4663 default remains DELIBERATELY without INDEXER_ALLOW_FORK_4663: the
+  # registry's 4663 entry is still the mainnet-FORK pipeline artifact, so loadConfig REFUSES
+  # to boot on 4663 (the ruling forbids 4663 outside a LOCAL fork stack until a real deploy
+  # replaces the entry). Never set the fork opt-in here. ──
   indexer:
     <<: *dev-base
     command:
@@ -298,11 +322,11 @@ services:
         set -e
         if [ ! -f tools/localstack/out/mainnet.env ]; then
           echo "FATAL: tools/localstack/out/mainnet.env not found." >&2
-          echo "  There is NO real mainnet deployment yet (Gate G-A governs; spec §14). This stack is" >&2
-          echo "  STAGED for Phase B and fails closed by design: contract addresses + START_BLOCK come" >&2
-          echo "  only from the real Phase-B deploy artifact (contracts/deployments/4663.json replacing" >&2
-          echo "  the fork artifact), emitted to tools/localstack/out/mainnet.env with the same keys as" >&2
-          echo "  testnet.env. See docs/runbooks/docker.md 'Mainnet stack'." >&2
+          echo "  INTERIM state (see file header STATUS): recreate it as a loudly-marked copy of the" >&2
+          echo "  46630 testnet artifact set (tools/localstack/out/testnet.env keys). At Phase B it is" >&2
+          echo "  emitted from the real 4663 deploy artifact (contracts/deployments/4663.json replacing" >&2
+          echo "  the fork artifact; Gate G-A governs, spec §14). Same keys as testnet.env. See" >&2
+          echo "  docs/runbooks/docker.md 'Mainnet stack'." >&2
           exit 1
         fi
         set -a; . ./tools/localstack/out/mainnet.env; set +a
@@ -316,8 +340,9 @@ services:
         required: false
     environment:
       <<: *dev-env
-      # §12.55: explicit selection; NO INDEXER_ALLOW_FORK_4663 here (see service comment).
-      INDEXER_CHAIN_ID: "4663"
+      # §12.55: explicit selection via the seam above; NO INDEXER_ALLOW_FORK_4663 here
+      # (see service comment). Default 4663 = Phase-B value; INTERIM .env sets 46630.
+      INDEXER_CHAIN_ID: ${MAINNET_INDEXER_CHAIN_ID:-4663}
       INDEXER_RPC_HTTP: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/runbooks/docker.md 'Mainnet stack'.}
       # OPTIONAL (see header): empty ⇒ apps/indexer/src/config.ts maps INDEXER_RPC_WS
       # `|| undefined` ⇒ Ponder falls back to HTTP polling. Alchemy wss when a key exists;
@@ -351,18 +376,31 @@ services:
       start_period: 90s
     restart: "no"
 
-  # ── web — Next.js 16. MAINNET deltas: MOCK_DATA hard "false", browser RPC → real mainnet. ──
+  # ── web — Next.js 16. MAINNET deltas: MOCK_DATA hard "false", browser RPC from env. ──
   web:
     <<: *dev-base
     command: ["pnpm", "--filter", "@robbed/web", "exec", "next", "dev", "-H", "0.0.0.0"]
     environment:
       <<: *dev-env
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-4201}
+      # §12.55 chain-identity pattern applied to the web (mirror of the testnet stack): the
+      # env var SELECTS the target chain, the shared deployment registry DEFINES it (apps/web
+      # env.ts throws on a non-registry id). ONE source of truth with chaincheck: the id the
+      # browser advertises to wallets is exactly the id chaincheck asserted the RPC serves
+      # (INTERIM 46630; 4663 at Phase B — flips with root .env, no compose edit).
+      NEXT_PUBLIC_CHAIN_ID: ${MAINNET_CHAIN_ID:?MAINNET_CHAIN_ID is required — asserted live by chaincheck and advertised as NEXT_PUBLIC_CHAIN_ID (INTERIM 46630; 4663 at Phase B). See docs/runbooks/docker.md 'Mainnet stack'.}
+      # Public-origin overrides (Cloudflare Tunnel: robbed.fun → web, api.robbed.fun → api
+      # with /ws → ws; see the cloudflared service below): browser-visible URLs must be
+      # reachable from EXTERNAL browsers, so the MAINNET_PUBLIC_* env (root .env) overrides
+      # the host-mapped localhost defaults. The public URLs also work for local browsing;
+      # unset ⇒ localhost defaults, and port re-bases still flow via the nested ${*_PORT}.
+      # R2 stays on the localhost default until minio gets a tunnel hostname or real R2
+      # (same known limitation as the testnet stack — docker.md 'Public exposure').
+      NEXT_PUBLIC_API_BASE_URL: ${MAINNET_PUBLIC_API_BASE_URL:-http://localhost:${API_PORT:-4201}}
       # MIRROR of the split-horizon API base: SSR (in-container) uses the service-DNS
-      # api:3001; the browser keeps the host-mapped NEXT_PUBLIC_API_BASE_URL.
+      # api:3001; the browser keeps the public/host-mapped NEXT_PUBLIC_API_BASE_URL.
       API_BASE_URL_INTERNAL: http://api:3001
-      NEXT_PUBLIC_WS_URL: ws://localhost:${WS_PORT:-4202}
-      NEXT_PUBLIC_R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4290}/${R2_BUCKET:-robbed-assets}
+      NEXT_PUBLIC_WS_URL: ${MAINNET_PUBLIC_WS_URL:-ws://localhost:${WS_PORT:-4202}}
+      NEXT_PUBLIC_R2_PUBLIC_BASE_URL: ${MAINNET_PUBLIC_R2_BASE_URL:-http://localhost:${MINIO_PORT:-4290}/${R2_BUCKET:-robbed-assets}}
       NEXT_PUBLIC_RPC_HTTP: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/runbooks/docker.md 'Mainnet stack'.}
       # OPTIONAL (see header): empty tolerated by the web env layer (apps/web/src/shared/lib/
       # env.ts `rpcWs: … ?? ""`) — set the Alchemy wss when a key exists.
@@ -391,6 +429,39 @@ services:
       timeout: 10s
       retries: 10
       start_period: 60s
+
+  # ── MAINNET: cloudflared — Cloudflare Tunnel connector AS A COMPOSE SERVICE ──
+  # MIRROR of the testnet cloudflared service (anti-drift) with the robbed-mainnet tunnel:
+  # publishes robbed.fun / api.robbed.fun (+/ws) from INSIDE the stack network, so it
+  # starts/stops with the stack (supersedes the host systemd user unit
+  # cloudflared-robbed-mainnet.service). Ingress lives in-repo (NO secrets — the tunnel
+  # UUID is routing metadata): tools/localstack/cloudflared/mainnet.yml, targeting
+  # compose-internal service DNS (web:3000 / api:3001 / ws:3002 — never localhost, which
+  # inside this container is the connector itself). Run CREDENTIALS stay on the host and
+  # are bind-mounted read-only — never committed (docs/runbooks/docker.md "Public exposure").
+  # Multiple connectors per tunnel are supported, so overlap with the (now decommissioned)
+  # host unit during migration is safe. The ingress is chain-agnostic: the Phase-B swap
+  # (header checklist) does not touch this service.
+  cloudflared:
+    # Pinned current stable (Docker Hub, published 2026-07-09; verified 2026-07-12).
+    image: cloudflare/cloudflared:2026.7.1
+    # Image ENTRYPOINT is ["cloudflared","--no-autoupdate"]; compose shell-lexes this
+    # string into exec args (distroless image — there is no shell to invoke).
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    # The image's default user is distroless nonroot (65532), which cannot read the
+    # 0600/0400 host credentials owned by the login user — run as that user instead.
+    user: "${CLOUDFLARED_UID:-1000}:${CLOUDFLARED_GID:-1000}"
+    volumes:
+      - ./tools/localstack/cloudflared/mainnet.yml:/etc/cloudflared/config.yml:ro
+      - ${CLOUDFLARED_DIR:-~/.cloudflared}/c80870d9-6ce5-40b6-a0d4-3e8e19b537b5.json:/etc/cloudflared/creds.json:ro
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      ws:
+        condition: service_healthy
+    restart: unless-stopped
 
 # Same volume KEYS as the other stacks, but the `name: robbed-mainnet` project prefix makes them
 # physically distinct (robbed-mainnet_robbed_pgdata vs robbed_/robbed-testnet_…) — mainnet state

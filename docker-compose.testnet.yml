@@ -414,6 +414,37 @@ services:
       retries: 10
       start_period: 60s
 
+  # ── TESTNET: cloudflared — Cloudflare Tunnel connector AS A COMPOSE SERVICE ──
+  # Publishes testnet.robbed.fun / api.testnet.robbed.fun (+/ws) from INSIDE the stack
+  # network, so it starts/stops with the stack (supersedes the host systemd user unit
+  # cloudflared-robbed-testnet.service). Ingress lives in-repo (NO secrets — the tunnel
+  # UUID is routing metadata): tools/localstack/cloudflared/testnet.yml, targeting
+  # compose-internal service DNS (web:3000 / api:3001 / ws:3002 — never localhost, which
+  # inside this container is the connector itself). Run CREDENTIALS stay on the host and
+  # are bind-mounted read-only — never committed (docs/runbooks/docker.md "Public exposure").
+  # Multiple connectors per tunnel are supported, so overlap with the (now decommissioned)
+  # host unit during migration is safe.
+  cloudflared:
+    # Pinned current stable (Docker Hub, published 2026-07-09; verified 2026-07-12).
+    image: cloudflare/cloudflared:2026.7.1
+    # Image ENTRYPOINT is ["cloudflared","--no-autoupdate"]; compose shell-lexes this
+    # string into exec args (distroless image — there is no shell to invoke).
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    # The image's default user is distroless nonroot (65532), which cannot read the
+    # 0600/0400 host credentials owned by the login user — run as that user instead.
+    user: "${CLOUDFLARED_UID:-1000}:${CLOUDFLARED_GID:-1000}"
+    volumes:
+      - ./tools/localstack/cloudflared/testnet.yml:/etc/cloudflared/config.yml:ro
+      - ${CLOUDFLARED_DIR:-~/.cloudflared}/15ec4e57-6998-4da2-8a5b-ca45c10eecba.json:/etc/cloudflared/creds.json:ro
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      ws:
+        condition: service_healthy
+    restart: unless-stopped
+
 # Same volume KEYS as docker-compose.yml, but the `name: robbed-testnet` project prefix makes them
 # physically distinct (robbed-testnet_robbed_pgdata vs robbed_robbed_pgdata) — testnet backfill
 # state never mixes with the local fork's.

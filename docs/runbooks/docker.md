@@ -268,10 +268,37 @@ Everything else (`POSTGRES_*`, `MINIO_*`, `R2_BUCKET`, `NEXT_PUBLIC_WALLETCONNEC
 defaults are re-based to the 41XX block (table above). `web` runs with
 `NEXT_PUBLIC_MOCK_DATA=false` hardcoded — this stack exists to exercise real testnet data.
 
-### Public exposure (Cloudflare Tunnel) — browser-visible URL overrides
+### Public exposure (Cloudflare Tunnel) — compose-managed connector + browser-visible URL overrides
 
-`testnet.robbed.fun` → `:4100` and `api.testnet.robbed.fun` → `:4101` (with `/ws` → `:4102`) are
-published via Cloudflare Tunnel. External visitors' browsers cannot reach `http://localhost:4101`,
+`testnet.robbed.fun` → `web`, `api.testnet.robbed.fun` → `api` (with `/ws` → `ws`) are published
+via Cloudflare Tunnel `robbed_testnet` (UUID `15ec4e57-6998-4da2-8a5b-ca45c10eecba`) by the
+**`cloudflared` compose service** inside `docker-compose.testnet.yml` — the connector starts and
+stops with the stack (2026-07-12; it supersedes the host systemd user units
+`cloudflared-robbed-testnet.service` / `cloudflared-robbed-mainnet.service`, now stopped +
+disabled — re-enabling them is harmless overlap, multiple connectors per tunnel are supported,
+but the compose services are canonical). How it is wired:
+
+- **Ingress config is committed in-repo** (no secrets — a tunnel UUID is routing metadata):
+  `tools/localstack/cloudflared/testnet.yml` (+ `mainnet.yml` for the mainnet stack), mounted
+  read-only at `/etc/cloudflared/config.yml`. Targets are **compose-internal service DNS**
+  (`web:3000` / `api:3001` / `ws:3002`) — the connector joins the stack network, so `localhost`
+  there would be the connector container itself, never the stack.
+- **Run credentials NEVER enter the repo**: compose bind-mounts
+  `${CLOUDFLARED_DIR:-~/.cloudflared}/<tunnel-uuid>.json` read-only to
+  `/etc/cloudflared/creds.json`. Set `CLOUDFLARED_DIR` if the credentials live elsewhere. The
+  service runs as `user: "${CLOUDFLARED_UID:-1000}:${CLOUDFLARED_GID:-1000}"` because the image's
+  distroless nonroot user (65532) cannot read the 0600/0400 host credential files.
+- Image pinned: `cloudflare/cloudflared:2026.7.1` (current stable at 2026-07-12);
+  `restart: unless-stopped`, `depends_on` web/api/ws healthy. Verify with
+  `docker logs <stack>-cloudflared-1` — expect 4 × "Registered tunnel connection" and
+  `Settings: map[config:/etc/cloudflared/config.yml …]`.
+- **Known edge limitation (zone-owner action, not a connector issue):** `api.testnet.robbed.fun`
+  is a *second-level* subdomain, outside Universal SSL's `robbed.fun`/`*.robbed.fun` coverage —
+  the edge answers TLS with handshake-failure (alert 40) until an Advanced Certificate /
+  Total TLS cert covering `*.testnet.robbed.fun` exists. Routing itself is proven (edge :80 →
+  tunnel → api returns 200).
+
+External visitors' browsers cannot reach `http://localhost:4101`,
 so the web service's three browser-visible URLs are override-able with localhost defaults
 (root `.env` carries the live values; the public URLs also work for local browsing):
 
@@ -318,27 +345,45 @@ Phase-B deploy replaces the entry.
 Also note: minio still stands in for R2 here; verification against **real R2** is the T-5 staging
 deploy's concern, not this compose file's.
 
-## Mainnet stack (`docker-compose.mainnet.yml`) — STAGED for Phase B, fails closed by design
+## Mainnet stack (`docker-compose.mainnet.yml`) — RUNNING in the INTERIM testnet-values state
 
 Same pattern as the testnet stack (project `robbed-mainnet`, own volumes, `chaincheck` one-shot,
-no anvil/deploychain), pointed at **real Robinhood Chain mainnet (4663)**. Env:
-`MAINNET_RPC_URL` (required, `:?` — official `https://rpc.mainnet.chain.robinhood.com`),
-`MAINNET_CHAIN_ID` (required — 4663, asserted live by `chaincheck`), `MAINNET_RPC_WS_URL`
-(optional, `:-` — Alchemy wss when a key exists; HTTP-polling fallback). Scripts:
+no anvil/deploychain). Env seams: `MAINNET_RPC_URL` (required, `:?`), `MAINNET_CHAIN_ID`
+(required — asserted live by `chaincheck` **and** advertised as `NEXT_PUBLIC_CHAIN_ID`, one
+source of truth), `MAINNET_INDEXER_CHAIN_ID` (optional — indexer §12.55 selection, default 4663),
+`MAINNET_RPC_WS_URL` (optional, `:-` — Alchemy wss when a key exists; HTTP-polling fallback),
+`MAINNET_PUBLIC_API_BASE_URL` / `MAINNET_PUBLIC_WS_URL` / `MAINNET_PUBLIC_R2_BASE_URL`
+(browser-visible URL overrides, same seam as the testnet stack). Scripts:
 `dev:mainnet` / `:d` / `:down` / `:reset` / `:logs` / `:ps`.
 
-**There is no real mainnet deployment (Gate G-A governs), so the stack fails closed twice:**
+**⚠ INTERIM (2026-07-12): `robbed.fun` must be alive before a real 4663 deploy exists, so this
+stack currently runs with TESTNET (46630) values** ("later we will replace testnet by mainnet"):
+root `.env` sets `MAINNET_RPC_URL=https://rpc.testnet.chain.robinhood.com`,
+`MAINNET_CHAIN_ID=46630`, `MAINNET_INDEXER_CHAIN_ID=46630`, and
+`tools/localstack/out/mainnet.env` is a loudly-marked copy of the 46630 artifact set
+(`testnet.env` keys, START_BLOCK 89648621). **§12.55 stays honest — nothing is bypassed:**
+`chaincheck` asserts the live RPC serves the declared 46630, the indexer's chain-identity gate
+resolves 46630 against the registry's real testnet entry, and `INDEXER_ALLOW_FORK_4663` is never
+set (the 4663 default remains refused until a real deploy replaces the fork artifact — that
+refusal is exactly why the interim runs on 46630). The DB backfills 46630 from 89648621 as a
+**sibling** of the testnet stack's indexer with a physically distinct database
+(`robbed-mainnet_*` volumes).
 
-1. `api`/`indexer` refuse to start without `tools/localstack/out/mainnet.env` — emitted only by
-   a real future Phase-B deploy (the T-3 equivalent), same contract as testnet.env pre-T-3.
-2. §12.55: the registry's `4663` entry is a mainnet-**fork** artifact, so the indexer's
-   chain-identity gate refuses `INDEXER_CHAIN_ID=4663` without `INDEXER_ALLOW_FORK_4663=1` —
-   which this file deliberately never sets (only the local fork stack does).
+**Public exposure:** the `cloudflared` compose service publishes `robbed.fun` → `web`,
+`api.robbed.fun` → `api` (with `/ws` → `ws`) over tunnel `robbed-mainnet`
+(UUID `c80870d9-6ce5-40b6-a0d4-3e8e19b537b5`) — same wiring as the testnet stack (see "Public
+exposure" above: in-repo ingress `tools/localstack/cloudflared/mainnet.yml`, host-mounted
+credentials, `CLOUDFLARED_DIR`/`CLOUDFLARED_UID` seams). The ingress is chain-agnostic and does
+not change at the Phase-B swap.
 
-It comes alive when a real 4663 deploy lands `contracts/deployments/4663.json` (replacing the
-fork artifact; registry re-codegen'd) + `mainnet.env`, and the §12.55 robbed-contracts follow-up
-replaces the interim fork opt-in with a registry-mode assertion. This compose file is the local
-staging shape only — the real production deploy is the P-3 images on Komodo (`prod-images.md`).
+**Phase-B swap (replace testnet by mainnet):** follow the "PHASE-B SWAP CHECKLIST" in the
+`docker-compose.mainnet.yml` header — real 4663 deploy lands `contracts/deployments/4663.json`
+(registry re-codegen'd; Gate G-A governs), regenerate `mainnet.env` from it, flip root `.env`
+(`MAINNET_RPC_URL` → official mainnet, `MAINNET_CHAIN_ID=4663`, delete
+`MAINNET_INDEXER_CHAIN_ID`), then `down -v` (the DB holds 46630 backfill state) + `up -d`. The
+§12.55 robbed-contracts follow-up still replaces the fork opt-in with a registry-mode assertion.
+This compose file is the local staging shape only — the real production deploy is the P-3 images
+on Komodo (`prod-images.md`).
 
 Host ports — **42XX block** (dev 40XX/44XX, testnet 41XX; all three stacks can run at once):
 
