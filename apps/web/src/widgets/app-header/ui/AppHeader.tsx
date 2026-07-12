@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Suspense } from "react";
 
 import { WalletConnectButton } from "@/features/connect-wallet";
-import { SearchBox } from "@/features/search-tokens";
+import { SearchBox, UrlSeededSearchBox } from "@/features/search-tokens";
 import { Button, Wordmark } from "@/shared/ui";
 import { cn } from "@/shared/lib/utils";
 
@@ -62,9 +63,15 @@ export function AppHeader() {
         </nav>
 
         {/* Mockup search: max-width 340px, 12px text (line 181). The text-sm
-            override is per-instance — the kit Input default (13px) is untouched. */}
+            override is per-instance — the kit Input default (13px) is untouched.
+            URL-seeded (`?q=` creator deep link, DISC-4); the useSearchParams
+            reader MUST sit under Suspense on this statically-prerendered route
+            (Next 16 docs, see UrlSeededSearchBox) — the fallback is the same box
+            un-seeded, so prerendered HTML stays visually identical. */}
         <div className="ml-auto hidden w-full max-w-[340px] md:block">
-          <SearchBox className="sm:max-w-none" inputClassName="text-sm" />
+          <Suspense fallback={<SearchBox className="sm:max-w-none" inputClassName="text-sm" />}>
+            <UrlSeededSearchBox className="sm:max-w-none" inputClassName="text-sm" />
+          </Suspense>
         </div>
 
         <Button
@@ -87,7 +94,9 @@ export function AppHeader() {
 
       {/* Mobile second row: full-width search (nav + CREATE live in MobileNav). */}
       <div className="border-t border-border-soft px-4 py-2 md:hidden">
-        <SearchBox />
+        <Suspense fallback={<SearchBox />}>
+          <UrlSeededSearchBox />
+        </Suspense>
       </div>
     </header>
   );

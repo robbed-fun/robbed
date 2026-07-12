@@ -64,13 +64,14 @@ apps/web/
     │   ├── create/               //   ui/CreateView (renamed from views/launch — ROBBED_ redesign)
     │   └── portfolio/            //   ui/PortfolioView — Phase-F SHELL; Portfolio page agent fills it
     ├── widgets/                  // large self-contained page regions; each = ui/ + optional model/ + index.ts
-    │   ├── app-header/           //   ROBBED_ header (wordmark·nav·search·+CREATE·wallet), mobile-first collapse
+    │   ├── app-header/           //   ROBBED_ header (wordmark·nav·search·+CREATE·wallet), mobile-first collapse;
+    │   │                         //     search = UrlSeededSearchBox under Suspense (?q= creator deep link)
     │   ├── mobile-nav/           //   bottom nav < md (discover · portfolio · + create)
-    │   ├── site-header/          //   LEGACY — superseded by app-header; kept additively until Phase P cleanup
-    │   ├── token-grid/           //   ui/TokenGrid, ui/TokenGridSkeleton, model/live.ts (WS→cache patch, TokensPage)
-    │   ├── king-of-the-hill-hero/
-    │   ├── launch-ticker/
-    │   ├── price-chart/ · trade-widget/ · trade-feed/ · trust-panel/ · holder-table/ · token-og/
+    │   ├── trending-carousel/    //   §12.50(f) Discover: server-rendered CSS marquee of API-ranked cards
+    │   ├── event-tape/           //   §12.50(f) Discover: seeded LAUNCH snapshot + live WS rows, tab filters
+    │   │                         //     (RETIRED with §12.50(f): token-grid/, king-of-the-hill-hero/,
+    │   │                         //      launch-ticker/, site-header/; token-og/ moved with OG → API, §6)
+    │   ├── price-chart/ · trade-widget/ · trade-feed/ · trust-panel/ · holder-table/
     │   └── live-status-banner/
     ├── features/                 // user actions / interactions
     │   ├── search-tokens/        //   ui/SearchBox + search query logic
@@ -95,7 +96,7 @@ apps/web/tests/                   // Vitest units (outside the layer graph)
 apps/web/e2e/                     // Playwright specs (§8 of this doc)
 ```
 
-**Placement decision rule** (apply when unsure): business-agnostic → `shared`; a domain noun → `entity`; a user verb/action → `feature`; a page-region composition of several → `widget`; a whole screen → `view`. Notable calls made in the M3 restructure: the token sort/filter vocabulary lives in `entities/token/model` (a property of the token domain, consumed by both the grid widget and the Discover view); the grid's WS→cache patch (`TokensPage`, `patchTradePrice`) lives in `widgets/token-grid/model` (it patches the grid's paginated page shape, a widget concern); the optimistic trade reducer lives in `entities/trade/model` (the trade domain model); the base REST client stays in `shared/api` (business-agnostic typed client), so entities do not each shatter it into per-entity `api/` files unless a real need arises.
+**Placement decision rule** (apply when unsure): business-agnostic → `shared`; a domain noun → `entity`; a user verb/action → `feature`; a page-region composition of several → `widget`; a whole screen → `view`. Notable calls made in the M3 restructure: the optimistic trade reducer lives in `entities/trade/model` (the trade domain model); the event-tape's pure event model (WS→row mapping, registry enrichment, tab filters) lives in `widgets/event-tape/model` (it shapes the tape's row buffer, a widget concern); the base REST client stays in `shared/api` (business-agnostic typed client), so entities do not each shatter it into per-entity `api/` files unless a real need arises. (The former `entities/token/model/params` sort/filter URL-state and `widgets/token-grid/model` were deleted with the §12.50(f) Discover deviation — sort/filter remain API capabilities with no web consumer.)
 
 **Path alias:** `@/*` → `src/*` (tsconfig `paths` + vitest `resolve.alias`). Root `app/` files reach into `src` via `@/…` too (e.g. `@/app/globals.css`, `@/views/discover`).
 
@@ -105,16 +106,15 @@ apps/web/e2e/                     // Playwright specs (§8 of this doc)
 
 | Route | Rendering | Client islands |
 |---|---|---|
-| `/` | Server component; initial grid/hero/ticker data fetched server-side from API (short revalidate, ~5s) so the page paints with content | `LaunchTicker` (WS), `TokenGrid` (TanStack Query + WS patch), `SearchBox`, sort/filter tabs (URL searchParams-driven) |
-| `/t/[address]` | **SSR required** (§5.2): server component fetches token summary + metadata for full HTML + OG/meta tags; must be meaningful without client JS (crawlers see name, ticker, mcap, progress, description) | `PriceChart`, `TradeWidget`, `TrustPanel` (live on-chain reads), `TradeFeed` (WS), `HolderTable` |
-| `/t/[address]/opengraph-image` | Route handler, satori → PNG. No client JS by construction | — |
+| `/` | Server component (§12.50(f) surface); TRENDING (`sort=volume24h`) + newest lists fetched server-side via **isolated fetches** (short revalidate, ~5s) so the page paints with content; `TrendingCarousel` is server-rendered (CSS-only marquee, no hydration) | `EventTape` (WS), header `UrlSeededSearchBox` (reads `?q=` under Suspense) |
+| `/t/[address]` | **SSR required** (§5.2): server component fetches token summary + metadata for full HTML + OG/meta tags (og:image → the API-served PNG, §6); must be meaningful without client JS (crawlers see name, ticker, mcap, progress, description) | `PriceChart`, `TradeWidget`, `TrustPanel` (live on-chain reads), `TradeFeed` (WS), `HolderTable` |
 | `/create` | (renamed from `/launch` — ROBBED_ redesign; `/launch` redirects) Server shell (economics copy is static-per-deploy except fee values, which are read live); form is a client component | `LaunchForm` (entire flow) |
 | `/portfolio` | NEW (ROBBED_ redesign; was §5.4 Phase-2). Phase-F shell; Phase-P page agent fills: address header, stat cells, HOLDINGS/ACTIVITY/CREATED tabs, holdings table — live data only (§2) | wallet-derived content (entire screen) |
 
 Rules:
 - Server components fetch via `lib/api.ts` with `fetch` caching (`revalidate`), never through TanStack Query.
 - Client components hydrate TanStack Query with `initialData` passed from the server component (no double-fetch flash).
-- Sorting/filtering/search state lives in URL `searchParams` — shareable, back-button correct, SSR-consistent.
+- URL state after §12.50(f): the Discover sort/filter `searchParams` surface is **retired** (sorts/filters remain API capabilities). URL state remains for the `?q=` search deep link (`UrlSeededSearchBox` reads it via `useSearchParams` under a Suspense boundary — Next 16 static-prerender rule) and `/portfolio?address=`.
 
 ### 2.3 Chain config — `lib/chain.ts` (§2, §9)
 
@@ -183,7 +183,9 @@ Degraded modes: WS down → banner "Live updates degraded — reconnecting", que
 
 ### 3.1 Discover `/` (§5.1)
 
-**Component tree**
+> **SUPERSEDED by §12.50(f) (D-1 user-ratified 2026-07-12; spec entry being recorded by robbed-architect):** the shipped Discover is the **TRENDING carousel + live event tape** — the KotH hero, token grid, 5 sorts / 3 filters, and Discover URL-state below are **retired from the page** (they remain API capabilities). Authoritative surface description: `src/views/discover/ui/DiscoverView.tsx` + `docs/user-flows.md` DISC-1..DISC-4 (amended 2026-07-12). The creator click now deep-links `/?q=<creator>` into the header search (DISC-4). The tree below is kept as the pre-redesign design record only.
+
+**Component tree** *(pre-§12.50(f) — superseded, see banner)*
 
 ```
 DiscoverPage (server)
@@ -407,21 +409,22 @@ Global mutations follow the same pattern: token creation (Launch stepper), gradu
 
 ---
 
-## 6. OG images & sharing (§5.2, §9)
+## 6. OG images & sharing (§5.2, §9) — **REWRITTEN 2026-07-12: OG rendering relocated web → API**
 
 The per-token OG image is **the viral share unit** — a link paste into X/Telegram/Discord must sell the token at a glance, with zero client JS.
 
-- **Route:** `app/t/[address]/opengraph-image.tsx` (Next.js file convention → auto `og:image`/`twitter:image` meta on the page). 1200×630 PNG via satori.
-- **Deploy target = Cloudflare Workers via OpenNext** (`@opennextjs/cloudflare`, spec §12.45 / deploy-komodo-cloudflare.md Part B; NOT Bun self-host, NOT Pages-edge). `apps/web/wrangler.jsonc` (`name: robbed`, `nodejs_compat` + `global_fetch_strictly_public`, `ASSETS` + R2 `ASSETS_BUCKET`/`NEXT_INC_CACHE_R2_BUCKET` → `robbed-assets`), `apps/web/open-next.config.ts` (`r2IncrementalCache`, ISR day one), `next.config.ts` dev hook `initOpenNextCloudflareForDev()`. Scripts: `build:cf` / `deploy:cf` / `preview:cf` / `cf-typegen`. All `NEXT_PUBLIC_*` are build-inlined → set as Workers **build vars** (root `.env.example`); the env reads (`shared/lib/env.ts`) tolerate missing vars during `next build` (placeholder, no hard-fail) but still fail loud at runtime.
-- **Runtime / raster backend (UPDATED — supersedes the earlier "self-host on Bun / raw resvg-js" note; web-7/M3-8 retargeted to workerd):** the OG raster is **Next's `ImageResponse` from `next/og`** (satori → **resvg-WASM**, bundled by Next). `workerd` **cannot load native N-API addons**, so the native `@resvg/resvg-js` backend was removed (dep + `serverExternalPackages` entry gone; `satori` direct dep also dropped — `next/og` bundles it). `ImageResponse` is the workerd-native path and also renders `image/png` 1200×630 in the Vitest Node env, so `tests/og.test.ts` still proves the M3-8 contract without booting Next. Fonts are **base64-embedded** (`shared/lib/og/fonts-data.ts`, generated) and decoded at module scope — Workers has no filesystem, so the previous `node:fs.readFileSync` of the `.ttf` files could not run there. `shared/lib/og/render.ts` keeps the `renderOgPng(element, { fonts })` signature so the card layout + tests are unchanged. Verified: `build:cf` produces `.open-next/worker.js` with no `.node` addon; local `wrangler dev` boots the worker on workerd (both R2 bindings resolve, static route 200).
-- **Content (spec-exact, §5.2):** chart snapshot + mcap + graduation progress —
-  - token image (from R2 CDN), name, ticker;
-  - **price sparkline/mini-candles** rendered as inline SVG paths from `GET /v1/tokens/:address/candles?interval=15m&from=<now−12h>&to=<now>` (≈ 48 buckets; the candles endpoint takes `from`/`to`, **not** `limit` — api.md §3.4; the OG route computes the window from the current time). Satori renders SVG; no canvas;
-  - **mcap** in ETH (USD secondary only if the ETH/USD endpoint responds — with source label; a fetch failure degrades to ETH-only, never a stale constant);
-  - **graduation progress bar** + % (or "Graduated → Uniswap V3" band);
-  - brand mark + `soft-confirmed trading` tag line (AMM framing, §1).
-- **Data path:** server-side fetch from the API (token summary + candles) with `revalidate: 60`; response headers `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`. Unknown token → 404. Fonts loaded once at module scope (Inter, weights 400/700; base64-embedded per the workerd note above).
+**Where the PNG comes from (normative):** the raster is rendered by the **API**, not the web app — `GET {API_ORIGIN}/v1/og/{address}.png` (native `satori` + `@resvg/resvg-js` on Bun, R2-cached at `og/{address}/{version}.png`; contract + card content spec live in `docs/services/api.md` §3, landed in commit `9528121`). Rationale: the web ships as a Cloudflare Worker via OpenNext (spec §12.45), and bundling `@vercel/og`/resvg-WASM blew the Worker's 3 MiB Free size limit, while `workerd` cannot load the native resvg N-API addon at all. The API runs on Bun/Komodo with neither constraint. Earlier §6 revisions (web `opengraph-image.tsx` route → `next/og` `ImageResponse` on workerd) are **superseded**; the web renders no OG raster and carries no satori/resvg/`next/og` dependency.
+
+**What web still owns (normative for `apps/web`):**
+
+- **The metadata pointer** — `src/views/token-detail/model/metadata.ts` `generateTokenMetadata(address)`, called from `app/t/[address]/page.tsx` `generateMetadata`:
+  - `openGraph.images` + `twitter.images` (card `summary_large_image`) point at the **absolute** API URL `${env.apiBaseUrl()}/v1/og/{lowercased-address}.png` — origin from env, never inline (§2). Absolute URLs mean no `metadataBase` is needed (Next `generateMetadata` docs, verified 2026-07-10).
+  - **The 1200×630 contract** — width/height are declared on the OG image entry and must match the API's raster contract (api.md: `image/png` 1200×630).
+  - Title/description are produced server-side from the indexed token summary; unknown token degrades to a not-found title (no throw), transient API failure degrades to the bare brand title.
+- **The test** — `tests/token-detail-og.test.ts` proves: textual OG/Twitter metadata is SSR-produced; the image URL is absolute, API-origin, lowercased-address, `1200×630`; a 404 degrades without throwing. The `javaScriptEnabled:false` DOM-level assertion (OG meta present with no client JS) lives in the Playwright TD-12 scenario.
 - **SSR of the page itself** (§5.2): Token Detail's server-rendered HTML includes title/description/OG tags and the meaningful above-the-fold content (name, ticker, mcap, progress, trust summary) so crawlers and JS-off clients get the pitch — the interactive chart/widget hydrate on top.
+
+**Deploy target (unchanged):** Cloudflare Workers via OpenNext (`@opennextjs/cloudflare`, spec §12.45 / deploy-komodo-cloudflare.md Part B; NOT Bun self-host, NOT Pages-edge). `apps/web/wrangler.jsonc` (`name: robbed`, `nodejs_compat` + `global_fetch_strictly_public`, `ASSETS` + R2 `ASSETS_BUCKET`/`NEXT_INC_CACHE_R2_BUCKET` → `robbed-assets`), `apps/web/open-next.config.ts` (`r2IncrementalCache`, ISR day one), `next.config.ts` dev hook `initOpenNextCloudflareForDev()`. Scripts: `build:cf` / `deploy:cf` / `preview:cf` / `cf-typegen`. All `NEXT_PUBLIC_*` are build-inlined → set as Workers **build vars** (root `.env.example`); the env reads (`shared/lib/env.ts`) tolerate missing vars during `next build` (placeholder, no hard-fail) but still fail loud at runtime.
 
 ---
 
@@ -479,7 +482,7 @@ Environment: anvil fork of Robinhood Chain (real WETH `0x0Bd7…AD73`, deployed 
 | **Sell while buys paused** | Set `pauseBuys` on fork Router → sell executes end-to-end; buy UI disabled (§6.5) |
 | **Graduation venue switch** | Drive curve past threshold → `graduate()` → status pill flips via WS, widget quotes via QuoterV2, chart series continuous across the boundary (no gap: assert candle timestamps contiguous), Trust panel rows 3/4 flip to post-grad states |
 | **Trust panel truth** | Reserves row equals direct `eth_call` values (not API); metadata-mismatch fixture renders the ⚠ verdict (§8.3) |
-| **OG image** | `GET /t/[address]/opengraph-image` → 200, `image/png`, dimension check + pixel-diff snapshot; page HTML contains OG meta tags without JS (`javaScriptEnabled: false` context) |
+| **OG metadata** | Page HTML contains OG meta tags without JS (`javaScriptEnabled: false` context), with `og:image` pointing at the **API-served** PNG (`{API_ORIGIN}/v1/og/{address}.png`, §6); the PNG's 200/`image/png`/1200×630 contract is asserted against that API route |
 | **WS reconnect** | Kill WS mid-session → degraded banner → restore → queries invalidated, feed gap closed |
 | **Stored-link XSS** (UM-5) | Token whose `links` include a `javascript:`/`data:` payload → Token Detail renders no executable href (https-only allowlist + `rel=noopener noreferrer`); no script executes |
 
@@ -517,7 +520,7 @@ Plus: LP sentence exists **only** as the single exported constant (grep for the 
    - **projectId:** `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` is a per-org secret obtainable only at cloud.walletconnect.com — the user must furnish it. Disposition (`src/shared/lib/wagmi.ts`): injected (browser-extension) wallets work in **dev with no projectId**; the WalletConnect group and the Robinhood Wallet entry are **omitted from the wallet list until the id is set** (never a broken connector). `.env.example` carries the `web-6 NEEDS-USER` note.
    - **Robinhood Wallet connector:** docs-first finding — RainbowKit 2.2.11 ships **no `robinhoodWallet`** export (verified: no entry in `walletConnectors/`; GitHub code search `robinhood repo:rainbow-me/rainbowkit` → 0 hits). The `robinhoodWallet` in web.md §2.4 was an assumed export. Interim (safest-correct, `src/shared/lib/wallets/robinhoodWallet.ts`): a **custom RainbowKit wallet wrapping the shared WalletConnect connector** via the documented `getWalletConnectConnector` (web.md §2.4: "WalletConnect-based under the hood"). It is **UNVERIFIED on a real Robinhood Wallet on chain 4663** — no on-device / deep-link / WC-metadata test, and it only appears when a projectId is present. **NEEDS-USER:** a real Robinhood Wallet device connection test on 4663 + official WC metadata + brand icon (§13 brand pending). Flagged to robbed-architect (§13).
 7. **Runtime verifications at M3 start** — **RESOLVED (both legs).**
-   - **`next/og`/satori under Bun self-hosting:** RESOLVED — M3-8 does **not** use `next/og`. The OG route (`app/t/[address]/opengraph-image.tsx`) is a metadata Route Handler that calls **raw `satori` + `@resvg/resvg-js`** (`src/widgets/token-og` → `src/shared/lib/og/render.ts`), so there is no dependency on `next/og`'s runtime behavior under Bun. Proven by `tests/og.test.ts` (returns `image/png` 1200×630). No `ImageResponse`/edge assumption anywhere.
+   - **OG raster runtime (web-7):** **RESOLVED — SUPERSEDED (2026-07-12).** The question ("`next/og`/satori under Bun self-hosting", later retargeted to workerd/`ImageResponse`) is moot: OG rendering was **relocated to the API** (`GET /v1/og/{address}.png`, native satori + resvg on Bun, R2-cached — commit `9528121`; see §6). The web renders no OG raster, carries no satori/resvg/`next/og` dependency, and only points `og:image` at the absolute API URL (`src/views/token-detail/model/metadata.ts`, proven by `tests/token-detail-og.test.ts`).
    - **Multicall3 on 4663:** **UNCONFIRMED** — canonical `0xcA11…` deployment on 4663 is not verified. Disposition: `src/shared/lib/chain.ts` **omits** `contracts.multicall3` (commented, with rationale); Trust-panel batch reads use **parallel `readContract` / `useReadContracts` without a multicall aggregator** (viem falls back to individual `eth_call`s when no `multicall3` is configured). No behavior depends on Multicall3; if/when it is confirmed on 4663, adding the address is a pure optimization. Flagged to robbed-architect (§13) as an infra confirmation item, not a blocker.
 10. **Large-value disclosure threshold** — §2.1 requires posted/finalized disclosure on "large-value displays"; ETH notional threshold needs an M0/architect number before M3 exit (config value, not a literal). Spec §13.
 11. **Pending §13 upstream:** V3 Factory/NPM/Quoter/SwapRouter addresses on 4663 **RESOLVED (spec §12.28)** — recorded in CLAUDE.md/constants; the post-grad widget + `addresses.ts` codegen consume them (codegen still comes from the M1 deploy pipeline, never hand-edited). Name/domain/brand (blocks OG brand mark and header); legal wrapper/ToS jurisdiction (blocks footer links); final curve constants + graduation tick (M0 — blocks economics display values, all read live regardless) remain open.

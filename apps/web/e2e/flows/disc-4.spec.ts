@@ -37,5 +37,20 @@ test(
       await box.press("Enter");
       await expect(page).toHaveURL(new RegExp(`/t/${token.token}`, "i"));
     });
+
+    await assertUi("creator deep link /?q=<creator> seeds the header search box", async () => {
+      // §12.50(f): the grid's creator filter is retired — a creator click deep
+      // links `/?q=<creator>` and the header SearchBox re-seeds from the URL.
+      const detail = await api.token(token.token);
+      const creator: string = detail?.creator?.address ?? detail?.creator;
+      expect(creator).toMatch(/^0x/);
+      await page.goto(`${routes.discover}?q=${creator}`);
+      const box = page.getByRole("searchbox").first();
+      await expect(box).toHaveValue(creator);
+      // The seeded query resolves over the creator column (pg_trgm) too.
+      await expect(
+        page.getByRole("button").filter({ hasText: new RegExp(token.ticker, "i") }).first(),
+      ).toBeVisible({ timeout: 10_000 });
+    });
   },
 );

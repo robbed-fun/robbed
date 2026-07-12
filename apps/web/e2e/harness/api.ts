@@ -18,8 +18,6 @@ async function get<T = unknown>(path: string): Promise<T> {
 export const api = {
   healthz: () => fetch(`${STACK.apiUrl}/v1/healthz`).then((r) => r.ok),
   tokens: (q = "") => get<{ tokens: any[]; nextCursor: string | null }>(`/v1/tokens${q}`),
-  // king-of-the-hill wraps the leader as `{ token }` (api.md §3.3) — unwrap it.
-  kingOfTheHill: async () => (await get<{ token: any }>(`/v1/tokens/king-of-the-hill`)).token,
   token: (address: string) => get<any>(`/v1/tokens/${address.toLowerCase()}`),
   // /v1/search returns `{ results }`; normalize to `{ tokens }` for the specs.
   search: async (q: string) => {
