@@ -36,7 +36,10 @@ test(
     });
 
     await assertUi("ticker entry appears at the head and links to detail", async () => {
-      const entry = page.getByRole("link", { name: new RegExp(token.ticker, "i") }).first();
+      // Tape entries expose the token NAME (twice) + creator in their accessible
+      // name — never the ticker symbol (verified DOM snapshot 2026-07-12). The
+      // seeded name is run-unique (nonce suffix), so match on it.
+      const entry = page.getByRole("link", { name: new RegExp(token.name, "i") }).first();
       await expect(entry).toBeVisible({ timeout: 15_000 });
       await entry.click();
       await expect(page).toHaveURL(new RegExp(`/t/${token.token}`, "i"));

@@ -28,6 +28,15 @@ export const CORS_HEADERS: Record<string, string> = {
 
 export const test = base.extend<{ stackReady: void }>({
   page: async ({ page }, use) => {
+    // NOTE on clocks: the app computes tx deadlines from wall time
+    // (`computeDeadline` = Date.now()+10m). Anvil warps push `block.timestamp`
+    // AHEAD of wall time, but a UI-driven trade only expires once that drift
+    // exceeds the 10-minute deadline; a full suite run drifts a few hundred
+    // seconds (well under 600s), so wall-based deadlines stay valid and we do NOT
+    // fake the page clock — `page.clock.install` breaks timer-driven UI (debounced
+    // search, the WS-driven live tape, optimistic silence timers). Fork-relative
+    // times that MUST track the chain (candle windows, a deliberately-past
+    // deadline) are computed with `forkNowSeconds()`/`forkDeadline()` directly.
     await page.route(`${STACK.apiUrl}/**`, async (route) => {
       if (route.request().method() === "OPTIONS") {
         await route.fulfill({ status: 204, headers: CORS_HEADERS });

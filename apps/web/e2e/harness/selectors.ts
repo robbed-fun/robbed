@@ -51,10 +51,13 @@ export const sel = {
   searchBox: (page: Page) => page.getByRole("searchbox").first(),
 } as const;
 
-/** Launch form fields — the form uses PLACEHOLDERS, not labels (verified DOM). */
+/** Launch form fields — the form uses PLACEHOLDERS, not labels (verified DOM).
+ * `exact: true` is load-bearing on the ticker: the default case-insensitive
+ * substring match makes "MILK" ALSO hit the name field ("Moonmilk"), so
+ * `.first()` would fill the NAME input and leave the ticker empty. */
 export const launch = {
-  name: (page: Page) => page.getByPlaceholder("Moonmilk").first(),
-  ticker: (page: Page) => page.getByPlaceholder("MILK").first(),
+  name: (page: Page) => page.getByPlaceholder("Moonmilk", { exact: true }).first(),
+  ticker: (page: Page) => page.getByPlaceholder("MILK", { exact: true }).first(),
   description: (page: Page) => page.getByPlaceholder(/what is this token about/i).first(),
   initialBuy: (page: Page) => page.getByLabel(/initial buy/i).first(),
   fileInput: (page: Page) => page.locator('input[type="file"]').first(),

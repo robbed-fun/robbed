@@ -4,7 +4,9 @@ import {
   assertOnChain,
   assertUi,
   connectAs,
+  copy,
   expect,
+  forkNowSeconds,
   loadDeployedAddresses,
   publicClient,
   routes,
@@ -24,7 +26,7 @@ test(
     const { router } = loadDeployedAddresses();
 
     await assertOnChain("a past deadline reverts on the deadline guard", async () => {
-      const pastDeadline = BigInt(Math.floor(Date.now() / 1000) - 1);
+      const pastDeadline = BigInt((await forkNowSeconds()) - 1); // fork clock, not wall
       await expect(
         publicClient.simulateContract({
           account: ROLES.trader.address,
@@ -43,9 +45,14 @@ test(
       await sel.buyTab(page).click();
       await sel.amountInput(page).fill("0.01");
       // The widget recomputes now+10m at submit; a normal submit must NOT fail on
-      // the deadline (proving no stale/expired deadline is ever shipped).
+      // the deadline (proving no stale/expired deadline is ever shipped). The
+      // positive signal is the soft-confirmed row; the negative is the widget's
+      // EXACT deadline-error copy ("Trade deadline expired — refresh the quote."),
+      // not a bare /deadline/ (the slippage row's static "· deadline 10m" always
+      // matches that).
       await sel.submitTrade(page).click();
-      await expect(page.getByText(/deadline|expired/i)).toHaveCount(0);
+      await expect(page.getByText(copy.softConfirmed).first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(/deadline expired/i)).toHaveCount(0);
     });
   },
 );

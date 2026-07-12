@@ -53,6 +53,11 @@ export function antiSniperWindowSeconds(): number {
   return Number(forkConstants().antiSniper.windowSeconds);
 }
 
+/** The single V3 fee tier (M0 notebook `v3.feeTier` — 1%; never hardcoded). */
+export function v3FeeTier(): number {
+  return Number(forkConstants().v3.feeTier);
+}
+
 /** A minimal valid PNG (1×1) for the API upload path (it re-encodes anyway). */
 const ONE_PX_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
@@ -71,12 +76,23 @@ export async function pinMetadata(fields: {
   ticker: string;
   description?: string;
 }): Promise<PinnedMetadata> {
-  // 1) image → POST /v1/uploads/image (multipart; API sniffs + re-encodes)
-  const form = new FormData();
-  form.append("image", new Blob([ONE_PX_PNG], { type: "image/png" }), "seed.png");
-  const upRes = await fetch(`${STACK.apiUrl}/v1/uploads/image`, { method: "POST", body: form });
-  const up = (await upRes.json()) as { data: { imageUrl: string; imageHash: string }; error: any };
-  if (up.error) throw new Error(`upload failed: ${up.error.code}`);
+  // 1) image → POST /v1/uploads/image (multipart; API sniffs + re-encodes).
+  // The route is rate-limited (uploads_m 3/min, uploads_h 10/h — api mw); a
+  // suite run does several real uploads, so back off and retry on
+  // `rate_limited` exactly like a well-behaved client (bounded, ~95s).
+  let up: { data: { imageUrl: string; imageHash: string }; error: any } | undefined;
+  for (let attempt = 0; ; attempt++) {
+    const form = new FormData();
+    form.append("image", new Blob([ONE_PX_PNG], { type: "image/png" }), "seed.png");
+    const upRes = await fetch(`${STACK.apiUrl}/v1/uploads/image`, { method: "POST", body: form });
+    up = (await upRes.json()) as { data: { imageUrl: string; imageHash: string }; error: any };
+    if (!up.error) break;
+    if (up.error.code === "rate_limited" && attempt < 4) {
+      await new Promise((r) => setTimeout(r, 22_000));
+      continue;
+    }
+    throw new Error(`upload failed: ${up.error.code}`);
+  }
 
   // 2) metadata → POST /v1/metadata (server canonicalizes + keccak)
   const body = {
@@ -194,13 +210,18 @@ export async function ensureBuysEnabled(): Promise<void> {
   }
 }
 
-/** Full happy fixture: local hash → createToken → wait until the indexer lists it. */
+/** Full happy fixture: local hash → createToken → wait until the indexer lists it.
+ * `pin: true` routes through the REAL API pin path (upload + POST /v1/metadata,
+ * rate-limited `uploads_h`) so the indexer's verifier can actually FETCH the
+ * JSON and materialize description/links — required by flows that assert
+ * metadata-sourced display (TD-11). Default stays the local (unfetchable) hash. */
 export async function seedToken(opts: {
   creator?: DevAccount;
   name: string;
   ticker: string;
   description?: string;
   initialBuyWei?: bigint;
+  pin?: boolean;
 }): Promise<SeededToken> {
   await ensureCreatesEnabled();
   await ensureBuysEnabled();
@@ -209,7 +230,9 @@ export async function seedToken(opts: {
   const tag = nonce();
   const ticker = `${opts.ticker.slice(0, 7)}${tag}`;
   const name = `${opts.name} ${tag}`;
-  const metadata = localMetadata({ name, ticker, description: opts.description });
+  const metadata = opts.pin
+    ? await pinMetadata({ name, ticker, description: opts.description })
+    : localMetadata({ name, ticker, description: opts.description });
   const addresses = loadDeployedAddresses();
   const created = await createTokenOnChain({
     creator: opts.creator,

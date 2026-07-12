@@ -11,11 +11,13 @@
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { UNISWAP_V3, WETH_ADDRESS } from "@robbed/shared";
 import {
   bondingCurveAbi,
   curveFactoryAbi,
   lpFeeVaultAbi,
   routerAbi,
+  swapRouter02Abi,
 } from "@robbed/shared/abi";
 import {
   http,
@@ -102,6 +104,22 @@ export function loadDeployedAddresses(): DeployedAddresses {
 
 // ── time-warp helpers (anti-sniper window + graduation) ──────────────────────
 
+/**
+ * The FORK clock, not the wall clock. Warps accumulate across specs/runs, so the
+ * fork's `block.timestamp` runs AHEAD of `Date.now()`; any deadline or query
+ * window computed from wall time silently under-covers the fork (candles missing,
+ * deadlines already expired). ALWAYS derive chain-relative times from here.
+ */
+export async function forkNowSeconds(): Promise<number> {
+  const block = await publicClient.getBlock();
+  return Number(block.timestamp);
+}
+
+/** Absolute tx deadline `secs` ahead of the FORK clock (never wall time). */
+export async function forkDeadline(secs = 600): Promise<bigint> {
+  return BigInt((await forkNowSeconds()) + secs);
+}
+
 /** Advance the fork clock by `seconds` and mine a block (viem anvil actions). */
 export async function warpTime(seconds: number): Promise<void> {
   await testClient.increaseTime({ seconds });
@@ -111,6 +129,26 @@ export async function warpTime(seconds: number): Promise<void> {
 /** Mine `n` blocks (default 1) — used to force inclusion / advance watermarks. */
 export async function mine(blocks = 1): Promise<void> {
   await testClient.mine({ blocks });
+}
+
+/**
+ * Toggle automine (viem `setAutomine`, anvil). With automine OFF, txs queue in
+ * the pool until an explicit `mine()`, letting a spec order two txs into ONE
+ * block (ERR-10: pause lands first, the user's buy broadcasts against the still
+ * -open state, then genuinely REVERTS when the block executes — a real reverted
+ * receipt through the app's full submit path, no receipt mocking).
+ */
+export async function setAutomine(on: boolean): Promise<void> {
+  await testClient.setAutomine(on);
+}
+
+/** Number of txs waiting in the pool (viem `getTxpoolContent`, anvil). */
+export async function pendingTxCount(): Promise<number> {
+  const pool = await testClient.getTxpoolContent();
+  return Object.values(pool.pending).reduce(
+    (n, byNonce) => n + Object.keys(byNonce).length,
+    0,
+  );
 }
 
 /** Snapshot / revert so specs can restore fork state (viem `snapshot`/`revert`). */
@@ -161,7 +199,7 @@ export async function createTokenOnChain(args: {
 }): Promise<CreatedToken> {
   const wallet = walletFor(args.creator ?? ROLES.creator);
   const { router } = loadDeployedAddresses();
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
+  const deadline = await forkDeadline(); // fork clock — wall time drifts behind warps
   const value = args.deployFeeWei + (args.initialBuyWei ?? 0n);
   const txHash = await wallet.writeContract({
     address: router,
@@ -197,7 +235,7 @@ export async function buyOnChain(args: {
 }): Promise<Hash> {
   const wallet = walletFor(args.buyer ?? ROLES.trader);
   const { router } = loadDeployedAddresses();
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
+  const deadline = await forkDeadline(); // fork clock — wall time drifts behind warps
   return wallet.writeContract({
     address: router,
     abi: routerAbi,
@@ -205,6 +243,40 @@ export async function buyOnChain(args: {
     args: [args.token, (args.buyer ?? ROLES.trader).address, 0n, deadline],
     value: args.ethWei,
     ...(args.nonce !== undefined ? { nonce: args.nonce } : {}),
+  });
+}
+
+/**
+ * POST-GRADUATION buy: a real Uniswap V3 exactInputSingle (ETH in via WETH9,
+ * SwapRouter02 wraps msg.value — Uniswap docs). `Router.buy` correctly reverts
+ * once a token graduates, so post-grad volume (COLLECT-1's fee source) must go
+ * through the V3 venue exactly like the product's own V3 engine. Addresses +
+ * ABI come from `@robbed/shared` (§12.28 registry, anti-drift rule); the fee
+ * tier comes from the M0 notebook via the caller — never hardcoded here.
+ */
+export async function v3BuyOnChain(args: {
+  buyer?: DevAccount;
+  token: Address;
+  ethWei: bigint;
+  feeTier: number;
+}): Promise<Hash> {
+  const wallet = walletFor(args.buyer ?? ROLES.trader);
+  return wallet.writeContract({
+    address: UNISWAP_V3.swapRouter02 as Address,
+    abi: swapRouter02Abi,
+    functionName: "exactInputSingle",
+    args: [
+      {
+        tokenIn: WETH_ADDRESS as Address,
+        tokenOut: args.token,
+        fee: args.feeTier,
+        recipient: (args.buyer ?? ROLES.trader).address,
+        amountIn: args.ethWei,
+        amountOutMinimum: 0n,
+        sqrtPriceLimitX96: 0n,
+      },
+    ],
+    value: args.ethWei,
   });
 }
 

@@ -76,3 +76,17 @@ export const ALL_ACCOUNTS = ANVIL_ACCOUNTS;
 
 /** Comma-joined address list for `NEXT_PUBLIC_E2E_ACCOUNTS` (web server env). */
 export const E2E_ACCOUNTS_ENV = ANVIL_ACCOUNTS.map((a) => a.address).join(",");
+
+/**
+ * Matcher for `page.routeWebSocket` — the app connects to `NEXT_PUBLIC_WS_URL`
+ * as an ORIGIN (`ws://host:port/`, no `/v1/ws` path — verified against
+ * `src/shared/lib/ws.tsx` + the container env, 2026-07-12), so path-based
+ * patterns never match. Match by host instead.
+ */
+export function isAppWsUrl(url: URL): boolean {
+  try {
+    return url.host === new URL(STACK.wsUrl).host;
+  } catch {
+    return false;
+  }
+}

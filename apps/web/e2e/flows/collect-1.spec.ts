@@ -5,7 +5,6 @@ import {
   api,
   assertIndexed,
   assertOnChain,
-  buyOnChain,
   collectOnChain,
   expect,
   graduateToken,
@@ -13,6 +12,8 @@ import {
   ROLES,
   seedToken,
   test,
+  v3BuyOnChain,
+  v3FeeTier,
   waitForIndexed,
 } from "../harness";
 
@@ -36,10 +37,17 @@ test(
     });
     const tokenId = graduated!.args.tokenId;
 
-    // Post-grad V3 volume so `collect` has fees to sweep (best-effort: the
-    // assertions below hold regardless of the swept amount).
-    const swap = await buyOnChain({ buyer: ROLES.trader2, token: token.token, ethWei: 5n * 10n ** 16n });
-    await publicClient.waitForTransactionReceipt({ hash: swap }).catch(() => null);
+    // Post-grad V3 volume so `collect` has fees to sweep. Router.buy correctly
+    // REVERTS once graduated (curve retired), so this must be a REAL Uniswap V3
+    // swap — SwapRouter02 exactInputSingle, exactly the product's post-grad
+    // venue. Fee tier comes from the M0 notebook (never hardcoded).
+    const swap = await v3BuyOnChain({
+      buyer: ROLES.trader2,
+      token: token.token,
+      ethWei: 5n * 10n ** 16n,
+      feeTier: v3FeeTier(),
+    });
+    await publicClient.waitForTransactionReceipt({ hash: swap });
 
     let collectHash: `0x${string}`;
     await assertOnChain("collect(tokenId) succeeds; principal stays locked", async () => {

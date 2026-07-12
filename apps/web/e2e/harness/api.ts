@@ -26,7 +26,13 @@ export const api = {
   },
   trades: (address: string, limit = 50) =>
     get<{ trades: any[] }>(`/v1/tokens/${address.toLowerCase()}/trades?limit=${limit}`),
-  tradeByTx: (txHash: string) => get<any>(`/v1/trades/${txHash.toLowerCase()}`),
+  // /v1/trades/:txHash returns `{ trades: [...] }` (one tx can carry several
+  // Trade logs — verified live 2026-07-12); normalize to the first trade so
+  // predicates can read a single record. Empty array → null (keeps polling).
+  tradeByTx: async (txHash: string) => {
+    const d = await get<{ trades: any[] }>(`/v1/trades/${txHash.toLowerCase()}`);
+    return d.trades?.[0] ?? null;
+  },
   candles: (address: string, interval: string, from: number, to: number) =>
     get<{ candles: any[] }>(
       `/v1/tokens/${address.toLowerCase()}/candles?interval=${interval}&from=${from}&to=${to}`,

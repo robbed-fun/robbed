@@ -3,6 +3,7 @@ import {
   assertIndexed,
   assertOnChain,
   assertUi,
+  copy,
   expect,
   graduateOnChain,
   publicClient,
@@ -40,8 +41,12 @@ test(
       );
     });
 
-    await assertUi("status pill flips to Graduated → Uniswap V3 without a reload", async () => {
-      await expect(page.getByText(/Graduated\s*→\s*Uniswap V3/i).first()).toBeVisible({
+    await assertUi("the venue switch appears live (no reload) — widget re-engines to V3", async () => {
+      // Shipped post-grad copy (verified DOM 2026-07-12): the status pill reads
+      // "GRADUATED → V3" and the trade widget re-engines to the §5.2 invariant
+      // "Trading on Uniswap V3". The catalog requires this flip WS-driven with no
+      // reload; assert on the trade widget's re-engine signal.
+      await expect(page.getByText(copy.tradingOnV3).first()).toBeVisible({
         timeout: 20_000,
       });
     });

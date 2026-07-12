@@ -37,7 +37,18 @@ flake. Playwright drives connect/switch through the in-app bridge `window.__ROBB
    ```
    NEXT_PUBLIC_E2E=true
    NEXT_PUBLIC_E2E_ACCOUNTS=0xf39Fd6…,0x709979…,0x3C44Cd…,0x90F79b…   # anvil accounts 0..3
+   # Fork contract addresses (addresses.ts E2E override) — WITHOUT these,
+   # requireAddress() throws and NO UI-driven tx can ever be sent (every
+   # TD/LAUNCH flow fails with "no deployment for CHAIN_ID=4663"). Values map
+   # 1:1 from tools/localstack/out/local.env (deploychain output):
+   NEXT_PUBLIC_E2E_ROUTER=$ROUTER_ADDRESS
+   NEXT_PUBLIC_E2E_CURVE_FACTORY=$CURVE_FACTORY_ADDRESS
+   NEXT_PUBLIC_E2E_LP_FEE_VAULT=$LP_FEE_VAULT_ADDRESS
+   NEXT_PUBLIC_E2E_MIGRATOR=$MIGRATOR_ADDRESS
+   NEXT_PUBLIC_E2E_TREASURY=$TREASURY_ADDRESS
    ```
+   (docker-compose.yml passes all of these through to the `web` service; export them
+   before `docker compose up -d web` / `bun run dev:stack`.)
 3. **Point the harness at the stack** via `E2E_*` env (defaults in `harness/config.ts`):
    | var | default (task ports) | docker-compose host ports |
    |---|---|---|

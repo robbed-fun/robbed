@@ -1,6 +1,7 @@
 import { routerAbi } from "@robbed/shared/abi";
 
 import {
+  forkDeadline,
   assertOnChain,
   assertUi,
   connectAs,
@@ -26,7 +27,7 @@ test(
     const { router } = loadDeployedAddresses();
 
     await assertOnChain("a buy above MAX_EARLY_BUY reverts inside the early window", async () => {
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
+      const deadline = await forkDeadline(); // fork clock, not wall
       // Far above the fork's maxEarlyBuyWei (~0.2 ETH) → cap revert.
       await expect(
         publicClient.simulateContract({
