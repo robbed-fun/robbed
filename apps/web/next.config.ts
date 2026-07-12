@@ -9,6 +9,20 @@ import type { NextConfig } from "next";
  */
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // DEV-ONLY: `next dev` (16.x) blocks cross-origin requests to dev assets/HMR
+  // ("Unauthorized"/403) unless the origin is allowlisted. The Cloudflare-Tunnel
+  // stacks (robbed.fun → mainnet :4200, testnet.robbed.fun → testnet :4100) serve
+  // `next dev` with Host = the tunnel hostname, so without this the client runtime
+  // never hydrates (chunks/HMR rejected). Top-level `allowedDevOrigins`, hostname
+  // strings, wildcard subdomains supported — nextjs.org/docs/app/api-reference/
+  // config/next-config-js/allowedDevOrigins (v16.2.10, verified 2026-07-12).
+  // Ignored by production builds — the P-3 prod images run `next build`/serve,
+  // never `next dev`, so this knob disappears there. Override/extend via
+  // NEXT_DEV_ALLOWED_ORIGINS (comma-separated hostnames) without a code edit.
+  allowedDevOrigins: (process.env.NEXT_DEV_ALLOWED_ORIGINS ?? "robbed.fun,*.robbed.fun")
+    .split(",")
+    .map((host) => host.trim())
+    .filter(Boolean),
   // Token images are served from the R2 public CDN; host comes from env so no
   // origin is ever hardcoded (§2). `next/image` remote allowlist is host-only.
   images: {
