@@ -1,0 +1,47 @@
+{
+  // TESTNET-TARGET Cloudflare Workers config — a PARALLEL deployment target
+  // for the testnet frontend build (chain 46630), served on workers.dev ONLY.
+  // testnet.robbed.fun stays on its Cloudflare Tunnel — NO routes / custom
+  // domains here, ever. Used via `pnpm|bun run deploy:cf:testnet`
+  // (opennextjs-cloudflare build|deploy --config wrangler.testnet.jsonc).
+  // Mirrors wrangler.jsonc except: name, workers_dev, testnet vars, and an
+  // isolated incremental-cache prefix.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "robbed-testnet",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-05-05",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  // Serve on <name>.<subdomain>.workers.dev — the ONLY URL for this target.
+  "workers_dev": true,
+  // Preserve dashboard-set vars on deploy (see wrangler.jsonc rationale).
+  "keep_vars": true,
+  "r2_buckets": [
+    // Same shared assets bucket as mainnet (read path only, §12.19).
+    { "binding": "ASSETS_BUCKET", "bucket_name": "robbed-assets" },
+    // ISR / `use cache` store — same bucket, but see NEXT_INC_CACHE_R2_PREFIX
+    // below: testnet cache entries live under their own prefix so the two
+    // workers never share cache keys.
+    { "binding": "NEXT_INC_CACHE_R2_BUCKET", "bucket_name": "robbed-assets" }
+  ],
+  // Runtime env for the SERVER side (NEXT_PUBLIC_* are ALSO inlined at build
+  // time from apps/web/.env.testnet — these runtime copies must match it).
+  "vars": {
+    "NEXT_PUBLIC_CHAIN_ID": "46630",
+    "NEXT_PUBLIC_RPC_HTTP": "https://rpc.testnet.chain.robinhood.com",
+    "NEXT_PUBLIC_API_BASE_URL": "https://api.testnet.robbed.fun",
+    "NEXT_PUBLIC_WS_URL": "wss://api.testnet.robbed.fun/ws",
+    "NEXT_PUBLIC_R2_PUBLIC_BASE_URL": "https://pub-1f7ef06884964a2f82e21cd86e1893b0.r2.dev",
+    // r2IncrementalCache prefix override (opennext.js.org/cloudflare/caching):
+    // isolates testnet ISR entries from mainnet's default `incremental-cache/`.
+    "NEXT_INC_CACHE_R2_PREFIX": "incremental-cache-testnet"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  }
+}

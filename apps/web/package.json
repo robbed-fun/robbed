@@ -15,6 +15,8 @@
     "e2e:coverage": "bun ../../scripts/e2e-coverage.ts",
     "build:cf": "opennextjs-cloudflare build",
     "deploy:cf": "opennextjs-cloudflare deploy",
+    "deploy:cf:mainnet": "bash -c 'set -a && . ./.env.mainnet && set +a && opennextjs-cloudflare build && opennextjs-cloudflare deploy'",
+    "deploy:cf:testnet": "bash -c 'set -a && . ./.env.testnet && set +a && opennextjs-cloudflare build --config wrangler.testnet.jsonc && opennextjs-cloudflare deploy --config wrangler.testnet.jsonc'",
     "preview:cf": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },

@@ -268,6 +268,26 @@ Everything else (`POSTGRES_*`, `MINIO_*`, `R2_BUCKET`, `NEXT_PUBLIC_WALLETCONNEC
 defaults are re-based to the 41XX block (table above). `web` runs with
 `NEXT_PUBLIC_MOCK_DATA=false` hardcoded — this stack exists to exercise real testnet data.
 
+### Public exposure (Cloudflare Tunnel) — browser-visible URL overrides
+
+`testnet.robbed.fun` → `:4100` and `api.testnet.robbed.fun` → `:4101` (with `/ws` → `:4102`) are
+published via Cloudflare Tunnel. External visitors' browsers cannot reach `http://localhost:4101`,
+so the web service's three browser-visible URLs are override-able with localhost defaults
+(root `.env` carries the live values; the public URLs also work for local browsing):
+
+| Override (root `.env`) | Wired to | Live value |
+|---|---|---|
+| `TESTNET_PUBLIC_API_BASE_URL` | `NEXT_PUBLIC_API_BASE_URL` | `https://api.testnet.robbed.fun` |
+| `TESTNET_PUBLIC_WS_URL` | `NEXT_PUBLIC_WS_URL` | `wss://api.testnet.robbed.fun/ws` |
+| `TESTNET_PUBLIC_R2_BASE_URL` | `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` | *(unset — see limitation)* |
+
+**Known limitation:** R2 stays on the `http://localhost:4190/robbed-assets` default, so
+**external visitors see broken images** (token logos/metadata assets). Fix options, either works:
+(a) add a tunnel hostname for minio (e.g. `assets.testnet.robbed.fun` → `:4190`) and set
+`TESTNET_PUBLIC_R2_BASE_URL` accordingly — note the API's `R2_PUBLIC_BASE_URL` (baked into stored
+metadata URLs) must move in lockstep; or (b) switch the stack to **real R2 + CDN** (the T-5
+production shape). Local browsing is unaffected either way.
+
 ### Bring-up
 
 ```bash
