@@ -12,7 +12,6 @@ import type { CandleInterval } from "@robbed/shared";
 export const qk = {
   tokens: (params?: Record<string, unknown>) =>
     params ? (["tokens", params] as const) : (["tokens"] as const),
-  kingOfTheHill: () => ["king-of-the-hill"] as const,
   token: (address: string) => ["token", address.toLowerCase()] as const,
   trades: (address: string) => ["trades", address.toLowerCase()] as const,
   txTrades: (txHash: string) => ["trades", "tx", txHash.toLowerCase()] as const,
@@ -32,7 +31,6 @@ export const qk = {
  */
 export const LIVE_QUERY_PREFIXES = [
   "tokens",
-  "king-of-the-hill",
   "token",
   "trades",
   "candles",

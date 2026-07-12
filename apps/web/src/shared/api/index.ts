@@ -9,7 +9,6 @@ import {
   confirmationsResponseSchema,
   ethUsdResponseSchema,
   holdersResponseSchema,
-  kingOfTheHillResponseSchema,
   metadataResponseSchema,
   searchResponseSchema,
   tokenDetailSchema,
@@ -126,9 +125,9 @@ export function getTokens(
   return apiGet(`/v1/tokens${q ? `?${q}` : ""}`, tokensResponseSchema, opts);
 }
 
-export function getKingOfTheHill(opts?: FetchOpts): Promise<{ token: TokenCard | null }> {
-  return apiGet(`/v1/tokens/king-of-the-hill`, kingOfTheHillResponseSchema, opts);
-}
+// NOTE (§12.50(f)): the king-of-the-hill client leg was removed with the
+// Discover deviation — the endpoint remains an API capability, but no web
+// surface consumes it (the KotH hero is retired).
 
 export function getToken(address: string, opts?: FetchOpts): Promise<TokenDetail> {
   return apiGet(`/v1/tokens/${address.toLowerCase()}`, tokenDetailSchema, opts);

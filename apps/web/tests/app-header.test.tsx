@@ -19,6 +19,9 @@ vi.mock("@/features/connect-wallet", () => ({
 }));
 vi.mock("@/features/search-tokens", () => ({
   SearchBox: () => <input data-testid="search-box" />,
+  // The URL-seeded variant (creator `?q=` deep link) renders in the header under
+  // Suspense; its own round-trip behavior is proven in search-deeplink.test.tsx.
+  UrlSeededSearchBox: () => <input data-testid="search-box" />,
 }));
 
 // Imported AFTER the mocks are registered.

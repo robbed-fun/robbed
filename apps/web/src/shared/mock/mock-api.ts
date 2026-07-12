@@ -92,20 +92,6 @@ function holdersFor(address: string): { holders: HolderRow[]; holderCount: numbe
   return { holders: rows, holderCount: 1204 };
 }
 
-/**
- * King of the Hill = the pre-graduation token closest to the threshold. Computed
- * from the demo cards (highest `progressPct` among non-graduated) — never a
- * hardcoded pick.
- */
-function kingOfTheHill(): { token: TokenCard | null } {
-  const preGrad = allTokens.filter((t) => !t.graduated);
-  const top = preGrad.reduce<TokenCard | null>(
-    (best, t) => (best == null || t.progressPct > best.progressPct ? t : best),
-    null,
-  );
-  return { token: top };
-}
-
 function confirmations() {
   // Derived from the demo trade block heights so the tiers line up with the
   // trades' soft/posted/finalized states.
@@ -136,10 +122,9 @@ export function resolveMock(path: string): unknown {
   const segments = rawPath.split("/").filter(Boolean); // ["v1","tokens", ...]
 
   // ── /v1/tokens family ─────────────────────────────────────────────────────
+  // (No king-of-the-hill leg: the KotH client leg was removed with §12.50(f);
+  //  the mock only serves paths the app actually fetches.)
   if (segments[0] === "v1" && segments[1] === "tokens") {
-    // /v1/tokens/king-of-the-hill
-    if (segments[2] === "king-of-the-hill") return kingOfTheHill();
-
     // /v1/tokens  (list)
     if (segments.length === 2) {
       const sort = query.get("sort");

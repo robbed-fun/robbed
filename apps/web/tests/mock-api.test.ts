@@ -3,7 +3,6 @@ import {
   confirmationsResponseSchema,
   ethUsdResponseSchema,
   holdersResponseSchema,
-  kingOfTheHillResponseSchema,
   portfolioActivityResponseSchema,
   portfolioCreatedResponseSchema,
   portfolioHoldingsResponseSchema,
@@ -44,14 +43,14 @@ describe("mock-api · demo payloads satisfy the frozen contract", () => {
     expect(trending.tokens[0]!.ticker).toBe("HCAT");
   });
 
-  it("GET /v1/tokens/king-of-the-hill → closest-to-graduation pre-grad token", () => {
-    const { token } = kingOfTheHillResponseSchema.parse(
-      resolveMock("/v1/tokens/king-of-the-hill"),
-    );
-    expect(token).not.toBeNull();
-    expect(token!.graduated).toBe(false);
-    // BAGEL (78%) is the highest-progress pre-grad card.
-    expect(token!.ticker).toBe("BGL");
+  it("the KotH client leg stays retired (§12.50(f)) — no getKingOfTheHill export", async () => {
+    // The endpoint remains an API capability, but no web surface consumes it;
+    // this guards against the dead client leg silently coming back. (The mock
+    // resolver has no KotH branch either — the path would fall through to the
+    // deliberate any-address demo fallback, which is why this is asserted on
+    // the client surface, not the resolver.)
+    const apiClient = await import("@/shared/api");
+    expect("getKingOfTheHill" in apiClient).toBe(false);
   });
 
   it("GET /v1/tokens/:address → full TokenDetail incl. Trust panel", () => {

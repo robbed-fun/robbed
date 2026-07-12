@@ -6,6 +6,8 @@
 > **Architect sign-off:** `RATIFIED-BY: robbed-architect  DATE: 2026-07-11` — all 36 flows verified against spec §5.1 (5/5) / §5.2 (8/8) / §5.3 (5/5), the 9 transaction types, the 15 error paths (ERR-5 §12.25 confirmed full three-layer), and P-7 waiver completeness (every <3-layer flow has a waiver row). Ratified **as amended** for the §12.50 four-page redesign: route strings `/launch`→`/create` updated, `LAUNCH-*` IDs retained (stable-ID rule), and §8 records the required `PORT-*` addendum. Stable-ID rule is now in force.
 >
 > **`PORT-*` addendum sign-off:** `RATIFIED-BY: robbed-architect  DATE: 2026-07-11` — PORT-1..8 verified against the shipped Portfolio implementation (`apps/web/src/views/portfolio/**`, `entities/portfolio/**`, `app/portfolio/page.tsx`) and spec §12.50a: the §6 traceability table covers every §12.50a surface bullet; every layer declaration is honest per P-7 (read-only page ⇒ no on-chain layer anywhere; PORT-4/PORT-8 correctly UI-only — no subject/failed read produces no request/indexed payload); the 8 waiver rows match. **Advisory-read semantics RATIFIED** (no live-patch flow; disposition recorded in the §3b freshness note; ratified 2026-07-11 — ledger retired, history: git).
+>
+> **§12.50(f) Discover amendment (2026-07-12, RATIFIED):** per the USER-RATIFIED D-1 ruling, Discover `/` keeps the shipped redesign — **TRENDING carousel + live event tape**; the KotH hero, token grid, 5 sorts / 3 filters, and Discover URL-state are **retired from the page** (they remain API capabilities). §12.50(f) is recorded in the spec (2026-07-12). Amended rows: **DISC-1** and **DISC-3** (rewritten to assert the shipped surface — stable-ID rule: IDs retained, both stay full three-layer, no waiver change), plus **DISC-4 step 3** (the retired grid's creator filter is now the `/?q=<creator>` search deep link) and the §6 §5.1 traceability table. `AMENDED-BY: robbed-frontend  DATE: 2026-07-12` · `RATIFIED-BY: robbed-architect  DATE: 2026-07-12` — rows verified against spec §12.50(f) **and** the shipped surface, not the amender's claims: `DiscoverView.tsx` (isolated `Promise.allSettled` fetches; API-owned `volume24h` order per §12.22; `newest` seed + merged enrichment registry), `TrendingCarousel.tsx` (image · #rank · name/ticker · 24h Δ% cards → `/t/[address]`), `event-tape/model/events.ts` (seeded real-LAUNCH rows; registry-by-reference mcap/Δ% with "—" fallback, never fabricated — §2; ALL/LAUNCHES/TRADES/GRADUATIONS view-local filter; `prependCapped` ~60 buffer), `AppHeader.tsx` (`?q=` `useSearchParams` SearchBox seeding). Coverage stays 44/44; no waiver change. **Two ratification-pass corrections by the ratifier (rulings of 2026-07-12; ledger retired — this note is the record):** DISC-2's stale "cap ~30" corrected to the shipped shared ~60 tape buffer (cap ruled **descriptive**, not normative); TD-12 ruled **re-pointed to the §12.53 API OG URL** (row annotated in place; row rewrite + e2e spec/selector re-point executed by robbed-frontend the same day).
 
 ## Purpose & conventions
 
@@ -24,30 +26,30 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 
 ---
 
-## 1. Discover — `/` (§5.1)
+## 1. Discover — `/` (§5.1 as amended by §12.50(f))
 
-### `@flow:DISC-1` — King of the Hill hero: render & navigate
+### `@flow:DISC-1` — TRENDING carousel + event tape: Discover paints _(amended 2026-07-12 per §12.50(f))_
 - **Actors:** Visitor (no wallet required).
-- **Preconditions:** ≥1 pre-grad token exists; API `GET /v1/tokens/king-of-the-hill` returns the ranked leader (rank formula `progress × ln(1+vol24h)`, §12.22 — API-computed, frontend renders, never computes).
-- **Steps:** (1) SSR fetches the hero payload and paints avatar/name/ticker/creator + graduation ProgressBar + mcap + 24h volume. (2) WS `global:trades`/`global:launches` patch the hero's live metrics. (3) Click CTA → route to `/t/[address]`.
+- **Preconditions:** ≥1 token exists; API `GET /v1/tokens?sort=volume24h` (TRENDING — volume-weighted, **API-owned order**, §12.22 family; frontend renders the returned order, never ranks) and `GET /v1/tokens?sort=newest` (tape seed + enrichment registry) reachable.
+- **Steps:** (1) SSR fetches both lists via **isolated fetches** (a TRENDING failure never blanks the tape and vice versa) and paints the TRENDING carousel — ranked full-bleed cards: image · #rank · name · ticker · 24h Δ% — over the live event tape (seeded with real LAUNCH rows). (2) Carousel card click → `/t/[address]`. (3) The tape is live over WS `global:trades`/`global:launches` (the WS-driven entry itself is asserted in DISC-2). Card metrics come from indexer payloads only — never client price math (§2).
 - **assertable-layers:** on-chain · indexed · UI.
 
 ### `@flow:DISC-2` — Live launch ticker (WebSocket)
 - **Actors:** Visitor.
 - **Preconditions:** WS connected on `global:launches`.
-- **Steps:** (1) A new `launch` message arrives → entry slides in at the head (in-memory cap ~30). (2) A `graduated` message updates the corresponding entry. (3) Entry click → `/t/[address]`.
+- **Steps:** (1) A new `launch` message arrives → entry slides in at the head of the event tape (shared in-memory buffer, cap ~60 — `prependCapped`; **descriptive** value per the 2026-07-12 ruling (ledger retired; this note is the record) — corrected from the stale "~30"). (2) A `graduated` message updates the corresponding entry. (3) Entry click → `/t/[address]`.
 - **assertable-layers:** on-chain · indexed · UI.
 
-### `@flow:DISC-3` — Token grid: sort / filter / paginate / live-patch (card fields)
+### `@flow:DISC-3` — Event tape: seeded snapshot, tab filter, registry-sourced metrics, navigate _(amended 2026-07-12 per §12.50(f) — replaces the retired grid's sort/filter/paginate surface)_
 - **Actors:** Visitor.
-- **Preconditions:** API `GET /v1/tokens?sort=&filter=&cursor=&limit=48` reachable.
-- **Steps:** (1) Choose sort (trending/newest/mcap/24h-volume/progress) and filter (pre-grad/graduated/all) → state syncs to URL `searchParams`, SSR-consistent. (2) Each card renders exactly image · name · ticker · mcap · progress bar · 24h Δ% · creator · age — metrics from indexer payload only, never client price math. (3) WS `global:trades`/`global:launches` patch visible cards (mcap/Δ%/progress); a new card flashes a highlight ring or, when scrolled, shows the "n new" pill. (4) Cursor infinite-scroll appends the next page.
+- **Preconditions:** API `GET /v1/tokens?sort=newest&limit=40` reachable (the tape's seed + enrichment registry).
+- **Steps:** (1) The tape seeds with **genuine LAUNCH rows** derived from the token registry (newest-first, real `createdAt` — no synthetic trades are invented to pad the feed). (2) Filter tabs ALL / LAUNCHES / TRADES / GRADUATIONS filter rows client-side (view-local state — the Discover URL-state is retired, §12.50(f)). (3) Row mcap/Δ% resolve **by reference from the registry's indexer aggregates**; a row whose token is unknown to the registry renders "—", never a fabricated value (§2 — a single trade can never justify an aggregate). (4) Row click → `/t/[address]`. (5) Live WS rows (`global:trades`/`global:launches`) prepend into a capped in-memory buffer (~60), newest first.
 - **assertable-layers:** on-chain · indexed · UI.
 
 ### `@flow:DISC-4` — Search (name / ticker / contract / creator)
 - **Actors:** Visitor.
 - **Preconditions:** API `GET /v1/search?q=` (pg_trgm) reachable.
-- **Steps:** (1) Type ≥1 char → debounced 200ms request. (2) Dropdown shows token rows + creator rows. (3) Enter navigates to best match; creator click filters the grid by creator.
+- **Steps:** (1) Type ≥1 char → debounced 200ms request. (2) Dropdown shows token rows + creator rows. (3) Enter navigates to best match; a creator click deep-links `/?q=<creator>`, which seeds the header SearchBox from the URL (the retired grid's creator filter — §12.50(f) amendment, 2026-07-12).
 - **assertable-layers:** indexed · UI. _(No on-chain surface — search is a pure indexer query; see waivers.)_
 
 ---
@@ -127,9 +129,12 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 - **assertable-layers:** indexed · UI. _(Links/metadata are indexer-sourced display; no state change — see waivers.)_
 
 ### `@flow:TD-12` — SSR + per-token OG image (viral share unit)
+
+> _**§12.53 re-point RULED 2026-07-12 (ledger retired; this annotation is the record) — ruling record; the row below was rewritten to the ruled legs the same day:** the web route `/t/[address]/opengraph-image` was REMOVED (OG relocated web→API, spec §12.53, commit `9528121`). The PNG-contract leg moves to **`GET {API_ORIGIN}/v1/og/{address}.png`** (API-rendered satori+resvg, R2-cached, 1200×630 — the e2e stack serves the API, so the assertion still runs end-to-end); the web-side leg becomes "SSR `generateMetadata` emits `og:image` as the **absolute API URL**" (`token-detail/model/metadata.ts`). Flow ID, layers (indexed · UI), and waiver unchanged. Row rewrite + `e2e/flows/td-12.spec.ts` + `e2e/harness/selectors.ts` `routes.og` re-point owned by **robbed-frontend** (executed 2026-07-12)._
+
 - **Actors:** Crawler / messenger unfurl (no client JS).
-- **Preconditions:** token exists; candles/summary reachable.
-- **Steps:** (1) Token Detail SSR HTML includes title/description/OG tags + meaningful above-the-fold (name/ticker/mcap/progress/trust summary) with `javaScriptEnabled:false`. (2) `GET /t/[address]/opengraph-image` returns `image/png` 1200×630 (raw satori + resvg): token image + name/ticker + mini-candles (inline SVG, 12h/15m window) + mcap ETH-first (USD only via live endpoint, else degrade to ETH) + graduation progress (or "Graduated → Uniswap V3") + soft-confirmed tagline. Unknown token → 404.
+- **Preconditions:** token exists and is indexed (summary reachable for SSR + the API OG data read).
+- **Steps:** (1) Token Detail SSR HTML includes title/description/OG tags + meaningful above-the-fold (name/ticker/mcap/progress/trust summary) with `javaScriptEnabled:false`; `generateMetadata` emits `og:image` as the **absolute API URL** `{API_ORIGIN}/v1/og/{address}.png` (`token-detail/model/metadata.ts`) — no web OG route exists post-§12.53. (2) `GET {API_ORIGIN}/v1/og/{address}.png` returns `image/png` 1200×630 (API-rendered native satori + resvg, R2-cached `og/{address}/{version}.png`): token image + name/ticker + mini-candles sparkline + mcap ETH-first (USD only via live endpoint, else degrade to ETH) + graduation progress (or "Graduated → Uniswap V3") + soft-confirmed tagline. Unknown token → 404.
 - **assertable-layers:** indexed · UI. _(Render output, not a chain state change — see waivers.)_
 
 ---
@@ -318,14 +323,14 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 
 ## 6. Traceability — every §5.1–5.3 feature bullet maps to ≥1 flow
 
-### §5.1 Discover
-| Spec bullet | Flow ID(s) |
+### §5.1 Discover _(surface bullets as amended by §12.50(f), 2026-07-12 — KotH hero / token grid / 5 sorts / 3 filters / URL-state retired from the page; they remain API capabilities)_
+| Surface bullet (§12.50(f)) | Flow ID(s) |
 |---|---|
-| King of the Hill hero (closest to graduation, volume-weighted) | DISC-1 |
-| Live launch ticker (WebSocket) | DISC-2 |
-| Token grid: sorts trending/newest/mcap/24h-volume/progress; filters pre-grad/graduated/all | DISC-3 |
-| Search: name, ticker, contract, creator (pg_trgm) | DISC-4 |
-| Card: image, name, ticker, mcap, progress bar, 24h Δ%, creator, age | DISC-3 |
+| TRENDING carousel (volume-weighted, API-owned order) | DISC-1 |
+| Live event tape: WS-driven entries (launch/graduate slide in) | DISC-2 |
+| Event tape: seeded snapshot, tab filter, registry-sourced metrics, navigate | DISC-3 |
+| Search: name, ticker, contract, creator (pg_trgm) + `/?q=` creator deep link | DISC-4 |
+| Carousel card / tape row fields (image · rank · name · ticker · Δ% / age · side · token · amount · mcap · Δ%) — indexer metrics only | DISC-1, DISC-3 |
 
 ### §5.2 Token Detail
 | Spec bullet | Flow ID(s) |

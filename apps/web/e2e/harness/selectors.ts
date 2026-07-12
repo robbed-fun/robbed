@@ -15,6 +15,8 @@
  */
 import type { Page } from "@playwright/test";
 
+import { STACK } from "./config";
+
 export const copy = {
   buyPaused: "Buying is temporarily paused — selling remains open.",
   createsPaused: "New launches are temporarily paused.",
@@ -59,12 +61,19 @@ export const launch = {
   submit: (page: Page) => page.getByRole("button", { name: /launch token/i }).first(),
 } as const;
 
-/** Discover / Token-Detail route builders. */
+/**
+ * Discover / Token-Detail route builders. All are web paths (prefix with
+ * `STACK.webUrl`) EXCEPT `og`, which is an ABSOLUTE URL on the API origin:
+ * OG rendering relocated web → API (spec §12.53; TD-12 re-point ruled
+ * 2026-07-12, decisions.md §15) — the web route `/t/[address]/opengraph-image`
+ * no longer exists. The origin comes from the env-driven harness config
+ * (`STACK.apiUrl`, same source as harness/api.ts), never a hardcoded port.
+ */
 export const routes = {
   discover: "/",
   token: (address: string) => `/t/${address}`,
   create: "/create",
-  og: (address: string) => `/t/${address}/opengraph-image`,
+  og: (address: string) => `${STACK.apiUrl}/v1/og/${address.toLowerCase()}.png`,
 } as const;
 
 /**
