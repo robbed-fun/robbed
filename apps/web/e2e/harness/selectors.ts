@@ -65,7 +65,7 @@ export const launch = {
  * Discover / Token-Detail route builders. All are web paths (prefix with
  * `STACK.webUrl`) EXCEPT `og`, which is an ABSOLUTE URL on the API origin:
  * OG rendering relocated web → API (spec §12.53; TD-12 re-point ruled
- * 2026-07-12, decisions.md §15) — the web route `/t/[address]/opengraph-image`
+ * 2026-07-12; record: the user-flows.md TD-12 annotation) — the web route `/t/[address]/opengraph-image`
  * no longer exists. The origin comes from the env-driven harness config
  * (`STACK.apiUrl`, same source as harness/api.ts), never a hardcoded port.
  */

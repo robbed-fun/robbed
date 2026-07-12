@@ -268,7 +268,7 @@ POST  /v1/admin/metadata/:tokenAddress/reverify        → publishes `control:re
 GET   /v1/admin/audit-log?cursor=
 ```
 
-### 3.7 Internal dashboard endpoints (D-4 — decisions.md §15; M2-13/M2-14; Gate G-A.1/G-A.2)
+### 3.7 Internal dashboard endpoints (D-4 — spec §12.54; M2-13/M2-14; Gate G-A.1/G-A.2)
 
 Thin, READ-ONLY internal surface under `/internal/*`, consumed by the internal ops dashboard /
 Gate G-A evidence collection — never by the public frontend. **Gating: admin-SIWE session** (the

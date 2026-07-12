@@ -43,7 +43,7 @@ tags:
     description: Moderation admin — SIWE session auth, listing visibility only (spec §8.4)
   - name: internal
     description: >-
-      Internal ops dashboard — read-only, admin-SIWE-gated (D-4, decisions.md §15;
+      Internal ops dashboard — read-only, admin-SIWE-gated (D-4, spec §12.54;
       api.md §3.7). Feeds Gate G-A.1/G-A.2 (spec §14). Advisory-only (spec §8.4/§8.5):
       never gates chain state, listing, or any user path. Not consumed by the public frontend.
 
@@ -956,7 +956,7 @@ paths:
       operationId: internalFlow
       summary: Per-token flow quality — organic %, cluster stats, bot-flag counts (M2-13; Gate G-A.1)
       description: >-
-        D-4 (decisions.md §15) / api.md §3.7. Read-only §8.5 telemetry over the
+        D-4 (spec §12.54) / api.md §3.7. Read-only §8.5 telemetry over the
         indexer's `token_flow_stats` + `address_flags` side tables. `organic` is
         EXACTLY the shared organicFlowSchema object the public Trust panel gets
         (same projection) — the holder estimate is a RANGE, never a point value
@@ -1019,7 +1019,7 @@ paths:
       operationId: internalCompetitorSnapshots
       summary: Competitor traction snapshots, paged newest-first (M2-14; Gate G-A.2)
       description: >-
-        D-4 (decisions.md §15) / api.md §3.7. Reads the indexer's
+        D-4 (spec §12.54) / api.md §3.7. Reads the indexer's
         `competitor_snapshots` table (spec §8.5.3 weekly hood.fun traction).
         Rows are the shared CompetitorSnapshotRow VERBATIM — `source` +
         `captured_at` are NOT NULL by table constraint and ALWAYS present

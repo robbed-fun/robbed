@@ -13,7 +13,7 @@ import {
 // @flow:TD-12 — SSR + per-token OG image (viral share unit) (§5.2/§9)
 // assertable-layers: indexed · UI   (N/A on-chain: render output, not chain state — waiver)
 //
-// §12.53 re-point (RULED 2026-07-12, decisions.md §15): OG rendering relocated
+// §12.53 re-point (RULED 2026-07-12; record: the user-flows.md TD-12 annotation): OG rendering relocated
 // web → API — the web route `/t/[address]/opengraph-image` was REMOVED. The two
 // legs are now: (web) SSR `generateMetadata` emits `og:image` as the ABSOLUTE
 // API URL; (PNG contract) `GET {API_ORIGIN}/v1/og/{address}.png` → 200
