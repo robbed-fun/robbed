@@ -212,11 +212,14 @@ jobs:
       # (indexer = Ponder /ready, i.e. backfill complete) and every one-shot
       # (deps/createbuckets/apimigrations/deploychain) exited 0; fails loud with log tails.
       # Linux-CI bind-mount UID fix: the `deploychain` foundry container runs `forge script`
-      # as the image's `foundry` user, but the repo is checked out as the runner user — so the
-      # container cannot create/write the bind-mounted forge output dirs (`contracts/out`,
-      # `cache`, `broadcast`) or emit `tools/localstack/out/local.env`. macOS Docker Desktop's
-      # osxfs/virtiofs masks this locally; on a Linux runner the mismatch is literal. Pre-create
-      # + world-write the dirs the deploy writes (CI checkout is throwaway).
+      # as the image's `foundry` user (uid 1000), but the repo is checked out as the runner
+      # user (uid 1001) — so the container cannot create/write the bind-mounted dirs the
+      # deploy touches: forge outputs (`contracts/out`, `cache`, `broadcast`), the deploy
+      # artifact dir `contracts/deployments` (exists in checkout — 31337.json is tracked —
+      # so vm.writeJson of 4663.json hits EACCES: run 29172303951), and
+      # `tools/localstack/out/local.env`. A uid-1000 dev box masks this locally; on a Linux
+      # runner the mismatch is literal. Pre-create + world-write every dir the deploy writes
+      # (CI checkout is throwaway).
       - name: make deploy bind-mount dirs container-writable (CI Linux UID mismatch)
         run: |
           mkdir -p contracts/out contracts/cache contracts/broadcast contracts/deployments tools/localstack/out
