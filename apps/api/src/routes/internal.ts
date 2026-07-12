@@ -1,5 +1,5 @@
 /**
- * Internal dashboard endpoints (D-4 — decisions.md §15; api.md §3.7; M2-13 /
+ * Internal dashboard endpoints (D-4 — spec §12.54; api.md §3.7; M2-13 /
  * M2-14; Gate G-A.1/G-A.2). Thin, READ-ONLY, admin-SIWE-gated (the same
  * `requireAdmin` session as /v1/admin/* — chosen over internal-network gating
  * per D-4 "least new surface": the session mechanism already exists, network

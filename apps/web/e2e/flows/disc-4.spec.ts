@@ -1,4 +1,5 @@
 import {
+  ROLES,
   api,
   assertIndexed,
   assertUi,
@@ -6,6 +7,7 @@ import {
   routes,
   seedToken,
   test,
+  waitForHydration,
   waitForIndexed,
 } from "../harness";
 
@@ -15,7 +17,11 @@ test(
   "DISC-4 search returns matches over name/ticker/contract/creator",
   { tag: ["@flow:DISC-4", "@layer:indexed", "@layer:ui"] },
   async ({ page }) => {
-    const token = await seedToken({ name: "Searchable Coin", ticker: "SRCH" });
+    // Seed from trader2 (not the default creator): the dev-seed creator owns
+    // dozens of tokens and /v1/search caps at 20 non-recency-ordered results,
+    // so a creator-address query could legitimately omit THIS run's token. A
+    // near-fresh creator makes the creator-column assertion deterministic.
+    const token = await seedToken({ name: "Searchable Coin", ticker: "SRCH", creator: ROLES.trader2 });
 
     await assertIndexed("pg_trgm search returns the token row", async () => {
       const res = await waitForIndexed(
@@ -28,6 +34,9 @@ test(
 
     await assertUi("search box shows the debounced dropdown and Enter navigates", async () => {
       await page.goto(routes.discover);
+      // Hydration barrier: a fill before React hydration settles is wiped when
+      // the client tree regenerates (see waitForHydration).
+      await waitForHydration(page);
       const box = page.getByRole("searchbox").first();
       await box.fill(token.ticker);
       // Results render as buttons inside the popover; wait for the dropdown entry.

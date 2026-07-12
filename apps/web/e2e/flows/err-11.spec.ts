@@ -5,6 +5,7 @@ import {
   buyOnChain,
   copy,
   expect,
+  isWsRequest,
   publicClient,
   routes,
   seedToken,
@@ -23,7 +24,7 @@ test(
     // Drop the first WS connection to force the degraded state; a later attempt
     // is allowed through so the client can reconnect and REST-invalidate.
     let dropped = false;
-    await page.routeWebSocket(/\/v1\/ws/, (ws) => {
+    await page.routeWebSocket(isWsRequest, (ws) => {
       if (!dropped) {
         dropped = true;
         ws.close(); // simulate the socket drop

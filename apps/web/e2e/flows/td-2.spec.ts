@@ -13,6 +13,7 @@ import {
   sel,
   test,
   tradeBy,
+  tradeFeeLabel,
   tradeIsBuy,
   waitForIndexed,
 } from "../harness";
@@ -30,8 +31,12 @@ test(
     await assertUi("buy submits and an optimistic soft-confirmed row appears", async () => {
       await sel.buyTab(page).click();
       await sel.amountInput(page).fill("0.02");
-      // Quote line discloses the 1% curve fee + min-received after 2% slippage (§5.2).
-      await expect(page.getByText(/curve fee/i).first()).toBeVisible();
+      // Quote rows disclose the curve fee (widget "Fee" row, value from the M0
+      // notebook) + min-received after slippage (§5.2). The old /curve fee/i
+      // check passed via TrustPanel prose and never asserted the widget.
+      await expect(sel.feeRow(page)).toBeVisible();
+      await expect(sel.feeRow(page)).toContainText(tradeFeeLabel());
+      await expect(sel.minReceivedRow(page)).toBeVisible();
       await sel.submitTrade(page).click();
       // Never rendered final while soft-confirmed (§2.1 rule 3).
       await expect(page.getByText(copy.softConfirmed).first()).toBeVisible({ timeout: 10_000 });

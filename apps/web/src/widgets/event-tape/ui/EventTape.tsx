@@ -4,10 +4,9 @@ import type { TokenCard, WsMessage } from "@robbed/shared";
 import { GLOBAL_LAUNCHES, GLOBAL_TRADES } from "@robbed/shared";
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
-  type MockTapeEntry,
   type TapeEvent,
   type TapeFilter,
   type TokenInfo,
@@ -17,7 +16,6 @@ import {
   filterEvents,
   graduateToEvent,
   launchToEvent,
-  mockTapeEvents,
   prependCapped,
   seedLaunches,
   tradeToEvent,
@@ -36,6 +34,7 @@ import {
   UsdAmount,
 } from "@/shared/ui";
 import { formatAge, shortAddress } from "@/shared/lib/format";
+import { useNowTick } from "@/shared/lib/use-now";
 import { cn } from "@/shared/lib/utils";
 import { useWsChannel } from "@/shared/lib/ws";
 
@@ -56,30 +55,15 @@ import { useWsChannel } from "@/shared/lib/ws";
  * silent CPU loop with no console error). The tape has no visible column header
  * (the filter tabs sit where a header would).
  */
-export function EventTape({
-  tokens,
-  mockEntries,
-}: {
-  tokens: TokenCard[];
-  /**
-   * DEMO-ONLY (task A): the gated `discover.eventTape` fixture. Events (and their
-   * relative ages) are built on the CLIENT at mount so the age column stays
-   * correct regardless of prerender staleness; falls back to the real launch seed.
-   */
-  mockEntries?: MockTapeEntry[];
-}) {
+export function EventTape({ tokens }: { tokens: TokenCard[] }) {
   const registry = useMemo<Map<string, TokenInfo>>(() => buildRegistry(tokens), [tokens]);
-  const [events, setEvents] = useState<TapeEvent[]>(() =>
-    mockEntries ? mockTapeEvents(mockEntries, tokens) : seedLaunches(tokens),
-  );
+  const [events, setEvents] = useState<TapeEvent[]>(() => seedLaunches(tokens));
   const [filter, setFilter] = useState<TapeFilter>("all");
-  const [now, setNow] = useState(() => Date.now());
-
-  // Age recomputes on a 10s tick so "4s → 1m" stays honest without a per-row timer.
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 10_000);
-    return () => clearInterval(id);
-  }, []);
+  // Hydration-safe age clock (hardening fix 2026-07-12): `null` until mount so
+  // SSR and hydration markup match deterministically (the previous
+  // `useState(Date.now())` seed mismatched server vs client text); then a 10s
+  // tick keeps "4s → 1m" honest without a per-row timer.
+  const now = useNowTick(10_000);
 
   const onTrade = useCallback((msg: WsMessage) => {
     if (msg.type !== "trade") return;
@@ -160,15 +144,16 @@ export function EventTape({
  */
 function buildTapeColumns(
   registry: Map<string, TokenInfo>,
-  now: number,
+  now: number | null,
 ): ColumnDef<TapeEvent>[] {
   return [
     {
       id: "age",
       cell: ({ row }) => (
-        // mockup age column: faint tone, 11px (template.html:278)
+        // mockup age column: faint tone, 11px (template.html:278). `now` is null
+        // for the single pre-mount frame (hydration-safe clock) → placeholder.
         <MonoText tone="faint" size="xs" numeric className="w-9 shrink-0 md:w-auto">
-          {formatAge(row.original.ts, now)}
+          {now === null ? "…" : formatAge(row.original.ts, now)}
         </MonoText>
       ),
     },
@@ -232,10 +217,9 @@ function buildTapeColumns(
       id: "delta",
       cell: ({ row }) => {
         const event = row.original;
-        const info = registry.get(event.token);
-        // Demo rows carry a per-event Δ% override (task A, §2-gated); live rows
-        // resolve the token's 24h Δ% from the registry.
-        const delta = event.deltaPct !== undefined ? event.deltaPct : info?.change24hPct ?? null;
+        // Live rows resolve the token's 24h Δ% from the registry — never from a
+        // single event (§2: no fabricated aggregates).
+        const delta = registry.get(event.token)?.change24hPct ?? null;
         return (
           // mockup: delta / "new" inherit the 13px base ramp (text-base)
           <span className="w-16 shrink-0 text-right md:w-auto">

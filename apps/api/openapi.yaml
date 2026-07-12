@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     Frozen HTTP contract for `apps/api` (Hono on Bun) — transcribed from
-    `docs/services/api.md` (Design v1.0) and `launchpad-spec.md` §2/§2.1/§5/§8/§12.
+    `docs/how-it-works/api.md` (Design v1.0) and `docs/spec.md` §2/§2.1/§5/§8/§12.
     M2 implements this document; M3 (frontend) consumes it. Response DTO shapes
     are the zod schemas in `packages/shared/src/api-types.ts` — the schemas
     below mirror them and MUST NOT drift (shared package is authoritative).
@@ -43,7 +43,7 @@ tags:
     description: Moderation admin — SIWE session auth, listing visibility only (spec §8.4)
   - name: internal
     description: >-
-      Internal ops dashboard — read-only, admin-SIWE-gated (D-4, decisions.md §15;
+      Internal ops dashboard — read-only, admin-SIWE-gated (D-4, spec §12.54;
       api.md §3.7). Feeds Gate G-A.1/G-A.2 (spec §14). Advisory-only (spec §8.4/§8.5):
       never gates chain state, listing, or any user path. Not consumed by the public frontend.
 
@@ -956,7 +956,7 @@ paths:
       operationId: internalFlow
       summary: Per-token flow quality — organic %, cluster stats, bot-flag counts (M2-13; Gate G-A.1)
       description: >-
-        D-4 (decisions.md §15) / api.md §3.7. Read-only §8.5 telemetry over the
+        D-4 (spec §12.54) / api.md §3.7. Read-only §8.5 telemetry over the
         indexer's `token_flow_stats` + `address_flags` side tables. `organic` is
         EXACTLY the shared organicFlowSchema object the public Trust panel gets
         (same projection) — the holder estimate is a RANGE, never a point value
@@ -1019,7 +1019,7 @@ paths:
       operationId: internalCompetitorSnapshots
       summary: Competitor traction snapshots, paged newest-first (M2-14; Gate G-A.2)
       description: >-
-        D-4 (decisions.md §15) / api.md §3.7. Reads the indexer's
+        D-4 (spec §12.54) / api.md §3.7. Reads the indexer's
         `competitor_snapshots` table (spec §8.5.3 weekly hood.fun traction).
         Rows are the shared CompetitorSnapshotRow VERBATIM — `source` +
         `captured_at` are NOT NULL by table constraint and ALWAYS present
@@ -1226,7 +1226,7 @@ components:
         mcapEth:
           allOf: [{ $ref: "#/components/schemas/DecimalString" }]
           description: >-
-            Native ETH market cap, wei decimal string (decisions.md §7.2 item 3).
+            Native ETH market cap, wei decimal string (spec §2 ETH-first; mcapEth refinement ratified 2026-07-10).
             ETH-first display source (§2) — USD mcap derives from it. Optional /
             additive: absent until the indexer materializes it; not in `required`.
         progressPct: { type: number, description: real_eth_reserves / graduation_eth }
@@ -1337,6 +1337,9 @@ components:
             curveAddress: { $ref: "#/components/schemas/Address" }
             v3PoolAddress: { $ref: "#/components/schemas/Address" }
             graduatedAt: { type: integer }
+            lpTokenId:
+              allOf: [{ $ref: "#/components/schemas/DecimalString" }]
+              description: LP NFT tokenId from the Graduated event (graduations.lp_token_id); present iff graduated — drives LPFeeVault.collect(tokenId)
             supply:
               type: object
               required: [total, curveHeld, lpTranche]

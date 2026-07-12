@@ -5,7 +5,7 @@ import {
   routes,
   seedToken,
   sel,
-  STACK,
+  isRpcRequest,
   test,
 } from "../harness";
 
@@ -18,8 +18,7 @@ test(
     const token = await seedToken({ name: "Reject Coin", ticker: "RJCT" });
 
     // Simulate an in-wallet rejection: fail eth_sendTransaction with 4001.
-    await page.route(`${STACK.rpcUrl}/**`, async (route) => route.fallback());
-    await page.route(STACK.rpcUrl, async (route) => {
+    await page.route(isRpcRequest, async (route) => {
       const body = route.request().postDataJSON?.();
       const calls = Array.isArray(body) ? body : [body];
       if (calls.some((c: any) => c?.method === "eth_sendTransaction")) {

@@ -1,0 +1,32 @@
+{
+  "canaryCurve": "0x89A2317b9e8cA54Baa3242d7eD376Ea3Af1bE07d",
+  "canaryToken": "0x4efa77f362379c8c7a590AD37E830C8d04B7309E",
+  "chainId": 46630,
+  "curveFactory": "0x6eb955d889b6958620FBE9DC17Fb84C7d3F08414",
+  "deployedAt": 1783856249,
+  "lpFeeVault": "0xD57dDb22ca1587AE368083f6cE0D341358E5817D",
+  "mode": "testnet",
+  "positionManager": "0xFFe6CFc4f759b65f9B62c9D05A9E21a78cE93e12",
+  "quoterV2": "0xDDcBe4989C8171F721c5e683C9C6339B59718213",
+  "router": "0xF8D79D3D1fE742FebbbB5b82f0AAf8D8E4fD4841",
+  "swapRouter02": "0xb79cB26e90EBBD9bC02c75267c9a86dBa1AFedB7",
+  "treasury": "0x4ae5b5Ae7D2edd7A2d43054246D6aaAcAAFC1000",
+  "v3Factory": "0xdf9e3D6ffaC4513dD7b053212bbECcbCD15ec932",
+  "v3Migrator": "0x62bB59cA67eEdAAfee4edc10A8821dd08e83A2B0",
+  "weth": "0x7943e237c7F95DA44E0301572D358911207852Fa",
+  "verification": {
+    "status": "VERIFIED — all six contracts, 2026-07-12",
+    "verifier": "blockscout-v2 @ https://explorer.testnet.chain.robinhood.com/api (no API key — spec §12.52)",
+    "compiler": "v0.8.35+commit.47b9dedd",
+    "evmVersion": "cancun",
+    "license": "MIT (SPDX headers in verified source)",
+    "guids": {
+      "curveFactory": "6eb955d889b6958620fbe9dc17fb84c7d3f084146a537e2e",
+      "router": "verified (Pass) — GUID not captured: first submission pipeline was interrupted client-side after submit; is_verified:true confirmed via /api/v2/smart-contracts read-back 2026-07-12",
+      "v3Migrator": "verified (Pass) — GUID not captured: first submission pipeline was interrupted client-side after submit; is_verified:true confirmed via /api/v2/smart-contracts read-back 2026-07-12",
+      "lpFeeVault": "verified (Pass) — GUID not captured: first submission pipeline was interrupted client-side after submit; is_verified:true confirmed via /api/v2/smart-contracts read-back 2026-07-12",
+      "canaryToken": "4efa77f362379c8c7a590ad37e830c8d04b7309e6a537e3e",
+      "canaryCurve": "verified (Pass) — GUID not captured: first submission pipeline was interrupted client-side after submit; is_verified:true confirmed via /api/v2/smart-contracts read-back 2026-07-12"
+    }
+  }
+}

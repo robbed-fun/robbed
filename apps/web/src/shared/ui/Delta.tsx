@@ -1,4 +1,4 @@
-import { formatPercent } from "@/shared/lib/format";
+import { formatPercent, percentRoundsToZero } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 /**
@@ -24,7 +24,13 @@ export function Delta({
       </span>
     );
   }
-  const tone = value > 0 ? "text-green" : value < 0 ? "text-red" : "text-muted";
+  // Tone follows the ROUNDED display value (review fix 2026-07-11): −0.04
+  // renders "0.0%" and must tint neutral — never a red/green zero.
+  const tone = percentRoundsToZero(value)
+    ? "text-muted"
+    : value > 0
+      ? "text-green"
+      : "text-red";
   return (
     <span className={cn("text-sm tabular-nums", tone, className)} {...props}>
       {formatPercent(value, { signed: true })}

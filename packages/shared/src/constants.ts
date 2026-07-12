@@ -3,10 +3,10 @@
  *
  * Sources (transcribed, not invented):
  * - CLAUDE.md "Chain facts" (chain id, WETH)
- * - launchpad-spec.md §5.3, §12.14, §12.17
- * - docs/services/api.md §3.1-§3.4, §5
- * - docs/services/indexer.md §3, §6.1
- * - docs/services/contracts.md §2.2 (on-chain input validation)
+ * - docs/spec.md §5.3, §12.14, §12.17
+ * - docs/how-it-works/api.md §3.1-§3.4, §5
+ * - docs/how-it-works/indexer.md §3, §6.1
+ * - docs/how-it-works/contracts.md §2.2 (on-chain input validation)
  *
  * Hard rule (spec §2): NO market metrics (prices, TVL, ETH/USD, volumes) may
  * ever live in this file or anywhere else as constants.

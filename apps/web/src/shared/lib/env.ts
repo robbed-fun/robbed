@@ -4,6 +4,8 @@
  *
  * `NEXT_PUBLIC_*` are inlined by Next at build; we read them through this module
  * so a missing var fails loudly in one place instead of silently `undefined`.
+ * One var is server-only and NOT inlined: `API_BASE_URL_INTERNAL` (split-horizon
+ * SSR fetch base — see `apiFetchBaseUrl` below).
  */
 
 /**
@@ -55,6 +57,41 @@ export const env = {
       process.env.NEXT_PUBLIC_API_BASE_URL,
       "https://api.invalid",
     ).replace(/\/$/, ""),
+  /**
+   * Data-plane REST base with SPLIT-HORIZON resolution (web.md §2.3) — the ONE
+   * resolution point every REST transport (`shared/api`, `entities/portfolio/
+   * api`) must call instead of `apiBaseUrl()`.
+   *
+   * Server-side (SSR / route handlers) prefers the server-only
+   * `API_BASE_URL_INTERNAL`: inside the compose network the browser-facing
+   * `NEXT_PUBLIC_API_BASE_URL` points at a HOST-mapped port (e.g.
+   * `http://localhost:4001`) that is ECONNREFUSED from within the web
+   * container, while the compose-internal `http://api:3001` works. Unset ⇒
+   * falls back to the public base, so host-run dev and prod (Workers fetch the
+   * public API origin) are unchanged.
+   *
+   * DECISION (robbed-frontend 2026-07-12; basis: nextjs.org/docs/app/guides/
+   * environment-variables, v16.2.10 — fetched via docs-first rule): the
+   * internal var is deliberately NOT `NEXT_PUBLIC_`-prefixed. Non-prefixed
+   * vars exist only in the Node.js environment, are NEVER inlined into the
+   * client bundle, and are read at runtime on the server — exactly the horizon
+   * split needed. Read at call time (never module scope) so the runtime value
+   * wins; the `typeof window` branch makes the client path explicit (browsers
+   * always use the public base). Alternative considered: resolving inside
+   * `shared/api` — rejected because the portfolio entity carries its own
+   * transport and both must share one resolution point.
+   *
+   * NOT for URLs handed to EXTERNAL agents: the `og:image` absolute URL
+   * (`views/token-detail/model/metadata.ts`) is fetched by crawlers from
+   * outside our network and must stay on `apiBaseUrl()`.
+   */
+  apiFetchBaseUrl: () => {
+    if (typeof window === "undefined") {
+      const internal = process.env.API_BASE_URL_INTERNAL;
+      if (internal) return internal.replace(/\/$/, "");
+    }
+    return env.apiBaseUrl();
+  },
   wsUrl: () =>
     required("NEXT_PUBLIC_WS_URL", process.env.NEXT_PUBLIC_WS_URL, "wss://ws.invalid"),
   /** web-6: absent in dev — injected wallets still work; WC/Robinhood hidden. */
@@ -76,18 +113,6 @@ export const env = {
       .split(",")
       .map((a) => a.trim())
       .filter((a) => a.length > 0),
-  /**
-   * DEMO MODE (task A). When truthy, the data layer serves the extracted mock
-   * fixture (`src/shared/mock/robbed-mock.json`) instead of hitting the API — for
-   * every REST read the four pages render. Strictly gated: flag off ⇒ untouched
-   * production path (real fetch + zod validation). Build-time inlined like every
-   * `NEXT_PUBLIC_*`. The mock's mcap/ethUsdMock figures are demo-only and NEVER
-   * reach the prod path (§2 hardcoded-metric rule holds behind the gate).
-   */
-  mockData: () => {
-    const v = process.env.NEXT_PUBLIC_MOCK_DATA;
-    return v === "true" || v === "1" || v === "yes";
-  },
   /**
    * web-10 / M3-10: large-value disclosure threshold, ETH-denominated, as a
    * DECIMAL STRING (never a JS number literal in code, §2). Architect-owned

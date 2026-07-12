@@ -9,6 +9,7 @@
  * needs a bespoke state (near-graduation, freshly-graduated, hostile-treasury)
  * build exactly what it asserts.
  */
+import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { canonicalizeJson, metadataHash } from "@robbed/shared/metadata";
@@ -46,6 +47,13 @@ export function deployFeeWei(): bigint {
 
 export function graduationEthWei(): bigint {
   return BigInt(forkConstants().curve.graduationEthWei as string);
+}
+
+/** Trade fee as the widget's plain label ("1%") — derived from the notebook, never hardcoded. */
+export function tradeFeeLabel(): string {
+  const bps = Number(forkConstants().fees.tradeFeeBps);
+  const pct = bps / 100;
+  return `${Number.isInteger(pct) ? pct : pct.toFixed(1)}%`;
 }
 
 /** Anti-sniper early-window length (M0 notebook) — warp past it before bulk buys. */
@@ -194,13 +202,18 @@ export async function ensureBuysEnabled(): Promise<void> {
   }
 }
 
-/** Full happy fixture: local hash → createToken → wait until the indexer lists it. */
+/** Full happy fixture: local hash → createToken → wait until the indexer lists it.
+ * `pin: true` routes through the REAL API upload+pin path (rate-limited 10/h!) so
+ * the metadata JSON exists in object storage and the indexer's verifier can fetch
+ * it (description/links render only then) — use it ONLY where a flow asserts
+ * fetched-metadata display (TD-11). */
 export async function seedToken(opts: {
   creator?: DevAccount;
   name: string;
   ticker: string;
   description?: string;
   initialBuyWei?: bigint;
+  pin?: boolean;
 }): Promise<SeededToken> {
   await ensureCreatesEnabled();
   await ensureBuysEnabled();
@@ -209,7 +222,9 @@ export async function seedToken(opts: {
   const tag = nonce();
   const ticker = `${opts.ticker.slice(0, 7)}${tag}`;
   const name = `${opts.name} ${tag}`;
-  const metadata = localMetadata({ name, ticker, description: opts.description });
+  const metadata = opts.pin
+    ? await pinMetadata({ name, ticker, description: opts.description })
+    : localMetadata({ name, ticker, description: opts.description });
   const addresses = loadDeployedAddresses();
   const created = await createTokenOnChain({
     creator: opts.creator,
@@ -226,6 +241,82 @@ export async function seedToken(opts: {
     { label: `token ${created.token} indexed` },
   );
   return { ...created, name, ticker, addresses, metadata };
+}
+
+/**
+ * ERR-6b fixture: a token whose ON-CHAIN committed metadataHash ≠ the keccak of
+ * its STORED canonical JSON — i.e. the pinned object was tampered with
+ * post-pin. Build order avoids any race with the indexer's 30s verifier pass:
+ *  1. pin real metadata via the API (hash H, object at metadata/H.json);
+ *  2. OVERWRITE the stored object with mutated bytes (object-store manipulation
+ *     via `mc` inside the minio container — a fixture operation on test infra,
+ *     exactly like `anvil_setCode`; no product surface is touched);
+ *  3. only then create the token committing H, so the verifier's FIRST fetch
+ *     already sees the tampered body → verdict `mismatch`.
+ * Requires docker access to the compose minio container; callers should skip
+ * with a clear message when unavailable (remote-stack runs).
+ */
+export async function seedMismatchToken(opts?: {
+  name?: string;
+  ticker?: string;
+}): Promise<SeededToken> {
+  await ensureCreatesEnabled();
+  const tag = nonce();
+  const name = `${opts?.name ?? "Tampered Coin"} ${tag}`;
+  const ticker = `${(opts?.ticker ?? "TMPR").slice(0, 7)}${tag}`;
+  const metadata = await pinMetadata({
+    name,
+    ticker,
+    description: "ERR-6b original description.",
+  });
+
+  // Mutate ONE field; keep the JSON valid so the verifier reaches the hash
+  // comparison (not a parse failure).
+  const mutated = metadata.canonicalJson.replace(
+    "ERR-6b original description.",
+    "ERR-6b TAMPERED post-pin.",
+  );
+  if (mutated === metadata.canonicalJson) {
+    throw new Error("[e2e seed] mismatch fixture: mutation did not apply");
+  }
+  const container = process.env.E2E_MINIO_CONTAINER ?? "robbed-minio-1";
+  const user = process.env.MINIO_ROOT_USER ?? "robbed";
+  const pass = process.env.MINIO_ROOT_PASSWORD ?? "robbed_dev_secret";
+  const bucket = process.env.R2_BUCKET ?? "robbed-assets";
+  const b64 = Buffer.from(mutated, "utf8").toString("base64");
+  // Object layout is `metadata/{keccak-NO-0x}.json` (apps/api/src/media/storage.ts).
+  const key = metadata.metadataHash.replace(/^0x/, "");
+  execSync(
+    `docker exec ${container} sh -c "mc alias set local http://localhost:9000 ${user} ${pass} >/dev/null && ` +
+      `echo ${b64} | base64 -d | mc pipe local/${bucket}/metadata/${key}.json"`,
+    { stdio: "pipe" },
+  );
+
+  const addresses = loadDeployedAddresses();
+  const created = await createTokenOnChain({
+    name,
+    symbol: ticker,
+    metadataHash: metadata.metadataHash,
+    metadataUri: metadata.metadataUri,
+    deployFeeWei: deployFeeWei(),
+  });
+  await waitForIndexed(
+    () => api.token(created.token),
+    (t) => Boolean(t?.address),
+    { label: `mismatch token ${created.token} indexed` },
+  );
+  return { ...created, name, ticker, addresses, metadata };
+}
+
+/** True when the compose minio container is reachable for the ERR-6b fixture. */
+export function canProvisionMismatchFixture(): boolean {
+  try {
+    const container = process.env.E2E_MINIO_CONTAINER ?? "robbed-minio-1";
+    execSync(`docker exec ${container} sh -c "mc --version >/dev/null 2>&1"`, { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Drive a curve to just under (or over) the graduation threshold via buys. */

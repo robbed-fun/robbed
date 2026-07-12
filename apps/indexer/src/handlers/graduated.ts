@@ -10,7 +10,9 @@
  */
 import { ponder } from "ponder:registry";
 import { graduations, tokens } from "ponder:schema";
-import { WETH_ADDRESS } from "@robbed/shared";
+// Chain's WETH from the registry-resolved config (§12.55(c)) — the shared
+// WETH_ADDRESS constant is mainnet-only and MUST NOT decide token0 ordering here.
+import { config } from "../runtime";
 import { eventId, lower } from "../ids";
 import { tokenIsToken0 } from "../price";
 import { graduationRegistry } from "../graduationRegistry";
@@ -28,7 +30,7 @@ ponder.on("V3Migrator:Graduated", async ({ event, context }) => {
   }
 
   const poolAddress = lower(event.args.pool);
-  const isToken0 = tokenIsToken0(tokenAddress, WETH_ADDRESS);
+  const isToken0 = tokenIsToken0(tokenAddress, config.weth);
 
   await context.db.insert(graduations).values({
     tokenAddress,

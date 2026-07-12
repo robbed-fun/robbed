@@ -105,3 +105,41 @@ export async function readCurveImmutables(
     tradeFeeBps: Number(tradeFeeBps as number | bigint),
   };
 }
+
+/**
+ * Event-block read with a pruned-state FALLBACK at `latest` (decision recorded
+ * per the decide-it-yourself loop, 2026-07-12):
+ *
+ * The primary path is the deterministic, Ponder-cached event-block read
+ * (`context.client`). But on a NON-ARCHIVE RPC the historical state can be
+ * pruned — observed live on the official public testnet RPC during the §12.55
+ * reindex: `eth_call` at the TokenCreated block returned "missing trie node"
+ * consistently (3/3 probes) once the block was ~40 min old, which killed the
+ * backfill. The fallback re-reads via a plain viem client at `latest`, which is
+ * VALUE-IDENTICAL here because every function read is a Solidity `immutable`
+ * (constructor-set, embedded in the deployed bytecode; `BondingCurve` has no
+ * selfdestruct) — the module doc above already records "block choice is
+ * immaterial". The fallback bypasses Ponder's RPC cache deliberately: Ponder's
+ * `context.client` rejects `blockTag` overrides (ponder.sh/docs/indexing/
+ * read-contracts, verified 2026-07-12), and the values persist into the
+ * `tokens` row anyway, so replay determinism holds at the value level — exactly
+ * the guarantee immutability grants. Alternative weighed: pinning the fallback
+ * to a recent concrete block (cacheable) — rejected: it re-prunes eventually
+ * and adds a head-lookup; `latest` cannot go stale for immutables.
+ */
+export async function readCurveImmutablesWithFallback(
+  primary: ContractReader,
+  fallback: ContractReader,
+  curveAddress: string,
+): Promise<CurveImmutables> {
+  try {
+    return await readCurveImmutables(primary, curveAddress);
+  } catch (err) {
+    console.warn(
+      `[curveReader] event-block immutables read failed for ${curveAddress} (pruned/non-archive node?) — ` +
+        `retrying at latest (immutables are value-identical at any block ≥ creation): ` +
+        (err instanceof Error ? err.message : String(err)),
+    );
+    return readCurveImmutables(fallback, curveAddress);
+  }
+}

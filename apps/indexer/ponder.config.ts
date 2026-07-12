@@ -42,7 +42,7 @@ assertStaticConfig(config);
 export default createConfig({
   chains: {
     robinhood: {
-      id: config.chainId, // asserted === 4663
+      id: config.chainId, // INDEXER_CHAIN_ID: registry-validated + live-RPC-asserted (§12.55(b))
       // Alchemy WS for realtime (<500ms budget, §8); HTTP for historical backfill.
       rpc: config.rpcHttp,
       ...(config.rpcWs ? { ws: config.rpcWs } : {}),

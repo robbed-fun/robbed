@@ -12,7 +12,6 @@
  */
 import { Pool, type PoolClient } from "pg";
 import type { IndexerConfig } from "../config";
-import { UNISWAP_V3 } from "@robbed/shared";
 import type { FlowInput, FlowResult } from "./heuristics";
 
 /**
@@ -30,7 +29,9 @@ export function buildOwnContractWhitelist(config: IndexerConfig): Set<string> {
   push(config.migrator);
   push(config.v3Factory);
   push(config.v3PositionManager);
-  push(UNISWAP_V3.swapRouter02);
+  // Chain's SwapRouter02 from the registry-resolved config (§12.55(c)) — the
+  // shared UNISWAP_V3 constant is mainnet-only.
+  push(config.swapRouter02);
   return set;
 }
 

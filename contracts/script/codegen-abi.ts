@@ -138,7 +138,9 @@ for (const name of CONTRACTS) {
 // panel / indexer curve-constants read, rather than shipping a silent gap.
 const REQUIRED_FNS: Partial<Record<ContractName, string[]>> = {
   BondingCurve: ["reserves", "phase", "quoteBuy", "quoteSell", "TRADE_FEE_BPS", "buy", "sell"],
-  CurveFactory: ["config", "createToken"],
+  // curveDefaults: factory-level curve-shape defaults for the pre-create Create-page
+  // preview (LAUNCH-2) + indexer startup cache (§12.38/§12.39).
+  CurveFactory: ["config", "curveDefaults", "createToken"],
   LaunchToken: ["metadataHash", "totalSupply"],
   LPFeeVault: ["collect"],
 };
@@ -274,7 +276,7 @@ for (const { artifact, events } of EVENT_SOURCES) {
   eventsByContract[artifact] = fragments;
 }
 
-// Plan-item verification hooks (implementation-plan M1-3; spec §12.15): the two
+// Plan-item verification hooks (M1-3; spec §12.15): the two
 // fields the indexer contract specifically hinges on must be present.
 const hasInput = (artifact: string, ev: string, input: string) =>
   eventsByContract[artifact]

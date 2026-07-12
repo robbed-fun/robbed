@@ -131,6 +131,16 @@ describe("TokenCard / TokenDetail (§5.1/§5.2)", () => {
     expect(tokenDetailSchema.safeParse(noPeriod).success).toBe(false);
   });
 
+  it("lpTokenId is optional (pre-grad absent) and a decimal string when present", () => {
+    // Pre-graduation detail carries no lpTokenId — the base fixture omits it.
+    expect(tokenDetailSchema.safeParse(detail).success).toBe(true);
+    // Graduated detail surfaces the Graduated event's LP NFT tokenId verbatim.
+    expect(tokenDetailSchema.safeParse({ ...detail, lpTokenId: "12345" }).success).toBe(true);
+    // uint256-as-decimal-string convention — hex/garbage must fail.
+    expect(tokenDetailSchema.safeParse({ ...detail, lpTokenId: "0xabc" }).success).toBe(false);
+    expect(tokenDetailSchema.safeParse({ ...detail, lpTokenId: 12345 }).success).toBe(false);
+  });
+
   it("creatorFeeBps is present from day 1 (§7)", () => {
     const { feePolicy: _fp, ...trustNoFee } = detail.trust;
     expect(

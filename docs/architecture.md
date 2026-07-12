@@ -1,6 +1,6 @@
 # ROBBED_ — System Architecture
 
-**Status:** v1.0, 2026-07-09. Entry-point overview for the whole system. Root authority: `launchpad-spec.md` (v1.1); hard rules distilled in `CLAUDE.md`; per-service designs in `docs/services/`. When this overview disagrees with a service doc, the service doc wins for that service's internals; when anything disagrees with the spec, the spec wins.
+**Status:** v1.0, 2026-07-09. Entry-point overview for the whole system. Root authority: `docs/spec.md` (v1.1); hard rules distilled in `CLAUDE.md`; per-service designs in `docs/how-it-works/`. When this overview disagrees with a service doc, the service doc wins for that service's internals; when anything disagrees with the spec, the spec wins.
 
 ROBBED_ is a pump.fun-style token launchpad on **Robinhood Chain** (chain ID 4663, Arbitrum Orbit L2, ETH gas, ~100ms blocks, single FCFS sequencer). The product is **soft-confirmed trading UX**: bonding-curve tokens tradeable in under a second, graduating to Uniswap V3 (1% tier) — "LP principal permanently locked; trading fees claimable by treasury" (the canonical LP sentence, spec §12.14). Differentiators vs hood.fun: perceived speed, trust transparency (Trust panel + on-chain metadata commitment + confirmation tiers), three-page product.
 
@@ -53,19 +53,19 @@ flowchart LR
 
 ## 2. Services
 
-### Contracts (`contracts/`) — [docs/services/contracts.md](services/contracts.md)
+### Contracts (`contracts/`) — [docs/how-it-works/contracts.md](how-it-works/contracts.md)
 
 Six immutable Solidity contracts (no proxies, one exact compiler pin, OZ v5, MIT): `LaunchToken` (fixed 1B, ownerless, on-chain `metadataHash`), `CurveFactory` (CREATE2 deploys, global config within hard caps, beta caps, Ownable2Step → Safe), `BondingCurve` (virtual-reserve constant product, in-contract 1% ETH-leg fee, graduation trigger at net-of-fee `GRADUATION_ETH`), `Router` (single user entrypoint, slippage+deadline, granular `pauseCreates`/`pauseBuys` — **sells can never be paused**), `V3Migrator` (pool pre-created+initialized at token creation at the deterministic graduation price; at graduation arbs any polluted price back before minting the full-range LP — never a hostile-ratio mint), `LPFeeVault` (no owner, no withdraw, sole function `collect()` → fixed treasury). Drives M1; gated by security gates 1–4.
 
-### Indexer (`apps/indexer`) — [docs/services/indexer.md](services/indexer.md)
+### Indexer (`apps/indexer`) — [docs/how-it-works/indexer.md](how-it-works/indexer.md)
 
 Ponder over six event families (`TokenCreated`, `Trade`, `Graduated`, LaunchToken `Transfer`, V3 `Swap`, V3 `Collect`) → Postgres. Single source of derived truth: venue-continuous candles (one `trades` table across curve and V3), exact holder balances from `Transfer`, confirmation-state watermarks (`soft_confirmed → posted_to_l1 → finalized`), metadata-hash verification against the on-chain commitment, ETH/USD snapshots (never a constant), Redis publish per handler with zero hot-path DB/RPC reads. Drives M2 (with API).
 
-### API + WS (`apps/api`) — [docs/services/api.md](services/api.md)
+### API + WS (`apps/api`) — [docs/how-it-works/api.md](how-it-works/api.md)
 
 Hono on Bun, two processes: HTTP (read endpoints over indexer tables, search via `pg_trgm`, API-mediated image upload with sniff+re-encode before R2, server-side metadata canonicalization that clients re-verify, moderation pipeline that gates *listing only*, SIWE admin) and the Bun WS fanout (Redis subscriber → sockets; contract defined in indexer.md §8). No chain writes, ever. Drives M2.
 
-### Web (`apps/web`) — [docs/services/web.md](services/web.md)
+### Web (`apps/web`) — [docs/how-it-works/web.md](how-it-works/web.md)
 
 Next.js 16 + React 19 (exact majors, no ranges — spec §12.37) App Router on Bun; exactly three pages: Discover `/`, Token Detail `/t/[address]`, Launch `/launch`. wagmi v2 + viem + RainbowKit (chain 4663), TanStack Query patched by one multiplexed WS, `lightweight-charts` venue-continuous candles, Trust panel with live on-chain reads, optimistic trade lifecycle reconciled to indexed truth, satori OG images, dark-only. Drives M3.
 
@@ -115,10 +115,10 @@ Not a service — the interface layer all three consume (see §4).
 | Metadata canonicalization (`canonicalizeMetadata`, `metadataHash`) + golden fixtures | `packages/shared` `metadata.ts` — **single implementation**, api.md §5 | API (hash at publish), web (pre-sign verify), indexer (verify vs chain) |
 | Confirmation vocabulary `soft_confirmed \| posted_to_l1 \| finalized` | shared `confirmation.ts` (semantics: spec §2.1, pipeline: indexer.md §5) | all three |
 | Constants (chain 4663, WETH, LP sentence, intervals, size caps) | shared `constants.ts` | all three |
-| Full read-function ABIs → `packages/shared/src/abi/*.json` (§12.38) — **compilation-time** codegen (`forge build`, no deploy) | hoodpad-contracts (M1-3b) → shared codegen, contracts.md §7.4 | indexer (`config()` startup read, replaces env-interim), web M3-5 Trust-panel live reads (never hand-written) |
+| Full read-function ABIs → `packages/shared/src/abi/*.json` (§12.38) — **compilation-time** codegen (`forge build`, no deploy) | hoodpad-contracts (M1-3b) → shared codegen, contracts.md §7.4 | indexer (`curveDefaults()` startup read — spec §12.39 amendment — replaces env-interim), web M3-5 Trust-panel live reads (never hand-written) |
 | Deploy artifacts → generated **addresses** — **deploy-time** codegen (needs a broadcast) | hoodpad-contracts (M1-14 output) → shared codegen | indexer config, web `lib/addresses.ts` (never hand-edited) |
 
-Change protocol for any row above: see [development-flow.md](development-flow.md) §6 (both owning agents + architect sign-off in the docs **before** code).
+Change protocol for any row above: the owning doc changes first, consuming agents review, architect signs off — in the docs **before** code (see [CONTRIBUTING.md](../CONTRIBUTING.md)).
 
 ## 5. Confirmation states — cross-cutting
 
@@ -139,7 +139,7 @@ Three tiers (spec §2.1): **soft-confirmed** (sequencer inclusion, sub-second �
 | Cloudflare R2 + CDN | Content-addressed images (`images/{keccak}.webp`) and canonical metadata (`metadata/{hash}.json`); bucket `robbed-assets`, account `0b1b0b8753489a11d35ee922961f6b72` | R2 is mutable; the on-chain hash is the commitment; indexer re-verifies |
 | Treasury | Gnosis Safe (verify/deploy canonical on 4663 — open §13) | Receives all fees; owner of CurveFactory via Ownable2Step; can never touch live curves or the vault |
 | Hosting — **backend** (spec §12.45) | Postgres (+`pg_trgm`), Redis, Ponder indexer (Node container), Hono/Bun API + Bun WS fanout — one **Komodo Stack** (git-synced docker-compose resource) on a Komodo core + periphery agent | Long-running stateful processes; **WS fanout stays co-located** so the Redis→socket hop keeps the <500ms budget (§8). Runbook: `docs/runbooks/deploy-komodo-cloudflare.md` |
-| Hosting — **frontend** (spec §12.45) | Next.js 16 SSR on **Cloudflare Workers** via the OpenNext adapter (`@opennextjs/cloudflare`, `nodejs_compat`) — **not** Pages-edge; R2 bound for assets | OpenNext supports Next.js 16 (re-verify at impl time). **OG rendering moves native `@resvg/resvg-js` → WASM** (`@resvg/resvg-wasm`+`satori` or `next/og`), **superseding implementation-plan M3-8's native raster backend for this deploy target** — `workerd` cannot run N-API addons |
+| Hosting — **frontend** (spec §12.45) | Next.js 16 SSR on **Cloudflare Workers** via the OpenNext adapter (`@opennextjs/cloudflare`, `nodejs_compat`) — **not** Pages-edge; R2 bound for assets | OpenNext supports Next.js 16 (re-verify at impl time). **OG rendering moves native `@resvg/resvg-js` → WASM** (`@resvg/resvg-wasm`+`satori` or `next/og`), **superseding plan item M3-8's native raster backend for this deploy target** — `workerd` cannot run N-API addons |
 | Monitoring (gate 7) | Prometheus-style metrics + alerts: head lag, publish latency, confirmation stalls, invariant violations (double-graduation, fee > cap, collect recipient ≠ treasury) | Mandatory during capped beta |
 
 ## 7. Milestone map (spec §11)

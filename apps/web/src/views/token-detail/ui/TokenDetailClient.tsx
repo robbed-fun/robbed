@@ -7,6 +7,7 @@ import type {
   TradeRow,
 } from "@robbed/shared";
 
+import { useLiveTokenDetail } from "@/entities/token";
 import { OptimisticTradesProvider } from "@/entities/trade";
 import { HolderTable } from "@/widgets/holder-table";
 import { PriceChart } from "@/widgets/price-chart";
@@ -14,31 +15,45 @@ import { TradeFeed } from "@/widgets/trade-feed";
 import { TradeWidget } from "@/widgets/trade-widget";
 import { TrustPanel } from "@/widgets/trust-panel";
 
+import { TokenHeader } from "./TokenHeader";
 import { TokenInfo } from "./TokenInfo";
 
 /**
- * Client island composing the five interactive widgets (§5.2, web.md §3.2). It
- * owns the SINGLE `OptimisticTradesProvider` so a trade submitted in the
- * TradeWidget appears in the TradeFeed and reconciles once (§4) — the two sibling
- * widgets never import each other; they share state through the entity-layer
- * context this view provides.
+ * Client island composing the header + five interactive widgets (§5.2, web.md
+ * §3.2). It owns the SINGLE `OptimisticTradesProvider` so a trade submitted in
+ * the TradeWidget appears in the TradeFeed and reconciles once (§4) — the two
+ * sibling widgets never import each other; they share state through the
+ * entity-layer context this view provides.
+ *
+ * LIVE VENUE SWITCH (TD-6, §5.2/§12.12): `token` here is the LIVE
+ * `useLiveTokenDetail` read — the SSR snapshot seeds it, and the WS `graduated`
+ * signal (or a v3-venue trade, or a reconnect refetch) flips `status` with no
+ * reload. Every status-derived surface consumes the same live object: the
+ * TradeWidget engine (graduating interstitial → V3 panel), the header status
+ * pill + bonding cell (TokenHeader now renders INSIDE this island for exactly
+ * that reason — it is still server-pre-rendered for the SSR pitch), the Trust
+ * panel, and the TokenInfo V3-pool link.
  *
  * Interactive islands hydrate from SSR `initialData`, so there is no double-fetch
  * flash while the client query becomes authoritative for live WS patching.
  */
 export function TokenDetailClient({
-  token,
+  token: initialToken,
+  holderCount,
   initialTrades,
   initialHolders,
   initialCandles,
 }: {
   token: TokenDetail;
+  holderCount?: number;
   initialTrades?: TradeRow[];
   initialHolders?: { holders: HolderRow[]; holderCount: number };
   initialCandles?: { candles: Candle[] };
 }) {
+  const token = useLiveTokenDetail(initialToken);
   return (
     <OptimisticTradesProvider>
+      <TokenHeader token={token} holderCount={holderCount} />
       {/*
         Mockup layout (docs/Robbed.html "2a", template lines 367-368): FLAT
         regions on the page background — grid `1fr 320px, gap 0`, the two columns

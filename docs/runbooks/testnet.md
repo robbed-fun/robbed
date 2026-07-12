@@ -119,10 +119,23 @@ With `treasurySafe` filled (T-2 below), the deploy is:
 cd contracts
 forge script script/Deploy.s.sol \
   --rpc-url "$TESTNET_RPC_URL" --broadcast \
+  --skip-simulation --slow --gas-estimate-multiplier 200 \
   --verify --verifier blockscout \
   --verifier-url "$TESTNET_BLOCKSCOUT_URL/api"
 bun script/emit-testnet-env.ts   # post-broadcast: tools/deployments/testnet.json + tools/localstack/out/testnet.env
 ```
+
+⚠ **`--skip-simulation --slow` are MANDATORY on this chain (incident 2026-07-12, first T-3 attempt).**
+Robinhood testnet is an Arbitrum Orbit L2: every tx's `gasUsed` includes an ArbOS **L1 data-fee
+component** (`gasUsedForL1` in receipts) that Foundry's *local* simulation cannot model. With the
+default flow (local sim × 1.3 multiplier) all four top-level CREATEs ran out of gas exactly at their
+limits (e.g. CurveFactory: limit 6,103,116 hit, of which 2,764,298 was `gasUsedForL1`), while the
+follow-up CALLs "succeeded" as value-transferring no-ops against the codeless addresses — stranding
+the canary's ETH at a dead address (CREATE nonce consumed, unrecoverable). `--skip-simulation` makes
+forge take gas limits from the node's `eth_estimateGas` (ArbOS includes the L1 component);
+`--gas-estimate-multiplier 200` adds a 2× buffer (unused gas is not charged); `--slow` waits for each
+receipt and **stops on the first failure**, preventing the no-op cascade. The 2026-07-12 T-3 deploy
+succeeded with exactly these flags.
 
 which per contracts.md §7.2 deploys all six contracts in order, runs the runtime V3/WETH assertions, executes the canary create+buy, initiates the Ownable2Step handoff to the treasury Safe (the Safe must `acceptOwnership()`), and Blockscout-verifies everything (this doubles as the **M1-2/O-5** solc-0.8.35+cancun verification check). *(Verifier endpoint: **RESOLVED — §12.52:** the testnet explorer runs the **Blockscout v2 verifier, no API key required, with `solc v0.8.35+commit.47b9dedd` in its supported list**.)* The `emit-testnet-env.ts` step (contracts-owned, mirrors the local `deploychain` one-shot) reads the deploy artifact `contracts/deployments/46630.json` + the broadcast receipts (for `START_BLOCK` = first deploy block, so the indexer backfill includes the canary events) and writes `tools/deployments/testnet.json` (addresses + verification-GUID placeholders) and `tools/localstack/out/testnet.env` with the **same keys as the local `local.env`** (`CURVE_FACTORY_ADDRESS`, `ROUTER_ADDRESS`, `MIGRATOR_ADDRESS`, `TREASURY_ADDRESS`, `LP_FEE_VAULT_ADDRESS`, `START_BLOCK`) — the fail-closed prerequisite of the §5 stack.
 

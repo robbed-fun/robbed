@@ -25,7 +25,11 @@ test(
       const res = await waitForIndexed(
         () => api.portfolioCreated(subject.address, "?limit=50"),
         (d) => d.tokens.some((t) => t.address.toLowerCase() === token.token.toLowerCase()),
-        { label: "created token indexed for the creator" },
+        // `listCreatedTokens` is a LIVE query on `tokens`, so this only waits out
+        // indexer lag. The creator (default seed signer) accumulates every seeded
+        // token across the suite, so mid-run the indexer can spike behind; give it
+        // a full 60s to materialize this launch (the assertion is unchanged).
+        { label: "created token indexed for the creator", timeoutMs: 60_000 },
       );
       const card = res.tokens.find((t) => t.address.toLowerCase() === token.token.toLowerCase());
       // Anti-drift: the card projection matches /v1/tokens (creator, status,

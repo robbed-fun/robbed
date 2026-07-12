@@ -139,7 +139,7 @@ services:
       "
     restart: "no"
 
-  # ── anvil — local chain (implementation-plan I-2): FORK of Robinhood Chain (4663) ──
+  # ── anvil — local chain (plan item I-2): FORK of Robinhood Chain (4663) ──
   # Fork mode (not a bare 31337 chain) is required: the indexer fail-closed asserts
   # chainId 4663 + canonical WETH/V3 (apps/indexer/src/assertions.ts), which only a fork
   # satisfies. Fork URL from the official Blockscout instance config
@@ -264,6 +264,10 @@ services:
       R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4900}/${R2_BUCKET:-robbed-assets}
       # Dev runs on stub moderation vendors (§4.3 boot guard allows this outside production).
       MODERATION_ALLOW_STUBS: "true"
+      # Dev/e2e: 100x the production per-route rate limits — back-to-back full
+      # e2e matrix runs exhaust prod uploads_h=10 and fail every create flow.
+      # Production deployments never set this (default 1 = prod values).
+      RATE_LIMIT_SCALE: "100"
       # Cold `tokensOwed` read (api.md §3.4) against the local fork.
       ROBINHOOD_RPC_URL: http://anvil:8545
     ports:
@@ -318,9 +322,17 @@ services:
       - /bin/sh
       - -c
       - |
+        # set -e per §12.55(d): the migrate step runs the fail-closed startup
+        # assertions — its failure MUST kill the container, never be swallowed.
+        set -e
         set -a; . ./tools/localstack/out/local.env; set +a
         # Offchain sidecar tables (watermarks, eth_usd, metadata_verifications — indexer.md §3)
         # live outside Ponder's schema management; the migrate script is idempotent.
+        # Phase 2 (0003 GIN indexes + 0005/0007 views over Ponder-managed tables) is
+        # skipped here on a fresh DB and applied by the indexer SIDECAR BOOT
+        # (src/offchainMigrations.ts, wired from the Ponder :setup hook) — the
+        # first-class replacement for the I-5b /ready-polling re-run loop that
+        # used to live in this command. No orchestration needed in compose.
         pnpm --filter @robbed/indexer migrate
         exec pnpm --filter @robbed/indexer exec ponder dev --hostname 0.0.0.0
     env_file:
@@ -328,6 +340,13 @@ services:
         required: false
     environment:
       <<: *dev-env
+      # §12.55 chain-identity gate: explicit selection (registry-validated + live
+      # RPC-asserted). This stack is the anvil FORK of mainnet — eth_chainId 4663.
+      INDEXER_CHAIN_ID: "4663"
+      # §12.55 known limit: the registry's 4663 entry is a mainnet-FORK pipeline
+      # artifact, so 4663 is refused unless the stack declares itself a LOCAL fork
+      # (this one is — the sanctioned exception until a real Phase-B deploy).
+      INDEXER_ALLOW_FORK_4663: "1"
       INDEXER_RPC_HTTP: http://anvil:8545
       DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
       REDIS_URL: redis://redis:6379
@@ -370,11 +389,32 @@ services:
   # ── web — Next.js 16 dev server (apps/web). Host :4000 ──
   web:
     <<: *dev-base
-    command: ["pnpm", "--filter", "@robbed/web", "exec", "next", "dev", "-H", "0.0.0.0"]
+    # Sources the deploychain-emitted fork addresses (when present) into the
+    # NEXT_PUBLIC_E2E_* seam (apps/web/src/shared/config/addresses.ts) so an
+    # e2e-mode web (NEXT_PUBLIC_E2E=true) can trade against the fork's Router.
+    # Inert otherwise: addresses.ts only reads these when NEXT_PUBLIC_E2E=true,
+    # and prod never sets that flag. Mirrors the api service's local.env sourcing.
+    command:
+      - /bin/sh
+      - -c
+      - |
+        if [ -f tools/localstack/out/local.env ]; then
+          set -a; . ./tools/localstack/out/local.env; set +a
+          export NEXT_PUBLIC_E2E_ROUTER="$${NEXT_PUBLIC_E2E_ROUTER:-$$ROUTER_ADDRESS}"
+          export NEXT_PUBLIC_E2E_CURVE_FACTORY="$${NEXT_PUBLIC_E2E_CURVE_FACTORY:-$$CURVE_FACTORY_ADDRESS}"
+          export NEXT_PUBLIC_E2E_LP_FEE_VAULT="$${NEXT_PUBLIC_E2E_LP_FEE_VAULT:-$$LP_FEE_VAULT_ADDRESS}"
+          export NEXT_PUBLIC_E2E_MIGRATOR="$${NEXT_PUBLIC_E2E_MIGRATOR:-$$MIGRATOR_ADDRESS}"
+          export NEXT_PUBLIC_E2E_TREASURY="$${NEXT_PUBLIC_E2E_TREASURY:-$$TREASURY_ADDRESS}"
+        fi
+        exec pnpm --filter @robbed/web exec next dev -H 0.0.0.0
     environment:
       <<: *dev-env
       # Browser-visible (NEXT_PUBLIC_) — must use HOST-mapped 4XXX ports, not service DNS names.
       NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-4001}
+      # Split-horizon API base: SSR fetches run INSIDE this container, where the browser URL
+      # (host-mapped localhost:4001) is ECONNREFUSED — server-only code prefers this service-DNS
+      # base (api service's internal port 3001); the browser keeps NEXT_PUBLIC_API_BASE_URL.
+      API_BASE_URL_INTERNAL: http://api:3001
       NEXT_PUBLIC_WS_URL: ws://localhost:${WS_PORT:-4002}
       NEXT_PUBLIC_R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4900}/${R2_BUCKET:-robbed-assets}
       # Browser → host-mapped anvil fork (chain 4663). anvil serves ws on the same port.
@@ -393,6 +433,18 @@ services:
       # NEXT_PUBLIC_E2E_ACCOUNTS=<addr0,..,addr3> docker compose up -d web`.
       NEXT_PUBLIC_E2E: ${NEXT_PUBLIC_E2E:-}
       NEXT_PUBLIC_E2E_ACCOUNTS: ${NEXT_PUBLIC_E2E_ACCOUNTS:-}
+      # Fork contract addresses for the e2e build (addresses.ts E2E override —
+      # apps/web/src/shared/config/addresses.ts). The ephemeral fork's deploys are
+      # NOT codegen'd into @robbed/shared, so without these `requireAddress()`
+      # throws and no UI-driven tx can ever be sent. Values come from the
+      # deploychain one-shot output `tools/localstack/out/local.env`
+      # (ROUTER_ADDRESS → NEXT_PUBLIC_E2E_ROUTER, etc.). Only read when
+      # NEXT_PUBLIC_E2E=true; unset (prod-shaped) by default.
+      NEXT_PUBLIC_E2E_ROUTER: ${NEXT_PUBLIC_E2E_ROUTER:-}
+      NEXT_PUBLIC_E2E_CURVE_FACTORY: ${NEXT_PUBLIC_E2E_CURVE_FACTORY:-}
+      NEXT_PUBLIC_E2E_LP_FEE_VAULT: ${NEXT_PUBLIC_E2E_LP_FEE_VAULT:-}
+      NEXT_PUBLIC_E2E_MIGRATOR: ${NEXT_PUBLIC_E2E_MIGRATOR:-}
+      NEXT_PUBLIC_E2E_TREASURY: ${NEXT_PUBLIC_E2E_TREASURY:-}
     volumes:
       - .:/workspace
       - robbed_pnpm_store:/pnpm-store
@@ -408,12 +460,37 @@ services:
     depends_on:
       deps:
         condition: service_completed_successfully
+      # local.env must exist BEFORE the dev server boots — NEXT_PUBLIC_* are read
+      # from the server process env, so the fork addresses can't be picked up later.
+      deploychain:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3000"]
       interval: 15s
       timeout: 10s
       retries: 10
       start_period: 60s
+
+  # ── apiproxy — SSR seam for the web dev server (found by I-5b e2e triage) ──
+  # Next.js server components fetch `NEXT_PUBLIC_API_BASE_URL` (host-mapped
+  # http://localhost:4001 so the BROWSER can reach it) — but the same fetch runs
+  # SERVER-SIDE inside the web container, where localhost:4001 is unbound and
+  # every SSR page (e.g. /t/[address]) crashed with ECONNREFUSED. This socat
+  # forward JOINS the web service's network namespace and listens on
+  # 127.0.0.1:4001 there, relaying to the api container (api:3001), so the one
+  # URL works identically from the host browser and from SSR. Infra-only fix —
+  # no product code; a first-class server-side base-URL seam in the web app
+  # would supersede this (flagged to robbed-frontend).
+  apiproxy:
+    image: alpine/socat:1.8.0.3
+    network_mode: "service:web"
+    command: TCP-LISTEN:4001,fork,reuseaddr,bind=127.0.0.1 TCP:api:3001
+    depends_on:
+      web:
+        condition: service_started
+      api:
+        condition: service_started
+    restart: unless-stopped
 
 volumes:
   robbed_pgdata:

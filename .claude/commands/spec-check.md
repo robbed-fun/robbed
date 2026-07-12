@@ -1,15 +1,15 @@
 ---
-description: Review files/dirs (or the current repo diff) against launchpad-spec.md hard rules and CLAUDE.md; outputs a findings table with spec references and severity.
+description: Review files/dirs (or the current repo diff) against docs/spec.md hard rules and CLAUDE.md; outputs a findings table with spec references and severity.
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
-Review **$ARGUMENTS** for compliance with `launchpad-spec.md` (v1.1) and `CLAUDE.md`.
+Review **$ARGUMENTS** for compliance with `docs/spec.md` (v1.1) and `CLAUDE.md`.
 
 Scope resolution:
 - If `$ARGUMENTS` names files or directories, review exactly those.
 - If `$ARGUMENTS` is empty, review the current repo diff: `git diff HEAD` plus staged changes plus untracked files (`git status --porcelain`); if the working tree is clean, review the last commit (`git show`).
 
-First read `CLAUDE.md` and `launchpad-spec.md` in full. Then check every in-scope file against the hard rules below. Check code, comments, copy strings, docs, and config — violations in copy or docs count the same as code.
+First read `CLAUDE.md` and `docs/spec.md` in full. Then check every in-scope file against the hard rules below. Check code, comments, copy strings, docs, and config — violations in copy or docs count the same as code.
 
 ## Rules to enforce (rule → spec ref)
 

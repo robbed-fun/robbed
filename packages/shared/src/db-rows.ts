@@ -36,8 +36,8 @@ export interface TokenRow {
   /** §7: 0 in v1; column exists so Phase 2 needs no migration. */
   creator_fee_bps: number;
   /**
-   * Per-curve snapshot of the trade fee, basis points (§12.40d; decisions.md
-   * §7.2 item 1). The indexer writes this from the curve's immutable
+   * Per-curve snapshot of the trade fee, basis points (spec §12.40d wiring
+   * follow-up, ratified 2026-07-10). The indexer writes this from the curve's immutable
    * `TRADE_FEE_BPS` at TokenCreated; API card/detail projections read THIS
    * column, never `apps/api/src/config.ts` (factory-current, which misreports
    * older curves deployed under a different fee). `≤ MAX_TRADE_FEE_BPS` (200).

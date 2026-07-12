@@ -372,9 +372,10 @@ function ReceiveBox({
  * `Price impact` / `Fee` (plain "1%") / `Max slippage` — 11.5px muted rows,
  * 7px gap, hairline top border, 12px top padding. The slippage row IS the
  * interactive control (spec: configurable slippage + a deadline on every trade
- * §5.2), visually integrated as the third mockup row rather than a separate
- * block. `Min received` stays as a fourth row — the spec requires the
- * minTokensOut floor to be communicated.
+ * §5.2): the label→value row keeps the mockup's third-row read, and the preset
+ * chips wrap onto their own line under it (review fix — the merged single row
+ * overflowed the 320px rail). `Min received` stays as a fourth row — the spec
+ * requires the minTokensOut floor to be communicated.
  */
 function InfoRows({
   side,
@@ -406,8 +407,22 @@ function InfoRows({
       <Row label="Fee">
         <span className="tabular-nums">{feeLabel}</span>
       </Row>
-      <Row label="Max slippage">
-        <span className="flex items-center gap-1.5">
+      {/* Review fix (2026-07-11): the merged label+chips+value+deadline row
+          overflowed the 320px rail. The mockup's three-row read is preserved —
+          "Max slippage" stays a label→value row (value + §5.2 deadline
+          disclosure); the preset chips wrap DELIBERATELY onto their own
+          right-aligned line beneath it. */}
+      <div className="flex flex-col gap-1.5">
+        <Row label="Max slippage">
+          <span className="flex items-center gap-1.5">
+            <span className={cn("tabular-nums", slippageWarn && "text-soft-confirmed")}>
+              {(slippageBps / 100).toFixed(1)}%
+            </span>
+            {/* §5.2: the deadline on every trade stays disclosed. */}
+            <span className="text-faint">· deadline 10m</span>
+          </span>
+        </Row>
+        <div className="flex items-center justify-end gap-1.5">
           {[50, 100, 200].map((preset) => (
             <Chip
               key={preset}
@@ -418,13 +433,8 @@ function InfoRows({
               {preset / 100}%
             </Chip>
           ))}
-          <span className={cn("tabular-nums", slippageWarn && "text-soft-confirmed")}>
-            {(slippageBps / 100).toFixed(1)}%
-          </span>
-          {/* §5.2: the deadline on every trade stays disclosed. */}
-          <span className="text-faint">· deadline 10m</span>
-        </span>
-      </Row>
+        </div>
+      </div>
       <Row label="Min received">
         <span className="tabular-nums text-text-secondary">
           {minOut !== null ? fmtOut(minOut) : "—"}

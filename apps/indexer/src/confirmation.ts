@@ -14,7 +14,7 @@
  * stored on Ponder-managed tables and NEVER written back by this tracker. The
  * previous design (ranged external `UPDATE`s of a `confirmation_state` column)
  * was disproven by the OI-11 verification against the pinned ponder 0.16.8
- * (decisions.md §11, indexer.md §7.3): Ponder's indexing-store cache retains
+ * (spec §12.48c, indexer.md §7.3): Ponder's indexing-store cache retains
  * rows in memory across realtime blocks, prefetch never re-reads cached keys,
  * and flush rewrites ALL columns from the cached copy — so an external upgrade
  * on a handler-mutated row (`tokens` on every Trade) is silently reverted and

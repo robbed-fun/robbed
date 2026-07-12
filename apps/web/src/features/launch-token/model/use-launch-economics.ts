@@ -4,8 +4,6 @@ import { curveFactoryAbi } from "@robbed/shared/abi";
 import { useReadContracts } from "wagmi";
 
 import { ROBBED, isPlaceholder } from "@/shared/config/addresses";
-import { env } from "@/shared/lib/env";
-import { mockLaunchEconomics } from "@/shared/mock/mock-api";
 
 /**
  * Live economics read from the CurveFactory (§5.3 "economics displayed plainly").
@@ -14,6 +12,14 @@ import { mockLaunchEconomics } from "@/shared/mock/mock-api";
  * CLAUDE.md). `pauseCreates` gates the submit button (granular flag, §6.5 — this
  * NEVER affects sells elsewhere).
  *
+ * LAUNCH-2 fix (2026-07-12): the curve seed values come from
+ * `CurveFactory.curveDefaults()` — the zero-input view returning
+ * `(virtualEth0, virtualToken0, curveSupply, lpTranche, graduationEth)` —
+ * NEVER from `curveParameters()`, which is a deploy-transient handoff slot that
+ * reads as all zeros outside `createToken` and broke the Create-page preview.
+ * Fees + pause come from the `config()` tuple (tradeFeeBps / creationFee /
+ * pauseCreates) — two eth_calls total.
+ *
  * The factory address is the generated `ROBBED.curveFactory`, a zero sentinel
  * until the M1-14 deploy codegen lands; while it is the placeholder the reads are
  * DISABLED and `available` is false, so the panel renders its labels + the LP
@@ -21,17 +27,17 @@ import { mockLaunchEconomics } from "@/shared/mock/mock-api";
  * fabricated value. `allowFailure` degrades a single reverting read to `null`.
  */
 export interface LaunchEconomics {
-  /** CurveFactory.creationFee() — the deploy fee, wei. */
+  /** FactoryConfig.creationFee — the deploy fee, wei. */
   deployFeeWei: bigint | null;
-  /** CurveParameters.graduationEth — the graduation threshold, wei. */
+  /** CurveDefaults.graduationEth — the graduation threshold, wei. */
   graduationEthWei: bigint | null;
-  /** CurveFactory.tradeFeeBps() — curve trade fee, rendered live. */
+  /** FactoryConfig.tradeFeeBps — curve trade fee, rendered live. */
   tradeFeeBps: number | null;
-  /** CurveParameters.virtualEth0 — seed virtual ETH reserve; seeds the M3-6 preview. */
+  /** CurveDefaults.virtualEth0 — seed virtual ETH reserve; seeds the M3-6 preview. */
   virtualEth0: bigint | null;
-  /** CurveParameters.virtualToken0 — seed virtual token reserve; seeds the M3-6 preview. */
+  /** CurveDefaults.virtualToken0 — seed virtual token reserve; seeds the M3-6 preview. */
   virtualToken0: bigint | null;
-  /** CurveFactory.pauseCreates() — disables submit when true (§6.5). */
+  /** FactoryConfig.pauseCreates — disables submit when true (§6.5). */
   pauseCreates: boolean | null;
   /** False while the factory address is still the M3-3 placeholder stub. */
   available: boolean;
@@ -43,61 +49,48 @@ const toBig = (v: unknown): bigint | null =>
   typeof v === "bigint" ? v : typeof v === "number" ? BigInt(v) : null;
 
 export function useLaunchEconomics(): LaunchEconomics {
-  // DEMO MODE (Gap 1): the CurveFactory `eth_call`s are short-circuited to the
-  // fixture so Create shows real Deploy cost / Starting price / Supply instead of
-  // "read on-chain". The wagmi read is DISABLED but still called unconditionally
-  // to keep hook order stable. Strictly gated — dead branch with the flag off.
-  const mock = env.mockData();
-  const available = mock || !isPlaceholder(ROBBED.curveFactory);
+  const available = !isPlaceholder(ROBBED.curveFactory);
   const factory = ROBBED.curveFactory;
 
   const { data, isLoading, isError } = useReadContracts({
     allowFailure: true,
     contracts: [
-      { address: factory, abi: curveFactoryAbi, functionName: "creationFee" },
-      { address: factory, abi: curveFactoryAbi, functionName: "curveParameters" },
-      { address: factory, abi: curveFactoryAbi, functionName: "tradeFeeBps" },
-      { address: factory, abi: curveFactoryAbi, functionName: "pauseCreates" },
+      { address: factory, abi: curveFactoryAbi, functionName: "curveDefaults" },
+      { address: factory, abi: curveFactoryAbi, functionName: "config" },
     ],
     query: {
-      enabled: available && !mock,
+      enabled: available,
       refetchInterval: 8_000,
       staleTime: 4_000,
     },
   });
-
-  if (mock) {
-    return {
-      ...mockLaunchEconomics(),
-      available: true,
-      isLoading: false,
-      isError: false,
-    };
-  }
 
   const at = (i: number): unknown => {
     const cell = data?.[i];
     return cell && cell.status === "success" ? cell.result : undefined;
   };
 
-  const params = at(1) as
-    | { graduationEth?: bigint; virtualEth0?: bigint; virtualToken0?: bigint }
+  // viem decodes the named single-tuple outputs as objects (ICurveFactory
+  // structs in the generated ABI — packages/shared/src/abi).
+  const defaults = at(0) as
+    | { virtualEth0?: bigint; virtualToken0?: bigint; graduationEth?: bigint }
     | undefined;
-  const feeRaw = at(2);
-  const pauseRaw = at(3);
+  const config = at(1) as
+    | { tradeFeeBps?: number; creationFee?: bigint; pauseCreates?: boolean }
+    | undefined;
 
   return {
-    deployFeeWei: toBig(at(0)),
-    graduationEthWei: params ? toBig(params.graduationEth) : null,
+    deployFeeWei: config ? toBig(config.creationFee) : null,
+    graduationEthWei: defaults ? toBig(defaults.graduationEth) : null,
     tradeFeeBps:
-      typeof feeRaw === "number"
-        ? feeRaw
-        : typeof feeRaw === "bigint"
-          ? Number(feeRaw)
+      typeof config?.tradeFeeBps === "number"
+        ? config.tradeFeeBps
+        : typeof config?.tradeFeeBps === "bigint"
+          ? Number(config.tradeFeeBps)
           : null,
-    virtualEth0: params ? toBig(params.virtualEth0) : null,
-    virtualToken0: params ? toBig(params.virtualToken0) : null,
-    pauseCreates: typeof pauseRaw === "boolean" ? pauseRaw : null,
+    virtualEth0: defaults ? toBig(defaults.virtualEth0) : null,
+    virtualToken0: defaults ? toBig(defaults.virtualToken0) : null,
+    pauseCreates: typeof config?.pauseCreates === "boolean" ? config.pauseCreates : null,
     available,
     isLoading: available && isLoading,
     isError: available && isError,

@@ -25,6 +25,9 @@ export function toTokenDetail(
     curveAddress: row.curve_address,
     ...(row.v3_pool_address ? { v3PoolAddress: row.v3_pool_address } : {}),
     ...(row.graduated_at != null ? { graduatedAt: row.graduated_at } : {}),
+    // LP NFT tokenId from graduations (present iff graduated) — lets clients
+    // call LPFeeVault.collect(tokenId) without re-reading the Graduated log.
+    ...(row.lp_token_id != null ? { lpTokenId: row.lp_token_id } : {}),
     supply: {
       total: row.total_supply,
       // Balance the curve holds; falls back to live curve token reserves.

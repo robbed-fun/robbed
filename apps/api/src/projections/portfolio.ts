@@ -153,6 +153,14 @@ function combinePnl(
 export function toPortfolioSummary(input: {
   address: string;
   pnl: AddressPnlRow | null;
+  /**
+   * Live `count(*)` from `trades` (Db.countAddressTrades) — NOT the advisory
+   * `address_pnl.trade_count`, which lags by up to one roll-up interval and is
+   * 0 on a fresh DB before the job's first tick (PORT-1). firstSeenAt /
+   * tokensCreated / realized PnL below remain roll-up-sourced (advisory
+   * latency ≤ PNL_JOB_INTERVAL_MS, default 60s — api.md §3.4a).
+   */
+  tradeCount: number;
   holdings: PortfolioHoldingRow[];
   walletEthBalance: string;
   ethUsd: EthUsdSnapshot | null;
@@ -168,7 +176,7 @@ export function toPortfolioSummary(input: {
   return {
     address: input.address,
     firstSeenAt: input.pnl?.first_seen_at ?? null,
-    tradeCount: input.pnl?.trade_count ?? 0,
+    tradeCount: input.tradeCount,
     tokensCreated: input.pnl?.tokens_created ?? 0,
     walletEthBalance: input.walletEthBalance,
     totalValueEth: totalValue.toString(),

@@ -28,15 +28,33 @@ export const CORS_HEADERS: Record<string, string> = {
 
 export const test = base.extend<{ stackReady: void }>({
   page: async ({ page }, use) => {
+    // NOTE on clocks: the app computes tx deadlines from wall time
+    // (`computeDeadline` = Date.now()+10m). Anvil warps push `block.timestamp`
+    // AHEAD of wall time, but a UI-driven trade only expires once that drift
+    // exceeds the 10-minute deadline; a full suite run drifts a few hundred
+    // seconds (well under 600s), so wall-based deadlines stay valid and we do NOT
+    // fake the page clock — `page.clock.install` breaks timer-driven UI (debounced
+    // search, the WS-driven live tape, optimistic silence timers). Chain-relative
+    // times that MUST track the fork (candle windows, a deliberately-past
+    // deadline) are computed with `chainNow()`/`txDeadline()` directly.
     await page.route(`${STACK.apiUrl}/**`, async (route) => {
-      if (route.request().method() === "OPTIONS") {
-        await route.fulfill({ status: 204, headers: CORS_HEADERS });
-        return;
+      try {
+        if (route.request().method() === "OPTIONS") {
+          await route.fulfill({ status: 204, headers: CORS_HEADERS });
+          return;
+        }
+        const res = await route.fetch();
+        await route.fulfill({ response: res, headers: { ...res.headers(), ...CORS_HEADERS } });
+      } catch {
+        // A poll can be in flight while the page/context closes — never let the
+        // shim's own error fail the test (the assertion already settled).
+        await route.abort().catch(() => {});
       }
-      const res = await route.fetch();
-      await route.fulfill({ response: res, headers: { ...res.headers(), ...CORS_HEADERS } });
     });
     await use(page);
+    // Recommended teardown for long-lived routes (playwright.dev/docs/api/class-page
+    // unrouteAll, checked 2026-07-12): drop handlers, ignoring in-flight errors.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
   },
   stackReady: [
     async ({}, use, testInfo) => {

@@ -1,6 +1,6 @@
 # Contracts toolchain — install + pin record
 
-Transcribes: `docs/services/contracts.md` §6 (gate 1 — static analysis) and §7.1 (deployment/verification toolchain).
+Transcribes: `docs/how-it-works/contracts.md` §6 (gate 1 — static analysis) and §7.1 (deployment/verification toolchain).
 Owner: `hoodpad-contracts`. Scope: everything under `contracts/`.
 
 This file is the authoritative record of the static-analysis / build toolchain for the Foundry
@@ -23,7 +23,8 @@ pipx 1.4.3 (`/usr/bin/pipx`).
   Reviewer reported Blockscout verification failures on `0.8.36` for this chain, so the pin stays at `0.8.35`.
   A change to the pin is a §12 decision (hoodpad-architect), never silent.
 - **Not this item:** the throwaway/canary-contract verification GUID is master-plan item **M1-2**, not P0-5.
-  Only the pin value is recorded here.
+  Only the pin value is recorded here — the M1-2/O-5 round-trip record lives in the dedicated section at
+  the bottom of this file ("O-5 / M1-2 — verification round-trip record").
 
 ## Installed tools
 
@@ -117,3 +118,30 @@ Expected: `forge` 1.7.1, `slither` 0.11.5, `solhint` 6.2.3, file present; overal
 Aderyn is not in the DoD gate but is installed and recorded: `aderyn --version` => `aderyn 0.6.8`.
 Last run green: 2026-07-12 (linux reinstall) — forge 1.7.1, slither 0.11.5, solhint 6.2.3,
 aderyn 0.6.8, `solc-select versions` => `0.8.35 (current)`.
+
+## O-5 / M1-2 — verification round-trip record
+
+**TESTNET round-trip: DONE 2026-07-12** (Phase-T, per docs/runbooks/testnet.md §6 + this file's pin).
+A throwaway probe contract (`VerifyProbe085Cancun`, MIT, no constructor args, exercises the
+Cancun-only `mcopy` path) was compiled at the EXACT production pins — solc `0.8.35+commit.47b9dedd`,
+`evm_version = cancun`, optimizer on / 200 runs — deployed to Robinhood Chain **testnet (46630)** and
+verified on the testnet Blockscout with `forge verify-contract … --verifier blockscout
+--verifier-url https://explorer.testnet.chain.robinhood.com/api --chain-id 46630 --watch`
+(Blockscout v2 verifier, no API key — spec §12.52):
+
+| Field | Value |
+|---|---|
+| Date | 2026-07-12 |
+| Contract | `VerifyProbe085Cancun` (throwaway probe — not part of `contracts/src`) |
+| Address (46630) | `0x8584Be043292ED7c688F193AbdC4271A0B9a0892` |
+| Deploy tx | `0xbcbf6754deb85b9fe5855f21f4c788997f6c00a06ec8555bf653da47d9ae39de` |
+| Verification GUID | `8584be043292ed7c688f193abdc4271a0b9a08926a5378b7` |
+| Result | `Pass - Verified`; API read-back: `is_verified: true`, `compiler_version: v0.8.35+commit.47b9dedd`, `evm_version: cancun`, `optimization_runs: 200` |
+| Explorer | https://explorer.testnet.chain.robinhood.com/address/0x8584be043292ed7c688f193abdc4271a0b9a0892 |
+
+Notes: (a) Blockscout's API reports `license_type: "none"` — forge's Blockscout submission does not
+carry a license field; the verified SOURCE carries the `SPDX-License-Identifier: MIT` header, which is
+the spec §6.7 requirement. (b) This round-trip proves the **testnet** verifier
+(explorer.testnet.chain.robinhood.com); the **mainnet** robinhoodchain.blockscout.com round-trip
+(the original O-5 target — pin presence in its config was confirmed 2026-07-09, see "Compiler pin")
+is repeated at the first mainnet deploy before anything else is broadcast there.

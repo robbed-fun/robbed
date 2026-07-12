@@ -38,6 +38,11 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
+    // Anti-flake: the trending carousel / event tape are infinite CSS marquees;
+    // a moving link is never "stable" so clicks retry until timeout. The app
+    // honours `prefers-reduced-motion` (motion-reduce:animate-none), so emulate
+    // it (playwright.dev/docs/api/class-testoptions#test-options-contexts).
+    contextOptions: { reducedMotion: "reduce" },
   },
   projects: [
     {

@@ -1,18 +1,23 @@
-# ROBBED_ — TESTNET stack (implementation-plan Phase T / T-5 staging shape, delivered ahead of the
+# ROBBED_ — TESTNET stack (Phase T / T-5 staging shape, delivered ahead of the
 # testnet deploy as P-9/M2-0 infrastructure): the same off-chain stack as docker-compose.yml
 # (postgres, redis, minio, api, ws, indexer, web) pointed at the REMOTE Robinhood Chain testnet.
 #
 #   NO anvil, NO deploychain: the chain is remote and contracts are deployed by the Phase-T
 #   `forge script` run (T-3), never by compose.
 #
-# ── HARD RULE: no invented testnet parameters (spec §13, implementation-plan Phase T note) ──
+# ── HARD RULE: no invented testnet parameters (spec §13, Phase-T rule) ──
 # The Robinhood testnet chain ID / RPC / WS / Blockscout URLs are a §13 open item pulled from
-# OFFICIAL Robinhood docs at Phase-T start. This file carries NO defaults for them — every
-# `${TESTNET_*:?…}` below makes `docker compose config`/`up` fail loud when unset. Export them
-# in your shell or a root `.env`:
+# OFFICIAL Robinhood docs at Phase-T start. This file carries NO defaults for them — the
+# REQUIRED `${TESTNET_*:?…}` guards below make `docker compose config`/`up` fail loud when
+# unset. Export them in your shell or a root `.env`:
 #
 #   TESTNET_RPC_URL       required — official testnet JSON-RPC (http/https)
-#   TESTNET_RPC_WS_URL    required — official testnet WebSocket RPC
+#   TESTNET_RPC_WS_URL    OPTIONAL — WS JSON-RPC. Not invention-prevention: the only official WS
+#                         JSON-RPC is the key-gated Alchemy endpoint (wss://robinhood-testnet.g.
+#                         alchemy.com/v2/{KEY}, NEEDS-USER — may arrive later). Empty/unset ⇒ the
+#                         indexer falls back to HTTP polling (apps/indexer/src/config.ts:
+#                         INDEXER_RPC_WS is optional, `|| undefined`). NEVER the sequencer feed
+#                         wss (feed.testnet…) — that is a block feed, not JSON-RPC.
 #   TESTNET_CHAIN_ID      required — official testnet chain id (asserted by `chaincheck` preflight)
 #   (TESTNET_BLOCKSCOUT_URL is part of the same §13 set but is consumed by the T-3 forge
 #    verification step, not by any service here — see docs/runbooks/docker.md "Testnet stack".)
@@ -25,13 +30,15 @@
 # refuse to start without it (clear error pointing at Phase T / T-3); there is no best-effort mode
 # here because no local deploy one-shot can fill the gap.
 #
-# ── HONEST STATUS: indexer fail-closed gates are MAINNET constants (do not weaken) ──
-# apps/indexer/src/assertions.ts + src/config.ts assert chainId === 4663 (shared CHAIN_ID, also
-# runtime-checked against the RPC) and canonical WETH from @robbed/shared — NEITHER is
-# env-overridable (only V3_FACTORY_ADDRESS / V3_NPM_ADDRESS accept env overrides). Until T-1
-# delivers testnet constants through robbed-shared/architect, the indexer (and the web wallet
-# config, same shared CHAIN_ID) will correctly refuse a testnet whose chain id ≠ 4663. That is
-# fail-closed working as designed — this file is Phase-T-ready infrastructure, not a bypass.
+# ── STATUS (2026-07-12): §12.55 chain-identity gate IMPLEMENTED — the earlier bypass is fixed ──
+# The indexer consumes INDEXER_CHAIN_ID (injected below: 46630), which must resolve in the
+# shared deployment registry (packages/shared addresses.ts) AND match the live RPC's
+# eth_chainId (double fail-closed, apps/indexer/src/config.ts + assertions.ts). Every
+# chain-dependent address (WETH, V3 factory/NPM/SwapRouter02, robbed contracts, treasury)
+# resolves from that registry entry — the pre-§12.55 mainnet-default fallbacks are gone, so
+# testnet graduated-pool Swap/Collect indexing watches the CORRECT testnet V3 deployment.
+# `set -e` is restored in the indexer command per §12.55(d): a failed startup assertion kills
+# the container instead of being silently swallowed (the pre-ruling defect observed live here).
 #
 # ── ANTI-DRIFT: this file is a deliberate self-contained MIRROR of docker-compose.yml ──
 # Compose override merging cannot delete whole services or depends_on edges from an untouched base
@@ -43,8 +50,12 @@
 # Sections copied verbatim are marked "MIRROR"; testnet-specific deltas are marked "TESTNET".
 #
 # Distinct project name => distinct volumes/network (robbed-testnet_*): testnet DB/backfill state
-# never mixes with the local fork's. Host ports reuse the local 4XXX convention — do NOT run both
-# stacks at once without overriding the *_PORT vars.
+# never mixes with the local fork's. Host ports live on a DISTINCT 41XX block (dev keeps 40XX/44XX)
+# so BOTH stacks can run simultaneously with no *_PORT overrides:
+#   4100 web   4101 api   4102 ws   4132 postgres   4164 indexer metrics
+#   4169 ponder dev UI/GraphQL     4179 redis       4190 minio S3   4191 minio console
+# (env-var NAMES stay identical to the dev stack — only the `:-` defaults differ; an exported
+#  *_PORT in your shell/.env therefore applies to BOTH stacks and re-collides them.)
 name: robbed-testnet
 
 # MIRROR of docker-compose.yml x-dev-base (see anti-drift note above).
@@ -75,7 +86,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-robbed_dev_pw}
       POSTGRES_DB: ${POSTGRES_DB:-robbed}
     ports:
-      - "${POSTGRES_PORT:-4432}:5432"
+      - "${POSTGRES_PORT:-4132}:5432"
     volumes:
       - robbed_pgdata:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -91,7 +102,7 @@ services:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "${REDIS_PORT:-4379}:6379"
+      - "${REDIS_PORT:-4179}:6379"
     volumes:
       - robbed_redisdata:/data
     healthcheck:
@@ -110,8 +121,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-robbed}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-robbed_dev_secret}
     ports:
-      - "${MINIO_PORT:-4900}:9000"
-      - "${MINIO_CONSOLE_PORT:-4901}:9001"
+      - "${MINIO_PORT:-4190}:9000"
+      - "${MINIO_CONSOLE_PORT:-4191}:9001"
     volumes:
       - robbed_miniodata:/data
     healthcheck:
@@ -204,7 +215,7 @@ services:
       - |
         if [ ! -f tools/localstack/out/testnet.env ]; then
           echo "FATAL: tools/localstack/out/testnet.env not found." >&2
-          echo "  Contract addresses + START_BLOCK come from the Phase-T testnet deploy (implementation-plan T-3," >&2
+          echo "  Contract addresses + START_BLOCK come from the Phase-T testnet deploy (plan item T-3," >&2
           echo "  which writes tools/deployments/testnet.json); emit/copy them to tools/localstack/out/testnet.env" >&2
           echo "  with the same keys as the local deploychain local.env. No contracts are deployed on testnet yet" >&2
           echo "  until Phase T runs. See docs/runbooks/docker.md 'Testnet stack'." >&2
@@ -222,13 +233,13 @@ services:
       R2_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-robbed}
       R2_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-robbed_dev_secret}
       R2_BUCKET: ${R2_BUCKET:-robbed-assets}
-      R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4900}/${R2_BUCKET:-robbed-assets}
+      R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4190}/${R2_BUCKET:-robbed-assets}
       # Moderation vendors are a §13 open item — stubs stay allowed outside production (§4.3).
       MODERATION_ALLOW_STUBS: "true"
       # TESTNET: cold `tokensOwed` read (api.md §3.4) against the remote testnet RPC. Required, no default (§13).
       ROBINHOOD_RPC_URL: ${TESTNET_RPC_URL:?TESTNET_RPC_URL is required — official Robinhood testnet RPC (spec §13 / Phase T; never invented). See docs/runbooks/docker.md 'Testnet stack'.}
     ports:
-      - "${API_PORT:-4001}:3001"
+      - "${API_PORT:-4101}:3001"
     depends_on:
       deps:
         condition: service_completed_successfully
@@ -257,7 +268,7 @@ services:
       WS_PORT: "3002"
       REDIS_URL: redis://redis:6379
     ports:
-      - "${WS_PORT:-4002}:3002"
+      - "${WS_PORT:-4102}:3002"
     depends_on:
       deps:
         condition: service_completed_successfully
@@ -270,24 +281,30 @@ services:
       retries: 5
       start_period: 15s
 
-  # ── indexer — Ponder. TESTNET deltas: remote RPC (http + ws, both required, §13), addresses +
-  # START_BLOCK from the REQUIRED testnet.env (fail-closed with a Phase-T pointer).
+  # ── indexer — Ponder. TESTNET deltas: remote RPC (http required, ws OPTIONAL — HTTP-polling
+  # fallback, §13), addresses + START_BLOCK from the REQUIRED testnet.env (fail-closed with a
+  # Phase-T pointer).
   #
-  # KNOWN, HONEST LIMITATION (do not "fix" here): the fail-closed startup assertions
-  # (apps/indexer/src/assertions.ts) pin chainId 4663 via the shared CHAIN_ID constant and canonical
-  # WETH — NOT env-overridable by design; only V3_FACTORY_ADDRESS / V3_NPM_ADDRESS take env
-  # overrides. If the official testnet chain id ≠ 4663, this service will refuse to start until
-  # T-1 delivers testnet constants through robbed-shared (architect-ratified). That refusal is
-  # correct fail-closed behavior; never weaken the assertions to make this stack boot. ──
+  # §12.55 chain-identity gate (see header STATUS): INDEXER_CHAIN_ID=46630 must resolve in the
+  # shared deployment registry AND match the live RPC's eth_chainId; all chain-dependent
+  # addresses (WETH/V3 set/robbed contracts/treasury) resolve from that registry entry, with the
+  # testnet.env deploy artifact taking precedence for the robbed contracts (identical by
+  # construction on testnet). set -e in the command makes any assertion failure kill the
+  # container — never weaken the assertions to make this stack boot. ──
   indexer:
     <<: *dev-base
     command:
       - /bin/sh
       - -c
       - |
+        # set -e per §12.55(d): the migrate step runs the fail-closed startup
+        # assertions (registry membership + live eth_chainId == INDEXER_CHAIN_ID) —
+        # its failure MUST kill the container, never be swallowed (the pre-§12.55
+        # shape without set -e silently bypassed the chain gate; observed live).
+        set -e
         if [ ! -f tools/localstack/out/testnet.env ]; then
           echo "FATAL: tools/localstack/out/testnet.env not found." >&2
-          echo "  Contract addresses + START_BLOCK come from the Phase-T testnet deploy (implementation-plan T-3," >&2
+          echo "  Contract addresses + START_BLOCK come from the Phase-T testnet deploy (plan item T-3," >&2
           echo "  which writes tools/deployments/testnet.json); emit/copy them to tools/localstack/out/testnet.env" >&2
           echo "  with the same keys as the local deploychain local.env. No contracts are deployed on testnet yet" >&2
           echo "  until Phase T runs. See docs/runbooks/docker.md 'Testnet stack'." >&2
@@ -295,6 +312,9 @@ services:
         fi
         set -a; . ./tools/localstack/out/testnet.env; set +a
         # Offchain sidecar tables (watermarks, eth_usd, metadata_verifications — indexer.md §3); idempotent.
+        # MIRROR of docker-compose.yml (anti-drift): phase 2 (GIN indexes + views over
+        # Ponder-managed tables) is applied by the indexer sidecar boot
+        # (src/offchainMigrations.ts) — never re-run migrate from compose for it.
         pnpm --filter @robbed/indexer migrate
         exec pnpm --filter @robbed/indexer exec ponder dev --hostname 0.0.0.0
     env_file:
@@ -302,14 +322,20 @@ services:
         required: false
     environment:
       <<: *dev-env
+      # §12.55 chain-identity gate: explicit selection — must have a shared-registry
+      # entry AND match the live RPC's eth_chainId (double fail-closed, no default).
+      INDEXER_CHAIN_ID: "46630"
       INDEXER_RPC_HTTP: ${TESTNET_RPC_URL:?TESTNET_RPC_URL is required — official Robinhood testnet RPC (spec §13 / Phase T; never invented). See docs/runbooks/docker.md 'Testnet stack'.}
-      INDEXER_RPC_WS: ${TESTNET_RPC_WS_URL:?TESTNET_RPC_WS_URL is required — official Robinhood testnet WS RPC (spec §13 / Phase T; never invented). See docs/runbooks/docker.md 'Testnet stack'.}
+      # OPTIONAL (see header): empty ⇒ apps/indexer/src/config.ts maps INDEXER_RPC_WS
+      # `|| undefined` ⇒ Ponder falls back to HTTP polling. Alchemy wss when a key exists;
+      # never the sequencer feed.
+      INDEXER_RPC_WS: ${TESTNET_RPC_WS_URL:-}
       DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
       REDIS_URL: redis://redis:6379
       METRICS_PORT: "9464"
     ports:
-      - "${PONDER_PORT:-4269}:42069"
-      - "${METRICS_HOST_PORT:-4964}:9464"
+      - "${PONDER_PORT:-4169}:42069"
+      - "${METRICS_HOST_PORT:-4164}:9464"
     depends_on:
       deps:
         condition: service_completed_successfully
@@ -339,11 +365,16 @@ services:
     command: ["pnpm", "--filter", "@robbed/web", "exec", "next", "dev", "-H", "0.0.0.0"]
     environment:
       <<: *dev-env
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-4001}
-      NEXT_PUBLIC_WS_URL: ws://localhost:${WS_PORT:-4002}
-      NEXT_PUBLIC_R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4900}/${R2_BUCKET:-robbed-assets}
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-4101}
+      # MIRROR of docker-compose.yml split-horizon API base: SSR (in-container) uses the
+      # service-DNS api:3001; the browser keeps the host-mapped NEXT_PUBLIC_API_BASE_URL.
+      API_BASE_URL_INTERNAL: http://api:3001
+      NEXT_PUBLIC_WS_URL: ws://localhost:${WS_PORT:-4102}
+      NEXT_PUBLIC_R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4190}/${R2_BUCKET:-robbed-assets}
       NEXT_PUBLIC_RPC_HTTP: ${TESTNET_RPC_URL:?TESTNET_RPC_URL is required — official Robinhood testnet RPC (spec §13 / Phase T; never invented). See docs/runbooks/docker.md 'Testnet stack'.}
-      NEXT_PUBLIC_RPC_WS: ${TESTNET_RPC_WS_URL:?TESTNET_RPC_WS_URL is required — official Robinhood testnet WS RPC (spec §13 / Phase T; never invented). See docs/runbooks/docker.md 'Testnet stack'.}
+      # OPTIONAL (see header): empty tolerated by the web env layer (apps/web/src/shared/lib/
+      # env.ts `rpcWs: … ?? ""`, verified 2026-07-12) — set the Alchemy wss when a key exists.
+      NEXT_PUBLIC_RPC_WS: ${TESTNET_RPC_WS_URL:-}
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:-}
       NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD: ${NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD:-}
       # TESTNET: never the mock fixture — this stack exists to exercise real testnet data.
@@ -358,7 +389,7 @@ services:
       - robbed_shared_nm:/workspace/packages/shared/node_modules
       - robbed_web_next:/workspace/apps/web/.next
     ports:
-      - "${WEB_PORT:-4000}:3000"
+      - "${WEB_PORT:-4100}:3000"
     depends_on:
       deps:
         condition: service_completed_successfully

@@ -4,9 +4,6 @@ import { bondingCurveAbi, launchTokenAbi } from "@robbed/shared/abi";
 import { useReadContracts } from "wagmi";
 import type { Address } from "viem";
 
-import { env } from "@/shared/lib/env";
-import { mockCurveReads } from "@/shared/mock/mock-api";
-
 /**
  * Live on-chain curve state for the Trust panel (§5.2 rows 2/3/4/6) and the
  * anti-sniper cap surface (§6.5). These are the values the Trust panel promises
@@ -66,13 +63,7 @@ export function useCurveReads(
   curve: Address | undefined,
   opts: { pollMs?: number } = {},
 ): CurveReads {
-  // DEMO MODE (Gap 1): the curve `eth_call`s the transport-layer mock cannot cover
-  // are short-circuited to the fixture so the Trust panel renders live values
-  // instead of "on-chain read unavailable". The wagmi read is DISABLED (never
-  // fires) but still called unconditionally to keep hook order stable. Strictly
-  // gated — with the flag off this branch is dead and the prod read is untouched.
-  const mock = env.mockData();
-  const enabled = !mock && !!token && !!curve;
+  const enabled = !!token && !!curve;
   const { data, isLoading, isError, refetch } = useReadContracts({
     allowFailure: true,
     contracts: [
@@ -89,15 +80,6 @@ export function useCurveReads(
       staleTime: 2_000,
     },
   });
-
-  if (mock) {
-    return {
-      ...mockCurveReads(),
-      isLoading: false,
-      isError: false,
-      refetch: () => {},
-    };
-  }
 
   return {
     ...parseCurveReads(data),

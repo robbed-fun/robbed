@@ -45,15 +45,22 @@ export function portfolioRoutes(deps: AppDeps) {
     const address = addressParam(c);
     // Wallet ETH is a live RPC read (chain truth); the roll-up + holdings are
     // indexer-derived. All fetched in parallel — none in the WS hot path.
-    const [ctx, pnl, holdings, walletEthBalance] = await Promise.all([
+    // tradeCount is counted LIVE off `trades` (trades_trader_idx) rather than
+    // read from the advisory address_pnl roll-up — the job ticks every ~60s, so
+    // the materialized count lags fresh trades and is 0 on a fresh DB before
+    // the first tick (PORT-1). firstSeenAt / tokensCreated / realized PnL stay
+    // roll-up-sourced (≤ one job interval stale, documented in api.md §3.4a).
+    const [ctx, pnl, holdings, walletEthBalance, tradeCount] = await Promise.all([
       loadProjectionContext(deps),
       deps.db.getAddressPnl(address),
       deps.db.getAllHoldings(address),
       deps.walletBalance.read(address),
+      deps.db.countAddressTrades(address),
     ]);
     const summary = toPortfolioSummary({
       address,
       pnl,
+      tradeCount,
       holdings,
       walletEthBalance,
       ethUsd: ctx.ethUsd,

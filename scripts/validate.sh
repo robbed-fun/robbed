@@ -74,9 +74,9 @@ else
   record SKIP "doc-check" "(no scripts/doc-check.ts yet)"
 fi
 
-# ── 2b. Env-sync: .env.example ⇄ docs/runbooks/env-inventory.md (P-1 / G-9 env
-#        leg). Also runs inside doc-check (check g) — the named stage exists so
-#        a drift failure is attributed clearly. Self-contained block. ─────────
+# ── 2b. Env-sync: .env.example ⇄ docs/runbooks/env-inventory.md. Also runs
+#        inside doc-check (check g) — the named stage exists so a drift
+#        failure is attributed clearly. Self-contained block. ─────────────────
 if [ -f scripts/env-sync-check.ts ]; then
   if command -v bun >/dev/null 2>&1; then
     run_stage "env-sync" bun scripts/env-sync-check.ts
@@ -154,12 +154,12 @@ else
   record SKIP "vitest:web" "(no apps/web/vitest.config.ts yet)"
 fi
 
-# ── 5c. Flow-catalog coverage (G-5b) — static diff of docs/user-flows.md IDs vs
+# ── 5c. Flow-catalog coverage — static diff of apps/web/e2e/user-flows.md IDs vs
 #        @flow-tagged Playwright specs + declared assertable-layers; needs no stack ──
 if [ -f scripts/e2e-coverage.ts ]; then
   run_stage "e2e:coverage" bun scripts/e2e-coverage.ts
 else
-  record SKIP "e2e:coverage" "(no scripts/e2e-coverage.ts yet — arrives with I-5a)"
+  record SKIP "e2e:coverage" "(no scripts/e2e-coverage.ts yet)"
 fi
 
 # ── 5d. Web production build (SLOW — --full / validate:full only) ────────────

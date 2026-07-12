@@ -4,8 +4,6 @@ import { useState } from "react";
 import { useAccount } from "wagmi";
 
 import { WalletConnectButton } from "@/features/connect-wallet";
-import { env } from "@/shared/lib/env";
-import { MOCK_PORTFOLIO_ADDRESS } from "@/shared/mock/mock-api";
 import { EmptyState, Tab, TabBar } from "@/shared/ui";
 
 import { ActivityTab } from "./ActivityTab";
@@ -38,19 +36,10 @@ export function PortfolioClient({ initialAddress }: { initialAddress?: string })
   const { address: connected } = useAccount();
   const [tab, setTab] = useState<PortfolioTab>("holdings");
 
-  // DEMO MODE (task A): Portfolio is wallet-scoped, but the demo must render the
-  // mock portfolio with NO wallet connected — fall back to the mock address and
-  // treat it as "you". Strictly gated; the prod path still requires a subject.
-  const mock = env.mockData();
-  const subject = (
-    initialAddress ??
-    connected ??
-    (mock ? MOCK_PORTFOLIO_ADDRESS : undefined)
-  )?.toLowerCase();
+  const subject = (initialAddress ?? connected)?.toLowerCase();
   const isSelf =
-    (!!connected &&
-      (!initialAddress || initialAddress.toLowerCase() === connected.toLowerCase())) ||
-    (mock && !initialAddress && !connected);
+    !!connected &&
+    (!initialAddress || initialAddress.toLowerCase() === connected.toLowerCase());
 
   if (!subject) {
     return (

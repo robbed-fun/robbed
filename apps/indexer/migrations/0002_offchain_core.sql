@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS metadata_verifications (
   verified_at          timestamptz
 );
 
--- §3.11 moderation_status — WRITTEN BY THE API (docs/services/api.md §4); the
+-- §3.11 moderation_status — WRITTEN BY THE API (docs/how-it-works/api.md §4); the
 -- indexer only reads it (list/search join). Created here IF NOT EXISTS so local
 -- dev/tests can join before the API service provisions it; whoever runs first
 -- wins (idempotent). Listing gating only — never touches chain state (§8.4).

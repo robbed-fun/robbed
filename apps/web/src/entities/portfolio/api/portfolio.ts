@@ -12,7 +12,6 @@ import type { z } from "zod";
 
 import { ApiError } from "@/shared/api";
 import { env } from "@/shared/lib/env";
-import { resolveMock } from "@/shared/mock/mock-api";
 
 /**
  * Portfolio read client (api.md §3.4a) — the four `/v1/portfolio/*` endpoints.
@@ -21,7 +20,8 @@ import { resolveMock } from "@/shared/mock/mock-api";
  * scope explicitly fences off `src/shared/api` (the base typed REST client), so
  * these getters live in the portfolio entity's `api` segment instead of being
  * added to that barrel. They reuse the SAME transport contract — the shared
- * `ApiError`, the `env.apiBaseUrl()` origin, and the api.md §2 envelope
+ * `ApiError`, the `env.apiFetchBaseUrl()` origin (split-horizon, web.md
+ * §2.3), and the api.md §2 envelope
  * (`{ data, error }`) — and validate every response with the FROZEN
  * `@robbed/shared` schemas, so NO response shape is redeclared (anti-drift rule 2
  * holds on types; only the ~12-line envelope transport is repeated). NOTE for
@@ -36,11 +36,7 @@ async function apiGet<T>(
   schema: z.ZodType<T>,
   opts: FetchOpts = {},
 ): Promise<T> {
-  // DEMO MODE (task A) — same strictly-gated mock transport as `shared/api`.
-  if (env.mockData()) {
-    return schema.parse(resolveMock(path));
-  }
-  const res = await fetch(`${env.apiBaseUrl()}${path}`, {
+  const res = await fetch(`${env.apiFetchBaseUrl()}${path}`, {
     headers: { accept: "application/json" },
     signal: opts.signal,
   });

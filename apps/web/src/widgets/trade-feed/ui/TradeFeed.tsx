@@ -27,7 +27,7 @@ import {
 import { getTrades } from "@/shared/api";
 import { qk } from "@/shared/lib/query-keys";
 import { useWsChannel } from "@/shared/lib/ws";
-import { shortAddress } from "@/shared/lib/format";
+import { formatPriceEth, shortAddress } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 import { type FeedRow, buildFeedRows, prependTrade } from "../model/merge";
@@ -230,9 +230,12 @@ function AmountCell({ row }: { row: FeedRow }) {
 }
 
 function PriceCell({ row }: { row: FeedRow }) {
+  // Review fix (2026-07-11): `toPrecision(2)` emitted exponential notation for
+  // early curve prices ("9.3e-10") — route through the shared decimal formatter
+  // (2 sig digits, never e-notation).
   return (
     <span className="hidden text-right tabular-nums text-muted sm:block">
-      {row.priceEth === null ? "—" : row.priceEth.toPrecision(2)}
+      {formatPriceEth(row.priceEth)}
     </span>
   );
 }

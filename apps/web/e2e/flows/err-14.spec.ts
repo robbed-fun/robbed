@@ -6,6 +6,7 @@ import {
   connectAs,
   copy,
   expect,
+  isWsRequest,
   publicClient,
   routes,
   seedToken,
@@ -24,13 +25,24 @@ test(
     const token = await seedToken({ name: "Silent Coin", ticker: "SLNT" });
 
     // Swallow WS `trade` messages so the optimistic row gets no reconcile event.
-    await page.routeWebSocket(/\/v1\/ws/, (ws) => {
+    await page.routeWebSocket(isWsRequest, (ws) => {
       const server = ws.connectToServer();
       server.onMessage((message) => {
         const text = typeof message === "string" ? message : message.toString();
         if (!/"type"\s*:\s*"trade"/.test(text)) ws.send(message);
       });
       ws.onMessage((message) => server.send(message));
+    });
+
+    // Hold the browser's REST heal too while we OBSERVE the affordance: the
+    // awaiting-index flag is transient by design (set at WS_SILENCE_MS, cleared
+    // the moment the silence-triggered REST poll reconciles — ~1s against a
+    // healthy local indexer), so model the slow-indexer scenario the flow
+    // describes, then RELEASE and prove the REST heal completes.
+    let holdRestHeal = true;
+    await page.route("**/v1/trades/**", async (route) => {
+      if (holdRestHeal) return route.abort();
+      return route.fallback();
     });
 
     await page.goto(routes.token(token.token));
@@ -43,8 +55,25 @@ test(
       await sel.submitTrade(page).click();
       await expect(page.getByText(copy.softConfirmed).first()).toBeVisible({ timeout: 12_000 });
       optimisticSeen = true;
-      // No WS reconcile arrives → the badge gains "awaiting index" (never dropped).
-      await expect(page.getByText(copy.awaitingIndex).first()).toBeVisible({ timeout: 20_000 });
+      // No WS reconcile arrives → the badge gains the awaiting-index affordance.
+      // It surfaces as the badge TOOLTIP ("Awaiting the indexer — retrying."),
+      // so hover the badge and assert the tooltip copy (never dropped).
+      await expect
+        .poll(
+          async () => {
+            await page.getByText(copy.softConfirmed).first().hover();
+            return page
+              .getByText(copy.awaitingIndex)
+              .first()
+              .isVisible()
+              .catch(() => false);
+          },
+          { timeout: 20_000 },
+        )
+        .toBe(true);
+      // Release the heal path — the row must now reconcile, never be dropped.
+      holdRestHeal = false;
+      await expect(page.getByText(copy.softConfirmed).first()).toBeVisible();
     });
 
     let restTrade: any;

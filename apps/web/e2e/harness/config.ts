@@ -23,6 +23,26 @@ export const STACK = {
   rpcUrl: process.env.E2E_RPC_URL ?? "http://localhost:4545",
 } as const;
 
+/**
+ * Playwright URL predicate for intercepting the browser's fork-RPC requests.
+ * `page.route(STACK.rpcUrl, …)` NEVER matches: fetch normalizes a bare-origin
+ * URL to `…:4545/` and Playwright globs must match the ENTIRE URL
+ * (playwright.dev/docs/network, checked 2026-07-12) — so match on origin.
+ */
+export function isRpcRequest(url: URL): boolean {
+  return url.origin === new URL(STACK.rpcUrl).origin;
+}
+
+/**
+ * Same for `page.routeWebSocket`: the app connects to the BARE origin
+ * (`NEXT_PUBLIC_WS_URL` = ws://localhost:4002 — no `/v1/ws` path), so any
+ * path-based pattern silently never intercepts.
+ */
+export function isWsRequest(url: URL): boolean {
+  const ws = new URL(STACK.wsUrl);
+  return url.host === ws.host;
+}
+
 /** Foundry/anvil deterministic dev accounts (public — the mnemonic is well-known). */
 export interface DevAccount {
   address: `0x${string}`;

@@ -69,14 +69,25 @@ export interface RouteLimit {
   name: string;
 }
 
+/**
+ * RATE_LIMIT_SCALE multiplies every per-route limit (windows unchanged).
+ * Default 1 = production values. The local dev/e2e stack sets 100: three
+ * back-to-back full e2e matrix runs exhaust the production uploads_h=10
+ * budget and every create-path flow fails on "rate limit exceeded"
+ * (observed 2026-07-12). Never a bypass — 0/negative/NaN clamp to 1.
+ */
+const RATE_LIMIT_SCALE = Math.max(1, Math.floor(Number(process.env.RATE_LIMIT_SCALE ?? "1") || 1));
+
+const scaled = (limit: number): number => limit * RATE_LIMIT_SCALE;
+
 /** Default per-route limits (api.md §6.3), all overridable. */
 export const ROUTE_LIMITS = {
-  uploadsHour: { name: "uploads_h", limit: 10, windowMs: 60 * 60 * 1000 },
-  uploadsMin: { name: "uploads_m", limit: 3, windowMs: 60 * 1000 },
-  metadata: { name: "metadata", limit: 20, windowMs: 60 * 60 * 1000 },
-  search: { name: "search", limit: 60, windowMs: 60 * 1000 },
-  reads: { name: "reads", limit: 300, windowMs: 60 * 1000 },
-  admin: { name: "admin", limit: 60, windowMs: 60 * 1000 },
+  uploadsHour: { name: "uploads_h", limit: scaled(10), windowMs: 60 * 60 * 1000 },
+  uploadsMin: { name: "uploads_m", limit: scaled(3), windowMs: 60 * 1000 },
+  metadata: { name: "metadata", limit: scaled(20), windowMs: 60 * 60 * 1000 },
+  search: { name: "search", limit: scaled(60), windowMs: 60 * 1000 },
+  reads: { name: "reads", limit: scaled(300), windowMs: 60 * 1000 },
+  admin: { name: "admin", limit: scaled(60), windowMs: 60 * 1000 },
 } as const satisfies Record<string, RouteLimit>;
 
 /**

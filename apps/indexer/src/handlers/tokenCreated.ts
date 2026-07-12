@@ -20,7 +20,8 @@ import { ponder } from "ponder:registry";
 import { tokens } from "ponder:schema";
 import { TOTAL_SUPPLY_WEI } from "@robbed/shared";
 import { curveRegistry } from "../curveRegistry";
-import { readCurveImmutables } from "../curveReader";
+import { readCurveImmutablesWithFallback } from "../curveReader";
+import { getLatestReader } from "../latestReader";
 import { lower } from "../ids";
 import { publishLaunch } from "../publish";
 
@@ -38,8 +39,10 @@ ponder.on("CurveFactory:TokenCreated", async ({ event, context }) => {
 
   // Per-curve on-chain read of the deploy immutables (§12.40d) — supersedes the
   // M2-4 env interim. Virtual reserves, curve supply (X-4 seed), graduation
-  // threshold, and the per-token trade fee all come from THIS curve.
-  const curve = await readCurveImmutables(context.client, curveAddress);
+  // threshold, and the per-token trade fee all come from THIS curve. Event-block
+  // read first (Ponder-cached); `latest` fallback for pruned non-archive nodes
+  // (value-identical for immutables — see curveReader.ts decision note).
+  const curve = await readCurveImmutablesWithFallback(context.client, getLatestReader(), curveAddress);
 
   await context.db.insert(tokens).values({
     address: tokenAddress,

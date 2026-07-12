@@ -17,6 +17,7 @@ function validConfig(): IndexerConfig {
     migrator: "0x" + "22".repeat(20),
     v3Factory: "0x" + "33".repeat(20),
     v3PositionManager: "0x" + "44".repeat(20),
+    swapRouter02: "0x" + "55".repeat(20),
     redisUrl: undefined,
     databaseUrl: undefined,
     databaseSchema: undefined,
@@ -26,21 +27,29 @@ function validConfig(): IndexerConfig {
   };
 }
 
-describe("assertStaticConfig — fail-closed startup gate (indexer.md §2)", () => {
+describe("assertStaticConfig — fail-closed startup gate (indexer.md §2, §12.55(b) static half)", () => {
   it("passes a valid config", () => {
     expect(() => assertStaticConfig(validConfig())).not.toThrow();
   });
 
-  it("rejects a WETH that is not the canonical constant", () => {
+  it("rejects a chain id with no shared-registry entry (§12.55(b) — no default, no invention)", () => {
     const c = validConfig();
-    c.weth = "0x" + "ab".repeat(20);
-    expect(() => assertStaticConfig(c)).toThrow(/WETH/);
+    c.chainId = 1; // mainnet Ethereum — never a robbed deployment
+    expect(() => assertStaticConfig(c)).toThrow(/registry/);
   });
 
-  it("rejects a chain id that is not 4663", () => {
+  it("accepts every recorded registry chain id (4663 / 31337 / 46630)", () => {
+    for (const id of [4663, 31337, 46630]) {
+      const c = validConfig();
+      c.chainId = id;
+      expect(() => assertStaticConfig(c)).not.toThrow();
+    }
+  });
+
+  it("rejects a zero WETH address", () => {
     const c = validConfig();
-    c.chainId = 1;
-    expect(() => assertStaticConfig(c)).toThrow(/4663/);
+    c.weth = ZERO;
+    expect(() => assertStaticConfig(c)).toThrow(/WETH/);
   });
 
   it("rejects a zero V3 factory address", () => {
@@ -53,5 +62,11 @@ describe("assertStaticConfig — fail-closed startup gate (indexer.md §2)", () 
     const c = validConfig();
     c.v3PositionManager = ZERO;
     expect(() => assertStaticConfig(c)).toThrow(/V3_NPM/);
+  });
+
+  it("rejects a zero SwapRouter02 address", () => {
+    const c = validConfig();
+    c.swapRouter02 = ZERO;
+    expect(() => assertStaticConfig(c)).toThrow(/SWAP_ROUTER02/);
   });
 });

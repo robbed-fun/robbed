@@ -62,7 +62,7 @@ const rawSchema = z.object({
   // reads the per-token `tokens.trade_fee_bps` snapshot (§12.40d) the indexer
   // writes from each curve's immutable `TRADE_FEE_BPS`, so an older curve reports
   // its own fee rather than the factory's current one. The former `TRADE_FEE_BPS`
-  // env var is removed to eliminate that misreport path (decisions.md §7.2 item 1).
+  // env var is removed to eliminate that misreport path (spec §12.40d — factory-current value misreports older curves).
 
   /** Optional vault/treasury addresses → holder `vault` flag (api.md §3.4). */
   TREASURY_ADDRESS: z.string().optional(),

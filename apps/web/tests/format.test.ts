@@ -6,8 +6,10 @@ import {
   formatEthFromWei,
   formatEthNumber,
   formatPercent,
+  formatPriceEth,
   formatTokenFromWei,
   formatUsd,
+  percentRoundsToZero,
   shortAddress,
 } from "@/shared/lib/format";
 
@@ -46,6 +48,23 @@ describe("format helpers", () => {
     expect(formatEthNumber(0.031)).toBe("0.0310"); // mockup portfolio price, padded
   });
 
+  it("computes tiny-value sig places from the ROUNDED value (review fix)", () => {
+    // 0.00009999 rounds to 0.0001 → 2 sig digits "0.00010", never the
+    // pre-rounding-magnitude "0.000100" (3 sig).
+    expect(formatEthNumber(0.00009999)).toBe("0.00010");
+    // Rounding that crosses a magnitude boundary still keeps 2 sig digits.
+    expect(formatEthNumber(0.00099999)).toBe("0.0010");
+  });
+
+  it("never emits exponential notation at huge magnitudes (review fix)", () => {
+    // Number#toFixed switches to e-notation at 1e21 — the guard must not.
+    expect(formatEthNumber(1e21)).toBe("1000000000000000000000.0000");
+    expect(formatEthNumber(1e21)).not.toMatch(/e/i);
+    expect(formatEthNumber(-1.5e22, { decimals: 2 })).toBe(
+      "−15000000000000000000000.00",
+    );
+  });
+
   it("uses true minus U+2212 for negative ETH", () => {
     expect(formatEthNumber(-1.5)).toBe("−1.5000");
     expect(formatEthNumber(-1.5)).not.toContain("-"); // no ASCII hyphen-minus
@@ -61,6 +80,29 @@ describe("format helpers", () => {
     expect(formatPercent(-1.8)).toBe("−1.8%"); // mockup BAGEL delta
     expect(formatPercent(-1.8)).not.toContain("-");
     expect(formatPercent(null)).toBe("—");
+  });
+
+  it("never renders a signed zero — sign branches on the ROUNDED value (review fix)", () => {
+    expect(formatPercent(-0.04)).toBe("0.0%"); // was "−0.0%"
+    expect(formatPercent(-0.04, { signed: true })).toBe("0.0%");
+    expect(formatPercent(0.04, { signed: true })).toBe("0.0%"); // no "+0.0%" either
+    expect(formatPercent(0)).toBe("0.0%");
+    // Tone companion: a display-zero delta must tint neutral.
+    expect(percentRoundsToZero(-0.04)).toBe(true);
+    expect(percentRoundsToZero(0.04)).toBe(true);
+    expect(percentRoundsToZero(-1.8)).toBe(false);
+    expect(percentRoundsToZero(null)).toBe(true);
+  });
+
+  it("formatPriceEth: 2 significant digits, plain decimal, never e-notation (review fix)", () => {
+    expect(formatPriceEth(9.3e-10)).toBe("0.00000000093"); // was "9.3e-10"
+    expect(formatPriceEth(0.0000021)).toBe("0.0000021");
+    expect(formatPriceEth(0.000001)).toBe("0.0000010"); // trailing zero retained
+    expect(formatPriceEth(0.031)).toBe("0.031");
+    expect(formatPriceEth(1e-15)).not.toMatch(/e/i);
+    expect(formatPriceEth(0)).toBe("0.0");
+    expect(formatPriceEth(null)).toBe("—");
+    expect(formatPriceEth(Number.NaN)).toBe("—");
   });
 
   it("formats ages", () => {
@@ -112,29 +154,13 @@ describe("formatUsd — never a bare USD figure (spec §2)", () => {
   });
 });
 
-describe("formatUsd — demo-mode compact (Gap 2), gated by NEXT_PUBLIC_MOCK_DATA", () => {
-  const asOf = "2026-07-10T12:00:00.000Z";
-  const usd = (n: string): UsdValue => ({ usd: n, ethUsd: "3200", asOf });
-
-  it("prod path (flag off) keeps FULL precision", () => {
-    const prev = process.env.NEXT_PUBLIC_MOCK_DATA;
-    delete process.env.NEXT_PUBLIC_MOCK_DATA;
-    expect(formatUsd(usd("610000")).text).toBe("$610,000");
-    process.env.NEXT_PUBLIC_MOCK_DATA = prev;
-  });
-
-  it("demo path (flag on) renders compact, byte-for-byte matching the mockup labels", () => {
-    const prev = process.env.NEXT_PUBLIC_MOCK_DATA;
-    process.env.NEXT_PUBLIC_MOCK_DATA = "true";
-    // Values + labels straight from docs/Robbed.html (ROBBED_ terminal).
-    expect(formatUsd(usd("610000")).text).toBe("$610K");
-    expect(formatUsd(usd("1200000")).text).toBe("$1.2M");
-    expect(formatUsd(usd("4100000")).text).toBe("$4.1M");
-    expect(formatUsd(usd("240000")).text).toBe("$240K");
-    expect(formatUsd(usd("820000")).text).toBe("$820K");
-    expect(formatUsd(usd("12000")).text).toBe("$12K");
-    expect(formatUsd(usd("402000")).text).toBe("$402K");
-    if (prev === undefined) delete process.env.NEXT_PUBLIC_MOCK_DATA;
-    else process.env.NEXT_PUBLIC_MOCK_DATA = prev;
+describe("formatUsd — full precision, never compact (§2 source fidelity)", () => {
+  it("renders the indexer figure verbatim (no compact notation)", () => {
+    const v: UsdValue = {
+      usd: "610000",
+      ethUsd: "3200",
+      asOf: "2026-07-10T12:00:00.000Z",
+    };
+    expect(formatUsd(v).text).toBe("$610,000");
   });
 });
