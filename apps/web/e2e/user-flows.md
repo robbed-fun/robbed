@@ -95,16 +95,15 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 ### `@flow:TD-6` — Graduation venue switch  ·  tx type `graduate()`
 - **Actors:** Anyone (permissionless) triggers `graduate()`; Traders observe.
 - **Preconditions:** curve reserves reach `GRADUATION_ETH`; token enters `ReadyToGraduate`.
-- **Steps:** (1) Threshold crossed → status pill flips to "Graduating…" (see ERR-7). (2) `graduate()` executes → WS `graduated` on `token:{address}:events`. (3) Status flips to "Graduated → Uniswap V3", chart annotation appears, widget re-engines to V3 (TD-4/TD-5), Trust rows 3/4 flip to post-grad states — all WS-driven, no reload.
+- **Steps:** (1) Threshold crossed → status pill flips to "Graduating…" (see ERR-7). (2) `graduate()` executes → WS `graduated` on `token:{address}:events`. (3) Status flips to "Graduated → Uniswap V3", chart annotation appears, widget re-engines to V3 (TD-4/TD-5) — all WS-driven, no reload. _(§12.57: the SafetyStrip/Trust post-grad rows were removed with the strip; the venue switch on the widget is the asserted surface.)_
 - **assertable-layers:** on-chain · indexed · UI.
 
-### `@flow:TD-7` — Safety strip: relocated must-render floor (live reads)
-> _**AMENDED 2026-07-12 (USER-DIRECTED §12.57 redesign):** the standalone Trust panel is DELETED (§12.57). Its HARD-RULE must-render floor RELOCATES into the compact `SafetyStrip` above the Top Holders table; this row now covers that floor. Layers (on-chain · indexed · UI) unchanged._
-> _`AMENDED-BY: robbed-frontend  DATE: 2026-07-12` · `RATIFIED-BY: robbed-architect  DATE: 2026-07-12` — verified against the SHIPPED `widgets/safety-strip/ui/SafetyStrip.tsx` (rendered above `HolderTable` in `views/token-detail/ui/TokenDetailClient.tsx`), not the amender's claims: the §12.14 LP sentence renders VERBATIM via `LP_DESTINY_COPY` (a re-export of shared `LP_COPY`, never re-typed); graduation progress + curve reserves are LIVE `useCurveReads` on-chain reads refetched on each WS trade ("read from chain"; RPC-fail → "unavailable", NEVER the API's cached reserves); ownerless ✓ / fixed-1B ✓ (live `totalSupply === TOTAL_SUPPLY_WEI`) / metadata-verdict / "1% → treasury" ticks kept; post-grad → "Graduated ✓ → Uniswap V3". The §12.57 floor is doubly enforced: copy-lint's token-detail LP-presence test + `tests/safety-strip.test.tsx` (verbatim LP render, live-vs-cached reserves, ÷-threshold progress, and the DROPPED organic-range block asserted ABSENT). RATIFIED as the §12.57 relocation._
+### `@flow:TD-7` — Token detail: the surviving LP-destiny must-render floor (§12.14)
+> _**RE-SCOPED 2026-07-13 (USER-DIRECTED §12.57 SafetyStrip REMOVAL) — FLAGGED FOR ARCHITECT RATIFICATION (`FLAGGED-BY: robbed-e2e  DATE: 2026-07-13` · `RATIFICATION-PENDING: robbed-architect`):** the token-detail `SafetyStrip` block is DELETED — live curve reserves, graduation progress, ownerless / fixed-supply / metadata-hash ticks and the fee row are all GONE from `/t/[address]`. The ONLY survivor is the §12.14 hard-rule LP sentence, now a muted footnote inside `TokenInfo` (verbatim, via the shared `LP_DESTINY_COPY` re-export of `LP_COPY`, verified in `views/token-detail/ui/TokenInfo.tsx`). With the live-read surface gone there is no on-chain leg and no indexed leg left ON THIS PAGE — the LP line is a fixed shared constant, not a chain read and not an indexed record — so TD-7 re-scopes to a **UI-ONLY** assertion of the surviving LP floor. **LAYER CHANGE: on-chain · indexed · UI → UI** (on-chain + indexed waived; see waivers). Graduation-progress render is NOT lost to the suite: the compact `GraduationProgress` is exercised on the Discover carousel + token cards (DISC / TD-13 surfaces). Mirrors the TD-13 flagging pattern; awaiting robbed-architect §12.57 amendment — NOT self-ratified._
 - **Actors:** Visitor.
-- **Preconditions:** RPC reachable for live reads; indexer metadata verdict available.
-- **Steps:** the SafetyStrip renders (1) live curve reserves [**live** `BondingCurve.reserves()`, refresh on each WS trade, **never** cached API values, "read from chain"], (2) graduation progress toward `GRADUATION_ETH` [live reserves ÷ threshold], (3) the LP destination [the single shared LP constant, **verbatim** — §12.14 floor, copy-lint asserts presence], plus the cheap ticks: ownerless ✓, fixed 1B supply ✓ [**live** `totalSupply()` = 1e27], metadata hash verdict [indexer ✓/⚠], fee "1% → treasury" [live `TRADE_FEE_BPS`]. Post-grad: reserves → "curve retired", graduation → "Graduated ✓ → Uniswap V3".
-- **assertable-layers:** on-chain · indexed · UI.
+- **Preconditions:** token indexed (SSR summary reachable).
+- **Steps:** (1) `/t/[address]` renders; `TokenInfo` shows the single shared LP sentence **verbatim** (§12.14 floor, copy-lint asserts presence) — never re-spelled, never the forbidden LP verb. (2) The deleted SafetyStrip's live reserves / graduation / ownerless / fixed-supply / metadata ticks are ABSENT from token detail.
+- **assertable-layers:** UI. _(SafetyStrip removed §12.57; the surviving LP floor is fixed shared copy — no chain read, no indexed record. On-chain + indexed waived; see waivers.)_
 
 ### `@flow:TD-8` — Advisory §8.5 flags on the Top Holders table (heuristic)
 > _**AMENDED 2026-07-12 (USER-DIRECTED §12.57/§12.58 redesign):** the standalone organic-holder RANGE + flow-quality blocks are DROPPED from the public page (preserved on the §12.54 internal endpoint). The surviving PUBLIC §8.5 surface is the per-row sniper/programmatic advisory chips on the Top Holders table. Layers (indexed · UI) + the on-chain waiver unchanged._
@@ -142,7 +141,7 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 
 - **Actors:** Crawler / messenger unfurl (no client JS).
 - **Preconditions:** token exists and is indexed (summary reachable for SSR + the API OG data read).
-- **Steps:** (1) Token Detail SSR HTML includes title/description/OG tags + meaningful above-the-fold (name/ticker/mcap/progress/trust summary) with `javaScriptEnabled:false`; `generateMetadata` emits `og:image` as the **absolute API URL** `{API_ORIGIN}/v1/og/{address}.png` (`token-detail/model/metadata.ts`) — no web OG route exists post-§12.53. (2) `GET {API_ORIGIN}/v1/og/{address}.png` returns `image/png` 1200×630 (API-rendered native satori + resvg, R2-cached `og/{address}/{version}.png`): token image + name/ticker + mini-candles sparkline + mcap ETH-first (USD only via live endpoint, else degrade to ETH) + graduation progress (or "Graduated → Uniswap V3") + soft-confirmed tagline. Unknown token → 404.
+- **Steps:** (1) Token Detail SSR HTML includes title/description/OG tags + meaningful above-the-fold (name/ticker/mcap/progress) with `javaScriptEnabled:false`; `generateMetadata` emits `og:image` as the **absolute API URL** `{API_ORIGIN}/v1/og/{address}.png` (`token-detail/model/metadata.ts`) — no web OG route exists post-§12.53. (2) `GET {API_ORIGIN}/v1/og/{address}.png` returns `image/png` 1200×630 (API-rendered native satori + resvg, R2-cached `og/{address}/{version}.png`): token image + name/ticker + mini-candles sparkline + mcap ETH-first (USD only via live endpoint, else degrade to ETH) + graduation progress (or "Graduated → Uniswap V3") + soft-confirmed tagline. Unknown token → 404.
 - **assertable-layers:** indexed · UI. _(Render output, not a chain state change — see waivers.)_
 
 ### `@flow:TD-13` — Token-detail tables: server-side sort + keyset pagination (§12.59)
@@ -281,12 +280,12 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 - **Steps:** (1) Client recomputes and detects the mismatch. (2) **Signing is blocked** — the user is never committed to metadata they did not write; error surfaced; no tx broadcast.
 - **assertable-layers:** UI. _(Client-side guard prevents any tx → no on-chain / indexed record; see waivers.)_
 
-### `@flow:ERR-6b` — Metadata mismatch verdict on the SafetyStrip (§8.3)
-> _**AMENDED 2026-07-12 (USER-DIRECTED §12.57 redesign) — RATIFIED (cosmetic surface rename; verdict + layers unchanged):** the deleted Trust panel's ⚠ MISMATCH verdict RELOCATES to the compact `SafetyStrip` (its `MetadataTick` renders "Metadata MISMATCH", red — verified in `SafetyStrip.tsx`). The indexer verdict, the never-override rule, and the layers (on-chain · indexed · UI) are unchanged — only the display surface's name moved. `RATIFIED-BY: robbed-architect  DATE: 2026-07-12`._
-- **Actors:** Visitor.
+### `@flow:ERR-6b` — Metadata mismatch verdict (server-side; §8.3)
+> _**RE-SCOPED 2026-07-13 (USER-DIRECTED §12.57 SafetyStrip REMOVAL) — FLAGGED FOR ARCHITECT RATIFICATION (`FLAGGED-BY: robbed-e2e  DATE: 2026-07-13` · `RATIFICATION-PENDING: robbed-architect`):** the metadata-verdict UI surface (the deleted SafetyStrip's `MetadataTick` red "Metadata MISMATCH" state) no longer exists anywhere on token detail. The verdict is STILL computed server-side — the indexer's metadata-hash verification, exposed on `GET /v1/tokens/:address` as `trust.metadataVerification` — but it has NO token-detail UI home. The assertion re-homes to the surviving layers: the immutable on-chain committed `metadataHash` + the indexer's MISMATCH verdict read directly over REST. **LAYER CHANGE: on-chain · indexed · UI → on-chain · indexed** (UI waived; see waivers). The verdict + never-override rule are unchanged; only the vanished display leg is dropped. Awaiting robbed-architect §12.57 amendment — NOT self-ratified._
+- **Actors:** (none visitor-facing — server-side verdict; no display surface post-§12.57).
 - **Preconditions:** on-chain committed `metadataHash` ≠ indexer's keccak of the fetched canonical JSON (metadata changed after launch).
-- **Steps:** (1) Indexer emits the ⚠ MISMATCH verdict. (2) The `SafetyStrip` metadata tick renders the red prominent "Metadata MISMATCH" state, linking both hashes + the R2 JSON. Frontend renders the indexer verdict, never recomputes-and-overrides.
-- **assertable-layers:** on-chain · indexed · UI.
+- **Steps:** (1) The indexer's metadata-hash verifier materializes the ⚠ MISMATCH verdict on `trust.metadataVerification` (`computedHash` ≠ `onchainHash`). (2) Wherever the frontend surfaces the verdict it renders the indexer's value and never recomputes-and-overrides — but post-§12.57 there is no token-detail display surface for it.
+- **assertable-layers:** on-chain · indexed. _(Metadata-verdict UI surface removed §12.57; the verdict is proven at the immutable on-chain hash + the indexer verification. UI waived; see waivers.)_
 
 ### `@flow:ERR-7` — Graduating-window lock (ReadyToGraduate, §12.12)
 - **Actors:** Trader.
@@ -324,11 +323,8 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 - **Steps:** (1) Links render only as `https:` anchors with `rel="noopener noreferrer"` under a strict CSP. (2) A `javascript:`/`data:` href **never** reaches the DOM; no script executes.
 - **assertable-layers:** indexed · UI. _(Render-safety assertion; no chain state — see waivers.)_
 
-### `@flow:ERR-13` — Trust-panel RPC read failure
-- **Actors:** Visitor.
-- **Preconditions:** RPC unavailable for the live reads (rows 2/3/4/6).
-- **Steps:** (1) Affected rows show "on-chain read unavailable — retry". (2) The API's cached reserve values are **never** substituted (§5.2). `allowFailure: true` degrades one row, not the whole panel.
-- **assertable-layers:** on-chain · UI. _(Failed read → nothing indexed for the failure; see waivers.)_
+### ~~`ERR-13`~~ — Trust-panel RPC read failure — RETIRED 2026-07-13 (§12.57)
+> _**RETIRED (USER-DIRECTED §12.57 SafetyStrip REMOVAL) — FLAGGED FOR ARCHITECT RATIFICATION (`FLAGGED-BY: robbed-e2e  DATE: 2026-07-13` · `RATIFICATION-PENDING: robbed-architect`):** this flow asserted that the token-detail SafetyStrip's live-read rows degrade to "on-chain read unavailable — retry" and NEVER substitute the API's cached reserve values (§5.2). That entire surface — the SafetyStrip `useCurveReads` display with its purpose-built `allFailed` degradation — is DELETED. No surviving surface reliably carries the assertion: the token-detail `TradeWidget` hides its quote on read failure (no "unavailable" copy, and no cached-substitution to assert against); the /create `EconomicsPanel` shows "on-chain read unavailable" only on a query-level `isError`, which — with multicall3 intentionally omitted (`shared/lib/chain.ts`) so reads fall back to per-call `allowFailure` `eth_call`s — never trips on a per-call read failure (it renders "reading…" instead); the Discover `GraduationProgress` is fed CACHED indexer values, not a live browser read. The §5.2 "never substitute cached reserves" guarantee has no surface post-§12.57. Spec `flows/err-13.spec.ts` deleted; the ERR-13 waiver row removed; the `on-chain read unavailable` harness selector removed. If residual "degrade-don't-fabricate" coverage is wanted on /create, robbed-frontend must FIRST give the `EconomicsPanel` an `allFailed`-style degradation (a prerequisite) — recorded for architect + frontend. ID tombstoned (never reused)._
 
 ### `@flow:ERR-14` — WS silence on an optimistic trade
 - **Actors:** Trader with a soft-confirmed optimistic row.
@@ -354,7 +350,7 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 |---|---|
 | Live candles 1s→1h, venue-continuous across graduation | TD-1 (continuity also asserted in TD-6) |
 | Buy/Sell widget: curve pre-grad, V3 post-grad invisible switch; slippage 2% + deadline | TD-2, TD-3, TD-3b, TD-4, TD-5 |
-| Safety strip: relocated must-render floor (LP copy · graduation progress · live reserves) — §12.57 | TD-7 |
+| Token detail: surviving LP-destiny must-render floor (§12.14, verbatim in `TokenInfo`; SafetyStrip removed §12.57) | TD-7 |
 | Advisory §8.5 flags on the Top Holders table (organic range/flow-quality blocks dropped → internal §12.54) | TD-8 |
 | Live trade feed (soft-confirmed chip removed §12.56; posted/finalized surface) | TD-9 |
 | Top Holders table: rank · address · label · amount · % — server-sorted + paginated (§12.58/§12.59) | TD-10 |
@@ -406,27 +402,27 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 | Sells-open-while-buys-paused | ERR-4 |
 | Sells-open-while-treasury-reverts (§12.25) | ERR-5 |
 | Metadata hash mismatch (client pre-sign) | ERR-6a |
-| Metadata mismatch verdict (SafetyStrip §8.3) | ERR-6b |
+| Metadata mismatch verdict (server-side indexer verification; SafetyStrip UI removed §12.57) | ERR-6b |
 | Graduating-window lock (§12.12) | ERR-7 |
 | Launch blocked while creates paused | ERR-8 |
 | Wallet rejects tx | ERR-9 |
 | Tx reverts on-chain (generic) | ERR-10 |
 | WS reconnect / seq-gap heal | ERR-11 |
 | Stored-link XSS render safety | ERR-12 |
-| Trust-panel RPC read failure | ERR-13 |
+| ~~Trust-panel RPC read failure~~ — RETIRED §12.57 (SafetyStrip removed; no surviving surface) | ~~ERR-13~~ |
 | WS silence on optimistic trade | ERR-14 |
 
-**Coverage:** all §5.1 (5/5), §5.2 (8/8), §5.3 (5/5) bullets and all 9 transaction types + 15 error paths map to a flow ID. No gaps. The §12.50a Portfolio surface maps to `PORT-1`–`PORT-8` (addendum §3b, ratified 2026-07-11) — read-only, so the transaction-type and error-path tables above are unchanged.
+**Coverage:** all §5.1 (5/5), §5.2 (8/8), §5.3 (5/5) bullets and all 9 transaction types + 14 active error paths map to a flow ID (ERR-13 RETIRED §12.57 — its SafetyStrip surface was removed by user direction; FLAGGED for architect ratification of the baseline change). No gaps. The §12.50a Portfolio surface maps to `PORT-1`–`PORT-8` (addendum §3b, ratified 2026-07-11) — read-only, so the transaction-type and error-path tables above are unchanged.
 
 ## 7. Flow inventory
 
 - Discover: DISC-1..4 (4)
-- Token Detail: TD-1, TD-2, TD-3, TD-3b, TD-4, TD-5, TD-6, TD-7, TD-8, TD-9, TD-10, TD-11, TD-12 (13)
+- Token Detail: TD-1, TD-2, TD-3, TD-3b, TD-4, TD-5, TD-6, TD-7, TD-8, TD-9, TD-10, TD-11, TD-12, TD-13 (14)
 - Launch: LAUNCH-1, LAUNCH-2, LAUNCH-3 (3)
 - Portfolio (addendum §3b, 2026-07-11 — ratified): PORT-1..8 (8)
 - Transaction-only: COLLECT-1 (1)
-- Errors/edges: ERR-1..ERR-14 with ERR-6 split a/b → 15 flows
-- **Total: 44 flows** (36 ratified M3-11 + 8 `PORT-*` addendum flows ratified 2026-07-11) — **this 44-flow total is the I-5a `e2e:coverage` baseline.**
+- Errors/edges: ERR-1..ERR-14 with ERR-6 split a/b, ERR-13 RETIRED (§12.57) → 14 active flows
+- **Total: 44 active flows** (the prior 45-flow catalog — 36 ratified M3-11 + 8 `PORT-*` addendum + TD-13 — minus the retired `ERR-13`; the `e2e:coverage` gate reports 44/44). The retirement + the `TD-7`/`ERR-6b` layer changes are **FLAGGED for robbed-architect ratification** alongside the §12.57 amendment; once ratified this is the I-5a `e2e:coverage` baseline.
 
 See `user-flows-waivers.md` for every flow declaring fewer than three assertable layers.
 

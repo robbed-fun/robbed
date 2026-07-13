@@ -11,10 +11,8 @@ import type { CSSProperties } from "react";
 
 import { useLiveTokenDetail } from "@/entities/token";
 import { OptimisticTradesProvider } from "@/entities/trade";
-import { CommentsPanel } from "@/widgets/comments-panel";
 import { HolderTable } from "@/widgets/holder-table";
 import { PriceChart } from "@/widgets/price-chart";
-import { SafetyStrip } from "@/widgets/safety-strip";
 import { TradeFeed } from "@/widgets/trade-feed";
 import { TradeWidget } from "@/widgets/trade-widget";
 
@@ -35,14 +33,15 @@ import { TokenInfo } from "./TokenInfo";
  * reload. Every status-derived surface consumes the same live object: the
  * TradeWidget engine (graduating interstitial → V3 panel), the header status
  * pill + bonding cell (TokenHeader now renders INSIDE this island for exactly
- * that reason — it is still server-pre-rendered for the SSR pitch), the
- * SafetyStrip live reserves/graduation, and the TokenInfo V3-pool link.
+ * that reason — it is still server-pre-rendered for the SSR pitch), and the
+ * TokenInfo V3-pool link.
  *
- * REDESIGN (§12.57-§12.60, USER-DIRECTED 2026-07-12): the standalone Trust panel
- * is DELETED; its must-render floor (LP copy, graduation progress, live reserves)
- * relocates into the compact `SafetyStrip` above the right-column Top Holders
- * table. The trade feed + holders table are the common server-sorted, paginated
- * `DataTable`.
+ * REDESIGN (USER-DIRECTED 2026-07-13): the token-detail SafetyStrip block is
+ * REMOVED. The §12.14 LP-destiny hard-rule floor is preserved by a single muted
+ * `LP_DESTINY_COPY` footnote rendered in `TokenInfo` (verbatim, copy-lint
+ * enforced). Graduation progress/status still live on the Discover carousel +
+ * TokenCard; only this page's SafetyStrip is gone. The trade feed + holders
+ * table are the common server-sorted, paginated `DataTable`.
  *
  * Interactive islands hydrate from SSR `initialData`, so there is no double-fetch
  * flash while the client query becomes authoritative for live WS patching.
@@ -105,19 +104,16 @@ export function TokenDetailClient({
       </div>
 
       {/*
-        LOWER — detail region below the fixed hero (§12.57-§12.60 redesign). Two
-        columns on lg (LEFT trade feed + token info | RIGHT SafetyStrip + Top
-        Holders table) keep the 320px right rail + vertical hairline continuous
-        with the hero above. MOBILE ordering: chart → trade → SAFETY → holders →
-        trades → info (the safety strip is DOM-first so the relocated must-render
-        floor stays above the fold on mobile), grid-placed into the right rail on
-        lg (lg:order-2 / col 2).
+        LOWER — detail region below the fixed hero. Two columns on lg (LEFT trade
+        feed + token info | RIGHT Top Holders table) keep the 320px right rail +
+        vertical hairline continuous with the hero above. MOBILE ordering:
+        chart → trade → holders → trades → info, grid-placed into the right rail
+        on lg (lg:order-2 / col 2). The token-detail SafetyStrip was removed
+        (USER-DIRECTED 2026-07-13); the LP-destiny floor now lives as a muted
+        footnote inside TokenInfo.
       */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
         <div className="order-1 flex flex-col lg:order-2 lg:col-start-2 lg:row-start-1">
-          {/* Right rail: the relocated safety floor, then the Top Holders table
-              that REPLACES the deleted Trust panel (§12.58). */}
-          <SafetyStrip token={token} />
           <div className="px-5 py-4">
             <HolderTable token={token} initialData={initialHolders} />
           </div>
@@ -125,9 +121,6 @@ export function TokenDetailClient({
         <div className="order-2 flex min-w-0 flex-col gap-6 px-4 pb-[18px] pt-4 sm:px-6 lg:order-1 lg:col-start-1 lg:row-start-1 lg:border-r lg:border-border">
           <TradeFeed token={token} initialTrades={initialTrades} />
           <TokenInfo token={token} />
-          {/* §12.63b: per-token comments (SIWE-authored, WS-live). Additive — it
-              never gates any trade/sell path. */}
-          <CommentsPanel address={token.address} />
         </div>
       </div>
     </OptimisticTradesProvider>

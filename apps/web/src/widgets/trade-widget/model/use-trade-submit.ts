@@ -3,7 +3,7 @@
 import { launchTokenAbi, routerAbi } from "@robbed/shared/abi";
 import type { TokenDetail } from "@robbed/shared";
 import { useCallback, useState } from "react";
-import { maxUint256, type Address } from "viem";
+import { BaseError, maxUint256, type Abi, type Address } from "viem";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 
 import { useOptimisticTradesContext } from "@/entities/trade";
@@ -41,6 +41,19 @@ import { ROBBED, V3, requireAddress } from "@/shared/config/addresses";
  *   native ETH as `value` (SwapRouter02 wraps it); no allowance needed.
  * - The DEADLINE is recomputed HERE from `Date.now()` (not from the quote) so a
  *   stale on-screen quote can never ship an expired deadline (web.md decide-self).
+ * - GAS IS PRE-ESTIMATED node-side, then passed explicitly to `writeContractAsync`
+ *   (`estimateContractGas` → `gas = estimate * 2`, capped). On the Robinhood Orbit
+ *   L2 the wallet's OWN client-side gas estimation fails on the ArbOS L1-data-fee
+ *   component ("Network fee unavailable" in MetaMask) — the same quirk that forced
+ *   `--skip-simulation` on the contract deploys. The node's `eth_estimateGas` DOES
+ *   include that L1 component, so we estimate against `publicClient` and pass an
+ *   explicit `gas` limit; per viem, "passing a gas limit also skips the gas
+ *   estimation step", so the wallet never estimates. Unused gas isn't charged on
+ *   this chain, so the 2× buffer (mirrors the deploy's 2× posture, covers an L1
+ *   component that rises between estimate and execution) is free. If the estimate
+ *   THROWS it is a genuine revert (slippage/deadline) — we do NOT swallow it; it
+ *   propagates to the `humanizeError` path so the user sees WHY (docs verified via
+ *   context7/viem+wagmi 2026-07-13).
  */
 
 export interface SubmitArgs {
@@ -148,16 +161,70 @@ interface VenueSubmitArgs {
   deadline: bigint;
 }
 
+/** 2× the node estimate — mirrors the deploy's `--skip-simulation` 2× posture. */
+const GAS_BUFFER_MULTIPLIER = 2n;
+/** Absolute ceiling so a pathological estimate can never set an absurd limit. */
+const GAS_LIMIT_CEILING = 5_000_000n;
+
+/**
+ * Structural params for {@link estimateBufferedGas}. Kept deliberately loose (not
+ * viem's per-function generic type) so a `value` can be passed on payable calls:
+ * viem's base `estimateContractGas` generic resolves `value` to `undefined` when
+ * the ABI isn't proven payable, which would reject `value: bigint` at the call
+ * sites. The single cast inside the helper reconciles it — safe because the field
+ * is forwarded verbatim to the node's untyped `eth_estimateGas`.
+ */
+interface EstimateGasParams {
+  address: Address;
+  abi: Abi;
+  functionName: string;
+  args: readonly unknown[];
+  value?: bigint;
+  account: Address;
+}
+
+/**
+ * Node-side gas estimate + buffered explicit limit (see the header DECISIONS note):
+ * `publicClient.estimateContractGas` runs the node's `eth_estimateGas` (which DOES
+ * include the ArbOS L1-data-fee component the wallet can't estimate), then we return
+ * `estimate * 2` capped at the ceiling so the caller can pass an explicit `gas` and
+ * the wallet skips its own (failing) estimation. A REVERTING call throws here — the
+ * caller must let it propagate to `humanizeError`, never swallow it. `undefined`
+ * (no publicClient) falls back to wallet estimation.
+ */
+async function estimateBufferedGas(
+  publicClient: PublicClient,
+  params: EstimateGasParams,
+): Promise<bigint | undefined> {
+  if (!publicClient) return undefined;
+  const estimate = await publicClient.estimateContractGas(
+    params as Parameters<typeof publicClient.estimateContractGas>[0],
+  );
+  const buffered = estimate * GAS_BUFFER_MULTIPLIER;
+  return buffered > GAS_LIMIT_CEILING ? GAS_LIMIT_CEILING : buffered;
+}
+
 /** Curve venue: Router.buy (payable) / Router.sell (approve-then-sell). */
 async function submitCurve(a: VenueSubmitArgs): Promise<`0x${string}`> {
   const router = requireAddress(ROBBED.router, "router");
   if (a.side === "buy") {
+    // Pre-estimate node-side so the wallet skips its own (failing) estimation; a
+    // genuine revert throws here and propagates to humanizeError (see DECISIONS).
+    const gas = await estimateBufferedGas(a.publicClient, {
+      address: router,
+      abi: routerAbi,
+      functionName: "buy",
+      args: [a.token, a.account, a.minOut, a.deadline],
+      value: a.amountWei,
+      account: a.account,
+    });
     return a.writeContractAsync({
       address: router,
       abi: routerAbi,
       functionName: "buy",
       args: [a.token, a.account, a.minOut, a.deadline],
       value: a.amountWei,
+      gas,
     });
   }
   await ensureAllowance({
@@ -168,11 +235,20 @@ async function submitCurve(a: VenueSubmitArgs): Promise<`0x${string}`> {
     spender: router,
     amount: a.amountWei,
   });
+  // Estimate AFTER the allowance is in place, else `sell` reverts on transferFrom.
+  const gas = await estimateBufferedGas(a.publicClient, {
+    address: router,
+    abi: routerAbi,
+    functionName: "sell",
+    args: [a.token, a.amountWei, a.account, a.minOut, a.deadline],
+    account: a.account,
+  });
   return a.writeContractAsync({
     address: router,
     abi: routerAbi,
     functionName: "sell",
     args: [a.token, a.amountWei, a.account, a.minOut, a.deadline],
+    gas,
   });
 }
 
@@ -197,12 +273,23 @@ async function submitV3(a: VenueSubmitArgs): Promise<`0x${string}`> {
     minOut: a.minOut,
     deadline: a.deadline,
   });
+  // Pre-estimate node-side so the wallet skips its own (failing) estimation; a
+  // genuine revert throws here and propagates to humanizeError (see DECISIONS).
+  const gas = await estimateBufferedGas(a.publicClient, {
+    address: req.address,
+    abi: req.abi,
+    functionName: req.functionName,
+    args: req.args,
+    value: req.value,
+    account: a.account,
+  });
   return a.writeContractAsync({
     address: req.address,
     abi: req.abi,
     functionName: req.functionName,
     args: req.args,
     value: req.value,
+    gas,
   });
 }
 
@@ -223,23 +310,39 @@ async function ensureAllowance(args: {
     args: [owner, spender],
   })) as bigint;
   if (allowance >= amount) return;
+  // Same L1-data-fee quirk hits the approve → pre-estimate + explicit gas so the
+  // wallet doesn't fall over on "Network fee unavailable" (see DECISIONS).
+  const gas = await estimateBufferedGas(publicClient, {
+    address: token,
+    abi: launchTokenAbi,
+    functionName: "approve",
+    args: [spender, maxUint256],
+    account: owner,
+  });
   const hash = await writeContractAsync({
     address: token,
     abi: launchTokenAbi,
     functionName: "approve",
     args: [spender, maxUint256],
+    gas,
   });
   await publicClient.waitForTransactionReceipt({ hash });
 }
 
 function humanizeError(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  if (/user rejected|denied|rejected the request/i.test(msg)) {
+  // A pre-estimate revert surfaces as a viem BaseError; prefer its `shortMessage`
+  // (the decoded revert reason) over the verbose full message so the user sees WHY
+  // — the fix's whole point vs MetaMask's opaque "Network fee unavailable".
+  const short = e instanceof BaseError ? e.shortMessage : undefined;
+  const full = e instanceof Error ? e.message : String(e);
+  const probe = `${short ?? ""} ${full}`;
+  if (/user rejected|denied|rejected the request/i.test(probe)) {
     return "Transaction rejected in wallet.";
   }
-  if (/deadline|expired|transaction too old/i.test(msg))
+  if (/deadline|expired|transaction too old/i.test(probe))
     return "Trade deadline expired — refresh the quote.";
-  if (/slippage|Too little received|Too much requested/i.test(msg))
+  if (/slippage|Too little received|Too much requested/i.test(probe))
     return "Price moved past your slippage — retry.";
-  return msg.length > 160 ? `${msg.slice(0, 157)}…` : msg;
+  const surfaced = short || full;
+  return surfaced.length > 160 ? `${surfaced.slice(0, 157)}…` : surfaced;
 }

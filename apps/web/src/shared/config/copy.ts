@@ -31,4 +31,3 @@ export const BRAND = "ROBBED_" as const;
 /** Terminal taglines from the mockup — rendered via <CursorTag> (the trailing
  * `_` comes from the component, so the strings carry none). */
 export const TAGLINE_TRADE = "rob responsibly" as const;
-export const TAGLINE_CREATE = "in green we trust" as const;

@@ -52,6 +52,23 @@ export interface NetworkGuard {
   retry: () => void;
 }
 
+/**
+ * Explicit `wallet_addEthereumChain` params so a wallet that does NOT yet have
+ * Robinhood Chain configured ADDS it on switch — rather than relying only on the
+ * connector's implicit 4902 fallback (unreliable across wallets/WC sessions).
+ * Built from the single `robinhoodChain` config object so name / RPC / explorer /
+ * native currency stay the canonical official values (§2 — never invented). The
+ * wagmi/core 2.22 `switchChain` mutation accepts this per-call variable (verified
+ * against the installed `@wagmi/core` type). rpcUrls/blockExplorerUrls must be
+ * PUBLIC URLs the wallet can reach (they come from the env RPC + Blockscout).
+ */
+const ADD_CHAIN_PARAMETER = {
+  chainName: robinhoodChain.name,
+  nativeCurrency: { ...robinhoodChain.nativeCurrency },
+  rpcUrls: [...robinhoodChain.rpcUrls.default.http],
+  blockExplorerUrls: [robinhoodChain.blockExplorers.default.url],
+};
+
 export function useNetworkGuard(): NetworkGuard {
   const { isConnected, chainId: walletChainId, connector } = useAccount();
   const { switchChain, isPending, error, reset } = useSwitchChain();
@@ -71,12 +88,18 @@ export function useNetworkGuard(): NetworkGuard {
     if (!mismatch) return;
     if (attempted.current.has(episode)) return;
     attempted.current.add(episode);
-    switchChain({ chainId: robinhoodChain.id });
+    switchChain({
+      chainId: robinhoodChain.id,
+      addEthereumChainParameter: ADD_CHAIN_PARAMETER,
+    });
   }, [mismatch, episode, switchChain]);
 
   const retry = () => {
     reset();
-    switchChain({ chainId: robinhoodChain.id });
+    switchChain({
+      chainId: robinhoodChain.id,
+      addEthereumChainParameter: ADD_CHAIN_PARAMETER,
+    });
   };
 
   return {

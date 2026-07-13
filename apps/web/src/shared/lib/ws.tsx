@@ -104,12 +104,25 @@ export function useWsChannel(channel: string | null, handler: WsHandler): void {
   }, [client, channel]);
 }
 
+/**
+ * Stable default snapshot. `useSyncExternalStore` requires BOTH getSnapshot and
+ * getServerSnapshot to return a CACHED reference — a fresh object literal each
+ * call is read as a changed snapshot → React's "getServerSnapshot should be
+ * cached to avoid an infinite loop" render crash. `client.getWatermarks()`
+ * already returns a stable ref (ws-client caches `this.watermarks`); this const
+ * covers the disconnected + SSR paths with a single frozen reference.
+ */
+const EMPTY_WATERMARKS: ConfirmationWatermarks = Object.freeze({
+  safeBlock: 0,
+  finalizedBlock: 0,
+});
+
 /** Live confirmation watermark (safe/finalized blocks) — spec §12.20. */
 export function useConfirmationWatermarks(): ConfirmationWatermarks {
   const client = useWsClient();
   return useSyncExternalStore(
     (onChange) => (client ? client.onWatermarks(() => onChange()) : () => {}),
-    () => client?.getWatermarks() ?? { safeBlock: 0, finalizedBlock: 0 },
-    () => ({ safeBlock: 0, finalizedBlock: 0 }),
+    () => client?.getWatermarks() ?? EMPTY_WATERMARKS,
+    () => EMPTY_WATERMARKS,
   );
 }

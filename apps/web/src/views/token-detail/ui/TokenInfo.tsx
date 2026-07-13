@@ -1,6 +1,7 @@
 import type { TokenDetail } from "@robbed/shared";
 
 import { TokenAddressLink } from "@/entities/token";
+import { LP_DESTINY_COPY } from "@/shared/config/copy";
 import { AddressLink, Divider, ExtLink, MonoLabel, MonoText } from "@/shared/ui";
 
 /**
@@ -10,6 +11,12 @@ import { AddressLink, Divider, ExtLink, MonoLabel, MonoText } from "@/shared/ui"
  * External links are always `rel="noopener noreferrer"` (threat-model UM-5);
  * stored links are rendered as plain text hrefs (never dangerouslySetInnerHTML)
  * so a stored-link XSS cannot execute (web.md §8.2 stored-link XSS flow).
+ *
+ * LP-DESTINY FLOOR (§12.14 hard rule, copy-lint enforced): after the token-detail
+ * SafetyStrip was removed (USER-DIRECTED 2026-07-13), the canonical LP sentence
+ * must STILL render on /t/[address]. It survives here as the single muted
+ * `LP_DESTINY_COPY` footnote below — verbatim, via the shared constant, never
+ * re-spelled and never the forbidden LP verb the copy-lint bans.
  */
 export function TokenInfo({ token }: { token: TokenDetail }) {
   const links = token.links;
@@ -57,6 +64,9 @@ export function TokenInfo({ token }: { token: TokenDetail }) {
           </MonoText>
         </Row>
       </dl>
+
+      {/* LP-destiny hard-rule floor (§12.14) — the ONE shared constant, verbatim. */}
+      <p className="text-2xs text-text-tertiary">{LP_DESTINY_COPY}</p>
     </div>
   );
 }

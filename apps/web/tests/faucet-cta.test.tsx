@@ -13,7 +13,15 @@ const TESTNET_ID = 46630;
 const ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" as const;
 
 vi.mock("@/shared/lib/chain", () => ({
-  robinhoodChain: { id: 46630, name: "Robinhood Chain Testnet" },
+  robinhoodChain: {
+    id: 46630,
+    name: "Robinhood Chain Testnet",
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    rpcUrls: { default: { http: ["https://rpc.test.invalid"] } },
+    blockExplorers: {
+      default: { name: "Blockscout", url: "https://explorer.test.invalid" },
+    },
+  },
   explorer: {
     tx: (h: string) => `https://explorer.test.invalid/tx/${h}`,
     address: (a: string) => `https://explorer.test.invalid/address/${a}`,
@@ -105,6 +113,8 @@ describe("FaucetCta — zero-balance testnet onboarding", () => {
     expect(screen.getByRole("alert").textContent).toContain("Robinhood Chain Testnet");
     expect(screen.queryByTestId("faucet-cta")).toBeNull();
     // The auto-switch targeted the testnet chain.
-    expect(switchChainMock).toHaveBeenCalledWith({ chainId: TESTNET_ID });
+    expect(switchChainMock).toHaveBeenCalledWith(
+      expect.objectContaining({ chainId: TESTNET_ID }),
+    );
   });
 });

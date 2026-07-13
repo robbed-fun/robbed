@@ -45,31 +45,8 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [{ source: "/launch", destination: "/create", permanent: false }];
   },
-  // SAME-ORIGIN PROXY for the SIWE-authed comment surface (spec §12.63b). The
-  // comment author cookie (`robbed_user_session`, SameSite=Lax) is set by the API
-  // on `/v1/auth/login`, and the API's CORS is credential-less by design — so the
-  // browser must reach `/v1/auth/*` and the comment POST through THIS origin. A
-  // Next rewrite proxies those relative paths to the API, forwarding the cookie
-  // both ways ("frontend proxies same-origin, zero backend change"). Public reads
-  // (tokens/trades/…) keep hitting the API cross-origin via absolute URLs and are
-  // unaffected. Destination origin is a BUILD var (inlined) — when absent (bare
-  // unit build) no proxy is emitted rather than a broken `undefined` destination.
-  // Docs: nextjs.org/docs/app/api-reference/config/next-config-js/rewrites (v16.2).
-  async rewrites() {
-    const apiOrigin = (
-      process.env.API_BASE_URL_INTERNAL ??
-      process.env.NEXT_PUBLIC_API_BASE_URL ??
-      ""
-    ).replace(/\/$/, "");
-    if (!apiOrigin) return [];
-    return [
-      { source: "/v1/auth/:path*", destination: `${apiOrigin}/v1/auth/:path*` },
-      {
-        source: "/v1/tokens/:address/comments",
-        destination: `${apiOrigin}/v1/tokens/:address/comments`,
-      },
-    ];
-  },
+  // (The same-origin SIWE/comment proxy rewrites were removed with the comments
+  // feature, USER-DIRECTED 2026-07-13.)
   // OG images are NOT rendered by the web anymore: the API serves them at
   // `{API_ORIGIN}/v1/og/{address}.png` (R2-cached PNG) and the token-detail
   // metadata just references that absolute URL. This removed `next/og`

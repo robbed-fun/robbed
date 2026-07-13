@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 
 import {
@@ -8,9 +8,10 @@ import {
   METADATA_NAME_MAX,
   METADATA_TICKER_MAX,
 } from "@robbed/shared";
-import { AmountInput, Button, Input, MonoLabel, MonoText, TextArea } from "@/shared/ui";
+import { AmountInput, Button, Input, MonoLabel, MonoText, TextArea, toast } from "@/shared/ui";
 import { formatTokenFromWei } from "@/shared/lib/format";
 
+import { launchBlockReason } from "../model/block-reason";
 import { launchTextSchema, parseInitialBuyEth } from "../model/schema";
 import { initialBuyMinTokensOut, previewInitialBuy } from "../model/initial-buy-preview";
 import { type LaunchStep, isLaunchInFlight } from "../model/steps";
@@ -32,8 +33,14 @@ import { LaunchProgress } from "./LaunchProgress";
  * side), the client re-verifies the metadata hash before signing (§12.19
  * normative, inside `useLaunch`), and the single atomic `createToken`
  * ({deployFee + initialBuy}) submit + optimistic stepper run unchanged.
- * `pauseCreates` (live factory read) disables submit only; sells elsewhere are
- * never affected (granular flag, §6.5).
+ *
+ * The submit button never hides WHY it won't launch: a single prioritized
+ * `blockReason` (not-connected → image uploading/errored → invalid field →
+ * `pauseCreates` → in-flight) renders as a persistent helper line and fires an
+ * error toast on click, instead of a bare `disabled`. The button is only truly
+ * disabled while a launch is mid-flight (double-submit guard). `pauseCreates`
+ * (live factory read) blocks the launch but is a granular flag — sells elsewhere
+ * are never affected (§6.5).
  *
  * `launchOptions` lets a test inject the network/navigation deps (deterministic).
  */
@@ -50,6 +57,11 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
 
   const inFlight = isLaunchInFlight(launcher.step);
   const disabledForm = inFlight;
+  // "Uploading an image" is part of `isLaunchInFlight`, but it is NOT a launch
+  // in progress — it happens on file-select, before submit. The submit button
+  // stays clickable through it (so it can explain "waiting for the image"); only
+  // an actual mid-flight launch keeps the button disabled (double-submit guard).
+  const launchInFlight = inFlight && launcher.step !== "uploading";
   const unit = ticker.trim() ? ticker.trim() : "tokens";
 
   const initialBuyParse = useMemo(() => parseInitialBuyEth(initialBuy), [initialBuy]);
@@ -70,6 +82,55 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
     [econ.virtualEth0, econ.virtualToken0, econ.tradeFeeBps, initialBuyWei],
   );
   const minTokensOut = useMemo(() => initialBuyMinTokensOut(preview), [preview]);
+
+  // First field-validation message (derived, does NOT set inline `errors` — that
+  // stays a submit-time concern). Feeds `blockReason`.
+  const fieldError = useMemo<string | null>(() => {
+    const parsed = launchTextSchema.safeParse({
+      name: name.trim(),
+      ticker: ticker.trim(),
+      description: description.trim() ? description.trim() : undefined,
+    });
+    if (!parsed.success) return parsed.error.issues[0]?.message ?? "Check the form fields.";
+    if (!launcher.image.url || !launcher.image.hash) return "A logo image is required.";
+    if (!initialBuyParse.ok) return initialBuyParse.error;
+    return null;
+  }, [name, ticker, description, launcher.image.url, launcher.image.hash, initialBuyParse]);
+
+  const createsPaused = econ.pauseCreates === true;
+
+  // Single, prioritized reason the LAUNCH action is blocked (§5.3). `null` ⇒ the
+  // click proceeds to validate() + launch(). Surfaced as a toast on click AND as
+  // a persistent helper line under the button.
+  const blockReason = useMemo(
+    () =>
+      launchBlockReason({
+        isConnected,
+        imageUploading: launcher.image.uploading,
+        imageError: launcher.image.error,
+        fieldError,
+        createsPaused,
+        step: launcher.step,
+      }),
+    [isConnected, launcher.image.uploading, launcher.image.error, fieldError, createsPaused, launcher.step],
+  );
+
+  // Launch outcome → toast (§2.1 confirmation tiers, never an unqualified
+  // "confirmed"). Fires once per terminal transition; `toast` is a stable module
+  // singleton so it needs no dependency entry.
+  const toastedStepRef = useRef<LaunchStep | null>(null);
+  useEffect(() => {
+    const step = launcher.step;
+    if (toastedStepRef.current === step) return;
+    if (step === "soft-confirmed") {
+      toast.success("Token launched — it's tradeable now.");
+    } else if (step === "live-unindexed") {
+      toast.info("Tradeable now — still indexing. Your token page opens shortly.");
+    } else if ((step === "error" || step === "verify-failed") && launcher.error) {
+      toast.error(launcher.error);
+    }
+    toastedStepRef.current = step;
+  }, [launcher.step, launcher.error]);
 
   function collectValues() {
     return {
@@ -100,7 +161,13 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!validate()) return;
+    // Blocked: explain WHY (toast + inline field errors), never submit silently.
+    if (blockReason) {
+      validate(); // surface per-field inline errors alongside the toast
+      toast.error(blockReason);
+      return;
+    }
+    if (!validate()) return; // safety net (blockReason null ⇒ this passes)
     if (!initialBuyParse.ok) return;
     const values = collectValues();
     await launcher.launch({
@@ -112,9 +179,6 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
       deployFeeWei: econ.deployFeeWei ?? 0n,
     });
   }
-
-  const createsPaused = econ.pauseCreates === true;
-  const submitDisabled = disabledForm || createsPaused || launcher.image.uploading;
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5">
@@ -231,15 +295,20 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
         size="lg"
         // Mockup 2b (template 477): 13px/600 label, 13px vertical padding, NO
         // letter-spacing (size="lg" already renders text-base = 13px).
-        disabled={submitDisabled || !isConnected}
+        // Clickable through every block reason (so the click can EXPLAIN why it
+        // won't launch); only a launch already in-flight disables it (double-submit).
+        disabled={launchInFlight}
+        aria-disabled={blockReason ? true : undefined}
         className="h-auto w-full py-[13px] uppercase"
       >
         {submitLabel(launcher.step)}
       </Button>
 
-      {!isConnected && (
+      {/* Persistent, muted reason the button won't launch — visible without a
+          click. Hidden during an actual in-flight launch (the stepper shows it). */}
+      {blockReason && !launchInFlight && (
         <MonoText tone="faint" size="xs" className="text-center">
-          Connect your wallet (top right) to launch.
+          {blockReason}
         </MonoText>
       )}
 
@@ -313,6 +382,7 @@ function byteCounter(value: string, max: number): string {
 
 function submitLabel(step: LaunchStep): string {
   if (step === "verify-failed") return "Launch blocked — hash mismatch";
-  if (isLaunchInFlight(step)) return "Launching…";
+  // "uploading" is a pre-submit image step, not a launch in progress.
+  if (isLaunchInFlight(step) && step !== "uploading") return "Launching…";
   return "Launch token";
 }

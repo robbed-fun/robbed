@@ -3,7 +3,7 @@ import { getDeployment } from "@robbed/shared/addresses";
 /**
  * Official testnet faucet endpoints — TESTNET-TARGET-ONLY config (FSD slice
  * `config` segment). Values are TRANSCRIBED from official sources, never
- * invented (§2/§13): spec §12.52 + docs/runbooks/testnet.md §1/§3
+ * invented (§2/§13): spec §12.52 + docs/developers/runbooks/testnet.md §1/§3
  * (docs.robinhood.com/chain/connecting + Robinhood support article, retrieved
  * 2026-07-11; Chainlink/QuickNode fallbacks verified to target 46630).
  *

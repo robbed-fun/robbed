@@ -78,52 +78,15 @@ async function apiPost<T>(
   body: BodyInit,
   schema: z.ZodType<T>,
   headers?: Record<string, string>,
+  signal?: AbortSignal,
 ): Promise<T> {
   const res = await fetch(`${env.apiFetchBaseUrl()}${path}`, {
     method: "POST",
     headers: { accept: "application/json", ...headers },
     body,
+    signal,
   });
   return unwrap(res, schema);
-}
-
-/**
- * SAME-ORIGIN, CREDENTIALED transport (spec §12.63b comments/auth). The comment
- * author cookie (`robbed_user_session`, SameSite=Lax, set on `/v1/auth/login`)
- * and the API's credential-less CORS mean the browser MUST hit `/v1/auth/*` and
- * the comment POST through the WEB APP's OWN origin — a Next rewrite (next.config)
- * proxies those relative paths to the API, forwarding the cookie both ways. So
- * these use RELATIVE paths (never `env.apiBaseUrl()`) + `credentials: "include"`.
- * Browser-only (relative URLs don't resolve under SSR); comment/auth actions are
- * all client interactions. Same envelope + `ApiError` contract as `apiGet`.
- */
-async function sameOriginRequest<T>(
-  path: string,
-  init: RequestInit,
-  schema: z.ZodType<T>,
-): Promise<T> {
-  const res = await fetch(path, {
-    credentials: "include",
-    ...init,
-    headers: { accept: "application/json", ...(init.headers ?? {}) },
-  });
-  return unwrap(res, schema);
-}
-
-export function sameOriginGet<T>(path: string, schema: z.ZodType<T>): Promise<T> {
-  return sameOriginRequest(path, { method: "GET" }, schema);
-}
-
-export function sameOriginPost<T>(
-  path: string,
-  body: unknown,
-  schema: z.ZodType<T>,
-): Promise<T> {
-  return sameOriginRequest(
-    path,
-    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
-    schema,
-  );
 }
 
 async function unwrap<T>(res: Response, schema: z.ZodType<T>): Promise<T> {
@@ -273,11 +236,20 @@ export function getEthUsd(opts?: FetchOpts) {
 
 // ── Launch flow (api.md §3.1–§3.2) ──────────────────────────────────────────
 
-/** POST /v1/uploads/image — API-mediated upload (spec §12.19; no browser presign). */
-export function uploadImage(file: File | Blob, fieldName = "image") {
+/**
+ * POST /v1/uploads/image — API-mediated upload (spec §12.19; no browser presign).
+ * Accepts an optional `AbortSignal` so the caller can bound the request with a
+ * timeout — an unbounded upload fetch can otherwise wedge the launch form's
+ * `uploading` state true forever (button stuck disabled).
+ */
+export function uploadImage(
+  file: File | Blob,
+  fieldName = "image",
+  opts?: { signal?: AbortSignal },
+) {
   const form = new FormData();
   form.append(fieldName, file);
-  return apiPost(`/v1/uploads/image`, form, uploadImageResponseSchema);
+  return apiPost(`/v1/uploads/image`, form, uploadImageResponseSchema, undefined, opts?.signal);
 }
 
 /** POST /v1/metadata — server canonicalizes + keccak; client re-verifies (§12.19). */

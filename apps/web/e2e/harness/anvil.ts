@@ -138,7 +138,10 @@ export async function revert(id: `0x${string}`): Promise<void> {
   await testClient.revert({ id });
 }
 
-// ── curve reads (Trust-panel truth) ──────────────────────────────────────────
+// ── curve reads (on-chain ground truth) ──────────────────────────────────────
+// (§12.57, 2026-07-13: the token-detail SafetyStrip that rendered these live is
+// DELETED; these reads remain the harness's on-chain truth source for the trade
+// and graduation flows, no longer a UI mirror.)
 
 export async function readReserves(curve: Address): Promise<{
   virtualEth: bigint;
@@ -149,8 +152,8 @@ export async function readReserves(curve: Address): Promise<{
     abi: bondingCurveAbi,
     functionName: "reserves",
   })) as readonly bigint[];
-  // `reserves()` → (virtualEth, virtualToken, realEth, realToken, …); we assert
-  // the ETH legs the Trust panel renders.
+  // `reserves()` → (virtualEth, virtualToken, realEth, realToken, …); we expose
+  // the ETH legs as the on-chain truth for reserve/graduation assertions.
   return { virtualEth: res[0]!, realEth: res[2]! };
 }
 
@@ -158,8 +161,8 @@ export async function readReserves(curve: Address): Promise<{
  * LIVE graduation threshold from the DEPLOYED curve — `BondingCurve.GRADUATION_ETH()`
  * (§6.2). ALWAYS read on-chain, never the static M0 notebook: the target moved
  * 8.076869 → 7.916610 ETH and the `constants.fork.json` fixture can lag whatever
- * the deploy actually baked in. Mirrors the frontend's SafetyStrip live read
- * (`entities/curve/model/reads.ts` reads the same immutable getter). This is the
+ * the deploy actually baked in. Reads the same immutable getter the frontend's
+ * live curve reads use (`entities/curve/model/reads.ts`). This is the
  * authoritative source for "how much ETH graduates this curve".
  */
 export async function readGraduationEth(curve: Address): Promise<bigint> {

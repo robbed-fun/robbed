@@ -11,8 +11,12 @@
  *   entities/trade/ui/ConfirmationBadge.tsx — "Posted to L1" / "Finalized"
  *     (§12.56: the "Soft-confirmed" chip is REMOVED — `softConfirmed` is now an
  *     ABSENCE assertion in TD-9, not a presence selector).
- *   widgets/safety-strip/ui/SafetyStrip.tsx — "Ownerless token"; "read from chain";
- *     "1,000,000,000 fixed"; "on-chain read unavailable"; the shared LP sentence
+ *   views/token-detail/ui/TokenInfo.tsx — the shared LP sentence (§12.14 floor).
+ *     (§12.57, 2026-07-13: the token-detail SafetyStrip was DELETED; "Ownerless
+ *     token"/"read from chain"/"1,000,000,000 fixed"/"Metadata MISMATCH"/"on-chain
+ *     read unavailable" no longer render on /t/[address], so those selectors are
+ *     removed — the LP line survives here in TokenInfo. ERR-13, which asserted the
+ *     strip's "read unavailable" degradation, was RETIRED with the strip.)
  *   features/launch-token/ui/LaunchForm.tsx — "New launches are temporarily paused."
  */
 import { LP_COPY } from "@robbed/shared";
@@ -31,15 +35,11 @@ export const copy = {
   // §12.56: the visible soft-confirmed chip is REMOVED — used for ABSENCE checks.
   softConfirmed: /Soft-confirmed/i,
   postedToL1: /Posted to L1/i,
-  rpcUnavailable: /on-chain read unavailable/i,
-  ownerless: /Ownerless token/i,
-  readFromChain: /read from chain/i,
-  fixedSupply: /1,000,000,000 fixed/i,
-  // §12.57 must-render floor: the single shared LP sentence on token detail.
+  // §12.14 must-render floor: the single shared LP sentence on token detail. The
+  // SafetyStrip removal (§12.57, 2026-07-13) relocated it to `TokenInfo`, verbatim
+  // via the shared constant — asserted by the re-scoped TD-7. (The removed strip's
+  // `rpcUnavailable`/"on-chain read unavailable" selector went with retired ERR-13.)
   lpCopy: LP_COPY,
-  // SafetyStrip metadata tick (§12.57): renders "Metadata MISMATCH" for a changed
-  // hash — the Trust panel's old row-7 verdict, relocated (ERR-6b).
-  metadataMismatch: /MISMATCH/i,
   // ConfirmationBadge WS-silence note (web.md §4.5): "Awaiting the indexer —
   // retrying." §12.56 CAVEAT — this note is APPENDED to a rendered badge's tooltip,
   // but the soft-confirmed tier now renders NO badge, so a receipt-success-but-
@@ -87,7 +87,8 @@ export const sel = {
   // panel and never checked the widget). `..` = the flex Row wrapper.
   feeRow: (page: Page) => page.getByText("Fee", { exact: true }).locator(".."),
   minReceivedRow: (page: Page) => page.getByText("Min received", { exact: true }).locator(".."),
-  trustPanel: (page: Page) => page.getByText(copy.ownerless).locator("xpath=ancestor::*[3]"),
+  // (§12.57, 2026-07-13: the `trustPanel` locator is removed — the token-detail
+  // SafetyStrip/Trust panel it anchored on ("Ownerless token") no longer exists.)
   tokenCard: (page: Page) => page.getByRole("link", { name: /\/t\// }),
   searchBox: (page: Page) => page.getByRole("searchbox").first(),
 } as const;

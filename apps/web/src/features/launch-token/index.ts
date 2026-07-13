@@ -35,5 +35,6 @@ export {
   launchStepLabel,
   isLaunchInFlight,
 } from "./model/steps";
+export { launchBlockReason, type BlockReasonInput } from "./model/block-reason";
 export { useLaunch } from "./model/use-launch";
 export { useLaunchEconomics } from "./model/use-launch-economics";

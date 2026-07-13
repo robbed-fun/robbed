@@ -37,7 +37,7 @@ const TARGET_CHAIN_ID = env.chainId();
 /**
  * Official per-chain facts — TRANSCRIBED, never invented (§2/§13):
  * - 4663:  CLAUDE.md "Chain facts" (explorer robinhoodchain.blockscout.com).
- * - 46630: docs/runbooks/testnet.md §1 / spec §12.49 (docs.robinhood.com/chain/
+ * - 46630: docs/developers/runbooks/testnet.md §1 / spec §12.49 (docs.robinhood.com/chain/
  *   connecting, retrieved 2026-07-11): name "Robinhood Chain Testnet", explorer
  *   explorer.testnet.chain.robinhood.com.
  * No entry for 31337: the local stack is an anvil FORK of 4663 (keeps chain id
@@ -60,7 +60,7 @@ if (!facts) {
   throw new Error(
     `[robbed/web] no official chain facts (name/explorer) recorded for chain id ` +
       `${TARGET_CHAIN_ID}. Web builds target 4663 (mainnet) or 46630 (testnet); ` +
-      `facts come from CLAUDE.md / docs/runbooks/testnet.md §1 — never invented.`,
+      `facts come from CLAUDE.md / docs/developers/runbooks/testnet.md §1 — never invented.`,
   );
 }
 

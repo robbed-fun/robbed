@@ -79,7 +79,16 @@ describe("wrong-network banner + auto-switch", () => {
     expect(banner.textContent).toContain(`chain ${TARGET_ID}`);
 
     expect(switchChainMock).toHaveBeenCalledTimes(1);
-    expect(switchChainMock).toHaveBeenCalledWith({ chainId: TARGET_ID });
+    expect(switchChainMock).toHaveBeenCalledWith(
+      expect.objectContaining({ chainId: TARGET_ID }),
+    );
+    // Carries the explicit wallet_addEthereumChain params so a wallet without the
+    // chain ADDS it (not just switches) — the canonical name from the chain config.
+    expect(switchChainMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        addEthereumChainParameter: expect.objectContaining({ chainName: expect.any(String) }),
+      }),
+    );
 
     // Re-renders must NOT re-fire the wallet popup (one attempt per episode).
     rerender(<NetworkBanner />);
@@ -108,7 +117,9 @@ describe("wrong-network banner + auto-switch", () => {
     fireEvent.click(button);
     expect(resetMock).toHaveBeenCalledTimes(1);
     expect(switchChainMock).toHaveBeenCalledTimes(2);
-    expect(switchChainMock).toHaveBeenLastCalledWith({ chainId: TARGET_ID });
+    expect(switchChainMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ chainId: TARGET_ID }),
+    );
   });
 
   it("chain-changed to the target (post-switch) → banner unmounts cleanly", () => {

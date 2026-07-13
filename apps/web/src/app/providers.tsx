@@ -10,6 +10,7 @@ import { WagmiProvider } from "wagmi";
 import { E2eWalletBridge } from "@/shared/lib/e2e-bridge";
 import { createWagmiConfig } from "@/shared/lib/wagmi";
 import { WsProvider } from "@/shared/lib/ws";
+import { Toaster } from "@/shared/ui";
 
 /**
  * Provider stack (web.md §2.5), outermost → innermost:
@@ -55,6 +56,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
         >
           <WsProvider>{children}</WsProvider>
           <E2eWalletBridge config={wagmiConfig} />
+          {/* Single app-wide toast surface (portals to document.body). */}
+          <Toaster />
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

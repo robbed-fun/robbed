@@ -66,7 +66,7 @@ describe("env-selected chain target (§12.55)", () => {
     const { robinhoodChain: testnet } = await import("@/shared/lib/chain");
     const dep = getDeployment(46630);
     expect(testnet.id).toBe(46630);
-    // Official params — docs/runbooks/testnet.md §1 (docs.robinhood.com).
+    // Official params — docs/developers/runbooks/testnet.md §1 (docs.robinhood.com).
     expect(testnet.name).toBe("Robinhood Chain Testnet");
     expect(testnet.blockExplorers?.default.url).toBe(
       "https://explorer.testnet.chain.robinhood.com",

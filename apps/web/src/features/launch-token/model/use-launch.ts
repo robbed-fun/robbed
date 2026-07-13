@@ -3,7 +3,7 @@
 import { curveFactoryAbi } from "@robbed/shared/abi";
 import type { MetadataRequest } from "@robbed/shared";
 import { useCallback, useMemo, useState } from "react";
-import { type Address, parseEventLogs } from "viem";
+import { type Abi, type Address, BaseError, parseEventLogs } from "viem";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 
 import { type TrackedTrade, useOptimisticTrades } from "@/entities/trade";
@@ -98,6 +98,25 @@ const IMAGE_INIT: ImageState = {
   error: null,
 };
 
+/**
+ * Upper bound on the API-mediated image upload (§12.19). Without it a hung
+ * request (e.g. an unreachable/misrouted upload host — the R2-localhost bug)
+ * leaves `image.uploading` wedged `true` forever, so the Launch button stays
+ * silently disabled with no way to recover. Aborting after this window settles
+ * the promise, clears `uploading`, and surfaces a retryable error.
+ */
+const IMAGE_UPLOAD_TIMEOUT_MS = 30_000;
+
+function isAbortError(e: unknown): boolean {
+  return e instanceof DOMException && (e.name === "AbortError" || e.name === "TimeoutError");
+}
+
+function imageUploadErrorMessage(e: unknown): string {
+  if (isAbortError(e)) return "Logo upload timed out — check your connection and try again.";
+  if (e instanceof ApiError) return `Logo upload failed: ${e.message}`;
+  return "Logo upload failed — try again.";
+}
+
 export function useLaunch(opts: UseLaunchOptions = {}): UseLaunchApi {
   const uploadImageFn = opts.uploadImageFn ?? uploadImageApi;
   const postMetadataFn = opts.postMetadataFn ?? postMetadataApi;
@@ -123,7 +142,12 @@ export function useLaunch(opts: UseLaunchOptions = {}): UseLaunchApi {
       setImage({ ...IMAGE_INIT, fileName: file.name, uploading: true });
       setStep((s) => (s === "idle" ? "uploading" : s));
       try {
-        const res = await uploadImageFn(file);
+        // Bound the request so a hung upload can't wedge `uploading` true (STUCK
+        // button). On timeout the signal aborts → the promise rejects → the
+        // catch clears `uploading` and surfaces a retryable error.
+        const res = await uploadImageFn(file, undefined, {
+          signal: AbortSignal.timeout(IMAGE_UPLOAD_TIMEOUT_MS),
+        });
         setImage({
           url: res.imageUrl,
           hash: res.imageHash,
@@ -133,11 +157,8 @@ export function useLaunch(opts: UseLaunchOptions = {}): UseLaunchApi {
         });
         setStep((s) => (s === "uploading" ? "idle" : s));
       } catch (e) {
-        setImage({
-          ...IMAGE_INIT,
-          fileName: file.name,
-          error: e instanceof ApiError ? e.message : "Image upload failed — try again.",
-        });
+        // IMAGE_INIT.uploading is false — the button always recovers on failure.
+        setImage({ ...IMAGE_INIT, fileName: file.name, error: imageUploadErrorMessage(e) });
         setStep((s) => (s === "uploading" ? "idle" : s));
       }
     },
@@ -229,7 +250,23 @@ export function useLaunch(opts: UseLaunchOptions = {}): UseLaunchApi {
           tokenAmount: "0",
         });
 
-        const hash = await writeContractAsync(req);
+        // GAS PRE-ESTIMATE (same ArbOS L1-data-fee quirk as trades, §2/§6.5): on
+        // the Robinhood Orbit L2 the WALLET's own gas estimation fails on the L1
+        // component ("Network fee unavailable" in MetaMask). The node's
+        // `eth_estimateGas` DOES include it, so we estimate against publicClient
+        // and pass an explicit `gas` — per viem, passing a gas limit also skips
+        // the wallet's estimation. A genuine revert THROWS here and propagates to
+        // the catch → humanizeError (decoded reason surfaced), never swallowed.
+        const gas = await estimateBufferedGas(publicClient, {
+          address: req.address,
+          abi: req.abi as Abi,
+          functionName: req.functionName,
+          args: req.args,
+          value: req.value, // deployFee + initialBuy (the total the tx sends)
+          account,
+        });
+
+        const hash = await writeContractAsync({ ...req, gas });
         optimistic.attachHash(optimisticId, hash);
         setStep("pending");
 
@@ -300,12 +337,60 @@ function defaultNavigate(href: string): void {
   if (typeof window !== "undefined") window.location.assign(href);
 }
 
+type PublicClientT = ReturnType<typeof usePublicClient>;
+
+/** 2× the node estimate — mirrors the deploy's `--skip-simulation` 2× posture. */
+const GAS_BUFFER_MULTIPLIER = 2n;
+/**
+ * Absolute ceiling so a pathological estimate can't set an absurd limit. Higher
+ * than the trade path's 5M: `createToken` is heavy (~7.4M gas incl. the one-time
+ * V3 pool init), so the buffered estimate legitimately runs to several million.
+ */
+const GAS_LIMIT_CEILING = 8_000_000n;
+
+interface EstimateGasParams {
+  address: Address;
+  abi: Abi;
+  functionName: string;
+  args: readonly unknown[];
+  value?: bigint;
+  account: Address;
+}
+
+/**
+ * Node-side gas estimate + buffered explicit limit (mirrors the trade path's
+ * helper — kept local because `widgets/*` is ABOVE `features/*` in the FSD layer
+ * graph and cannot be imported here). `estimateContractGas` runs the node's
+ * `eth_estimateGas` (which DOES include the ArbOS L1-data-fee component the wallet
+ * can't estimate), then we return `estimate * 2` capped so the caller passes an
+ * explicit `gas` and the wallet skips its own (failing) estimation. A REVERTING
+ * call throws here — the caller must let it propagate to `humanizeError`, never
+ * swallow it. `undefined` (no publicClient) falls back to wallet estimation.
+ */
+async function estimateBufferedGas(
+  publicClient: PublicClientT,
+  params: EstimateGasParams,
+): Promise<bigint | undefined> {
+  if (!publicClient) return undefined;
+  const estimate = await publicClient.estimateContractGas(
+    params as Parameters<typeof publicClient.estimateContractGas>[0],
+  );
+  const buffered = estimate * GAS_BUFFER_MULTIPLIER;
+  return buffered > GAS_LIMIT_CEILING ? GAS_LIMIT_CEILING : buffered;
+}
+
 function humanizeError(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  if (/user rejected|denied|rejected the request/i.test(msg)) {
+  // A pre-estimate revert surfaces as a viem BaseError; prefer its decoded
+  // `shortMessage` (the revert reason) over the verbose full message — the whole
+  // point vs MetaMask's opaque "Network fee unavailable".
+  const short = e instanceof BaseError ? e.shortMessage : undefined;
+  const full = e instanceof Error ? e.message : String(e);
+  const probe = `${short ?? ""} ${full}`;
+  if (/user rejected|denied|rejected the request/i.test(probe)) {
     return "Transaction rejected in wallet. Your image and metadata are reusable — retry.";
   }
-  if (/deadline/i.test(msg)) return "Deadline expired — retry.";
-  if (/CreatesPaused/i.test(msg)) return "New launches are temporarily paused.";
-  return msg.length > 180 ? `${msg.slice(0, 177)}…` : msg;
+  if (/deadline|expired|transaction too old/i.test(probe)) return "Deadline expired — retry.";
+  if (/CreatesPaused/i.test(probe)) return "New launches are temporarily paused.";
+  const surfaced = short || full;
+  return surfaced.length > 180 ? `${surfaced.slice(0, 177)}…` : surfaced;
 }

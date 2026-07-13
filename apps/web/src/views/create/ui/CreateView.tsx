@@ -3,8 +3,6 @@ import { AppHeader } from "@/widgets/app-header";
 import { MobileNav } from "@/widgets/mobile-nav";
 import { LiveStatusBanner } from "@/widgets/live-status-banner";
 import { NetworkBanner } from "@/widgets/network-banner";
-import { CursorTag } from "@/shared/ui";
-import { TAGLINE_CREATE } from "@/shared/config/copy";
 
 /**
  * Create `/create` screen (§5.3; ROBBED_ mockup "2b — Create token"; renamed
@@ -34,9 +32,6 @@ export default function CreateView() {
           </p>
         </header>
         <LaunchForm />
-        <div className="flex justify-center pt-1">
-          <CursorTag>{TAGLINE_CREATE}</CursorTag>
-        </div>
       </main>
       <MobileNav />
     </>
