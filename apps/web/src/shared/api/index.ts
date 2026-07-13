@@ -55,7 +55,7 @@ type FetchOpts = {
   signal?: AbortSignal;
 };
 
-async function apiGet<T>(
+export async function apiGet<T>(
   path: string,
   schema: z.ZodType<T>,
   opts: FetchOpts = {},
@@ -85,6 +85,45 @@ async function apiPost<T>(
     body,
   });
   return unwrap(res, schema);
+}
+
+/**
+ * SAME-ORIGIN, CREDENTIALED transport (spec §12.63b comments/auth). The comment
+ * author cookie (`robbed_user_session`, SameSite=Lax, set on `/v1/auth/login`)
+ * and the API's credential-less CORS mean the browser MUST hit `/v1/auth/*` and
+ * the comment POST through the WEB APP's OWN origin — a Next rewrite (next.config)
+ * proxies those relative paths to the API, forwarding the cookie both ways. So
+ * these use RELATIVE paths (never `env.apiBaseUrl()`) + `credentials: "include"`.
+ * Browser-only (relative URLs don't resolve under SSR); comment/auth actions are
+ * all client interactions. Same envelope + `ApiError` contract as `apiGet`.
+ */
+async function sameOriginRequest<T>(
+  path: string,
+  init: RequestInit,
+  schema: z.ZodType<T>,
+): Promise<T> {
+  const res = await fetch(path, {
+    credentials: "include",
+    ...init,
+    headers: { accept: "application/json", ...(init.headers ?? {}) },
+  });
+  return unwrap(res, schema);
+}
+
+export function sameOriginGet<T>(path: string, schema: z.ZodType<T>): Promise<T> {
+  return sameOriginRequest(path, { method: "GET" }, schema);
+}
+
+export function sameOriginPost<T>(
+  path: string,
+  body: unknown,
+  schema: z.ZodType<T>,
+): Promise<T> {
+  return sameOriginRequest(
+    path,
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+    schema,
+  );
 }
 
 async function unwrap<T>(res: Response, schema: z.ZodType<T>): Promise<T> {

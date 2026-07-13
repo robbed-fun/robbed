@@ -1,7 +1,7 @@
 # ROBBED_ — User-Flow Catalog (`apps/web`)
 
 **Owner:** hoodpad-frontend (author) · **Ratifier:** hoodpad-architect · **Status:** **RATIFIED** (M3-11) — including the §8 redesign-reconciliation addendum (PORT-\* flows authored §3b and **RATIFIED 2026-07-11**; 44-flow total is the I-5a coverage baseline)
-**Spec:** `docs/spec.md` v1.1 §5.1–5.3, §2.1, §6.5, §12.12/§12.14/§12.19/§12.20/§12.25/§12.50 · **Driving doc:** `docs/how-it-works/web.md` §3/§4/§8 · **Plan item:** M3-11
+**Spec:** `docs/spec.md` v1.1 §5.1–5.3, §2.1, §6.5, §12.12/§12.14/§12.19/§12.20/§12.25/§12.50 · **Driving doc:** `docs/developers/web.md` §3/§4/§8 · **Plan item:** M3-11
 
 > **Architect sign-off:** `RATIFIED-BY: robbed-architect  DATE: 2026-07-11` — all 36 flows verified against spec §5.1 (5/5) / §5.2 (8/8) / §5.3 (5/5), the 9 transaction types, the 15 error paths (ERR-5 §12.25 confirmed full three-layer), and P-7 waiver completeness (every <3-layer flow has a waiver row). Ratified **as amended** for the §12.50 four-page redesign: route strings `/launch`→`/create` updated, `LAUNCH-*` IDs retained (stable-ID rule), and §8 records the required `PORT-*` addendum. Stable-ID rule is now in force.
 >

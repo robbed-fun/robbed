@@ -9,7 +9,7 @@ import { ACCEPTED_IMAGE_MIME } from "../model/schema";
 import type { ImageState } from "../model/use-launch";
 
 /**
- * Required token image (§5.3, ≤4 MB) — ROBBED_ terminal skin (docs/Robbed.html):
+ * Required token image (§5.3, ≤4 MB) — ROBBED_ terminal skin (ratified redesign, spec §12.50):
  * a square `logo 512×512` slot with a DASHED hairline frame; the whole square is
  * the tap target (mobile-first). API-MEDIATED upload (spec §12.19): the file is
  * handed to `POST /v1/uploads/image` eagerly on select — the API MIME-sniffs +

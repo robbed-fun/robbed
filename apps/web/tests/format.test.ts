@@ -14,7 +14,7 @@ import {
 } from "@/shared/lib/format";
 
 /**
- * WAVE-1 mockup-faithful contract (docs/Robbed.html):
+ * WAVE-1 mockup-faithful contract (the ratified redesign, spec §12.50):
  * - ETH amounts zero-PADDED to fixed decimals (default 4 — "0.4200 ETH"),
  *   never trimmed; callers pass `decimals: 2` where the mockup shows 2
  *   ("1.40 ETH" portfolio values).

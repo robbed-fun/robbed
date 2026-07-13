@@ -1,7 +1,7 @@
 {
   // Cloudflare Workers config for the ROBBED_ frontend, deployed via OpenNext
   // (@opennextjs/cloudflare). Basis: opennext.js.org/cloudflare/get-started +
-  // deploy-komodo-cloudflare.md Part B, verified 2026-07-10.
+  // spec §12.45 (Cloudflare Workers/OpenNext), verified 2026-07-10.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "robbed",
   "main": ".open-next/worker.js",

@@ -6,7 +6,7 @@ import { cn } from "@/shared/lib/utils";
 
 /**
  * Vendored shadcn/ui Button (new-york, Tailwind v4) — code we own (§12.24),
- * restyled to the ROBBED_ terminal skin (Phase F; docs/Robbed.html samples):
+ * restyled to the ROBBED_ terminal skin (Phase F; ratified redesign samples, spec §12.50):
  * square corners, mono, weight 500/600. Variant → mockup mapping:
  *   default — solid green with near-black text (LAUNCH TOKEN / BUY HCAT;
  *             bg-primary is the green accent token post-redesign)

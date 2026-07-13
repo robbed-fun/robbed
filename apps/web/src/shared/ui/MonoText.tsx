@@ -1,7 +1,7 @@
 import { cn } from "@/shared/lib/utils";
 
 /**
- * ROBBED_ terminal text atoms (redesign Phase F; docs/Robbed.html).
+ * ROBBED_ terminal text atoms (redesign Phase F; ratified redesign, spec §12.50).
  *
  * `MonoText` — tone/size-tokenized inline text (everything is mono already via
  * the body font; these map the mockup's exact text ramp + accent hues).

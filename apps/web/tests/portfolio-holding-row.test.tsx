@@ -47,7 +47,7 @@ function RowHarness({ data }: { data: PortfolioHolding }) {
 describe("HoldingRow", () => {
   it("renders the token name, grouped balance, price, ETH value and signed PnL", () => {
     render(<RowHarness data={holding()} />);
-    // The mockup's TOKEN column shows the token NAME (docs/Robbed.html "2c").
+    // The mockup's TOKEN column shows the token NAME (spec §12.50 — page "2c").
     expect(screen.getAllByText("Hoodcat").length).toBeGreaterThan(0);
     expect(screen.getAllByText("4,120,551").length).toBeGreaterThan(0);
     expect(screen.getAllByText("0.00034").length).toBeGreaterThan(0);

@@ -36,6 +36,7 @@ vi.mock("@/widgets/trade-widget", () => ({
 vi.mock("@/widgets/trade-feed", () => ({ TradeFeed: () => <div /> }));
 vi.mock("@/widgets/holder-table", () => ({ HolderTable: () => <div /> }));
 vi.mock("@/widgets/safety-strip", () => ({ SafetyStrip: () => <div /> }));
+vi.mock("@/widgets/comments-panel", () => ({ CommentsPanel: () => <div /> }));
 vi.mock("@/views/token-detail/ui/TokenHeader", () => ({ TokenHeader: () => <div /> }));
 vi.mock("@/views/token-detail/ui/TokenInfo", () => ({ TokenInfo: () => <div /> }));
 

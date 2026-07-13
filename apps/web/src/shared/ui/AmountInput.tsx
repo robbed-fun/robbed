@@ -53,7 +53,7 @@ export function AmountInput({
         </MonoLabel>
       ) : null}
       {/* Baseline-aligned box, unit in the muted token — mockup YOU PAY block
-          (docs/Robbed.html line 406: baseline alignment, muted unit color). */}
+          (the ratified redesign, spec §12.50 — mockup line 406: baseline alignment, muted unit color). */}
       <div
         className={cn(
           "flex items-baseline gap-2 border border-border bg-transparent px-3 py-2.5 transition-colors focus-within:border-green",

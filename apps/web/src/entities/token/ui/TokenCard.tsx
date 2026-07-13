@@ -3,13 +3,14 @@
 import type { TokenCard as TokenCardType } from "@robbed/shared";
 import { useRouter } from "next/navigation";
 
-import { AddressLink } from "@/shared/ui";
+import { CopyAddressButton } from "@/shared/ui";
 import { EthAmount } from "@/shared/ui";
-import { ProgressBar } from "@/shared/ui";
+import { GraduationProgress } from "@/shared/ui";
 import { RelativeTime } from "@/shared/ui";
 import { TokenAvatar } from "@/shared/ui";
 import { UsdAmount } from "@/shared/ui";
 import { Badge } from "@/shared/ui";
+import { TokenAddressLink } from "./TokenAddressLink";
 import { formatPercent, shortAddress } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
@@ -99,10 +100,14 @@ export function TokenCard({
         </div>
       </div>
 
-      <ProgressBar
-        pct={token.progressPct}
-        graduated={token.graduated}
-        label="Graduation"
+      {/* Graduation progress + status — the shared compact GraduationProgress
+          (bar + % pre-grad, or a Graduating / Graduated pill). `progressPct` is
+          the indexer's cached card value (a per-card on-chain read would be too
+          costly for a list); `status`/`graduated` drive the status pill. */}
+      <GraduationProgress
+        variant="compact"
+        progressPct={token.progressPct}
+        status={token.graduated ? "graduated" : token.status}
       />
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -117,11 +122,12 @@ export function TokenCard({
         >
           by {shortAddress(token.creator)}
         </button>
-        <span className="flex items-center gap-2">
+        <span className="flex items-center gap-1.5">
           <span className="tabular-nums">
             Vol <EthAmount wei={token.volume24h} unit="ETH" />
           </span>
-          <AddressLink address={token.address} kind="token" label="↗" />
+          <TokenAddressLink address={token.address} kind="token" tone="muted" />
+          <CopyAddressButton value={token.address} />
         </span>
       </div>
     </div>

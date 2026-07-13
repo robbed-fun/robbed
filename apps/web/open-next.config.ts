@@ -4,7 +4,7 @@ import memoryQueue from "@opennextjs/cloudflare/overrides/queue/memory-queue";
 
 /**
  * OpenNext → Cloudflare Workers adapter config (opennext.js.org/cloudflare,
- * verified 2026-07-10; deploy-komodo-cloudflare.md Part B §B.3).
+ * verified 2026-07-10; spec §12.45; docker.md).
  *
  * incrementalCache (R2): ISR revalidation + `use cache` entries persist in R2
  * (r2IncrementalCache reads the NEXT_INC_CACHE_R2_BUCKET binding in

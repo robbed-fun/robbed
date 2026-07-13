@@ -41,6 +41,11 @@ export const qk = {
   confirmations: () => ["confirmations"] as const,
   ethUsd: () => ["eth-usd"] as const,
   stats: () => ["stats"] as const,
+  /** Creator-fee claimable roll-up (§7/§12.63) — per creator address. */
+  creatorClaimable: (address: string) =>
+    ["creator-claimable", address.toLowerCase()] as const,
+  /** Per-token comments (§12.63b) — bare key = WS-live newest-first list. */
+  comments: (address: string) => ["comments", address.toLowerCase()] as const,
 } as const;
 
 /**

@@ -39,7 +39,7 @@ import { cn } from "@/shared/lib/utils";
 import { useWsChannel } from "@/shared/lib/ws";
 
 /**
- * Live event tape (Discover, ROBBED_ redesign — docs/Robbed.html "2d").
+ * Live event tape (Discover, ROBBED_ redesign — spec §12.50, panel "2d").
  *
  * Filter tabs (ALL/LAUNCHES/TRADES/GRADUATIONS) + a LIVE dot, then rows:
  * age · colored SIDE · token · amount ETH · mcap · Δ%. It merges a real

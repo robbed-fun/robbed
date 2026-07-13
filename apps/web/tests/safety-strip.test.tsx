@@ -76,6 +76,27 @@ describe("SafetyStrip — relocated must-render floor (§12.57)", () => {
     expect(screen.getByText(/1% → treasury/)).toBeTruthy();
   });
 
+  it("discloses the creator fee split when CREATOR_FEE_BPS > 0 (§12.63, live reads)", () => {
+    readContractsMock.mockReturnValue({
+      data: [
+        { status: "success", result: 10n ** 27n }, // totalSupply
+        { status: "success", result: [1n, 2n, LIVE_REAL_ETH, 5n * 10n ** 26n] }, // reserves
+        { status: "success", result: 8_076_868_822_140_981_824n }, // GRADUATION_ETH
+        { status: "success", result: 100 }, // TRADE_FEE_BPS (treasury 1%)
+        { status: "success", result: 0n }, // EARLY_WINDOW_END
+        { status: "success", result: 0n }, // MAX_EARLY_BUY
+        { status: "success", result: 50 }, // CREATOR_FEE_BPS (creator 0.5%)
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    render(<SafetyStrip token={tokenDetail()} />);
+    expect(
+      screen.getByText(/Trade fee 1\.5% — 1% treasury \+ 0\.5% creator/),
+    ).toBeTruthy();
+  });
+
   it("shows the indexer metadata verdict", () => {
     readContractsMock.mockReturnValue(liveReads());
     render(<SafetyStrip token={tokenDetail()} />);

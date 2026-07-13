@@ -7,7 +7,7 @@ import { TrendingCarousel } from "@/widgets/trending-carousel";
 import { getTokens } from "@/shared/api";
 
 /**
- * Discover `/` (§5.1) — ROBBED_ terminal redesign (docs/Robbed.html "2d").
+ * Discover `/` (§5.1) — ROBBED_ terminal redesign (spec §12.50, panel "2d").
  *
  * The screen is a single dense terminal panel: a TRENDING carousel over a live
  * event tape. Both hang off the indexer's `/v1/tokens` projection fetched

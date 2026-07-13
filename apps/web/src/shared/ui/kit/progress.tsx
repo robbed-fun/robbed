@@ -17,6 +17,11 @@ function Progress({
 }: React.ComponentProps<typeof ProgressPrimitive.Root>) {
   return (
     <ProgressPrimitive.Root
+      // Pass `value` to the Root (not only the Indicator transform below) so the
+      // primitive emits `aria-valuenow`/`aria-valuemin`/`aria-valuemax` — a
+      // screen reader announces the graduation progress, not just an unlabelled
+      // progressbar. Callers clamp to [0,100] (ProgressBar), so it is always valid.
+      value={value}
       className={cn(
         // ROBBED_ terminal restyle (Phase F): flat 4px square bar, green fill
         // (bg-primary == the green accent token), surface-2 track.

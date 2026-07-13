@@ -37,8 +37,10 @@ export interface CurveReads {
   reserves: CurveReserves | null;
   /** BondingCurve.GRADUATION_ETH() — threshold constant (§6.2, row 4). */
   graduationEth: bigint | null;
-  /** BondingCurve.TRADE_FEE_BPS() — per-token fee, rendered live (row 6). */
+  /** BondingCurve.TRADE_FEE_BPS() — TREASURY portion of the trade fee, live (row 6). */
   tradeFeeBps: number | null;
+  /** BondingCurve.CREATOR_FEE_BPS() — CREATOR portion of the trade fee, live (§12.63). */
+  creatorFeeBps: number | null;
   /** BondingCurve.EARLY_WINDOW_END() — anti-sniper window end (unix, §6.5). */
   earlyWindowEnd: bigint | null;
   /** BondingCurve.MAX_EARLY_BUY() — per-tx early-buy cap, wei (§6.5). */
@@ -73,6 +75,7 @@ export function useCurveReads(
       { address: curve, abi: bondingCurveAbi, functionName: "TRADE_FEE_BPS" },
       { address: curve, abi: bondingCurveAbi, functionName: "EARLY_WINDOW_END" },
       { address: curve, abi: bondingCurveAbi, functionName: "MAX_EARLY_BUY" },
+      { address: curve, abi: bondingCurveAbi, functionName: "CREATOR_FEE_BPS" },
     ],
     query: {
       enabled,
@@ -100,6 +103,7 @@ export function parseCurveReads(
   | "reserves"
   | "graduationEth"
   | "tradeFeeBps"
+  | "creatorFeeBps"
   | "earlyWindowEnd"
   | "maxEarlyBuyWei"
 > {
@@ -107,6 +111,9 @@ export function parseCurveReads(
     const cell = data?.[i];
     return cell && cell.status === "success" ? cell.result : undefined;
   };
+
+  const toBps = (v: unknown): number | null =>
+    typeof v === "number" ? v : typeof v === "bigint" ? Number(v) : null;
 
   const reservesRaw = at(1);
   let reserves: CurveReserves | null = null;
@@ -123,21 +130,14 @@ export function parseCurveReads(
     }
   }
 
-  const feeRaw = at(3);
-  const tradeFeeBps =
-    typeof feeRaw === "number"
-      ? feeRaw
-      : typeof feeRaw === "bigint"
-        ? Number(feeRaw)
-        : null;
-
   return {
     totalSupply: toBig(at(0)),
     reserves,
     graduationEth: toBig(at(2)),
-    tradeFeeBps,
+    tradeFeeBps: toBps(at(3)),
     earlyWindowEnd: toBig(at(4)),
     maxEarlyBuyWei: toBig(at(5)),
+    creatorFeeBps: toBps(at(6)),
   };
 }
 

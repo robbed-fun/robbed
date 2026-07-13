@@ -165,7 +165,7 @@ export function PriceChart({
   const empty = !feed.isLoading && (feed.data?.candles.length ?? 0) === 0;
 
   return (
-    // ROBBED_ terminal chart panel (docs/Robbed.html "2a"): interval TabBar +
+    // ROBBED_ terminal chart panel (redesign mockup, spec §12.50 — panel "2a"): interval TabBar +
     // "price / ETH" micro-label over one venue-continuous series.
     // DECISION (hoodpad-frontend): the mockup shows 1H/4H/1D/ALL, but the data
     // contract is INTERVAL-based (`CANDLE_INTERVALS` from @robbed/shared / the

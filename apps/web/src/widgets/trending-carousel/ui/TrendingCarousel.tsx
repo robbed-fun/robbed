@@ -1,11 +1,11 @@
 import type { TokenCard } from "@robbed/shared";
 import Link from "next/link";
 
-import { Delta, MonoText } from "@/shared/ui";
+import { Delta, GraduationProgress, MonoText } from "@/shared/ui";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * TRENDING carousel (Discover, ROBBED_ redesign — docs/Robbed.html "2d").
+ * TRENDING carousel (Discover, ROBBED_ redesign — spec §12.50, panel "2d").
  *
  * Pixel-matched to the mockup: a full-bleed marquee of ranked 300×168 cards
  * (image · #rank · name + ticker · 24h Δ%) that auto-scrolls left via the pure-CSS
@@ -102,15 +102,26 @@ function TrendingCard({
         #{rank}
       </span>
 
-      {/* footer scrim + name/ticker/Δ% (mockup: single bottom gradient, no full-card scrim) */}
-      <div className="absolute inset-x-0 bottom-0 flex items-baseline gap-2 bg-gradient-to-b from-transparent to-bg/[0.92] px-3 pb-2.5 pt-[26px]">
-        <MonoText tone="default" size="base" className="truncate font-semibold">
-          {token.name}
-        </MonoText>
-        <MonoText tone="tertiary" size="xs" className="shrink-0 uppercase">
-          {token.ticker}
-        </MonoText>
-        <Delta value={token.change24hPct} className="ml-auto shrink-0" />
+      {/* footer scrim + name/ticker/Δ% + raise-progress (mockup: single bottom
+          gradient, no full-card scrim). The compact GraduationProgress adds the
+          §5.1 progress bar + graduated/on-curve status to the real Discover list;
+          `progressPct`/`status` come straight off the card payload (no threshold
+          hardcoded, no per-card on-chain read — §2). */}
+      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1.5 bg-gradient-to-b from-transparent to-bg/[0.92] px-3 pb-2.5 pt-[26px]">
+        <div className="flex items-baseline gap-2">
+          <MonoText tone="default" size="base" className="truncate font-semibold">
+            {token.name}
+          </MonoText>
+          <MonoText tone="tertiary" size="xs" className="shrink-0 uppercase">
+            {token.ticker}
+          </MonoText>
+          <Delta value={token.change24hPct} className="ml-auto shrink-0" />
+        </div>
+        <GraduationProgress
+          variant="compact"
+          progressPct={token.progressPct}
+          status={token.graduated ? "graduated" : token.status}
+        />
       </div>
     </Link>
   );

@@ -3,7 +3,7 @@ import { formatEther, formatUnits } from "viem";
 import { formatEthNumber } from "@/shared/lib/format";
 
 /**
- * Portfolio-local display formatters (mockup: docs/Robbed.html page "2c"). Pure
+ * Portfolio-local display formatters (redesign mockup, spec §12.50 — page "2c"). Pure
  * formatting over SUPPLIED indexer/on-chain values — never market math and never
  * a hardcoded metric (§2). These are slice-local because they differ from the
  * shared token/ETH formatters: balances render as GROUPED integers (mockup

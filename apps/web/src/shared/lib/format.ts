@@ -7,7 +7,7 @@ import type { UsdValue } from "@robbed/shared";
  * `{ usd, ethUsd, asOf }` object — `formatUsd` throws otherwise, so a bare USD
  * figure can never reach the DOM (proven by tests/format.test.ts).
  *
- * WAVE-1 fidelity contract (basis: docs/Robbed.html, sampled 2026-07-11):
+ * WAVE-1 fidelity contract (basis: the ratified redesign, spec §12.50, sampled 2026-07-11):
  * - ETH amounts are ZERO-PADDED to a fixed decimal count, never trimmed —
  *   the mockup tape reads "0.4200 ETH" / "1.2000 ETH", the portfolio reads
  *   "1.40 ETH" (2 dec). Callers pick the count via `decimals` (default 4).

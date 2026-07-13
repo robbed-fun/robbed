@@ -7,7 +7,7 @@ import { PortfolioClient } from "./PortfolioClient";
 
 /**
  * Portfolio `/portfolio` (§5.4 — Phase-2 page surfaced day 1 by the ROBBED_
- * redesign, docs/Robbed.html "2c"). SERVER shell: the SSR chrome (status banner,
+ * redesign, spec §12.50, page "2c"). SERVER shell: the SSR chrome (status banner,
  * header, bottom nav) matches every other view, while the wallet-scoped content
  * hydrates as one client island (`PortfolioClient`) — the subject address comes
  * from the connected wallet or an explicit `?address=`, so there is nothing

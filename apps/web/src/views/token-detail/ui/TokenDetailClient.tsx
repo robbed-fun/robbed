@@ -11,6 +11,7 @@ import type { CSSProperties } from "react";
 
 import { useLiveTokenDetail } from "@/entities/token";
 import { OptimisticTradesProvider } from "@/entities/trade";
+import { CommentsPanel } from "@/widgets/comments-panel";
 import { HolderTable } from "@/widgets/holder-table";
 import { PriceChart } from "@/widgets/price-chart";
 import { SafetyStrip } from "@/widgets/safety-strip";
@@ -74,7 +75,7 @@ export function TokenDetailClient({
         columns take `lg:h-full`, so the chart box and the trade-form box are
         EXACTLY equal-height, aligned top and bottom; `lg:items-stretch` keeps
         them flush even if one had less content. Mockup fidelity
-        (docs/Robbed.html "2a"): FLAT regions on the page bg, single vertical
+        (redesign mockup, spec §12.50 — panel "2a"): FLAT regions on the page bg, single vertical
         hairline via the chart column's `border-r`, 320px trade rail self-padded.
         MOBILE (< lg): the two columns STACK — chart (viewport-relative height)
         then trade form — via `flex-col`; the fixed equal-height is scoped to
@@ -124,6 +125,9 @@ export function TokenDetailClient({
         <div className="order-2 flex min-w-0 flex-col gap-6 px-4 pb-[18px] pt-4 sm:px-6 lg:order-1 lg:col-start-1 lg:row-start-1 lg:border-r lg:border-border">
           <TradeFeed token={token} initialTrades={initialTrades} />
           <TokenInfo token={token} />
+          {/* §12.63b: per-token comments (SIWE-authored, WS-live). Additive — it
+              never gates any trade/sell path. */}
+          <CommentsPanel address={token.address} />
         </div>
       </div>
     </OptimisticTradesProvider>

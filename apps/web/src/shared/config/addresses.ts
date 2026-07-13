@@ -65,6 +65,17 @@ export const ROBBED = {
 } satisfies Record<string, Address>;
 
 /**
+ * Creator-fee vault (§7 / §12.63) — OPTIONAL: it exists only on a creator-fee
+ * factory deployment; a v1/treasury-only deployment has none, so this is
+ * `Address | undefined` (never a zero sentinel). Derived from the shared
+ * per-chain map (`getDeployment(chainId).robbed.creatorVault`, itself optional),
+ * with the e2e fork override seam. Consumers MUST hide/disable the claim surface
+ * when this is `undefined` (there is no vault to claim from).
+ */
+export const CREATOR_VAULT: Address | undefined =
+  e2eAddr(process.env.NEXT_PUBLIC_E2E_CREATOR_VAULT) ?? deployment?.robbed.creatorVault ?? undefined;
+
+/**
  * Canonical Uniswap V3 set for the TARGET chain — from the shared per-chain
  * registry entry (mainnet 4663 = the §12.28 official set; testnet 46630 = the
  * §12.52 adopted community deployment, TESTNET-ONLY). Falls back to the shared

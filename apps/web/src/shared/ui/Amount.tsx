@@ -33,7 +33,7 @@ export function EthAmount({
     <span className={cn("tabular-nums", className)}>
       {text}
       {/* Unit inherits the number's color — mockup renders "0.4200 ETH" as ONE
-          color in tape/table rows (docs/Robbed.html line 281). */}
+          color in tape/table rows (the ratified redesign, spec §12.50 — mockup line 281). */}
       {unit ? <span className="ml-1">{unit}</span> : null}
     </span>
   );

@@ -2,7 +2,7 @@ import localFont from "next/font/local";
 
 /**
  * ROBBED_ display font — IBM Plex Mono, self-hosted (see ./fonts/NOTICE.md).
- * The mockup (docs/Robbed.html) is IBM Plex Mono throughout; weights used there
+ * The mockup (ratified redesign, spec §12.50) is IBM Plex Mono throughout; weights used there
  * are 400 (body/rows), 500 (+ CREATE), 600 (wordmark, token names, action
  * buttons). Exposed as `--font-plex-mono`, consumed by the `@theme` `--font-mono`
  * / `--font-sans` tokens in globals.css so BOTH stacks resolve to the terminal

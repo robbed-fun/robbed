@@ -71,7 +71,7 @@ export function PortfolioClient({ initialAddress }: { initialAddress?: string })
 
       {tab === "holdings" && <HoldingsTab address={subject} />}
       {tab === "activity" && <ActivityTab address={subject} />}
-      {tab === "created" && <CreatedTab address={subject} />}
+      {tab === "created" && <CreatedTab address={subject} isSelf={isSelf} />}
     </div>
   );
 }

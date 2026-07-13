@@ -16,7 +16,7 @@ import { describe, expect, it } from "vitest";
  *   - the FSD import-boundary rule (no upward / sibling-slice imports),
  * so a single `bun run test` fails if any is violated. Replaces the former
  * split copy-lint.test.ts + token-lint.test.ts (M3-2/M3-3), same coverage in one
- * suite. Basis: docs/how-it-works/web.md §8.3 + §2.1 (FSD layers); spec §1/§2/§12.14.
+ * suite. Basis: docs/developers/web.md §8.3 + §2.1 (FSD layers); spec §1/§2/§12.14.
  *
  * IMPLEMENTATION NOTE: the forbidden phrases are NOT spelled out literally in
  * this file — they are assembled from fragments via `RegExp` so neither this

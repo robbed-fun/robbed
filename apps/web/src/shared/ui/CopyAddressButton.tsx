@@ -37,13 +37,16 @@ export function CopyAddressButton({
     async (e: React.MouseEvent<HTMLButtonElement>) => {
       e.stopPropagation();
       e.preventDefault();
+      // No clipboard API (SSR / insecure context) → do NOT flip to "copied": a
+      // confirmation must only ever mean the write actually happened.
+      if (!navigator.clipboard) return;
       try {
-        await navigator.clipboard?.writeText(value);
+        await navigator.clipboard.writeText(value);
         setCopied(true);
         if (timer.current) clearTimeout(timer.current);
         timer.current = setTimeout(() => setCopied(false), 1500);
       } catch {
-        // Clipboard unavailable / permission denied — never throw from a copy
+        // Permission denied / write rejected — never throw from a copy
         // affordance; the address text/link beside it remains usable.
       }
     },

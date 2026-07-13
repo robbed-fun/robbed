@@ -21,7 +21,7 @@ import { ImageUpload } from "./ImageUpload";
 import { LaunchProgress } from "./LaunchProgress";
 
 /**
- * Launch form (§5.3) — ROBBED_ terminal skin (docs/Robbed.html "Create"),
+ * Launch form (§5.3) — ROBBED_ terminal skin (redesign mockup, spec §12.50 — panel "Create"),
  * mobile-first single column: dashed 512×512 logo slot beside NAME / TICKER,
  * DESCRIPTION, INITIAL BUY, the live economics summary, and the green LAUNCH
  * TOKEN action.

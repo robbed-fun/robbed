@@ -9,6 +9,7 @@
  */
 export * from "./lib/venue";
 export * from "./lib/v3";
+export * from "./lib/fee";
 export * from "./model/reads";
 export * from "./model/quote";
 export * from "./model/v3-quote";

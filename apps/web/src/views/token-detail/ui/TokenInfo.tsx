@@ -1,7 +1,7 @@
 import type { TokenDetail } from "@robbed/shared";
 
+import { TokenAddressLink } from "@/entities/token";
 import { AddressLink, Divider, ExtLink, MonoLabel, MonoText } from "@/shared/ui";
-import { shortAddress } from "@/shared/lib/format";
 
 /**
  * Token info panel (§5.2) — ROBBED_ terminal skin: description, external links,
@@ -52,7 +52,7 @@ export function TokenInfo({ token }: { token: TokenDetail }) {
         )}
         <Row label="Creator">
           <MonoText tone="muted">
-            {shortAddress(token.creator.address)}
+            <TokenAddressLink address={token.creator.address} kind="address" tone="muted" />
             <span className="ml-1 text-faint">· {token.creator.tokensCreated} launched</span>
           </MonoText>
         </Row>

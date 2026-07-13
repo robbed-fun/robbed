@@ -3,6 +3,7 @@
 import { formatEther, formatUnits } from "viem";
 import { TOTAL_SUPPLY_WEI } from "@robbed/shared";
 
+import { describeFeeSplit } from "@/entities/curve";
 import { MonoText } from "@/shared/ui";
 import { LP_DESTINY_COPY } from "@/shared/config/copy";
 import { formatEthFromWei, formatEthNumber } from "@/shared/lib/format";
@@ -11,7 +12,7 @@ import { useLaunchEconomics } from "../model/use-launch-economics";
 
 /**
  * "Economics displayed plainly" (§5.3) — ROBBED_ terminal summary block
- * (docs/Robbed.html "Create"): a hairline-topped stack of label→value rows,
+ * (redesign mockup, spec §12.50 — panel "Create"): a hairline-topped stack of label→value rows,
  * exactly the mockup's Deploy cost / Starting price / Supply, extended with the
  * §5.3-mandated Trade fee + Graduation rows and the verbatim LP sentence (those
  * are product guarantees the mockup omits; kept, styled to match).
@@ -48,10 +49,13 @@ export function EconomicsPanel({ ticker }: { ticker?: string }) {
     TOTAL_SUPPLY_WEI / 10n ** 18n,
   )} ${unit}`;
 
-  const tradeFee =
-    econ.tradeFeeBps !== null
-      ? `${(econ.tradeFeeBps / 100).toFixed(econ.tradeFeeBps % 100 === 0 ? 0 : 2)}% curve fee → treasury`
-      : liveHint(econ.available, econ.isError);
+  // Fee split read LIVE from the factory config (§12.63) — treasury + creator.
+  const split = describeFeeSplit(econ.tradeFeeBps, econ.tradeFeeBps === null ? null : econ.creatorFeeBps ?? 0);
+  const tradeFee = split
+    ? split.hasCreatorShare
+      ? `${split.totalPct} — ${split.treasuryPct} treasury + ${split.creatorPct} creator`
+      : `${split.treasuryPct} curve fee → treasury`
+    : liveHint(econ.available, econ.isError);
 
   return (
     <div className="flex flex-col">
@@ -63,6 +67,9 @@ export function EconomicsPanel({ ticker }: { ticker?: string }) {
         <Row label="Starting price">{startingPrice}</Row>
         <Row label="Supply">{supply}</Row>
         <Row label="Trade fee">{tradeFee}</Row>
+        {split?.hasCreatorShare && (
+          <Row label="You earn">{split.creatorPct} as the creator</Row>
+        )}
         <Row label="Graduation">{ethValue(econ.graduationEthWei)}</Row>
       </dl>
       {/* The exact, single-sourced LP sentence — verbatim (§12.14). */}

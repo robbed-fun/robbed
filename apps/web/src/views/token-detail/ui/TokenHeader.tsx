@@ -1,6 +1,8 @@
 import type { TokenDetail } from "@robbed/shared";
 
+import { TokenAddressLink } from "@/entities/token";
 import {
+  CopyAddressButton,
   Delta,
   EthAmount,
   MonoLabel,
@@ -11,11 +13,10 @@ import {
   TokenAvatar,
   UsdAmount,
 } from "@/shared/ui";
-import { shortAddress } from "@/shared/lib/format";
 
 /**
  * Token Detail above-the-fold header (§5.2, web.md §3.2) — ROBBED_ terminal skin
- * (docs/Robbed.html "2a Token detail"). Rendered inside the client island (TD-6)
+ * (redesign mockup, spec §12.50 — panel "2a Token detail"). Rendered inside the client island (TD-6)
  * so the status pill + bonding cell track the LIVE token status, but still
  * SERVER-pre-rendered: the identity row (avatar · NAME TICKER ·
  * addr·created·creator) and the stat cells (PRICE / VOL 24H / 24H / MCAP /
@@ -59,8 +60,9 @@ export function TokenHeader({
             </MonoText>
             <StatusTag status={token.status} />
           </div>
-          <MonoText tone="faint" size="xs" className="truncate">
-            {shortAddress(token.address)}
+          <MonoText tone="faint" size="xs" className="flex items-center truncate">
+            <TokenAddressLink address={token.address} kind="token" tone="faint" />
+            <CopyAddressButton value={token.address} className="ml-1" />
           </MonoText>
         </div>
       </div>

@@ -6,7 +6,7 @@ import type {
 } from "@robbed/shared";
 
 /**
- * Event-tape domain model (Discover, ROBBED_ redesign — docs/Robbed.html "2d").
+ * Event-tape domain model (Discover, ROBBED_ redesign — spec §12.50, panel "2d").
  *
  * The tape is a MERGED LIVE feed of protocol events — trades (BUY/SELL),
  * launches, graduations — across all tokens. This module is the pure,

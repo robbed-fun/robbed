@@ -42,7 +42,7 @@ import { formatReceiveTokenAmount } from "../lib/format-receive";
 
 /**
  * Buy/Sell widget with the INVISIBLE VENUE SWITCH (§5.2) — ROBBED_ terminal skin
- * (docs/Robbed.html "2a" trade panel). One design, two engines, selected by the
+ * (redesign mockup, spec §12.50 — "2a" trade panel). One design, two engines, selected by the
  * indexed `status` — never a user choice:
  *   status=curve/graduating → curve engine (Router.buy/sell, on-chain quote)
  *   status=graduated        → Uniswap V3 engine

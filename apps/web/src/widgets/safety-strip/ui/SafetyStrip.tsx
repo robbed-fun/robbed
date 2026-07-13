@@ -4,8 +4,8 @@ import { TOTAL_SUPPLY_WEI, type TokenDetail, tokenTrades } from "@robbed/shared"
 import { formatUnits } from "viem";
 import type { Address } from "viem";
 
-import { useCurveReads } from "@/entities/curve";
-import { AddressLink, Button, MonoLabel, ProgressBar } from "@/shared/ui";
+import { describeFeeSplit, useCurveReads } from "@/entities/curve";
+import { AddressLink, Button, GraduationProgress, MonoLabel } from "@/shared/ui";
 import { LP_DESTINY_COPY } from "@/shared/config/copy";
 import { ROBBED, isPlaceholder } from "@/shared/config/addresses";
 import { useWsChannel } from "@/shared/lib/ws";
@@ -77,29 +77,26 @@ export function SafetyStrip({ token }: { token: TokenDetail }) {
         )}
       </div>
 
-      {/* Graduation progress toward GRADUATION_ETH (LIVE reserves ÷ threshold). */}
-      {graduated ? (
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-green">Graduated ✓ → Uniswap V3</span>
-          {token.v3PoolAddress && (
+      {/*
+        Graduation progress toward GRADUATION_ETH — the shared presentational
+        GraduationProgress (full variant), fed the LIVE on-chain reserves ÷ the
+        LIVE threshold (spec §5.2 — NEVER the API's cached `progressPct`). It owns
+        the graduated verdict, the loading/"unavailable" degrade, and the raised/
+        threshold label; the retry button stays here (it drives `useCurveReads`).
+      */}
+      <GraduationProgress
+        variant="full"
+        status={graduated ? "graduated" : token.status}
+        progressPct={pct ?? 0}
+        raisedEth={realEth}
+        graduationEth={graduationEth}
+        loading={loading}
+        trailing={
+          token.v3PoolAddress ? (
             <AddressLink address={token.v3PoolAddress} kind="address" label="pool ↗" />
-          )}
-        </div>
-      ) : pct === null ? (
-        <p className="text-xs text-muted-foreground">
-          {loading ? "reading chain…" : "on-chain read unavailable — retry"}
-        </p>
-      ) : (
-        <div className="flex flex-col gap-1">
-          <ProgressBar pct={pct} showValue={false} />
-          <div className="flex items-center justify-between text-xs tabular-nums text-muted-foreground">
-            <span>
-              {formatEthFromWei(realEth!)} / {formatEthFromWei(graduationEth!)} ETH raised
-            </span>
-            <span>{pct.toFixed(1)}%</span>
-          </div>
-        </div>
-      )}
+          ) : undefined
+        }
+      />
 
       {/* Live curve reserves (LIVE reserves — read FROM CHAIN, never cached API). */}
       <div className="text-xs">
@@ -126,7 +123,7 @@ export function SafetyStrip({ token }: { token: TokenDetail }) {
         <Tick ok label="Ownerless token" />
         <Tick ok={supplyOk} label={FIXED_SUPPLY_LABEL} pending={reads.totalSupply === null} />
         <MetadataTick verification={token.trust.metadataVerification} />
-        <FeeTick feeBps={reads.tradeFeeBps} />
+        <FeeTick treasuryBps={reads.tradeFeeBps} creatorBps={reads.creatorFeeBps} />
         <AddressLink address={token.address} kind="token" label="verify ↗" />
       </div>
 
@@ -190,11 +187,32 @@ function MetadataTick({
   return <Tick ok label="Metadata matches" />;
 }
 
-function FeeTick({ feeBps }: { feeBps: number | null }) {
-  if (feeBps === null) {
+/**
+ * Live trade-fee split (§12.63). With NO creator share (v1 tokens) the copy is the
+ * unchanged "1% → treasury" (e2e-stable). With a creator share it discloses the
+ * split, e.g. "Trade fee 1.5% — 1% treasury + 0.5% creator". `treasuryBps` is the
+ * on-chain `TRADE_FEE_BPS`; `creatorBps` the on-chain `CREATOR_FEE_BPS` (0, not
+ * null, on a token with no creator fee — null only means "still reading").
+ */
+function FeeTick({
+  treasuryBps,
+  creatorBps,
+}: {
+  treasuryBps: number | null;
+  creatorBps: number | null;
+}) {
+  // Degrade gracefully if the creator-bps read is unavailable but treasury is
+  // known: treat it as 0 so the (unchanged) treasury-only copy still renders.
+  const split = describeFeeSplit(treasuryBps, treasuryBps === null ? null : creatorBps ?? 0);
+  if (!split) {
     return <span className="text-muted-foreground">fee reading…</span>;
   }
-  const pct = feeBps / 100;
-  const label = Number.isInteger(pct) ? `${pct}%` : `${pct.toFixed(2).replace(/0+$/, "")}%`;
-  return <span className="text-text-secondary">{label} → treasury</span>;
+  if (!split.hasCreatorShare) {
+    return <span className="text-text-secondary">{split.treasuryPct} → treasury</span>;
+  }
+  return (
+    <span className="text-text-secondary">
+      Trade fee {split.totalPct} — {split.treasuryPct} treasury + {split.creatorPct} creator
+    </span>
+  );
 }

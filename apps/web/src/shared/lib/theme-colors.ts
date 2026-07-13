@@ -27,7 +27,7 @@ function cssVar(name: string, fallback: string): string {
 /**
  * Resolve the chart palette from theme tokens (client-only; SSR uses fallbacks).
  *
- * CANDLES use the DIM tokens (mockup docs/Robbed.html "2a", template chart bars:
+ * CANDLES use the DIM tokens (redesign mockup, spec §12.50 — panel "2a", template chart bars:
  * up `--color-green-soft` / down `--color-red-dim`) — NOT the bright
  * `--color-buy`/`--color-sell`, which remain the badge/side-label accents
  * elsewhere. Separate reads so the two roles can never drift into one token.

@@ -31,8 +31,10 @@ export interface LaunchEconomics {
   deployFeeWei: bigint | null;
   /** CurveDefaults.graduationEth — the graduation threshold, wei. */
   graduationEthWei: bigint | null;
-  /** FactoryConfig.tradeFeeBps — curve trade fee, rendered live. */
+  /** FactoryConfig.tradeFeeBps — TREASURY portion of the trade fee, live. */
   tradeFeeBps: number | null;
+  /** FactoryConfig.creatorFeeBps — CREATOR portion (§12.63), live; 0 in v1. */
+  creatorFeeBps: number | null;
   /** CurveDefaults.virtualEth0 — seed virtual ETH reserve; seeds the M3-6 preview. */
   virtualEth0: bigint | null;
   /** CurveDefaults.virtualToken0 — seed virtual token reserve; seeds the M3-6 preview. */
@@ -76,18 +78,22 @@ export function useLaunchEconomics(): LaunchEconomics {
     | { virtualEth0?: bigint; virtualToken0?: bigint; graduationEth?: bigint }
     | undefined;
   const config = at(1) as
-    | { tradeFeeBps?: number; creationFee?: bigint; pauseCreates?: boolean }
+    | {
+        tradeFeeBps?: number | bigint;
+        creatorFeeBps?: number | bigint;
+        creationFee?: bigint;
+        pauseCreates?: boolean;
+      }
     | undefined;
+
+  const toBps = (v: unknown): number | null =>
+    typeof v === "number" ? v : typeof v === "bigint" ? Number(v) : null;
 
   return {
     deployFeeWei: config ? toBig(config.creationFee) : null,
     graduationEthWei: defaults ? toBig(defaults.graduationEth) : null,
-    tradeFeeBps:
-      typeof config?.tradeFeeBps === "number"
-        ? config.tradeFeeBps
-        : typeof config?.tradeFeeBps === "bigint"
-          ? Number(config.tradeFeeBps)
-          : null,
+    tradeFeeBps: config ? toBps(config.tradeFeeBps) : null,
+    creatorFeeBps: config ? toBps(config.creatorFeeBps) : null,
     virtualEth0: defaults ? toBig(defaults.virtualEth0) : null,
     virtualToken0: defaults ? toBig(defaults.virtualToken0) : null,
     pauseCreates: typeof config?.pauseCreates === "boolean" ? config.pauseCreates : null,
