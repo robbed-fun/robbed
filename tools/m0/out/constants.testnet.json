@@ -1,39 +1,39 @@
 {
   "chainId": 46630,
-  "generatedAt": "2026-07-12T11:21:05.473Z",
+  "generatedAt": "2026-07-13T13:52:42.495Z",
   "ethUsdSnapshot": {
     "source": "coingecko (https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd&precision=8)",
-    "timestamp": "2026-07-10T06:43:28.947Z",
-    "value": "1771.50888854"
+    "timestamp": "2026-07-12T17:32:49.696Z",
+    "value": "1817.62115697"
   },
   "curve": {
-    "virtualEthWei": "2852303954560041089",
-    "virtualTokenWei": "1073179114341976436170422978",
+    "virtualEthWei": "2201069734696270",
+    "virtualTokenWei": "1141057044591943228750641277",
     "curveSupplyWei": "793100000000000000000000000",
     "lpTrancheWei": "206900000000000000000000000",
-    "graduationEthWei": "8076868822140981824"
+    "graduationEthWei": "5016907787094222"
   },
   "fees": {
     "tradeFeeBps": 100,
     "creatorFeeBps": 50,
-    "creationFeeWei": "847000000000000",
-    "maxCreationFeeWei": "16940000000000000",
-    "graduationFeeWei": "450000000000000",
-    "maxGraduationFeeWei": "4500000000000000",
-    "callerRewardWei": "2822000000000000",
-    "maxCallerRewardWei": "14110000000000000"
+    "creationFeeWei": "825000000000000",
+    "maxCreationFeeWei": "16500000000000000",
+    "graduationFeeWei": "225000000000000",
+    "maxGraduationFeeWei": "1000000000000000",
+    "callerRewardWei": "500000000000000",
+    "maxCallerRewardWei": "1000000000000000"
   },
   "antiSniper": {
     "windowSeconds": 8,
-    "maxEarlyBuyWei": "201922000000000000"
+    "maxEarlyBuyWei": "125000000000000"
   },
   "v3": {
     "feeTier": 10000,
     "tickSpacing": 200,
-    "sqrtPriceX96Token0": "15650667588154918705036412",
-    "sqrtPriceX96Token1": "401075653803896166612957246818246",
-    "targetTickToken0": -170600,
-    "targetTickToken1": 170600,
+    "sqrtPriceX96Token0": "360848188669105838005842",
+    "sqrtPriceX96Token1": "17395408741105584325850076197244405",
+    "targetTickToken0": -246000,
+    "targetTickToken1": 246000,
     "fullRangeTickLower": -887200,
     "fullRangeTickUpper": 887200,
     "toleranceTicks": 100,
@@ -41,8 +41,8 @@
     "migrationSlippageBps": 100
   },
   "beta": {
-    "perTokenEthCapWei": "12115303233211472736",
-    "globalEthCapWei": "403843441107049091200"
+    "perTokenEthCapWei": "7525361680641333",
+    "globalEthCapWei": "250845389354711100"
   },
   "governance": {
     "organicVolumeFloor": {
@@ -51,7 +51,7 @@
       "unit": "multiple of GRADUATION_ETH (self-referential to the curve's own economics — no external ETH/USD or chain-volume figure is baked in)",
       "windowDays": 7,
       "floorGraduationsEquiv": 5,
-      "floorWei": "40384344110704909120",
+      "floorWei": "25084538935471110",
       "organicFlowDiscountMaxPct": 50,
       "status": "M0 DEFAULT (tunable) — recalibrate at M2 once the indexer emits real organic-volume series (§8.5); the magnitude of N ('what counts as not-collapsed') is a product/policy call → hoodpad-architect ratifies before Gate G-A (§13/§14)."
     },
@@ -74,10 +74,10 @@
   },
   "provenance": {
     "generator": "tools/m0/derive.ts (@robbed/m0)",
-    "gitSha": "28c0cb74cf7a644e6dc21ae93e3d2f61a3d97466",
+    "gitSha": "b1c90366b9a5c3bd92dabaee45b7652db6bdfc2e",
     "ethUsdSource": "coingecko (https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd&precision=8)",
-    "ethUsdPrice": "1771.50888854",
-    "fetchedAt": "2026-07-10T06:43:28.947Z",
+    "ethUsdPrice": "1817.62115697",
+    "fetchedAt": "2026-07-12T17:32:49.696Z",
     "specRefs": [
       "§2.2",
       "§6.2",
@@ -124,7 +124,7 @@
       ],
       "runs": 25,
       "maxTerminalPriceErrPpb": "0",
-      "maxCurveRoundingDustTokenWei": "476989939"
+      "maxCurveRoundingDustTokenWei": "901292578368"
     }
   },
   "derivation": {
@@ -132,51 +132,71 @@
     "gradMcapTargetUsd": "69000",
     "graduationFeeModel": {
       "basis": "cost-based (§12.26) — migrationGasEstimate × gasPriceWei × (marginNum/marginDen); NOT %-of-raise, no hardcoded USD",
-      "migrationGasEstimate": "3000000",
+      "migrationGasEstimate": "1500000",
+      "migrationGasBasis": "MEASURED on a mainnet-fork of chain 4663 at the latest block via the real §12.28 V3 factory/NPM (contracts/test/fork/Lifecycle.t.sol, 2026-07-12): graduate()+V3 migration = 814729 gas clean / 817845 gas with arb-back. Estimate rounded up to 1500000 (~1.83× measured) to cover the full MAX_ARB_ITERATIONS=8 loop.",
+      "measuredGraduateGas": "817845",
       "gasPriceWei": "100000000",
       "gasPriceBasis": "placeholder",
       "gasPriceSource": "ROBINHOOD_RPC_URL unset — M0 placeholder (finalize at M1 vs real testnet gas)",
-      "gasPriceFetchedAt": "2026-07-12T11:21:05.471Z",
+      "gasPriceFetchedAt": "2026-07-13T13:52:42.493Z",
       "marginNum": 3,
       "marginDen": 2,
-      "graduationFeeWei": "450000000000000",
-      "status": "M0 PLACEHOLDER inputs — exact fee finalized at M1 against real graduate() gas on testnet"
+      "graduationFeeWei": "225000000000000",
+      "callerRewardGasFloorWei": "122676750000000",
+      "callerRewardCoversGasFloor": true,
+      "status": "M1 gas re-validation DONE (2026-07-12) — migrationGasEstimate is fork-measured; graduation fee and the §12.34 ≥10×-graduate()-gas caller-reward floor are validated against live gas. Exact fee still finalized at deploy against live gas per §12.26."
     },
-    "rawTickToken0BeforeAlignment": -170619,
-    "k": "3061033031788861896951862079727077686189743042",
-    "ethToLpWei": "8073596822140981824",
+    "rawTickToken0BeforeAlignment": -246040,
+    "k": "2511546126413298409487307459778019319936790",
+    "ethToLpWei": "4291907787094222",
+    "testnetGraduationOverride": {
+      "envVar": "M0_TESTNET_GRADUATION_ETH",
+      "requested": "0.005",
+      "requestedWei": "5000000000000000",
+      "derivedGraduationEthWei": "5016907787094222",
+      "policy": {
+        "priceTarget": "constraint (c) inverted: raw p = (G − F − R)/L, then tick-aligned (±≤~1%)",
+        "callerReward": "10% of target G; ceiling 2× (20% of G)",
+        "graduationFee": "min(cost-based §12.26, 10% of G); ceiling min(10×, 20% of G)",
+        "callerRewardGasFloor": "relaxed 10× → 1.5× of fork-measured graduate() gas (TESTNET-ONLY)",
+        "creationFee": "unchanged (independent of G)"
+      },
+      "status": "TESTNET-ONLY faucet-scale lifecycle-testing device — derive fails closed if the env var is present in mainnet mode; never a mainnet input (hoodpad-architect re-ratifies the policy)."
+    },
     "lpDust": {
       "token0IsToken": {
-        "tokenWei": "2729",
-        "wethWei": "2221",
-        "liquidity": "40870859820916040276058"
+        "tokenWei": "146027",
+        "wethWei": "48",
+        "liquidity": "942335248809994927852"
       },
       "token0IsWeth": {
-        "tokenWei": "2723",
-        "wethWei": "2221",
-        "liquidity": "40870859820916040276058"
+        "tokenWei": "145593",
+        "wethWei": "48",
+        "liquidity": "942335248809994927852"
       }
     }
   },
   "humanReadable": {
-    "virtualEth0": "2.852303 ETH",
-    "virtualToken0": "1073.1791e6 tokens",
-    "graduationEth": "8.076868 ETH (net-of-fee, §12.11) ≈ $14308.24 @snapshot",
-    "graduationMcap": "39.0217 ETH ≈ $69127.35 @snapshot (target $69000)",
-    "initialMcap": "2.6578 ETH ≈ $4708.33 @snapshot",
-    "graduationFee": "0.000450 ETH ≈ $0.80 @snapshot — cost-based flat (§12.26), gas placeholder (USD shown is informational only)",
-    "creationFee": "0.000847 ETH ≈ $1.50 @snapshot",
-    "callerReward": "0.002822 ETH ≈ $5.00 @snapshot",
-    "maxEarlyBuy": "0.201922 ETH ≈ $357.71 @snapshot",
-    "ethToLp": "8.073596 ETH"
+    "virtualEth0": "0.002201 ETH",
+    "virtualToken0": "1141.0570e6 tokens",
+    "graduationEth": "0.005016 ETH (net-of-fee, §12.11) ≈ $9.12 @snapshot",
+    "graduationMcap": "0.0207 ETH ≈ $37.70 @snapshot (target $69000)",
+    "initialMcap": "0.0019 ETH ≈ $3.51 @snapshot",
+    "graduationFee": "0.000225 ETH ≈ $0.41 @snapshot — cost-based flat (§12.26), gas placeholder (USD shown is informational only)",
+    "creationFee": "0.000825 ETH ≈ $1.50 @snapshot",
+    "callerReward": "0.000500 ETH ≈ $0.91 @snapshot",
+    "maxEarlyBuy": "0.000125 ETH ≈ $0.23 @snapshot",
+    "ethToLp": "0.004291 ETH"
   },
   "reviewRequired": [
     "§13 GATE: ALL constants below are open item §13 until hoodpad-architect reviews this output; gate approval closes the item.",
-    "fees.graduationFeeWei: COST-BASED per §12.26 (decision 26) — a small flat fee = migrationGasEstimate × gasPriceWei × margin (see derivation.graduationFeeModel), NOT a %-of-raise and never a hardcoded USD figure. All inputs are M0 PLACEHOLDERS; the exact fee is finalized at M1 against real graduate() gas on testnet. gasPrice is fetched live when ROBINHOOD_RPC_URL is set, otherwise a labeled placeholder is used.",
-    "fees.callerRewardWei: PROPOSAL (O-9) — sized ≈$5 equivalent at snapshot; re-validate ≥10× graduate() gas on testnet at M1.",
+    "fees.graduationFeeWei: COST-BASED per §12.26 (decision 26) — a small flat fee = migrationGasEstimate × gasPriceWei × margin (see derivation.graduationFeeModel), NOT a %-of-raise and never a hardcoded USD figure. M1 RE-VALIDATION DONE (2026-07-12): migrationGasEstimate is now FORK-MEASURED (real §12.28 V3 factory/NPM, graduate()+V3 = ~817845 gas worst-case), not the old 3,000,000 placeholder. gasPrice is fetched live when ROBINHOOD_RPC_URL is set; the exact fee is still re-confirmed at deploy against live gas per §12.26.",
+    "fees.callerRewardWei: O-9 (§12.34) — sized ≈$5 equivalent at snapshot. M1 RE-VALIDATION DONE (2026-07-12): asserted ≥10× the FORK-MEASURED graduate() gas × live gas price (see derivation.graduationFeeModel.callerRewardCoversGasFloor); passes with margin.",
+    "fees.creatorFeeBps: §7/§12.63 Phase-2 creator-fee leg. MAINNET = 0 (Phase-2 disabled — enabling it on mainnet requires a §12.62 economics re-derivation that prices the split, NOT shipped here). TESTNET = 50 (architect-ratified PLACEHOLDER: treasury 100 + creator 50 = 150 ≤ the 200/2% additive cap), so Phase-T exercises the creator leg end-to-end. NOT a mainnet commitment; the final mainnet value is a §13/§12.62 knob.",
     "antiSniper.*: PROPOSAL (O-7) — 8s timestamp window (§12.18) with per-tx cap = 2.5% of GRADUATION_ETH; multi-wallet bypass documented.",
     "v3.toleranceTicks / maxArbIterations / migrationSlippageBps: PROPOSAL (O-8) — needed before gate-2 fuzz bounds are final.",
     "beta.*: PLACEHOLDER (O-10) — mainnet values set with hoodpad-security before beta deploy.",
+    "TESTNET SMALL-G OVERRIDE ACTIVE (M0_TESTNET_GRADUATION_ETH): curve.*, fees.graduationFee/callerReward (+ their ceilings), antiSniper.maxEarlyBuyWei, beta.* and governance.organicVolumeFloor are re-derived around the faucet-scale graduation target — see derivation.testnetGraduationOverride for the policy. The §12.34 caller-reward gas floor is relaxed 10×→1.5× (still strictly profitable) FOR TESTNET ONLY. Derive fails closed if this env var is set in mainnet mode; the mainnet derivation path is untouched. hoodpad-architect re-ratifies the override policy before it is treated as anything but a lifecycle-testing device.",
     "governance.organicVolumeFloor: M0-4 DEFAULT (§14 Gate G-A.1) — floor = 5 × GRADUATION_ETH / 7d of OWN-INDEXER organic curve volume (§8.5); NOT a headline metric (§2). The magnitude ('what counts as not-collapsed') is a product/policy call → hoodpad-architect ratifies before Gate G-A; recalibrate at M2 with real organic series.",
     "governance.clusterAlertThresholds: M0-4 DEFAULT (§10 gate 7 amend, §8.5) — per-token X=25% / platform Y=10% of curve volume over 24h; ADVISORY alert only, never gates chain state (§8.4/§8.5). Final tuning with hoodpad-security before beta.",
     "external.weth / v3Factory / positionManager / swapRouter02 / quoterV2: TESTNET 46630 set — RATIFIED spec §12.52 (2026-07-11), sourced from tools/m0/external.testnet.json (never inlined in source, §12.49). WETH is official (docs.robinhood.com/chain/protocol-contracts); the V3 set is a Blockscout-VERIFIED community deployment, TESTNET-ONLY with the §12.52 trust caveat (deployer EOA owns the factory) — FORBIDDEN on mainnet/local. Deploy script still runtime-asserts feeAmountTickSpacing(10000)==200, NPM.factory(), NPM.WETH9() (contracts.md §7.2) so a wrong address fails closed.",

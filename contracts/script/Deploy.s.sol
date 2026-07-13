@@ -104,6 +104,16 @@ contract Deploy is Script {
     ///         allowed in the codebase; asserted equal to `constants.json.external.weth` on live.
     address internal constant CANONICAL_WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
 
+    /// @notice Canonical Uniswap V3 Factory on chain 4663 (spec §12.28, confirmed on-chain). Asserted
+    ///         equal to the resolved `external.v3Factory` on Live AND Fork, mirroring the WETH literal
+    ///         (F-2): a wrong registry value fails closed pre-broadcast, in addition to the runtime
+    ///         `V3Assertions.assertV3Wiring` behavioural checks.
+    address internal constant CANONICAL_V3_FACTORY = 0x1f7d7550B1b028f7571E69A784071F0205FD2EfA;
+
+    /// @notice Canonical NonfungiblePositionManager on chain 4663 (spec §12.28, confirmed on-chain).
+    ///         Asserted equal to the resolved `external.positionManager` on Live AND Fork (F-2 mirror).
+    address internal constant CANONICAL_NPM = 0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3;
+
     /// @notice The production chain id (spec §2).
     uint256 internal constant LIVE_CHAIN_ID = 4663;
 
@@ -129,8 +139,11 @@ contract Deploy is Script {
     error TreasurySafeUnset();
     error ConstantsChainIdMismatch(uint256 chainId, uint256 declaredChainId);
     error WethMismatch(address expected, address actual);
+    error V3FactoryMismatch(address expected, address actual);
+    error PositionManagerMismatch(address expected, address actual);
     error SupplySplitMismatch(uint256 sum);
     error GraduationUnfundable();
+    error CapBelowGraduation(uint256 cap, uint256 graduationEth);
     error CanaryNoTokensOut();
     error CanaryPoolUninitialized(address pool);
     error CanaryPriceMismatch(uint160 expected, uint160 actual);
@@ -197,8 +210,14 @@ contract Deploy is Script {
         //    dev-fork constants fixture records it), so the literal check catches a misconfigured
         //    fork exactly as it would a mainnet deploy. Skipped only for `Testnet`/`Local`.
         V3Assertions.assertV3Wiring(v3Factory, npm, weth);
-        if ((mode == Mode.Live || mode == Mode.Fork) && weth != CANONICAL_WETH) {
-            revert WethMismatch(CANONICAL_WETH, weth);
+        // §12.28 canonical-address literals — Live AND Fork only (a real fork of 4663 carries the
+        // genuine registry deployments; Testnet/Local use different chains). Mirrors the F-2 WETH
+        // literal: a wrong `external.v3Factory`/`external.positionManager` in the constants file fails
+        // closed pre-broadcast, layered ON TOP of the behavioural `assertV3Wiring` above.
+        if (mode == Mode.Live || mode == Mode.Fork) {
+            if (weth != CANONICAL_WETH) revert WethMismatch(CANONICAL_WETH, weth);
+            if (v3Factory != CANONICAL_V3_FACTORY) revert V3FactoryMismatch(CANONICAL_V3_FACTORY, v3Factory);
+            if (npm != CANONICAL_NPM) revert PositionManagerMismatch(CANONICAL_NPM, npm);
         }
 
         // 3. Deploy topology in contracts.md §7.2 order.
@@ -288,6 +307,16 @@ contract Deploy is Script {
         uint256 maxGraduationFee = vm.parseJsonUint(cj, ".fees.maxGraduationFeeWei");
         uint256 maxCallerReward = vm.parseJsonUint(cj, ".fees.maxCallerRewardWei");
         if (maxCallerReward + maxGraduationFee >= graduationEth) revert GraduationUnfundable();
+
+        // Beta caps must clear the graduation threshold, or graduation is UNREACHABLE (the cap binds
+        // before real reserves reach GRADUATION_ETH). Mirrors the factory constructor's
+        // `_requireCapsReachGraduation`; fails a bad constants file loudly, pre-broadcast, with a
+        // deploy-specific error (config-discipline finding, guards §12.11). `globalEthCap` bounds the
+        // SUM across curves, so it too must clear the single-curve threshold for ANY curve to graduate.
+        uint256 perTokenEthCap = vm.parseJsonUint(cj, ".beta.perTokenEthCapWei");
+        uint256 globalEthCap = vm.parseJsonUint(cj, ".beta.globalEthCapWei");
+        if (perTokenEthCap < graduationEth) revert CapBelowGraduation(perTokenEthCap, graduationEth);
+        if (globalEthCap < graduationEth) revert CapBelowGraduation(globalEthCap, graduationEth);
 
         // Gate-4 mutation-disposition calibration pin (reports/mutation/README.md, "L362/L363" DID
         // rows): the §6.3.2 amount-min floor `(1 − migrationSlippageBps/1e4)` must cover the worst
@@ -470,7 +499,15 @@ contract Deploy is Script {
     ///      whole wired stack — factory CREATE2, token mint, pool pre-seed, curve buy — is live.
     function _canary() internal {
         uint256 creationFee = factory.creationFee();
-        uint256 tinyBuy = 0.001 ether; // « maxEarlyBuyWei; anti-sniper stays satisfied
+        // Anti-sniper-safe canary buy: capped to the LIVE per-tx early cap instead of a bare
+        // 0.001-ether literal. The canary create+buy is atomic, so it always executes INSIDE the
+        // §12.18 early window; under the TESTNET small-G constants (M0_TESTNET_GRADUATION_ETH)
+        // maxEarlyBuyWei = 2.5% of a faucet-scale G (0.000125 ETH) sits BELOW the old literal, which
+        // made the whole deploy revert EarlyBuyCapExceeded on the T-1 dry-run (2026-07-13). `== cap`
+        // is admissible (BondingCurve only rejects grossIn > MAX_EARLY_BUY); a zero cap would brick
+        // every in-window buy and SHOULD fail the canary loudly, so it is deliberately not special-cased.
+        uint256 earlyCap = uint256(factory.maxEarlyBuyWei());
+        uint256 tinyBuy = earlyCap < 0.001 ether ? earlyCap : 0.001 ether;
         // Deadline must be FUTURE-DATED, not `block.timestamp`: under `--broadcast` the calldata is
         // encoded during simulation (timestamp T0) then mined a few blocks later (T1 > T0), so a
         // `block.timestamp` deadline would trip `Router.checkDeadline` (DeadlineExpired) on-chain
