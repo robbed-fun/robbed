@@ -77,6 +77,7 @@ x-dev-base: &dev-base
     - robbed_indexer_nm:/workspace/apps/indexer/node_modules
     - robbed_web_nm:/workspace/apps/web/node_modules
     - robbed_shared_nm:/workspace/packages/shared/node_modules
+    - robbed_keeper_nm:/workspace/apps/keeper/node_modules
 
 services:
   # ── MIRROR: Postgres 17 (+ pg_trgm) — see docker-compose.yml for tag rationale ──
@@ -370,6 +371,48 @@ services:
       start_period: 90s
     restart: "no"
 
+  # ── keeper — auto-graduation keeper (apps/keeper). TESTNET deltas: remote RPC (WS
+  #   preferred → the <1-2-block eth_subscribe path; empty ⇒ HTTP polling + the
+  #   KEEPER_POLL_MS sweep is the safety net), chain id asserted vs the live RPC (and
+  #   pre-asserted by `chaincheck`), and a FUNDED ops-wallet key from the gitignored
+  #   root .env (never committed; NOT the deployer — fund ~0.05 ETH). Detection is
+  #   on-chain (REDIS_URL reserved — see apps/keeper/src/chain.ts). ──
+  keeper:
+    <<: *dev-base
+    working_dir: /workspace/apps/keeper
+    command: ["bun", "run", "--hot", "src/index.ts"]
+    environment:
+      <<: *dev-env
+      # WS enables push detection; TESTNET_RPC_URL is the required, chaincheck-guarded value.
+      KEEPER_RPC_URL: ${TESTNET_RPC_WS_URL:-${TESTNET_RPC_URL}}
+      CHAIN_ID: ${TESTNET_CHAIN_ID:?TESTNET_CHAIN_ID is required — official Robinhood testnet chain id (spec §13 / Phase T; never invented). See docs/developers/runbooks/docker.md 'Testnet stack'.}
+      # SECRET — a FUNDED testnet ops wallet (~0.05 ETH), NOT the deployer. Compose
+      # auto-loads the gitignored root .env for ${...} interpolation; NEVER commit a
+      # real key. Fail-closed if unset (the keeper is part of the testnet stack).
+      KEEPER_PRIVATE_KEY: ${TESTNET_KEEPER_PRIVATE_KEY:?TESTNET_KEEPER_PRIVATE_KEY is required — a FUNDED testnet ops-wallet private key (~0.05 ETH; NOT the deployer). Set it in the gitignored root .env. See docs/developers/runbooks/keeper.md.}
+      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
+      REDIS_URL: redis://redis:6379
+      KEEPER_PORT: "3003"
+    ports:
+      - "${KEEPER_PORT:-4103}:3003"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      chaincheck:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      indexer:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3003/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   # ── web — Next.js 16. TESTNET deltas: MOCK_DATA hard "false" (real-data stack), browser RPC →
   # the official testnet endpoints (required, §13), and NEXT_PUBLIC_CHAIN_ID=46630 — the §12.55
   # chain-identity pattern applied to the web (mirror of INDEXER_CHAIN_ID above): the env var
@@ -470,4 +513,5 @@ volumes:
   robbed_indexer_nm:
   robbed_web_nm:
   robbed_shared_nm:
+  robbed_keeper_nm:
   robbed_web_next:

@@ -35,6 +35,20 @@
         "typescript": "^5.6.0",
       },
     },
+    "apps/keeper": {
+      "name": "@robbed/keeper",
+      "dependencies": {
+        "@robbed/shared": "workspace:*",
+        "pg": "^8.13.1",
+        "viem": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/pg": "^8.11.10",
+        "typescript": "^5.6.0",
+      },
+    },
     "apps/web": {
       "name": "@robbed/web",
       "dependencies": {
@@ -623,6 +637,8 @@
     "@robbed/api": ["@robbed/api@workspace:apps/api"],
 
     "@robbed/indexer": ["@robbed/indexer@workspace:apps/indexer"],
+
+    "@robbed/keeper": ["@robbed/keeper@workspace:apps/keeper"],
 
     "@robbed/shared": ["@robbed/shared@workspace:packages/shared"],
 

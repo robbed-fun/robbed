@@ -1,0 +1,25 @@
+{
+  "name": "@robbed/keeper",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "ROBBED_ auto-graduation keeper — permissionless graduate() firer (off-chain service; spec §12.12 ReadyToGraduate lock, §12.34 caller reward, §12.62 gas model). Fires graduate(curve) within 1-2 blocks of GraduationReady; the caller reward offsets gas.",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "start": "bun run src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@robbed/shared": "workspace:*",
+    "pg": "^8.13.1",
+    "viem": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.6.0"
+  }
+}

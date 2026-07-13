@@ -40,6 +40,7 @@ x-dev-base: &dev-base
     - robbed_indexer_nm:/workspace/apps/indexer/node_modules
     - robbed_web_nm:/workspace/apps/web/node_modules
     - robbed_shared_nm:/workspace/packages/shared/node_modules
+    - robbed_keeper_nm:/workspace/apps/keeper/node_modules
 
 services:
   # ── Postgres 17 (+ pg_trgm) — indexer.md §2/§3 (search GIN indexes, offchain tables) ──
@@ -389,6 +390,49 @@ services:
       start_period: 90s
     restart: "no"
 
+  # ── keeper — auto-graduation keeper (apps/keeper). Fires permissionless graduate()
+  #   within ~1-2 blocks of GraduationReady; the §12.34 caller reward offsets gas.
+  #   DEV: ON by default. RPC = the anvil fork over WS (ws://anvil:8545 → the
+  #   eth_subscribe push-detection path; anvil serves JSON-RPC over WS on the same
+  #   port — HTTP would fall back to log polling + the DB sweep). Signer = anvil
+  #   account #4 (well-known public dev key, fork-funded — NOT a secret), chosen
+  #   deliberately OUTSIDE roles 0-3 (creator/treasury/trader/trader2 in
+  #   apps/web/e2e/harness/config.ts) so the keeper never contends for nonces with
+  #   the e2e signers. Detection does NOT use Redis (REDIS_URL is reserved; the
+  #   GraduationReady signal is read on-chain — see apps/keeper/src/chain.ts). ──
+  keeper:
+    <<: *dev-base
+    working_dir: /workspace/apps/keeper
+    command: ["bun", "run", "--hot", "src/index.ts"]
+    environment:
+      <<: *dev-env
+      KEEPER_RPC_URL: ws://anvil:8545
+      CHAIN_ID: "4663"
+      # anvil account #4 — well-known public dev key (fork-funded), NOT a secret.
+      KEEPER_PRIVATE_KEY: "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a"
+      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
+      REDIS_URL: redis://redis:6379
+      KEEPER_PORT: "3003"
+    ports:
+      - "${KEEPER_PORT:-4003}:3003"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      deploychain:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      indexer:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3003/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   # ── web — Next.js 16 dev server (apps/web). Host :4000 ──
   web:
     <<: *dev-base
@@ -505,4 +549,5 @@ volumes:
   robbed_indexer_nm:
   robbed_web_nm:
   robbed_shared_nm:
+  robbed_keeper_nm:
   robbed_web_next:

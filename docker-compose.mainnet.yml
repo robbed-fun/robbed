@@ -93,6 +93,7 @@ x-dev-base: &dev-base
     - robbed_indexer_nm:/workspace/apps/indexer/node_modules
     - robbed_web_nm:/workspace/apps/web/node_modules
     - robbed_shared_nm:/workspace/packages/shared/node_modules
+    - robbed_keeper_nm:/workspace/apps/keeper/node_modules
 
 services:
   # ── MIRROR: Postgres 17 (+ pg_trgm) — see docker-compose.yml for tag rationale ──
@@ -391,6 +392,54 @@ services:
       start_period: 90s
     restart: "no"
 
+  # ── keeper — auto-graduation keeper (apps/keeper). MAINNET: PROFILE-GATED OFF.
+  #   Nothing is deployed on 4663 yet — Gate G-A (spec §14) governs the real-money
+  #   go/no-go — so the keeper must NOT start with a default `up`. The `profiles:
+  #   ["keeper"]` gate keeps it inert until explicitly enabled AFTER G-A:
+  #     docker compose -f docker-compose.mainnet.yml --profile keeper up -d keeper
+  #   Because a profiled service is still interpolated at load, its env uses `:-`
+  #   defaults (NEVER `:?`, which would break the default up); the keeper's own
+  #   fail-closed config (src/config.ts) rejects a missing key/RPC at boot instead.
+  #   Signer = a FUNDED mainnet ops-wallet key from the gitignored root .env (NOT
+  #   the deployer). Detection is on-chain (REDIS_URL reserved — src/chain.ts). ──
+  keeper:
+    <<: *dev-base
+    profiles: ["keeper"]
+    working_dir: /workspace/apps/keeper
+    command: ["bun", "run", "--hot", "src/index.ts"]
+    environment:
+      <<: *dev-env
+      # WS preferred; MAINNET_RPC_URL is the indexer-guarded value on any real up.
+      KEEPER_RPC_URL: ${MAINNET_RPC_WS_URL:-${MAINNET_RPC_URL:-}}
+      CHAIN_ID: ${MAINNET_CHAIN_ID:-4663}
+      # SECRET — supply a FUNDED mainnet ops-wallet key in the gitignored root .env
+      # only when starting the keeper profile (post-G-A). Empty default so the
+      # DEFAULT (profile-off) up is never blocked; the keeper fails loud at boot if
+      # started without it. NEVER commit a real key.
+      KEEPER_PRIVATE_KEY: ${MAINNET_KEEPER_PRIVATE_KEY:-}
+      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
+      REDIS_URL: redis://redis:6379
+      KEEPER_PORT: "3003"
+    ports:
+      - "${KEEPER_PORT:-4203}:3003"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      chaincheck:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      indexer:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3003/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   # ── web — Next.js 16. MAINNET deltas: MOCK_DATA hard "false", browser RPC from env. ──
   web:
     <<: *dev-base
@@ -491,4 +540,5 @@ volumes:
   robbed_indexer_nm:
   robbed_web_nm:
   robbed_shared_nm:
+  robbed_keeper_nm:
   robbed_web_next:

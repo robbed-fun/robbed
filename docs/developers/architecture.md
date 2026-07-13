@@ -32,9 +32,12 @@ flowchart LR
         API[Hono API<br/>apps/api] --> PG
         API --> R2[(Cloudflare R2 + CDN)]
         API --> REDIS
+        KEEPER[Auto-graduation keeper<br/>apps/keeper] --> PG
     end
 
     RPC[Alchemy RPC WS/HTTP] --> PONDER
+    RPC -->|GraduationReady sub| KEEPER
+    KEEPER -->|graduate permissionless| BC
     chain --- RPC
 
     subgraph fe["Frontend"]
@@ -67,6 +70,10 @@ Ponder over the on-chain event families → Postgres (+`pg_trgm`): the single so
 
 Hono on Bun, two processes: HTTP (read endpoints over indexer tables, `pg_trgm` search, API-mediated R2 image upload, server-side metadata canonicalization clients re-verify, moderation gating *listing only*, SIWE admin) and the Bun WS fanout (Redis → sockets). **No chain writes, ever.** Drives M2. See api.md for the endpoint + WS contracts.
 
+### Keeper (`apps/keeper`) — [docs/developers/runbooks/keeper.md](runbooks/keeper.md)
+
+Small Bun service that makes graduation **automatic**. `graduate()` is permissionless with a caller reward (§12.34) that offsets its gas — the keeper is the standing caller so a curve does not sit locked in `ReadyToGraduate` waiting for an altruist. It watches the on-chain `GraduationReady` event over the same Alchemy WS RPC (a topic-filtered `eth_subscribe` across all curves — chosen over routing through the indexer's Redis because no channel republishes that signal today and the on-chain event is the authoritative, fewest-hops source; see the keeper runbook / `src/chain.ts`) and fires `graduate(curve)` within ~1–2 blocks; a periodic Postgres sweep (`graduated = false AND real_eth_reserves >= graduation_eth`) is the fallback that catches WS drops and downtime. Every attempt re-reads on-chain `phase()` before sending (idempotent — never two in-flight txs per curve; "already graduated by someone else" is a success), gas is `estimate × 2` capped at 30M (never a tight cap — graduation mints a V3 position, §12.62), and a persistent revert while the curve stays `ready` is flagged as the donation-brick signature (§6.3/§12.33) with a cooldown so it never hot-loops. **No chain reads or writes touch listing/moderation state** — the keeper only calls the permissionless `graduate()`. ON by default in dev/testnet; **profile-gated OFF on mainnet** until Gate G-A (§14).
+
 ### Web (`apps/web`) — [docs/developers/web.md](web.md)
 
 Next.js 16 + React 19 (exact majors, no ranges — §12.37) App Router on Bun; **four pages** — Discover `/`, Token Detail `/t/[address]`, Create `/create`, Portfolio `/portfolio` (read-only, no new tx types — §12.50). wagmi v2 + viem + RainbowKit (chain 4663), TanStack Query patched by one multiplexed WS, `lightweight-charts` venue-continuous candles, Top Holders table + safety strip (§12.57–§12.58), optimistic trade lifecycle reconciled to indexed truth, dark-only. Drives M3. See web.md for the trade lifecycle and confirmation surfacing.
@@ -95,7 +102,7 @@ Not a service — the interface layer all three consume (see §4).
 ### 3.3 Graduation
 
 1. Final buy is clamped to land net reserves exactly on `GRADUATION_ETH` (excess refunded); curve enters `ReadyToGraduate` — both directions locked (deterministic state, not a pause; UI shows a two-sided "Graduating…" interstitial).
-2. Anyone calls `graduate()` (caller reward). Migrator: graduation fee → treasury; wraps ETH; reads `slot0`; **arbs a polluted pool back to the target tick from curve inventory** (bounded; reverts `PoolPriceUnrecoverable` rather than hostile-mint — curve stays retriable); mints the full-range V3 position **to LPFeeVault**; token dust → `0xdEaD`, WETH dust → treasury; emits `Graduated`.
+2. Anyone calls `graduate()` (caller reward) — in practice the **auto-graduation keeper** (`apps/keeper`) fires it within ~1–2 blocks of `GraduationReady`, but the path stays fully permissionless (any caller wins the reward). Migrator: graduation fee → treasury; wraps ETH; reads `slot0`; **arbs a polluted pool back to the target tick from curve inventory** (bounded; reverts `PoolPriceUnrecoverable` rather than hostile-mint — curve stays retriable); mints the full-range V3 position **to LPFeeVault**; token dust → `0xdEaD`, WETH dust → treasury; emits `Graduated`.
 3. **Indexer:** `graduations` row; token flips `graduated`; the pool is registered as a Ponder child source (V3 `Swap` indexing starts now — pre-grad pool activity is never in the price series); publishes `graduated`.
 4. **Web:** status pill flips, TradeWidget silently re-engines to Uniswap V3 (QuoterV2 + SwapRouter02), chart continues as **one series** — the pool was initialized at the curve's terminal price, so there is no economic or visual seam. Post-graduation no ROBBED_ contract has any pause authority.
 
