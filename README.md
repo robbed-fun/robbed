@@ -81,7 +81,7 @@ Prerequisites: Bun ≥ 1.3, pnpm ≥ 10, Foundry (`foundryup`), Docker (for the 
 - [docs/spec.md](docs/spec.md) — the protocol specification (single source of truth)
 - [docs/developers/](docs/developers) — technical reference: [architecture](docs/developers/architecture.md), [contracts](docs/developers/contracts.md), [indexer](docs/developers/indexer.md), [api](docs/developers/api.md), [web](docs/developers/web.md)
 - [docs/developers/threat-model.md](docs/developers/threat-model.md) — design-time threat model
-- [docs/runbooks/](docs/runbooks) — operational procedures (docker, testnet, deploy, environments)
+- [docs/developers/runbooks/](docs/developers/runbooks) — operational procedures for operators (docker, testnet, deploy, environments)
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — contributor workflow, test tiers, hard rules
 - [docs/SECURITY.md](docs/SECURITY.md) — security policy & vulnerability disclosure
 - [docs/README.md](docs/README.md) — how this documentation is organized

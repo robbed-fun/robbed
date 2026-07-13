@@ -34,6 +34,9 @@
     "dev:mainnet:ps": "docker compose -f docker-compose.mainnet.yml ps",
     "web": "pnpm --filter @robbed/web dev",
     "web:build": "pnpm --filter @robbed/web build && pnpm --filter @robbed/web start",
+    "deploy:cf:mainnet": "pnpm --filter @robbed/web run deploy:cf:mainnet",
+    "deploy:cf:testnet": "pnpm --filter @robbed/web run deploy:cf:testnet",
+    "deploy:robbed.fun": "pnpm --filter @robbed/web run deploy:cf:mainnet",
     "e2e": "pnpm --filter @robbed/web exec playwright test",
     "e2e:coverage": "bun scripts/e2e-coverage.ts"
   },

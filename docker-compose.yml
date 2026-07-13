@@ -119,7 +119,7 @@ services:
   # ── one-shot: create the default bucket + allow public downloads (public CDN read pattern) ──
   # mc image docs-first (hub.docker.com/r/minio/mc/tags, 2026-07-10): RELEASE.2025-08-13T08-35-41Z.
   # Runs only after minio is healthy, then exits; re-running compose re-runs it idempotently
-  # (mb --ignore-existing). Alternative documented in docs/runbooks/docker.md is a manual mc/console step.
+  # (mb --ignore-existing). Alternative documented in docs/developers/runbooks/docker.md is a manual mc/console step.
   createbuckets:
     image: minio/mc:RELEASE.2025-08-13T08-35-41Z
     depends_on:

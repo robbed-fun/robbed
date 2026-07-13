@@ -32,11 +32,11 @@
 #      holds 46630 backfill state) + `up -d`; chaincheck/registry gates re-assert 4663 live.
 #   5. Tunnel ingress (tools/localstack/cloudflared/mainnet.yml) is chain-agnostic — no change.
 # NOTE: this compose file is the local staging/dry-run shape — the REAL production deploy is
-# the P-3 images on Komodo (docs/runbooks/prod-images.md), where API_ENV=production forbids
+# the P-3 images on Komodo (docs/developers/runbooks/prod-images.md), where API_ENV=production forbids
 # moderation stubs (§4.3).
 #
 # ── HARD RULE: no invented parameters (spec §2/§13) ──
-# Mainnet chain facts are ratified (CLAUDE.md chain facts; docs/runbooks/environments.md):
+# Mainnet chain facts are ratified (CLAUDE.md chain facts; docs/developers/runbooks/environments.md):
 # chain id 4663, public RPC https://rpc.mainnet.chain.robinhood.com (rate-limited; Alchemy
 # https://robinhood-mainnet.g.alchemy.com/v2/{KEY} recommended for sustained use). Mirroring the
 # testnet discipline, this file still carries NO silent defaults — required values arrive via
@@ -175,8 +175,8 @@ services:
   chaincheck:
     image: ghcr.io/foundry-rs/foundry:v1.7.1
     environment:
-      MAINNET_RPC_URL: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/runbooks/docker.md 'Mainnet stack'.}
-      MAINNET_CHAIN_ID: ${MAINNET_CHAIN_ID:?MAINNET_CHAIN_ID is required — 4663 (CLAUDE.md chain facts; asserted against the live RPC). See docs/runbooks/docker.md 'Mainnet stack'.}
+      MAINNET_RPC_URL: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/developers/runbooks/docker.md 'Mainnet stack'.}
+      MAINNET_CHAIN_ID: ${MAINNET_CHAIN_ID:?MAINNET_CHAIN_ID is required — 4663 (CLAUDE.md chain facts; asserted against the live RPC). See docs/developers/runbooks/docker.md 'Mainnet stack'.}
     # foundry image entrypoint is `sh -c` — command is ONE string (same as the other stacks).
     command:
       - |
@@ -235,7 +235,7 @@ services:
           echo "  46630 testnet artifact set (tools/localstack/out/testnet.env keys). At Phase B it is" >&2
           echo "  emitted from the real 4663 deploy artifact (contracts/deployments/4663.json replacing" >&2
           echo "  the fork artifact; Gate G-A governs, spec §14). Same keys as testnet.env. See" >&2
-          echo "  docs/runbooks/docker.md 'Mainnet stack'." >&2
+          echo "  docs/developers/runbooks/docker.md 'Mainnet stack'." >&2
           exit 1
         fi
         set -a; . ./tools/localstack/out/mainnet.env; set +a
@@ -259,7 +259,7 @@ services:
       # Override seam consistent with the MAINNET_* pattern.
       CORS_ALLOWED_ORIGINS: ${MAINNET_CORS_ALLOWED_ORIGINS:-https://robbed.fun,http://localhost:${WEB_PORT:-4200}}
       # Cold `tokensOwed` read (api.md §3.4) against the real mainnet RPC. Required, no default.
-      ROBINHOOD_RPC_URL: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/runbooks/docker.md 'Mainnet stack'.}
+      ROBINHOOD_RPC_URL: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/developers/runbooks/docker.md 'Mainnet stack'.}
     ports:
       - "${API_PORT:-4201}:3001"
     depends_on:
@@ -330,7 +330,7 @@ services:
           echo "  46630 testnet artifact set (tools/localstack/out/testnet.env keys). At Phase B it is" >&2
           echo "  emitted from the real 4663 deploy artifact (contracts/deployments/4663.json replacing" >&2
           echo "  the fork artifact; Gate G-A governs, spec §14). Same keys as testnet.env. See" >&2
-          echo "  docs/runbooks/docker.md 'Mainnet stack'." >&2
+          echo "  docs/developers/runbooks/docker.md 'Mainnet stack'." >&2
           exit 1
         fi
         set -a; . ./tools/localstack/out/mainnet.env; set +a
@@ -347,7 +347,7 @@ services:
       # §12.55: explicit selection via the seam above; NO INDEXER_ALLOW_FORK_4663 here
       # (see service comment). Default 4663 = Phase-B value; INTERIM .env sets 46630.
       INDEXER_CHAIN_ID: ${MAINNET_INDEXER_CHAIN_ID:-4663}
-      INDEXER_RPC_HTTP: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/runbooks/docker.md 'Mainnet stack'.}
+      INDEXER_RPC_HTTP: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/developers/runbooks/docker.md 'Mainnet stack'.}
       # OPTIONAL (see header): empty ⇒ apps/indexer/src/config.ts maps INDEXER_RPC_WS
       # `|| undefined` ⇒ Ponder falls back to HTTP polling. Alchemy wss when a key exists;
       # never a sequencer feed.
@@ -402,7 +402,7 @@ services:
       # env.ts throws on a non-registry id). ONE source of truth with chaincheck: the id the
       # browser advertises to wallets is exactly the id chaincheck asserted the RPC serves
       # (INTERIM 46630; 4663 at Phase B — flips with root .env, no compose edit).
-      NEXT_PUBLIC_CHAIN_ID: ${MAINNET_CHAIN_ID:?MAINNET_CHAIN_ID is required — asserted live by chaincheck and advertised as NEXT_PUBLIC_CHAIN_ID (INTERIM 46630; 4663 at Phase B). See docs/runbooks/docker.md 'Mainnet stack'.}
+      NEXT_PUBLIC_CHAIN_ID: ${MAINNET_CHAIN_ID:?MAINNET_CHAIN_ID is required — asserted live by chaincheck and advertised as NEXT_PUBLIC_CHAIN_ID (INTERIM 46630; 4663 at Phase B). See docs/developers/runbooks/docker.md 'Mainnet stack'.}
       # Public-origin overrides (Cloudflare Tunnel: robbed.fun → web, api.robbed.fun → api
       # with /ws → ws; see the cloudflared service below): browser-visible URLs must be
       # reachable from EXTERNAL browsers, so the MAINNET_PUBLIC_* env (root .env) overrides
@@ -416,7 +416,7 @@ services:
       API_BASE_URL_INTERNAL: http://api:3001
       NEXT_PUBLIC_WS_URL: ${MAINNET_PUBLIC_WS_URL:-ws://localhost:${WS_PORT:-4202}}
       NEXT_PUBLIC_R2_PUBLIC_BASE_URL: ${MAINNET_PUBLIC_R2_BASE_URL:-http://localhost:${MINIO_PORT:-4290}/${R2_BUCKET:-robbed-assets}}
-      NEXT_PUBLIC_RPC_HTTP: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/runbooks/docker.md 'Mainnet stack'.}
+      NEXT_PUBLIC_RPC_HTTP: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/developers/runbooks/docker.md 'Mainnet stack'.}
       # OPTIONAL (see header): empty tolerated by the web env layer (apps/web/src/shared/lib/
       # env.ts `rpcWs: … ?? ""`) — set the Alchemy wss when a key exists.
       NEXT_PUBLIC_RPC_WS: ${MAINNET_RPC_WS_URL:-}
@@ -453,7 +453,7 @@ services:
   # UUID is routing metadata): tools/localstack/cloudflared/mainnet.yml, targeting
   # compose-internal service DNS (web:3000 / api:3001 / ws:3002 — never localhost, which
   # inside this container is the connector itself). Run CREDENTIALS stay on the host and
-  # are bind-mounted read-only — never committed (docs/runbooks/docker.md "Public exposure").
+  # are bind-mounted read-only — never committed (docs/developers/runbooks/docker.md "Public exposure").
   # Multiple connectors per tunnel are supported, so overlap with the (now decommissioned)
   # host unit during migration is safe. The ingress is chain-agnostic: the Phase-B swap
   # (header checklist) does not touch this service.

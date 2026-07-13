@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * ROBBED_ env-sync check — `.env.example` ⇄ docs/runbooks/env-inventory.md
+ * ROBBED_ env-sync check — `.env.example` ⇄ docs/developers/runbooks/env-inventory.md
  * (CLAUDE.md anti-drift spirit: env vars are documented ONCE, in the
  * inventory, and the per-app examples mirror it).
  *
@@ -37,7 +37,7 @@ export interface EnvSyncFinding {
   msg: string;
 }
 
-const INVENTORY = "docs/runbooks/env-inventory.md";
+const INVENTORY = "docs/developers/runbooks/env-inventory.md";
 
 interface Row {
   name: string; // e.g. "REDIS_URL" or "FLOW_*"

@@ -30,7 +30,7 @@ groups:
           severity: page
         annotations:
           summary: "Indexer head lag {{ $value }}s (> 10s, §9.4)"
-          description: "Chain head vs last indexed event exceeds 10s — sync stalled or RPC degraded. Runbook: docs/runbooks/prod-images.md §4."
+          description: "Chain head vs last indexed event exceeds 10s — sync stalled or RPC degraded. Runbook: docs/developers/runbooks/prod-images.md §4."
 
       # SPEC'D — §9.4: ws_publish_to_head_ms p95 > 300ms (guards <500ms budget, §8).
       - alert: WsPublishLatencyP95High

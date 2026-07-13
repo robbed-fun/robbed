@@ -3,7 +3,7 @@ description: Bring up all three Docker Compose stacks (robbed / robbed-testnet /
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
-Bring up and verify the full local/infra stack per `docs/runbooks/docker.md` (the canonical runbook — **read its "Bring the stack up", "Testnet stack", "Mainnet stack", and "Public exposure" sections first**; if this command and the runbook disagree, the runbook wins and the drift is reported). `$ARGUMENTS` may name a subset (`dev`, `testnet`, `mainnet`, `tunnels`); default is all, in that order. All paths below are repo-root-relative; run everything from the repo root.
+Bring up and verify the full local/infra stack per `docs/developers/runbooks/docker.md` (the canonical runbook — **read its "Bring the stack up", "Testnet stack", "Mainnet stack", and "Public exposure" sections first**; if this command and the runbook disagree, the runbook wins and the drift is reported). `$ARGUMENTS` may name a subset (`dev`, `testnet`, `mainnet`, `tunnels`); default is all, in that order. All paths below are repo-root-relative; run everything from the repo root.
 
 The three stacks (distinct project names → distinct volumes/networks; all three run simultaneously on disjoint host-port blocks):
 
@@ -25,7 +25,7 @@ Check each; a missing item blocks only the stack(s) that need it, and goes in th
 
 ## 2. Dev stack (`robbed`) — deploychain hazard: NEVER re-up while running
 
-**CRITICAL:** if the dev stack is already running, do **NOT** run `up -d` (nor `compose start`) on it. Both re-run the exited `deploychain` one-shot, which redeploys contracts to the live anvil and **rewrites `tools/localstack/out/local.env` under the running indexer/api/web** (observed live; documented in `docs/runbooks/docker.md` "DB-only reset"). Decide by state:
+**CRITICAL:** if the dev stack is already running, do **NOT** run `up -d` (nor `compose start`) on it. Both re-run the exited `deploychain` one-shot, which redeploys contracts to the live anvil and **rewrites `tools/localstack/out/local.env` under the running indexer/api/web** (observed live; documented in `docs/developers/runbooks/docker.md` "DB-only reset"). Decide by state:
 
 - `docker compose -f docker-compose.yml ps --format 'table {{.Service}}\t{{.Status}}'` shows the long-running services (anvil, postgres, redis, minio, api, ws, indexer, web, apiproxy) `Up` → **verify only**, skip bring-up.
 - Fully or partially down → bring up with `bun run dev:stack` (readiness-gated; first boot builds `robbed-dev` + full pnpm install, be patient — default deadline 900s). A partially-up stack is safest fully restarted: `docker compose -f docker-compose.yml down` first (contracts redeploy anyway; anvil state is ephemeral).

@@ -74,7 +74,7 @@ else
   record SKIP "doc-check" "(no scripts/doc-check.ts yet)"
 fi
 
-# ── 2b. Env-sync: .env.example ⇄ docs/runbooks/env-inventory.md. Also runs
+# ── 2b. Env-sync: .env.example ⇄ docs/developers/runbooks/env-inventory.md. Also runs
 #        inside doc-check (check g) — the named stage exists so a drift
 #        failure is attributed clearly. Self-contained block. ─────────────────
 if [ -f scripts/env-sync-check.ts ]; then

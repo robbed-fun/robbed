@@ -51,7 +51,7 @@
  *                 is a pass — the mechanism exists for future M0-derived
  *                 numbers in docs.
  *  f. openapi   — apps/api/openapi.yaml, if present, parses as YAML.
- *  g. env-sync  — `.env.example` ⇄ docs/runbooks/env-inventory.md, both
+ *  g. env-sync  — `.env.example` ⇄ docs/developers/runbooks/env-inventory.md, both
  *                 directions, driven by the inventory's <!-- env-sync … -->
  *                 markers. Logic lives in scripts/env-sync-check.ts (also
  *                 standalone-runnable and a named validate.sh stage); included
@@ -66,7 +66,8 @@
  *                      roadmap-tracker)/i anywhere outside .claude/;
  *                 (h2) every *.md under docs/ must be in the sanctioned set —
  *                      docs-root allowlist (README/spec/CONTRIBUTING/SECURITY)
- *                      or a sanctioned subdir (users/, developers/, runbooks/);
+ *                      or a sanctioned subdir (users/, developers/ — the latter
+ *                      includes developers/runbooks/);
  *                 (h3) machine-consumed files must exist at the exact paths
  *                      their consumer scripts expect (spec, env-inventory,
  *                      user-flows pair) so a move without re-pointing fails
@@ -477,7 +478,7 @@ for (const p of walkMd(ROOT, [])) {
 const DOCS_ROOT_MD_ALLOWLIST = new Set([
   "README.md", "spec.md", "CONTRIBUTING.md", "SECURITY.md",
 ]);
-const DOCS_SANCTIONED_SUBDIRS = new Set(["users", "developers", "runbooks"]);
+const DOCS_SANCTIONED_SUBDIRS = new Set(["users", "developers"]);
 for (const p of docsMd) {
   const r = rel(p); // docs/...
   const parts = r.split("/"); // ["docs", ...]
@@ -492,7 +493,7 @@ for (const p of docsMd) {
 // a move without re-pointing fails HERE with a named error, not silently.
 const MACHINE_CONSUMED: [string, string][] = [
   ["docs/spec.md", "scripts/doc-check.ts spec-ref resolution (SPEC_PATH)"],
-  ["docs/runbooks/env-inventory.md", "scripts/env-sync-check.ts (env-sync gate)"],
+  ["docs/developers/runbooks/env-inventory.md", "scripts/env-sync-check.ts (env-sync gate)"],
   ["apps/web/e2e/user-flows.md", "scripts/e2e-coverage.ts (e2e coverage gate CATALOG)"],
   ["apps/web/e2e/user-flows-waivers.md", "scripts/e2e-coverage.ts (e2e coverage gate WAIVERS)"],
 ];

@@ -20,7 +20,7 @@
 #                         wss (feed.testnet…) — that is a block feed, not JSON-RPC.
 #   TESTNET_CHAIN_ID      required — official testnet chain id (asserted by `chaincheck` preflight)
 #   (TESTNET_BLOCKSCOUT_URL is part of the same §13 set but is consumed by the T-3 forge
-#    verification step, not by any service here — see docs/runbooks/docker.md "Testnet stack".)
+#    verification step, not by any service here — see docs/developers/runbooks/docker.md "Testnet stack".)
 #
 # ── Contract addresses + START_BLOCK: fail-closed on tools/localstack/out/testnet.env ──
 # No contracts exist on testnet yet (tools/deployments/testnet.json lands at T-3). This stack
@@ -114,7 +114,7 @@ services:
       start_period: 10s
 
   # ── MIRROR: minio — R2/S3-compatible object store (still local even on testnet: real R2 is
-  # the production/staging deploy's concern — T-5 note in docs/runbooks/docker.md) ──
+  # the production/staging deploy's concern — T-5 note in docs/developers/runbooks/docker.md) ──
   minio:
     image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: ["server", "/data", "--console-address", ":9001"]
@@ -160,8 +160,8 @@ services:
   chaincheck:
     image: ghcr.io/foundry-rs/foundry:v1.7.1
     environment:
-      TESTNET_RPC_URL: ${TESTNET_RPC_URL:?TESTNET_RPC_URL is required — official Robinhood testnet RPC (spec §13 / Phase T; never invented). See docs/runbooks/docker.md 'Testnet stack'.}
-      TESTNET_CHAIN_ID: ${TESTNET_CHAIN_ID:?TESTNET_CHAIN_ID is required — official Robinhood testnet chain id (spec §13 / Phase T; never invented). See docs/runbooks/docker.md 'Testnet stack'.}
+      TESTNET_RPC_URL: ${TESTNET_RPC_URL:?TESTNET_RPC_URL is required — official Robinhood testnet RPC (spec §13 / Phase T; never invented). See docs/developers/runbooks/docker.md 'Testnet stack'.}
+      TESTNET_CHAIN_ID: ${TESTNET_CHAIN_ID:?TESTNET_CHAIN_ID is required — official Robinhood testnet chain id (spec §13 / Phase T; never invented). See docs/developers/runbooks/docker.md 'Testnet stack'.}
     # foundry image entrypoint is `sh -c` — command is ONE string (same as docker-compose.yml anvil).
     command:
       - |
@@ -219,7 +219,7 @@ services:
           echo "  Contract addresses + START_BLOCK come from the Phase-T testnet deploy (plan item T-3," >&2
           echo "  which writes tools/deployments/testnet.json); emit/copy them to tools/localstack/out/testnet.env" >&2
           echo "  with the same keys as the local deploychain local.env. No contracts are deployed on testnet yet" >&2
-          echo "  until Phase T runs. See docs/runbooks/docker.md 'Testnet stack'." >&2
+          echo "  until Phase T runs. See docs/developers/runbooks/docker.md 'Testnet stack'." >&2
           exit 1
         fi
         set -a; . ./tools/localstack/out/testnet.env; set +a
@@ -241,7 +241,7 @@ services:
       # Override seam consistent with the TESTNET_PUBLIC_* pattern above.
       CORS_ALLOWED_ORIGINS: ${TESTNET_CORS_ALLOWED_ORIGINS:-https://testnet.robbed.fun,http://localhost:${WEB_PORT:-4100}}
       # TESTNET: cold `tokensOwed` read (api.md §3.4) against the remote testnet RPC. Required, no default (§13).
-      ROBINHOOD_RPC_URL: ${TESTNET_RPC_URL:?TESTNET_RPC_URL is required — official Robinhood testnet RPC (spec §13 / Phase T; never invented). See docs/runbooks/docker.md 'Testnet stack'.}
+      ROBINHOOD_RPC_URL: ${TESTNET_RPC_URL:?TESTNET_RPC_URL is required — official Robinhood testnet RPC (spec §13 / Phase T; never invented). See docs/developers/runbooks/docker.md 'Testnet stack'.}
     ports:
       - "${API_PORT:-4101}:3001"
     depends_on:
@@ -311,7 +311,7 @@ services:
           echo "  Contract addresses + START_BLOCK come from the Phase-T testnet deploy (plan item T-3," >&2
           echo "  which writes tools/deployments/testnet.json); emit/copy them to tools/localstack/out/testnet.env" >&2
           echo "  with the same keys as the local deploychain local.env. No contracts are deployed on testnet yet" >&2
-          echo "  until Phase T runs. See docs/runbooks/docker.md 'Testnet stack'." >&2
+          echo "  until Phase T runs. See docs/developers/runbooks/docker.md 'Testnet stack'." >&2
           exit 1
         fi
         set -a; . ./tools/localstack/out/testnet.env; set +a
@@ -329,7 +329,7 @@ services:
       # §12.55 chain-identity gate: explicit selection — must have a shared-registry
       # entry AND match the live RPC's eth_chainId (double fail-closed, no default).
       INDEXER_CHAIN_ID: "46630"
-      INDEXER_RPC_HTTP: ${TESTNET_RPC_URL:?TESTNET_RPC_URL is required — official Robinhood testnet RPC (spec §13 / Phase T; never invented). See docs/runbooks/docker.md 'Testnet stack'.}
+      INDEXER_RPC_HTTP: ${TESTNET_RPC_URL:?TESTNET_RPC_URL is required — official Robinhood testnet RPC (spec §13 / Phase T; never invented). See docs/developers/runbooks/docker.md 'Testnet stack'.}
       # OPTIONAL (see header): empty ⇒ apps/indexer/src/config.ts maps INDEXER_RPC_WS
       # `|| undefined` ⇒ Ponder falls back to HTTP polling. Alchemy wss when a key exists;
       # never the sequencer feed.
@@ -397,7 +397,7 @@ services:
       API_BASE_URL_INTERNAL: http://api:3001
       NEXT_PUBLIC_WS_URL: ${TESTNET_PUBLIC_WS_URL:-ws://localhost:${WS_PORT:-4102}}
       NEXT_PUBLIC_R2_PUBLIC_BASE_URL: ${TESTNET_PUBLIC_R2_BASE_URL:-http://localhost:${MINIO_PORT:-4190}/${R2_BUCKET:-robbed-assets}}
-      NEXT_PUBLIC_RPC_HTTP: ${TESTNET_RPC_URL:?TESTNET_RPC_URL is required — official Robinhood testnet RPC (spec §13 / Phase T; never invented). See docs/runbooks/docker.md 'Testnet stack'.}
+      NEXT_PUBLIC_RPC_HTTP: ${TESTNET_RPC_URL:?TESTNET_RPC_URL is required — official Robinhood testnet RPC (spec §13 / Phase T; never invented). See docs/developers/runbooks/docker.md 'Testnet stack'.}
       # OPTIONAL (see header): empty tolerated by the web env layer (apps/web/src/shared/lib/
       # env.ts `rpcWs: … ?? ""`, verified 2026-07-12) — set the Alchemy wss when a key exists.
       NEXT_PUBLIC_RPC_WS: ${TESTNET_RPC_WS_URL:-}
@@ -433,7 +433,7 @@ services:
   # UUID is routing metadata): tools/localstack/cloudflared/testnet.yml, targeting
   # compose-internal service DNS (web:3000 / api:3001 / ws:3002 — never localhost, which
   # inside this container is the connector itself). Run CREDENTIALS stay on the host and
-  # are bind-mounted read-only — never committed (docs/runbooks/docker.md "Public exposure").
+  # are bind-mounted read-only — never committed (docs/developers/runbooks/docker.md "Public exposure").
   # Multiple connectors per tunnel are supported, so overlap with the (now decommissioned)
   # host unit during migration is safe.
   cloudflared:
