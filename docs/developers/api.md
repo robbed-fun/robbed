@@ -234,6 +234,28 @@ GET /v1/portfolio/:address/created?cursor=&limit=             (§5.4 CREATED tab
 
 **Materialization (indexer `address_pnl`, db-rows.ts `AddressPnlRow`).** The per-address roll-up (`first_seen_at`/`last_active_at`/`trade_count`/`tokens_created`/`total_eth_in`/`total_eth_out`/realized-PnL range `realized_pnl_low/high` + `pnl_confidence`) is a **scheduled recompute-from-raw job** over `trades`+`transfers`+`tokens` (indexer.md §8.6 / SQL views `pnl_*` + TRUNCATE+re-insert, rebuildable §4.4). Balances stay Transfer-truth (existing `BalanceRow`, X-4/X-5). **Wallet ETH** = RPC balance read at the API layer; **all-time/unrealized PnL** is computed at request time (live price × balance − remaining basis), NOT materialized.
 
+### 3.4b Creator-fee claim surface (§7 / §12.63 pre-grad; §12.69 post-grad — additive, Phase-2)
+
+Read-only pull-payment claim reads for the Portfolio CreatedTab. Never mutate or depend on mutating chain state (§8.4). Shapes are the frozen `@robbed/shared` DTOs (`creatorClaimableSchema`, `creatorTokenClaimableSchema`) — never redeclared. Both serve the **live** on-chain vault read as the AUTHORITATIVE claimable, falling back to the event-derived accrued − claimed mirror only when no RPC is configured (exactly as `/fees` reads live `tokensOwed`). Vault resolves from the indexed roll-up row, else the configured `CREATOR_VAULT_ADDRESS`; a deployment with no vault (v1/treasury-only) and no accrual is 404. Additive/absent on v1.
+
+```
+GET /v1/creators/:address/claimable                            (§12.63 pre-grad native-ETH leg)
+  200 → CreatorClaimable: creator, vault, claimableEth (live CreatorVault.balanceOf, mirror fallback),
+        claimable{usd,ethUsd,asOf}, totalAccruedEth, totalClaimedEth, asOf
+  Source: indexer `creator_claimable` roll-up (§3.12) + live balanceOf. USD derived (§2). No confirmationState (roll-up).
+
+GET /v1/creators/:address/claimable/:token                     (§12.69 post-grad 50/50 split, per ERC20)
+  200 → CreatorTokenClaimable: creator, token, vault,
+        claimable (live CreatorVault.tokenBalanceOf(creator, token), mirror fallback),
+        claimableUsd: UsdValue | null,                         -- WETH leg only (ETH-priced §2); null for launch-token legs
+        totalAccrued, totalClaimed, asOf
+  One (creator, token) pair — matches claimERC20(creator, token) 1:1. `token` ∈ {graduated launch token, WETH}.
+  Source: indexer `creator_token_claimable` roll-up (§3.13) + live tokenBalanceOf. No confirmationState (roll-up).
+  WETH classification uses config `WETH_ADDRESS`; unset ⇒ claimableUsd null for every leg (fail-safe, never invents a price §2).
+```
+
+> **Endpoint shape (flagged for robbed-architect, §12.69 doc-lockstep):** both endpoint shapes are sensible defaults pending ratification. The per-ERC20 shape mirrors the single-asset `claimERC20`/`tokenBalanceOf` entrypoints 1:1 (one live read per request); a LIST variant enumerating all of a creator's `(token)` rows is a follow-up (would need N live reads or a mirror-only listing) — deferred, not self-resolved.
+
 ### 3.5 Confirmation & meta
 
 ```

@@ -144,6 +144,7 @@ function setTreasury(address newTreasury) external onlyOwner;              // !=
 function setTradeFeeBps(uint16 newBps) external onlyOwner;                 // treasury leg; newBps + creatorFeeBps ≤ 200; FUTURE curves only
 function setCreatorFeeBps(uint16 newBps) external onlyOwner;               // creator leg (§7/§12.63); tradeFeeBps + newBps ≤ 200; FUTURE curves only
 function setCreatorVault(address vault) external onlyOwner;                // ONE-TIME (§12.63): reverts AlreadyInitialized; != address(0)
+function setLpFeeVault(address v) external onlyOwner;                      // ONE-TIME (§12.69): gates CreatorVault.depositERC20; != address(0)
 function setCreationFee(uint256 newFee) external onlyOwner;                // ≤ maxCreationFee (immutable)
 function setGraduationFee(uint256 newFee) external onlyOwner;              // ≤ maxGraduationFee (immutable); future curves only
 function setCallerReward(uint256 newReward) external onlyOwner;            // ≤ maxCallerReward (immutable); future curves only
@@ -236,6 +237,7 @@ event RouterSet(address router);
 event MigratorSet(address migrator);
 event CreatorFeeUpdated(uint16 newBps);   // §7/§12.63 creator-leg default for future curves
 event CreatorVaultSet(address vault);     // §12.63 one-time CreatorVault wiring
+event LpFeeVaultSet(address lpFeeVault);  // §12.69 one-time LPFeeVault wiring (gates CreatorVault.depositERC20)
 ```
 
 **Errors:** `NotRouter()`, `NotCurve()`, `AlreadyInitialized()`, `ZeroAddress()`, `InvalidName()`, `InvalidSymbol()`, `ZeroMetadataHash()`, `CreatesPaused()`, `FeeAboveCap()`, `CapExceeded()`, `CreatorVaultUnset()` (§12.63 — a launch with `creatorFeeBps != 0` while the vault is unwired).
@@ -466,71 +468,76 @@ event Graduated(address indexed token, address indexed pool, uint256 indexed tok
 
 **Invariants owned (gate 2):** never mints into a pool whose tick is outside `target ± TOLERANCE_TICKS`; arb-back spend bounded by curve inventory; donation/sync-style/swap griefing of the pre-grad pool cannot produce a hostile-ratio mint (either corrected or reverted); `Graduated` emitted exactly once per token.
 
-### 2.6 LPFeeVault.sol (§6.3.4, §6.6)
+### 2.6 LPFeeVault.sol (§6.3.4, §6.6, §12.69 — creator-aware generation)
 
-Terminal custody for LP NFTs. **No owner, no withdraw, no upgrade path, no privileged functions.** One external state-mutating function. Target ~50 lines; any growth must be justified line-by-line to hoodpad-security.
+Terminal custody for LP NFTs. **No owner, no withdraw, no upgrade path, no privileged setter.** Two external state-mutating functions (`collect`, migrator-gated `registerCreator`). Post-graduation V3 fees are **split 50/50 treasury/creator** at `collect()` (§12.69). Target ~50 lines; grows to ~63 code lines for the split routing + `tokenId → creator` mapping + the set-once registration — the minimal surface the 50/50 split requires (each line justified in the source NatSpec for hoodpad-security).
 
 ```solidity
-/// @title LPFeeVault — LP principal permanently locked; trading fees claimable by treasury.
-contract LPFeeVault is IERC721Receiver {
+/// @title LPFeeVault — LP principal permanently locked; trading fees split between treasury and creator.
+contract LPFeeVault is ILPFeeVault {
+    uint16  public constant creatorLpShareBps = 5000;     // 50% (§12.69), in-contract constant
     INonfungiblePositionManager public immutable positionManager;
-    address public immutable treasury; // Gnosis Safe, fixed at deploy, unchangeable forever
+    address public immutable treasury;                    // Gnosis Safe, fixed at deploy, forever
+    address public immutable factory;                     // source of live creatorVault sink + migrator authority
+    mapping(uint256 tokenId => address) public creatorOf; // set-once, migrator-bound
 
-    event FeesCollected(uint256 indexed tokenId, uint256 amount0, uint256 amount1);
-    error NotPositionManager();
-    error ZeroAddress();
+    event FeesCollected(uint256 indexed tokenId, uint256 amount0, uint256 amount1);       // total (pre-split)
+    event FeesSplit(uint256 indexed tokenId, address indexed creator,
+                    uint256 treasury0, uint256 creator0, uint256 treasury1, uint256 creator1);
+    event CreatorRegistered(uint256 indexed tokenId, address indexed creator);
+    error NotPositionManager(); error ZeroAddress(); error NotMigrator(); error CreatorAlreadyRegistered();
 
-    constructor(address positionManager_, address treasury_) { /* zero-checks, set immutables */ }
+    /// @notice Permissionless: harvest both legs to THIS vault, split each 50/50 — treasury share pushed
+    ///         (treasury-first, callback-free ERC20 transfer), creator share → CreatorVault (pull-payment).
+    function collect(uint256 tokenId) external returns (uint256 amount0, uint256 amount1);
 
-    /// @notice Permissionless: collect accrued V3 fees on a held position, paid to the fixed treasury.
-    function collect(uint256 tokenId) external returns (uint256 amount0, uint256 amount1) {
-        (amount0, amount1) = positionManager.collect(INonfungiblePositionManager.CollectParams({
-            tokenId: tokenId, recipient: treasury,
-            amount0Max: type(uint128).max, amount1Max: type(uint128).max }));
-        emit FeesCollected(tokenId, amount0, amount1);
-    }
+    /// @notice Migrator-only (msg.sender == factory.migrator()), set-once: bind tokenId → creator.
+    function registerCreator(uint256 tokenId, address creator) external;
 
     /// @notice Accepts LP NFTs only from the position manager itself.
-    function onERC721Received(address, address, uint256, bytes calldata) external view returns (bytes4) {
-        if (msg.sender != address(positionManager)) revert NotPositionManager();
-        return IERC721Receiver.onERC721Received.selector;
-    }
+    function onERC721Received(address, address, uint256, bytes calldata) external view returns (bytes4);
 }
 ```
 
-There is no `decreaseLiquidity`, no `transferFrom` initiation, no `approve` — principal mathematically cannot leave (§6.3.4; VitaliyShulik `TokenLocker` is the reference property, §4.3). Copy language everywhere: **"LP principal permanently locked; trading fees claimable by treasury."** Never "burned."
+`collect` harvests to `address(this)` then splits: per leg `creatorShare = amount·5000/1e4`, `treasuryShare = amount − creatorShare` (exact sum; odd wei biased to treasury). The launch token (hookless OZ ERC20, §6.1) and canonical WETH9 both transfer without a recipient callback, so a hostile/mispointed treasury cannot revert `collect`, and the creator share is pushed to OUR non-reverting `CreatorVault` — never a hostile EOA on the fee path. There is no `decreaseLiquidity`, no `transferFrom` initiation, and no `approve` beyond the exact-amount forward of the creator's split share — **principal liquidity mathematically cannot leave** (§6.3.4; VitaliyShulik `TokenLocker` reference, §4.3; `collect` never touches liquidity — verified against v3-periphery). Copy language everywhere (§12.14 as amended by §12.69): **"LP principal permanently locked; trading fees split between treasury and creator."** Never "burned."
 
-**Invariants owned:** vault can never reduce or transfer position liquidity; `collect` recipient is constant.
+**Creator resolution — DECISION (§12.69(B), verified against the real NPM):** §12.69(B) ratified "option i" — pass `abi.encode(creator)` through `safeTransferFrom` into `onERC721Received`. **This does NOT work against the live NonfungiblePositionManager:** its `mint()` calls `_mint(recipient, tokenId)`, **not** `_safeMint`, so `onERC721Received` is **never triggered on mint** (verified against github.com/Uniswap/v3-periphery `NonfungiblePositionManager.mint` + the OZ ERC721 `_mint`/`_safeMint` distinction); the migrator also mints with `recipient = vault` directly (no transfer at all). **Chosen the robust alternative:** the `V3Migrator` reads the creator from the graduating curve's immutable (`IBondingCurve(curve).creator()`) and calls `vault.registerCreator(tokenId, creator)` in the **same graduation tx**, gated to `factory.migrator()` and set-once. Atomic with the mint (any vault-held position is already registered → `collect` always has a creator), O(1), zero external calls at `collect`, unspoofable. The §12.69(B) transfer-data spec text is **flagged to hoodpad-architect as non-functional against this NPM** (spec-accuracy annotation, no product change). `creatorVault`/`migrator` are read live from the factory (both one-time-set / immutable-by-convention); `treasury` stays a constructor immutable (finding G5-INFO-A: LP fees keep flowing to the original treasury after a Safe rotation).
 
-### 2.7 CreatorVault.sol (§7, §12.63)
+**Invariants owned (§12.69(F)):** (i) per-leg split sums exactly to collected (no leakage/drain); (ii) principal liquidity monotonic non-decreasing across any collect sequence (no `decreaseLiquidity` reachable); (iii) a hostile creator/treasury cannot brick `collect`; (iv) `creatorOf` is set-once, migrator-authenticated, unspoofable; (v) `collect` recipient split is a fixed 50/50 constant.
 
-Phase-2 pull-payment escrow for the creator-fee leg — the creator-side analogue of LPFeeVault's minimalism. **No owner, no admin withdraw, no upgrade path, no privileged functions, no `receive()`/`fallback()`.** Two external state-mutating functions. Every wei enters through `deposit` (attributed to a creator) and leaves only via `claim` (to that same creator). Wired to the factory via a one-time `setCreatorVault` (resolves the factory↔vault deploy cycle, mirroring `setRouter`/`setMigrator`).
+### 2.7 CreatorVault.sol (§7, §12.63, §12.69)
+
+Pull-payment escrow for the creator-fee legs — the creator-side analogue of LPFeeVault's minimalism. **No owner, no admin withdraw, no upgrade path, no privileged functions, no `receive()`/`fallback()`.** Two custody tracks: the **ETH leg** (pre-graduation curve fee, §12.63) and the **ERC20 legs** (post-graduation V3 split — part launch-token, part WETH, §12.69). Value enters attributed to a creator and leaves only to that same creator. Wired to the factory via one-time `setCreatorVault` + `setLpFeeVault` (resolves the deploy cycles, mirroring `setRouter`/`setMigrator`).
 
 ```solidity
-/// @title CreatorVault — per-creator pull-payment escrow for the creator-fee leg (§7, §12.63).
+/// @title CreatorVault — per-creator pull-payment escrow for the creator-fee legs (§7, §12.63, §12.69).
 contract CreatorVault is ICreatorVault, ReentrancyGuard {
-    address public immutable factory;                 // isCurve registry gates deposit
-    mapping(address creator => uint256) public balanceOf; // accrued, unclaimed
+    using SafeERC20 for IERC20;
+    address public immutable factory;                            // isCurve gates deposit; lpFeeVault gates depositERC20
+    mapping(address creator => uint256) public balanceOf;                      // ETH leg, accrued/unclaimed
+    mapping(address creator => mapping(address token => uint256)) public tokenBalanceOf; // ERC20 legs (§12.69)
 
     event CreatorFeeDeposited(address indexed creator, address indexed curve, uint256 amount);
     event CreatorFeeClaimed(address indexed creator, address indexed caller, uint256 amount);
+    event CreatorTokenDeposited(address indexed creator, address indexed token, address indexed source, uint256 amount);
+    event CreatorTokenClaimed(address indexed creator, address indexed token, address indexed caller, uint256 amount);
 
-    /// @notice Curve-only (factory.isCurve(msg.sender)): credit `creator`. A plain accumulate that
-    ///         cannot revert, so a curve's sweepCreatorFees() always clears its escrow. creator != 0.
+    /// @notice Curve-only (factory.isCurve): credit `creator` ETH. Non-reverting accumulate.
     function deposit(address creator) external payable;
-
-    /// @notice Permissionless: pay `creator`'s full accrued balance to the FIXED `creator` address
-    ///         (never msg.sender). CEI + nonReentrant. A reverting creator reverts ONLY this call
-    ///         (retriable, isolated) — never a curve buy/sell.
+    /// @notice Permissionless: pay `creator`'s ETH balance to the FIXED creator (never msg.sender). CEI + nonReentrant.
     function claim(address creator) external returns (uint256 amount);
+    /// @notice LPFeeVault-only (factory.lpFeeVault): PULL `amount` of `token` (vault pre-approves) and credit `creator`.
+    function depositERC20(address creator, address token, uint256 amount) external;
+    /// @notice Permissionless: pay `creator`'s `token` balance to the FIXED creator. CEI + nonReentrant.
+    function claimERC20(address creator, address token) external returns (uint256 amount);
 }
 ```
 
-**Errors:** `ZeroAddress()`, `NotCurve()`, `EthTransferFailed()`.
+**Errors:** `ZeroAddress()`, `NotCurve()`, `NotLpFeeVault()`, `EthTransferFailed()`.
 
-**Design (robbed-security gate):** `deposit` is gated to factory-registered curves so the vault balance equals the sum of swept creator fees to the wei (clean exact-fee accounting) and cannot be polluted by arbitrary donations; `claim` is permissionless in WHO pays gas but FIXED in WHERE funds go (the LPFeeVault.collect property). **No trade path touches this contract** — the curve accrues the creator leg in-contract and only `sweepCreatorFees()` (permissionless, non-trade) pushes here, so a hostile/reverting creator can never freeze a buy or sell (§6.5/§12.63).
+**Design (robbed-security gate):** `deposit` is gated to factory-registered curves and `depositERC20` to the factory-registered LPFeeVault — so each per-`(creator[, token])` balance equals the sum of routed fees to the wei (clean exact accounting, no donation pollution). `depositERC20` PULLS via `safeTransferFrom(msg.sender=vault, ...)` (the LPFeeVault approves the exact split share first), a credit that cannot revert for a legit vault → a `collect()` can never be bricked here. Claims are permissionless in WHO pays gas but FIXED in WHERE funds go. **No trade path touches this contract, and neither push calls the creator** — only the claim functions do, so a hostile creator can freeze nothing but its OWN claim (the ERC20 claim isn't even brickable: a plain-ERC20 `transfer` has no recipient hook).
 
-**Invariants owned (gate 2):** vault balance + curve `accruedCreatorFees` + claimed == Σ computed creator fees (exact accounting, both legs); a hostile creator address cannot freeze any Trading-phase sell; a claim revert leaves the balance intact (retriable) and touches no other creator's balance.
+**Invariants owned (gate 2, §12.63/§12.69):** vault ETH balance + curve `accruedCreatorFees` + claimed == Σ computed creator ETH fees; per-`(creator, token)` balance == Σ collect-routed creator shares; a hostile creator cannot freeze any Trading-phase sell or any `collect()`; a claim revert leaves the balance intact (retriable) and touches no other creator's balance.
 
 ---
 

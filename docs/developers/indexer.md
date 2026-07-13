@@ -427,6 +427,36 @@ CREATE INDEX creator_claimable_vault_idx ON creator_claimable (vault);
 
 **Authoritative claimable:** `claimable_eth` here is the event-derived MIRROR. The API serves the **live** on-chain `CreatorVault.balanceOf(creator)` as the authoritative claimable value (falling back to this mirror only when no RPC is configured) — exactly as `/fees` reads the live NPM `tokensOwed` rather than trusting a projection.
 
+### 3.13 Post-graduation 50/50 split roll-up (spec §12.69 — Phase-2, additive)
+
+The POST-GRAD half of the creator leg (§3.12 is the pre-grad native-ETH half). The graduated V3 pool's 1% fees are split 50/50 creator/treasury at `LPFeeVault.collect(tokenId)` (`creatorLpShareBps() == 5000`); the treasury share is PUSHED to the fixed treasury, the creator share routed to the pull-payment `CreatorVault` as a per-`(creator, ERC20-token)` balance via `depositERC20(creator, token, share)` — Option B (§12.69(C)). `token` ∈ {graduated launch token (sell-leg), canonical WETH (buy-leg)}; **not** unwrapped to ETH. Claimed per ERC20 via `claimERC20(creator, token)`; read live via `tokenBalanceOf(creator, token)`. Same reorg-tracked-Ponder-table rationale + additive/empty-on-v1 treatment as §3.12. The pre-grad native-ETH balance stays in `creator_claimable` (separate).
+
+```sql
+CREATE TABLE creator_token_claimable (
+  creator        text NOT NULL,
+  token          text NOT NULL,                    -- ERC20: a graduated launch token OR WETH
+  vault          text NOT NULL,                    -- the CreatorVault the balance lives in
+  total_accrued  numeric(78,0) NOT NULL DEFAULT 0, -- Σ CreatorTokenDeposited.amount
+  total_claimed  numeric(78,0) NOT NULL DEFAULT 0, -- Σ CreatorTokenClaimed.amount
+  claimable      numeric(78,0) NOT NULL DEFAULT 0, -- accrued − claimed (event-derived MIRROR)
+  last_claim_at  bigint,                           -- unix seconds of the last claim; null until first
+  updated_at     text NOT NULL,                    -- ISO from block timestamp (replay-stable)
+  PRIMARY KEY (creator, token)
+);
+CREATE INDEX creator_token_claimable_creator_idx ON creator_token_claimable (creator);
+CREATE INDEX creator_token_claimable_token_idx   ON creator_token_claimable (token);
+CREATE INDEX creator_token_claimable_vault_idx   ON creator_token_claimable (vault);
+```
+
+**Events → columns (handlers, `src/handlers/creatorFeeSplit.ts`; pure ledger `src/creatorTokenClaimable.ts`):**
+- `CreatorTokenDeposited(creator, token, source, amount)` (CreatorVault source) → **accrued** source. `vault` is the emitting vault (`event.log.address`). This concrete per-`(creator, token)` ERC20 credit is the accrued source of record (contrast the pre-grad leg, where the vault deposit was corroboration-only).
+- `CreatorTokenClaimed(creator, token, caller, amount)` (CreatorVault source) → **claimed** + `last_claim_at`; also publishes `creator_fee_claimed` (§8).
+- `FeesSplit(tokenId, creator, treasury0, creator0, treasury1, creator1)` (LPFeeVault source) → **WS-only** (`creator_fee_split`, §8); it feeds NO table. The launch token (channel key) + orientation are resolved from `tokenId` via the in-memory `graduationRegistry` (lp_token_id → {token, token_is_token0}) — the same zero-DB-read routing the V3 `Collect` handler uses; raw `{treasury,creator}{0,1}` legs are resolved to token/weth by `resolveSplitLegs`. Not persisted because `CreatorTokenDeposited` (same tx) already carries the concrete per-`(creator, token)` accrual — persisting the split too would be redundant.
+
+**Sources (ponder.config.ts):** the CreatorVault source ABI merges the native-ETH leg (`creatorVaultEventsAbi`) with the ERC20 leg (`creatorVaultTokenEventsAbi`); a NEW `LPFeeVault` single source carries `FeesSplit` (`lpFeeVaultSplitEventsAbi`, address `config.lpFeeVault`). Both, and their handler bindings, are registered ONLY when `config.creatorVault` resolves — a v1 LPFeeVault never emits `FeesSplit`, so gating on `creatorVault` avoids a no-op historical sync over the legacy vault.
+
+**Authoritative claimable:** the API serves the **live** `CreatorVault.tokenBalanceOf(creator, token)` as authoritative (mirror fallback only when no RPC), backing `GET /v1/creators/:address/claimable/:token` (api.md §3.4b).
+
 ## 4. Candle pipeline — venue-continuous (§5.2, §8)
 
 ### 4.1 Intervals
@@ -532,7 +562,7 @@ Publish happens at the end of each handler, after the DB write, fire-and-forget 
 
 ### 7.3 Table ownership
 
-Ponder-managed (schema in `ponder.schema.ts`): `tokens`, `trades`, `transfers`, `graduations`, `fee_collections`, `balances`, `candles`, and `creator_claimable` (§3.12 — Phase-2 creator-fee roll-up, reorg-tracked; empty on v1). Side-process-managed (plain migrations in `apps/indexer/migrations/`): the four **[offchain]** tables. **There are NO external writes into Ponder-managed tables — none.** VERDICT (2026-07-11, OI-11 verified — see §10 row + decisions §11): on the pinned ponder 0.16.8 a direct external `UPDATE` is NOT safe for `tokens` (indexing-store cache full-row flushes silently revert external column updates on rows the handlers keep mutating), and Ponder's docs forbid external writes outright ("Direct SQL queries should not insert, update, or delete rows from Ponder tables"). **REWORKED (2026-07-11): the §12.48c sidecar is implemented as pure READ-DERIVATION** — the `confirmation_watermarks` singleton is the sidecar, the per-row `confirmation_state` columns were removed from `ponder.schema.ts`, the tracker (`src/confirmation.ts`/`confirmationStore.ts`) writes only the watermark singleton, and readers derive the tier per row (§3.8/§5). A per-row `event_confirmations` join table was weighed and rejected: the tier is fully determined by `(block_number, watermarks)`, so per-row rows would re-introduce O(rows) writes for zero information.
+Ponder-managed (schema in `ponder.schema.ts`): `tokens`, `trades`, `transfers`, `graduations`, `fee_collections`, `balances`, `candles`, `creator_claimable` (§3.12 — Phase-2 creator-fee roll-up, reorg-tracked; empty on v1), and `creator_token_claimable` (§3.13 — Phase-2 post-grad split roll-up, reorg-tracked; empty on v1). Side-process-managed (plain migrations in `apps/indexer/migrations/`): the four **[offchain]** tables. **There are NO external writes into Ponder-managed tables — none.** VERDICT (2026-07-11, OI-11 verified — see §10 row + decisions §11): on the pinned ponder 0.16.8 a direct external `UPDATE` is NOT safe for `tokens` (indexing-store cache full-row flushes silently revert external column updates on rows the handlers keep mutating), and Ponder's docs forbid external writes outright ("Direct SQL queries should not insert, update, or delete rows from Ponder tables"). **REWORKED (2026-07-11): the §12.48c sidecar is implemented as pure READ-DERIVATION** — the `confirmation_watermarks` singleton is the sidecar, the per-row `confirmation_state` columns were removed from `ponder.schema.ts`, the tracker (`src/confirmation.ts`/`confirmationStore.ts`) writes only the watermark singleton, and readers derive the tier per row (§3.8/§5). A per-row `event_confirmations` join table was weighed and rejected: the tier is fully determined by `(block_number, watermarks)`, so per-row rows would re-introduce O(rows) writes for zero information.
 
 **Offchain migration application (2026-07-12, robbed-indexer — replaces the I-5b compose stopgap).** The plain migrations are phased in `src/offchainMigrations.ts` (single implementation, consumed by `scripts/migrate.ts` and the sidecar boot): **phase 1** (offchain tables → `public`) applies any time; **phase 2** (0003 pg_trgm GIN indexes + 0005 flow views + 0007 address_pnl views, which reference Ponder-managed tables) is applied **at sidecar boot** (`startSidecars`, Ponder `:setup` hook) on **every** indexer start. Basis (verified against pinned ponder 0.16.8 source): Ponder's `database.migrate()` builds its tables before indexing starts, so `:setup` is strictly after table creation — no `/ready` polling; and Ponder drops tables **with CASCADE** on a dev schema rebuild, silently dropping external views, so one-shot application is insufficient — every-boot re-application (all statements idempotent, test-enforced) is required. Compose therefore runs `migrate` only pre-start (phase 1 + assertions); the previous `/ready`-gated re-run loop is gone. Fresh-DB ordering (PORT-1 root cause) is covered by `test/offchainMigrations.test.ts`.
 
@@ -571,9 +601,11 @@ The WS server is a small Bun process (lives in `apps/api` deployment or standalo
 | `global:confirmations` | watermark advances + reorg notices | all pages (badge upgrades) |
 | `token:{address}:trades` | trades for one token | Token Detail feed (§5.2) |
 | `token:{address}:candles:{interval}` | candle upsert per trade per interval | chart live updates |
-| `token:{address}:events` | `graduated`, `metadata_verified`, `fee_collected`, state changes | safety strip (§12.57), venue switch |
+| `token:{address}:events` | `graduated`, `metadata_verified`, `fee_collected`, `creator_fee_split`, `creator_fee_claimed`, state changes | safety strip (§12.57), venue switch, creator claim surface |
 
 WS clients subscribe/unsubscribe by sending `{op:'sub'|'unsub', channel}`; the WS server maintains channel→socket maps and one Redis `PSUBSCRIBE token:*` + explicit `SUBSCRIBE global:*`.
+
+**Post-grad creator-fee split channel decision (§12.69 — indexer-owned taxonomy):** both `creator_fee_split` and `creator_fee_claimed` publish on the shared default `token:{address}:events` — no new channel. `creator_fee_split` is keyed by the graduated launch token (resolved from `FeesSplit.tokenId`), a natural per-token fit. `creator_fee_claimed` is keyed by the **claimed ERC20** (`CreatorTokenClaimed.token`): a launch-token-leg claim live-updates that token's page; a WETH-leg claim lands on the WETH-keyed channel (currently unconsumed — the Portfolio CreatedTab's AUTHORITATIVE source is the REST endpoint `GET /v1/creators/:address/claimable/:token`, which REST-heals independent of WS). A dedicated per-creator channel (`creator:{address}:events`) for WETH claims is **DEFERRED, not invented**: it requires a shared `channels.ts` helper (the frontend + WS relay both consume the name — a cross-service shape routed through robbed-shared, never redeclared) plus a `creator:*` PSUBSCRIBE in the Bun WS relay; wiring one leg alone yields a dead channel. Flagged to robbed-shared/architect for when the CreatedTab live-claim surface is built.
 
 ### 8.2 Message schemas (normative shapes; TypeScript defs in `packages/shared`)
 
@@ -586,6 +618,8 @@ All messages: `{ v: 1, type, channel, seq, ts, data }`. `seq` is a per-channel m
 - `type:'confirmations'` data: `{ safeBlock, finalizedBlock }`; `type:'reorg'` data: `{ fromBlock }`
 - `type:'metadata_verified'` data: `{ token, status }`
 - `type:'fee_collected'` data: `{ token, pool, lpTokenId, amountToken, amountWeth, blockNumber, txHash, logIndex, blockTimestamp, confirmationState }` — published on `token:{address}:events` from the V3 `Collect` handler (§3.5), feeds the treasury fee-accrual dashboard. **(X-6 — was promised in the §8.1 channel taxonomy but missing from this union; now defined. hoodpad-shared must add the matching schema to `packages/shared/ws-messages.ts`.)**
+- `type:'creator_fee_split'` data: `{ token, creator, creatorAmountToken, creatorAmountWeth, treasuryAmountToken, treasuryAmountWeth, blockNumber, blockTimestamp, txHash, logIndex, confirmationState }` (spec §12.69) — published on `token:{address}:events` from the `LPFeeVault:FeesSplit` handler (§3.13); the 50/50 split of a graduated pool's fees, per launch token. Schema `wsCreatorFeeSplitDataSchema` in `packages/shared/ws-messages.ts`.
+- `type:'creator_fee_claimed'` data: `{ creator, token, amount, blockNumber, blockTimestamp, txHash, logIndex, confirmationState }` (spec §12.69) — published on `token:{address}:events` from the `CreatorVault:CreatorTokenClaimed` handler (§3.13); a creator pulled an accrued post-grad ERC20 balance. Schema `wsCreatorFeeClaimedDataSchema`. (Channel decision: see §8.1.)
 
 Amounts serialize as decimal strings (uint256 > JS safe integer).
 
