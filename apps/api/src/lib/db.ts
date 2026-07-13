@@ -20,6 +20,7 @@ import type {
   CompetitorSnapshotRow,
   ConfirmationWatermarksRow,
   CreatorClaimableRow,
+  CreatorTokenClaimableRow,
   EthUsdSnapshotRow,
   FeeCollectionRow,
   HolderSortField,
@@ -235,6 +236,19 @@ export interface Db {
    * claimable value; this row supplies the vault + lifetime accrued/claimed.
    */
   getCreatorClaimable(creator: string): Promise<CreatorClaimableRow | null>;
+  /**
+   * Per-`(creator, ERC20-token)` post-graduation split roll-up (accrued/claimed/vault)
+   * backing GET /v1/creators/:address/claimable/:token (spec §12.69). Null when the
+   * `(creator, token)` pair has never accrued (no row) — the route then falls back to
+   * the config vault (or 404s). The live `CreatorVault.tokenBalanceOf(creator, token)`
+   * (CreatorVaultBalanceReader.readToken) is the authoritative claimable; this row
+   * supplies the vault + lifetime accrued/claimed. `token` is a graduated launch token
+   * OR canonical WETH.
+   */
+  getCreatorTokenClaimable(
+    creator: string,
+    token: string,
+  ): Promise<CreatorTokenClaimableRow | null>;
 
   // ── portfolio (spec §5.4; api.md §3) ──────────────────────────────────────
   /** Per-address materialized roll-up backing GET /v1/portfolio/:address; null when the address never appeared. */

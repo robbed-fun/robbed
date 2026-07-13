@@ -16,3 +16,6 @@ import "./handlers/transfer";
 // Creator-fee leg (§12.63) — CreatorFeesSwept on the curve source; the CreatorVault
 // bindings inside self-guard on config.creatorVault (absent-vault deployments skip).
 import "./handlers/creatorFees";
+// Post-grad 50/50 split (§12.69) — FeesSplit (LPFeeVault) + CreatorToken{Deposited,
+// Claimed} (CreatorVault ERC20 leg); bindings self-guard on config.creatorVault too.
+import "./handlers/creatorFeeSplit";

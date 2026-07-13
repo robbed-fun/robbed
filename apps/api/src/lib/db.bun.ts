@@ -745,6 +745,30 @@ export function createBunDb(config: Config): Db {
       };
     },
 
+    async getCreatorTokenClaimable(creator, token) {
+      // RO read of the Ponder-managed `creator_token_claimable` roll-up (§12.69).
+      // NUMERIC(78,0) columns arrive as strings → kept as wei decimal strings;
+      // last_claim_at (bigint) → number|null; updated_at text passthrough.
+      const rows = (await ro.unsafe(
+        `SELECT creator, token, vault, total_accrued, total_claimed, claimable,
+                last_claim_at, updated_at
+         FROM creator_token_claimable WHERE creator = $1 AND token = $2`,
+        [creator, token],
+      )) as Record<string, unknown>[];
+      const r = rows[0];
+      if (!r) return null;
+      return {
+        creator: String(r.creator),
+        token: String(r.token),
+        vault: String(r.vault),
+        total_accrued: str(r.total_accrued),
+        total_claimed: str(r.total_claimed),
+        claimable: str(r.claimable),
+        last_claim_at: r.last_claim_at == null ? null : num(r.last_claim_at),
+        updated_at: String(r.updated_at ?? ""),
+      };
+    },
+
     async getModerationStatus(token) {
       const rows = (await rw.unsafe(
         "SELECT * FROM moderation_status WHERE token_address = $1",

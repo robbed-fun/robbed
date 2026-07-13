@@ -58,6 +58,8 @@ import {
   type Venue,
   type WsCandleData,
   type WsConfirmationsData,
+  type WsCreatorFeeClaimedData,
+  type WsCreatorFeeSplitData,
   type WsFeeCollectedData,
   type WsGraduatedData,
   type WsLaunchData,
@@ -477,6 +479,86 @@ export function publishFeeCollected(input: FeeCollectedPublishInput): void {
     confirmationState: input.confirmationState,
   };
   firePublish(getDefaultPublisher(), "fee_collected", tokenEvents(input.token), input.blockTimestamp, data);
+}
+
+export interface CreatorFeeSplitPublishInput {
+  /** The graduated launch token (channel key), resolved from FeesSplit.tokenId. */
+  token: string;
+  creator: string;
+  creatorAmountToken: bigint;
+  creatorAmountWeth: bigint;
+  treasuryAmountToken: bigint;
+  treasuryAmountWeth: bigint;
+  blockNumber: number;
+  blockTimestamp: number;
+  txHash: string;
+  logIndex: number;
+  confirmationState: ConfirmationState;
+}
+
+/**
+ * creator_fee_split → `token:{launchToken}:events` (§12.69). The 50/50 split of a
+ * graduated pool's fees at `LPFeeVault.collect()`, keyed by the launch token so the
+ * token page / creator claim surface can live-update accrual. Both beneficiaries'
+ * per-leg amounts are already resolved to token/weth by the handler.
+ */
+export function publishCreatorFeeSplit(input: CreatorFeeSplitPublishInput): void {
+  if (!gatedFor(input.blockTimestamp)) return;
+  const data: WsCreatorFeeSplitData = {
+    token: input.token,
+    creator: input.creator,
+    creatorAmountToken: input.creatorAmountToken.toString(),
+    creatorAmountWeth: input.creatorAmountWeth.toString(),
+    treasuryAmountToken: input.treasuryAmountToken.toString(),
+    treasuryAmountWeth: input.treasuryAmountWeth.toString(),
+    blockNumber: input.blockNumber,
+    blockTimestamp: input.blockTimestamp,
+    txHash: input.txHash,
+    logIndex: input.logIndex,
+    confirmationState: input.confirmationState,
+  };
+  firePublish(getDefaultPublisher(), "creator_fee_split", tokenEvents(input.token), input.blockTimestamp, data);
+}
+
+export interface CreatorFeeClaimedPublishInput {
+  creator: string;
+  /** The ERC20 claimed — a graduated launch token OR canonical WETH; also the channel key. */
+  token: string;
+  amount: bigint;
+  blockNumber: number;
+  blockTimestamp: number;
+  txHash: string;
+  logIndex: number;
+  confirmationState: ConfirmationState;
+}
+
+/**
+ * creator_fee_claimed → `token:{token}:events` (§12.69). A creator pulled an accrued
+ * post-grad ERC20 balance (`claimERC20(creator, token)`); the Portfolio CreatedTab
+ * reconciles optimistic state against the confirmed payout. Channel decision (indexer-
+ * owned taxonomy, channels.ts): the shared DEFAULT `token:{address}:events` keyed by the
+ * claimed ERC20. A launch-token-leg claim (`token` = a graduated launch token) live-
+ * updates that token's page; a WETH-leg claim (`token` = canonical WETH) lands on the
+ * WETH-keyed channel — currently unconsumed, since the CreatorTab's AUTHORITATIVE source
+ * is the REST endpoint (live `tokenBalanceOf`), which REST-heals independent of WS. A
+ * dedicated per-creator channel (`creator:{address}:events`) is DEFERRED, not invented:
+ * it needs a shared `channels.ts` helper (frontend + WS relay both consume the name — a
+ * cross-service shape routed via robbed-shared, never redeclared) plus a `creator:*`
+ * PSUBSCRIBE in the Bun WS relay; wiring one leg alone yields a dead channel.
+ */
+export function publishCreatorFeeClaimed(input: CreatorFeeClaimedPublishInput): void {
+  if (!gatedFor(input.blockTimestamp)) return;
+  const data: WsCreatorFeeClaimedData = {
+    creator: input.creator,
+    token: input.token,
+    amount: input.amount.toString(),
+    blockNumber: input.blockNumber,
+    blockTimestamp: input.blockTimestamp,
+    txHash: input.txHash,
+    logIndex: input.logIndex,
+    confirmationState: input.confirmationState,
+  };
+  firePublish(getDefaultPublisher(), "creator_fee_claimed", tokenEvents(input.token), input.blockTimestamp, data);
 }
 
 // ── Side-process helpers (UNGATED — tracker/verifier run post-backfill) ──────

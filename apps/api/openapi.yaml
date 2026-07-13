@@ -502,6 +502,49 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /v1/creators/{address}/claimable/{token}:
+    get:
+      tags: [tokens]
+      operationId: getCreatorTokenClaimable
+      summary: Post-graduation creator-fee split claimable, per ERC20 (spec §12.69)
+      description: |
+        Post-graduation half of the creator leg: the graduated V3 pool's 1% fees are
+        split 50/50 creator/treasury at `LPFeeVault.collect()`, the creator share
+        credited in the `CreatorVault` per `(creator, ERC20-token)` (Option B, §12.69(C))
+        where `token` is a graduated launch token (sell-leg) or canonical WETH (buy-leg,
+        aggregated across the creator's graduated tokens). Serves ONE `(creator, token)`
+        pair — matching `claimERC20(creator, token)` 1:1. `claimable` is the
+        AUTHORITATIVE live `CreatorVault.tokenBalanceOf(creator, token)` (falling back to
+        the event-derived accrued − claimed mirror when no RPC is configured);
+        `totalAccrued` / `totalClaimed` come from the indexed `creator_token_claimable`
+        roll-up. `claimableUsd` is populated ONLY for the WETH leg (ETH-priced, §2); a
+        launch-token leg is an unpriceable ERC20 ⇒ null. Read-only — never touches chain
+        state (§8.4). Vault resolves from the pair's roll-up row, else the configured
+        vault; a deployment with NO vault (v1/treasury-only) and no accrual is 404.
+        NOTE: endpoint shape is a sensible default pending architect ratification
+        (§12.69 doc-lockstep).
+      parameters:
+        - $ref: "#/components/parameters/TokenAddress"
+        - name: token
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/Address" }
+          description: The ERC20 the claim is denominated in (a graduated launch token or WETH)
+      responses:
+        "200":
+          description: Per-(creator, token) claimable (live), lifetime accrued/claimed, vault
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data: { $ref: "#/components/schemas/CreatorTokenClaimable" }
+                  error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
   # ── Portfolio (spec §5.4 — was Phase-2; surfaced day 1 by the ROBBED_ redesign
   #    page 4. Advisory / read-only: no path mutates or depends on mutating chain
   #    state, §8.4. An unknown address is an EMPTY portfolio, never a 404 — the
@@ -1634,6 +1677,37 @@ components:
           allOf: [{ $ref: "#/components/schemas/DecimalString" }]
           description: Lifetime claimed (Σ CreatorFeeClaimed), wei
         asOf: { type: string, format: date-time, description: Timestamp of the live balanceOf read }
+
+    CreatorTokenClaimable:
+      type: object
+      required: [creator, token, vault, claimable, claimableUsd, totalAccrued, totalClaimed, asOf]
+      description: >-
+        Post-graduation 50/50 split claim surface, per `(creator, ERC20-token)` (spec
+        §12.69; mirrors packages/shared creatorTokenClaimableSchema). `claimable` = live
+        CreatorVault.tokenBalanceOf(creator, token) (authoritative), else accrued −
+        claimed mirror. `token` is a graduated launch token or canonical WETH. Aggregate
+        roll-up ⇒ no confirmationState.
+      properties:
+        creator: { $ref: "#/components/schemas/Address" }
+        token:
+          allOf: [{ $ref: "#/components/schemas/Address" }]
+          description: The ERC20 the balance is denominated in — a graduated launch token OR WETH
+        vault:
+          allOf: [{ $ref: "#/components/schemas/Address" }]
+          description: The CreatorVault custodying the balance
+        claimable:
+          allOf: [{ $ref: "#/components/schemas/DecimalString" }]
+          description: Live tokenBalanceOf(creator, token), wei of token — the authoritative claimable
+        claimableUsd:
+          oneOf: [{ $ref: "#/components/schemas/UsdValue" }, { type: "null" }]
+          description: USD mirror — populated only when token is WETH (§2); null for launch-token legs
+        totalAccrued:
+          allOf: [{ $ref: "#/components/schemas/DecimalString" }]
+          description: Lifetime accrued (Σ CreatorTokenDeposited.amount for this pair), wei
+        totalClaimed:
+          allOf: [{ $ref: "#/components/schemas/DecimalString" }]
+          description: Lifetime claimed (Σ CreatorTokenClaimed.amount), wei
+        asOf: { type: string, format: date-time, description: Timestamp of the live tokenBalanceOf read }
 
     FeesResponse:
       type: object

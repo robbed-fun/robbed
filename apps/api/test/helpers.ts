@@ -28,6 +28,7 @@ import type {
   CompetitorSnapshotRow,
   ConfirmationWatermarksRow,
   CreatorClaimableRow,
+  CreatorTokenClaimableRow,
   EthUsdSnapshotRow,
   HolderSortField,
   ModerationStatusRow,
@@ -370,6 +371,14 @@ export class FakeDb implements Db {
   async getCreatorClaimable(creator: string): Promise<CreatorClaimableRow | null> {
     return this.creatorClaimable.get(creator) ?? null;
   }
+  // ── post-grad split roll-up (§12.69) — keyed `${creator}:${token}` ──
+  creatorTokenClaimable = new Map<string, CreatorTokenClaimableRow>();
+  async getCreatorTokenClaimable(
+    creator: string,
+    token: string,
+  ): Promise<CreatorTokenClaimableRow | null> {
+    return this.creatorTokenClaimable.get(`${creator}:${token}`) ?? null;
+  }
   async getAddressPnl(a: string) {
     return this.pnl.get(a) ?? null;
   }
@@ -543,6 +552,7 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     // Public-CORS allowlist (api.md §6.1) — cors.test.ts uses this origin.
     corsAllowedOrigins: new Set<string>(["https://web.test"]),
     creatorVaultAddress: undefined, // §12.63 — overridden per creator-fee test
+    wethAddress: undefined, // §12.69 — overridden per WETH-leg claim test
     ...overrides,
   } as Config;
 }
@@ -577,9 +587,14 @@ export function makeTestDeps(overrides: Partial<AppDeps> = {}): AppDeps {
       return "0";
     } },
     // Default: null live balance ⇒ route uses the accrued − claimed mirror.
-    creatorVaultBalance: overrides.creatorVaultBalance ?? { async read() {
-      return null;
-    } },
+    creatorVaultBalance: overrides.creatorVaultBalance ?? {
+      async read() {
+        return null;
+      },
+      async readToken() {
+        return null;
+      },
+    },
     // Hermetic OG image inliner: no network in tests → always the monogram path.
     ogImage: overrides.ogImage ?? (async () => null),
     now: overrides.now ?? (() => 1_700_000_300_000),

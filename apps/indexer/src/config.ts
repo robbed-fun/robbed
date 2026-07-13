@@ -108,6 +108,16 @@ export interface IndexerConfig {
    * indexes normally (graceful skip). Registry-resolved, env-overridable; lowercased.
    */
   creatorVault: string | undefined;
+  /**
+   * The creator-aware LPFeeVault (spec §12.69) — the single source for the
+   * post-graduation 50/50 `FeesSplit` event. Always present in the deployment
+   * registry (`robbed.lpFeeVault`), but the `FeesSplit` handler + Ponder source
+   * are registered ONLY on the creator-fee generation (gated on `creatorVault`,
+   * which co-exists with the split LPFeeVault): a v1 LPFeeVault never emits
+   * `FeesSplit`, so registering its source there would only start a no-op sync.
+   * Registry-resolved, env-overridable; lowercased.
+   */
+  lpFeeVault: string;
   v3Factory: string;
   v3PositionManager: string;
   /** Chain's SwapRouter02 (registry-resolved, §12.55(c)) — own-contract whitelist (§8.5 heuristic 3). */
@@ -185,6 +195,9 @@ export function loadConfig(): IndexerConfig {
     // §12.63 optional — undefined on v1 (no vault in the registry entry). Never
     // crashes when absent; the CreatorVault Ponder source is registered only when set.
     creatorVault: optAddressOr("CREATOR_VAULT_ADDRESS", deployment.robbed.creatorVault),
+    // §12.69 — always in the registry; only USED to register the FeesSplit source
+    // when creatorVault also resolves (the creator-fee generation). Never a code default.
+    lpFeeVault: envAddressOr("LP_FEE_VAULT_ADDRESS", deployment.robbed.lpFeeVault),
     redisUrl: process.env.REDIS_URL || undefined,
     databaseUrl: process.env.DATABASE_URL || undefined,
     databaseSchema: process.env.DATABASE_SCHEMA || undefined,

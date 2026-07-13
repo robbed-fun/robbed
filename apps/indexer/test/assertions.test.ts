@@ -16,6 +16,7 @@ function validConfig(): IndexerConfig {
     router: undefined,
     migrator: "0x" + "22".repeat(20),
     creatorVault: undefined, // §12.63 optional — absent on v1 deployments
+    lpFeeVault: "0x" + "66".repeat(20), // §12.69 — always resolved from the registry
     v3Factory: "0x" + "33".repeat(20),
     v3PositionManager: "0x" + "44".repeat(20),
     swapRouter02: "0x" + "55".repeat(20),

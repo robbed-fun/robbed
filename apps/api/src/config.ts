@@ -77,6 +77,14 @@ const rawSchema = z.object({
   TREASURY_ADDRESS: z.string().optional(),
   LP_FEE_VAULT_ADDRESS: z.string().optional(),
   /**
+   * Chain WETH (spec §12.69) — the ONLY use is to classify a post-grad creator-fee
+   * claim leg: `token == WETH_ADDRESS` ⇒ the buy-leg WETH share is ETH-priced, so USD
+   * is derived (§2); a launch-token leg is an unpriceable ERC20 ⇒ `claimableUsd: null`.
+   * OPTIONAL/additive: unset ⇒ USD is null for every leg (fail-safe — never invents a
+   * price). Config-sourced (deployment-injected), never a code literal. Lowercased.
+   */
+  WETH_ADDRESS: z.string().optional(),
+  /**
    * Phase-2 CreatorVault (spec §7 / §12.63) — the pull-payment vault the live
    * `balanceOf(creator)` claimable read targets, and the fallback `vault` for a
    * creator with no `creator_claimable` row yet. OPTIONAL/additive: absent on v1
@@ -108,6 +116,8 @@ export interface Config extends RawConfig {
   corsAllowedOrigins: Set<string>;
   /** §12.63 CreatorVault address (lowercased) or undefined on v1 deployments. */
   creatorVaultAddress: string | undefined;
+  /** §12.69 chain WETH (lowercased) for classifying a claim's WETH leg; undefined ⇒ USD null. */
+  wethAddress: string | undefined;
 }
 
 /** Dev/test fallback: the compose web port (4000) + bare `next dev` (3000). */
@@ -160,6 +170,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     largeValueEthThresholdWei,
     corsAllowedOrigins,
     creatorVaultAddress: raw.CREATOR_VAULT_ADDRESS?.trim().toLowerCase() || undefined,
+    wethAddress: raw.WETH_ADDRESS?.trim().toLowerCase() || undefined,
   };
 }
 

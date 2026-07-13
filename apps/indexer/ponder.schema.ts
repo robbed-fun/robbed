@@ -228,6 +228,38 @@ export const creatorClaimable = onchainTable(
   }),
 );
 
+// ── creator_token_claimable (post-grad 50/50 split roll-up — spec §12.69) ────
+// Per-`(creator, ERC20-token)` aggregate maintained by the §12.69 handlers
+// (handlers/creatorFeeSplit.ts), mirroring the shared `CreatorTokenClaimableRow`
+// (db-rows.ts). The POST-GRAD half of the creator leg: the graduated V3 pool's 1%
+// fees are split 50/50 at `LPFeeVault.collect()`, the creator share credited in the
+// CreatorVault per `(creator, token)` where `token` ∈ {graduated launch token,
+// canonical WETH} (Option B, §12.69(C)). A REORG-TRACKED Ponder table (not an
+// offchain rollup): the aggregate is event-derived, so Ponder's own reorg revert
+// keeps it correct. Rebuildable from events. `claimable` is the event-derived MIRROR;
+// the API serves the live `CreatorVault.tokenBalanceOf(creator, token)` as
+// authoritative. Additive/Phase-2: empty on v1 deployments and not-yet-graduated
+// tokens. The pre-grad native-ETH balance stays in `creator_claimable` (separate).
+export const creatorTokenClaimable = onchainTable(
+  "creator_token_claimable",
+  (t) => ({
+    creator: t.text("creator").notNull(),
+    token: t.text("token").notNull(), // ERC20: a graduated launch token OR canonical WETH
+    vault: t.text("vault").notNull(),
+    totalAccrued: t.bigint("total_accrued").notNull().default(0n), // Σ CreatorTokenDeposited.amount
+    totalClaimed: t.bigint("total_claimed").notNull().default(0n), // Σ CreatorTokenClaimed.amount
+    claimable: t.bigint("claimable").notNull().default(0n), // accrued − claimed (event-derived MIRROR)
+    lastClaimAt: t.bigint("last_claim_at"), // unix seconds; null until first claim
+    updatedAt: t.text("updated_at").notNull(), // ISO from block timestamp (replay-stable)
+  }),
+  (table) => ({
+    pk: primaryKey({ columns: [table.creator, table.token] }),
+    creatorIdx: index().on(table.creator), // enumerate a creator's (token) rows
+    tokenIdx: index().on(table.token),
+    vaultIdx: index().on(table.vault),
+  }),
+);
+
 // ── §3.7 candles (derived, rebuildable; six intervals) ──────────────────────
 export const candles = onchainTable(
   "candles",

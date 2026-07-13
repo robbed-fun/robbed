@@ -22,6 +22,13 @@
  * a treasury-only deployment the vault source is simply omitted, so the indexer
  * runs unchanged (graceful skip — mirrors the §12.55 optional-config gate).
  *
+ * Post-grad 50/50 split (§12.69, ADDITIVE — gated identically on `config.creatorVault`):
+ * the CreatorVault source ABI gains the ERC20 leg (`CreatorTokenDeposited` /
+ * `CreatorTokenClaimed`), and a NEW `LPFeeVault` single source is registered for the
+ * `FeesSplit` event. Both are present iff the creator-fee generation is deployed
+ * (`creatorVault` resolves) — a v1 LPFeeVault never emits `FeesSplit`, so gating on
+ * `creatorVault` avoids a no-op historical sync over the legacy vault address.
+ *
  * Static startup assertions (WETH, chain 4663, non-zero V3 addrs) run HERE at
  * config load — if they throw, Ponder never starts (fail-closed, indexer.md
  * §2/§11). Curve constants are no longer a startup concern: they are read
@@ -34,9 +41,11 @@ import {
   bondingCurveCreatorEventsAbi,
   bondingCurveEventsAbi,
   creatorVaultEventsAbi,
+  creatorVaultTokenEventsAbi,
   curveFactoryEventsAbi,
   graduatedEvent,
   launchTokenEventsAbi,
+  lpFeeVaultSplitEventsAbi,
   tokenCreatedEvent,
   v3MigratorEventsAbi,
   v3PoolEventsAbi,
@@ -48,15 +57,26 @@ import { assertStaticConfig } from "./src/assertions";
 const config = loadConfig();
 assertStaticConfig(config);
 
-// CreatorVault (§12.63) — single source at the deployment vault; registered ONLY
-// when the optional address resolves. Spread into `contracts` so an absent vault
-// leaves the source (and its handlers, guarded identically) unregistered.
-const creatorVaultContract = config.creatorVault
+// CreatorVault (§12.63 + §12.69) — single source at the deployment vault; registered
+// ONLY when the optional address resolves. The ABI merges the native-ETH leg
+// (`creatorVaultEventsAbi`: CreatorFeeDeposited/Claimed) with the post-grad ERC20 leg
+// (`creatorVaultTokenEventsAbi`: CreatorTokenDeposited/Claimed) — the shared groupings
+// stay separate; merged only here. LPFeeVault (§12.69) — single source for `FeesSplit`,
+// registered under the SAME gate (the split LPFeeVault is the creator-fee generation).
+// Spread into `contracts` so an absent vault leaves both sources (and their handlers,
+// guarded identically) unregistered.
+const creatorFeeContracts = config.creatorVault
   ? {
       CreatorVault: {
-        abi: creatorVaultEventsAbi,
+        abi: [...creatorVaultEventsAbi, ...creatorVaultTokenEventsAbi],
         chain: "robinhood" as const,
         address: config.creatorVault as `0x${string}`,
+        startBlock: config.startBlock,
+      },
+      LPFeeVault: {
+        abi: lpFeeVaultSplitEventsAbi,
+        chain: "robinhood" as const,
+        address: config.lpFeeVault as `0x${string}`,
         startBlock: config.startBlock,
       },
     }
@@ -128,7 +148,8 @@ export default createConfig({
       address: config.v3PositionManager as `0x${string}`,
       startBlock: config.startBlock,
     },
-    // CreatorVault (§12.63) — present only on creator-fee deployments (see above).
-    ...creatorVaultContract,
+    // CreatorVault + LPFeeVault (§12.63/§12.69) — present only on creator-fee
+    // deployments (see above); each handler self-guards on the same condition.
+    ...creatorFeeContracts,
   },
 });

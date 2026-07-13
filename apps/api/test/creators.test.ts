@@ -29,9 +29,14 @@ function claimableRow(overrides: Partial<CreatorClaimableRow> = {}): CreatorClai
 function setup(opts: { row?: CreatorClaimableRow | null; live?: string | null; configVault?: string } = {}) {
   const db = new FakeDb();
   if (opts.row !== undefined && opts.row !== null) db.creatorClaimable.set(opts.row.creator, opts.row);
-  const reader: CreatorVaultBalanceReader = { async read() {
-    return opts.live ?? null;
-  } };
+  const reader: CreatorVaultBalanceReader = {
+    async read() {
+      return opts.live ?? null;
+    },
+    async readToken() {
+      return opts.live ?? null;
+    },
+  };
   const config = testConfig({ creatorVaultAddress: opts.configVault });
   return makeTestDeps({ db, config, creatorVaultBalance: reader });
 }
