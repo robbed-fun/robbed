@@ -28,19 +28,20 @@ Full system overview: [docs/developers/architecture.md](docs/developers/architec
 
 ## Deployments
 
-**Robinhood Chain Testnet (chain ID 46630)** — deployed, canary-exercised, and Blockscout-verified 2026-07-12 at deploy block **89648621**. The canonical machine-readable record is [`contracts/deployments/46630.json`](contracts/deployments/46630.json); this table is a convenience view of it.
+**Robinhood Chain Testnet (chain ID 46630)** — redeployed with creator fees, canary-exercised, and Blockscout-verified 2026-07-13 at deploy block **89749950**. The canonical machine-readable record is [`contracts/deployments/46630.json`](contracts/deployments/46630.json); this table is a convenience view of it. (This supersedes the earlier 2026-07-12 deployment; adding creator fees changed the bytecode, so immutable contracts were redeployed at new addresses.)
 
 | Contract | Address (testnet explorer) |
 |---|---|
-| CurveFactory | [`0x6eb955d889b6958620FBE9DC17Fb84C7d3F08414`](https://explorer.testnet.chain.robinhood.com/address/0x6eb955d889b6958620FBE9DC17Fb84C7d3F08414) |
-| Router | [`0xF8D79D3D1fE742FebbbB5b82f0AAf8D8E4fD4841`](https://explorer.testnet.chain.robinhood.com/address/0xF8D79D3D1fE742FebbbB5b82f0AAf8D8E4fD4841) |
-| V3Migrator | [`0x62bB59cA67eEdAAfee4edc10A8821dd08e83A2B0`](https://explorer.testnet.chain.robinhood.com/address/0x62bB59cA67eEdAAfee4edc10A8821dd08e83A2B0) |
-| LPFeeVault | [`0xD57dDb22ca1587AE368083f6cE0D341358E5817D`](https://explorer.testnet.chain.robinhood.com/address/0xD57dDb22ca1587AE368083f6cE0D341358E5817D) |
-| LaunchToken (canary) | [`0x4efa77f362379c8c7a590AD37E830C8d04B7309E`](https://explorer.testnet.chain.robinhood.com/address/0x4efa77f362379c8c7a590AD37E830C8d04B7309E) |
-| BondingCurve (canary) | [`0x89A2317b9e8cA54Baa3242d7eD376Ea3Af1bE07d`](https://explorer.testnet.chain.robinhood.com/address/0x89A2317b9e8cA54Baa3242d7eD376Ea3Af1bE07d) |
+| CurveFactory | [`0x7355BD34Bc12002F2bDc79A4791463d7d6D2529a`](https://explorer.testnet.chain.robinhood.com/address/0x7355BD34Bc12002F2bDc79A4791463d7d6D2529a) |
+| Router | [`0x6480534B6992419535554451BBDe79B898011BA8`](https://explorer.testnet.chain.robinhood.com/address/0x6480534B6992419535554451BBDe79B898011BA8) |
+| CreatorVault | [`0xE032467128A87e353b69AeDf8e97B0AA9d528eBB`](https://explorer.testnet.chain.robinhood.com/address/0xE032467128A87e353b69AeDf8e97B0AA9d528eBB) — creator-fee pull-payment escrow |
+| V3Migrator | [`0x4Bc86C3fdBABbFEF82094A772bA0194e980A5567`](https://explorer.testnet.chain.robinhood.com/address/0x4Bc86C3fdBABbFEF82094A772bA0194e980A5567) |
+| LPFeeVault | [`0x3B4dD3B5741EDcE6e08CE2BcbE3106035A3E8e75`](https://explorer.testnet.chain.robinhood.com/address/0x3B4dD3B5741EDcE6e08CE2BcbE3106035A3E8e75) |
+| LaunchToken (canary) | [`0xFF6e101f6Ddf202F513A8f7255c61c3BAd806AB2`](https://explorer.testnet.chain.robinhood.com/address/0xFF6e101f6Ddf202F513A8f7255c61c3BAd806AB2) |
+| BondingCurve (canary) | [`0x7cd37Dc905C89D970F2E6952D721F49cba284aC7`](https://explorer.testnet.chain.robinhood.com/address/0x7cd37Dc905C89D970F2E6952D721F49cba284aC7) |
 | Treasury Safe | [`0x4ae5b5Ae7D2edd7A2d43054246D6aaAcAAFC1000`](https://explorer.testnet.chain.robinhood.com/address/0x4ae5b5Ae7D2edd7A2d43054246D6aaAcAAFC1000) — canonical Safe v1.4.1, 1-of-1 dev signer (**testnet only**) |
 
-All six contracts are Blockscout-verified: solc **0.8.35** + **cancun**, MIT.
+All contracts are Blockscout-verified: solc **0.8.35** + **cancun**, MIT. Testnet trade fee is **1.5%** — 1% treasury + 0.5% creator (a testnet-calibrated placeholder; mainnet re-locks against fresh economics).
 
 Read the fine print:
 
