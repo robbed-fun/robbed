@@ -1,6 +1,6 @@
 # ROBBED_ — Threat Model
 
-**Status:** v1.0, 2026-07-09. Design-time artifact, authored **before any code exists** (spec v1.1, no implementation) so it cannot be biased by what got built. Root authority: `docs/spec.md`; hard rules in `CLAUDE.md`; component designs in `docs/how-it-works/`. When this doc and the spec disagree on a *defense*, the spec wins and this doc gets a PR; when this doc names a *threat the spec does not cover*, that is a finding routed to hoodpad-architect (§8 of this doc).
+**Status:** v1.0, 2026-07-09. Design-time artifact, authored **before any code exists** (spec v1.1, no implementation) so it cannot be biased by what got built. Root authority: `docs/spec.md`; hard rules in `CLAUDE.md`; component designs in `docs/developers/`. When this doc and the spec disagree on a *defense*, the spec wins and this doc gets a PR; when this doc names a *threat the spec does not cover*, that is a finding routed to hoodpad-architect (§8 of this doc).
 
 **Adversarial stance.** This is a refutation document, not a defense catalog. Its job is to find where funds, integrity, or the headline guarantees can break. The most load-bearing product claim — *"sells are always open; no pause authority can block a curve exit"* (spec §6.5) — is treated here as a hypothesis to be attacked, not an axiom. Section 4 and Section 6 record where that claim is in fact defeatable.
 

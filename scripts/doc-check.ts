@@ -65,9 +65,8 @@
  *                      /(implementation-plan|progress|status-report|standup|
  *                      roadmap-tracker)/i anywhere outside .claude/;
  *                 (h2) every *.md under docs/ must be in the sanctioned set —
- *                      docs-root allowlist (README/spec/architecture/
- *                      security-properties/threat-model) or a sanctioned
- *                      subdir (how-it-works/, runbooks/, design/);
+ *                      docs-root allowlist (README/spec/CONTRIBUTING/SECURITY)
+ *                      or a sanctioned subdir (users/, developers/, runbooks/);
  *                 (h3) machine-consumed files must exist at the exact paths
  *                      their consumer scripts expect (spec, env-inventory,
  *                      user-flows pair) so a move without re-pointing fails
@@ -287,7 +286,8 @@ function findNamedDocs(name: string, fromDir: string): MdFile[] {
     resolve(fromDir, name),
     join(ROOT, name),
     join(ROOT, "docs", name),
-    join(ROOT, "docs", "how-it-works", name),
+    join(ROOT, "docs", "users", name),
+    join(ROOT, "docs", "developers", name),
   ]);
   const out: MdFile[] = [];
   for (const c of candidates) {
@@ -475,9 +475,9 @@ for (const p of walkMd(ROOT, [])) {
 
 // h2. Every *.md under docs/ must be in the sanctioned set (docs/README.md map).
 const DOCS_ROOT_MD_ALLOWLIST = new Set([
-  "README.md", "spec.md", "architecture.md", "security-properties.md", "threat-model.md",
+  "README.md", "spec.md", "CONTRIBUTING.md", "SECURITY.md",
 ]);
-const DOCS_SANCTIONED_SUBDIRS = new Set(["how-it-works", "runbooks"]);
+const DOCS_SANCTIONED_SUBDIRS = new Set(["users", "developers", "runbooks"]);
 for (const p of docsMd) {
   const r = rel(p); // docs/...
   const parts = r.split("/"); // ["docs", ...]
@@ -485,7 +485,7 @@ for (const p of docsMd) {
     (parts.length === 2 && DOCS_ROOT_MD_ALLOWLIST.has(parts[1])) ||
     (parts.length > 2 && DOCS_SANCTIONED_SUBDIRS.has(parts[1]));
   if (!ok)
-    report(r, 0, "docs-placement", "not in the sanctioned docs/ set — see the placement table in docs/README.md (protocol docs only; test catalogs colocate with tests, audits go to audits/, process docs to CONTRIBUTING.md)");
+    report(r, 0, "docs-placement", "not in the sanctioned docs/ set — see the placement table in docs/README.md (protocol + contributor/security docs; test catalogs colocate with tests, security reviews go in the closing PR)");
 }
 
 // h3. Machine-consumed files must exist where their consumer scripts point —

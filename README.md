@@ -24,7 +24,7 @@ wallet ──txs──▶ Router ─▶ CurveFactory ─▶ LaunchToken + Bondin
                                 └──▶ Redis pub/sub ─▶ Bun WS fanout ─▶ Next.js frontend
 ```
 
-Full system overview: [docs/architecture.md](docs/architecture.md). Normative protocol spec: [docs/spec.md](docs/spec.md).
+Full system overview: [docs/developers/architecture.md](docs/developers/architecture.md). Normative protocol spec: [docs/spec.md](docs/spec.md).
 
 ## Deployments
 
@@ -58,8 +58,7 @@ Read the fine print:
 | `apps/web` | Discover / Token Detail / Create / Portfolio | Next.js 16 + React 19, wagmi v2 + viem |
 | `packages/shared` | Every cross-service type, schema, ABI, constant — defined once (Zod-first) | TypeScript |
 | `tools/` | M0 parameter notebook, local stack, deploy tooling | Bun scripts |
-| `docs/` | Protocol documentation (spec, how-it-works, runbooks) | — |
-| `audits/` | Security reviews and their findings | — |
+| `docs/` | All project documentation — spec, users, developers, runbooks, contributing, security | — |
 
 Dependency management is **pnpm workspaces** (strict node_modules, `workspace:*`, catalogs); **Bun is the runtime and test runner**.
 
@@ -74,22 +73,22 @@ bun run dev:stack                 # one-command local stack (anvil fork + servic
 bun run e2e:coverage              # static user-flow coverage gate
 ```
 
-Prerequisites: Bun ≥ 1.3, pnpm ≥ 10, Foundry (`foundryup`), Docker (for the local stack). See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow and the non-negotiable protocol rules.
+Prerequisites: Bun ≥ 1.3, pnpm ≥ 10, Foundry (`foundryup`), Docker (for the local stack). See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for the full workflow and the non-negotiable protocol rules.
 
 ## Documentation
 
-- [docs/how-it-works/overview.md](docs/how-it-works/overview.md) — **new to ROBBED_? start here** — the token lifecycle in plain language, with [token-creation](docs/how-it-works/token-creation.md), [trading](docs/how-it-works/trading.md), [fees](docs/how-it-works/fees.md), and [graduation](docs/how-it-works/graduation.md)
+- [docs/users/overview.md](docs/users/overview.md) — **new to ROBBED_? start here** — the token lifecycle in plain language, with [token-creation](docs/users/token-creation.md), [trading](docs/users/trading.md), [fees](docs/users/fees.md), and [graduation](docs/users/graduation.md)
 - [docs/spec.md](docs/spec.md) — the protocol specification (single source of truth)
-- [docs/how-it-works/](docs/how-it-works) — per-component design docs: [contracts](docs/how-it-works/contracts.md), [indexer](docs/how-it-works/indexer.md), [api](docs/how-it-works/api.md), [web](docs/how-it-works/web.md)
-- [docs/security-properties.md](docs/security-properties.md) — protocol invariants + the security-gate program
-- [docs/threat-model.md](docs/threat-model.md) — design-time threat model
+- [docs/developers/](docs/developers) — technical reference: [architecture](docs/developers/architecture.md), [contracts](docs/developers/contracts.md), [indexer](docs/developers/indexer.md), [api](docs/developers/api.md), [web](docs/developers/web.md)
+- [docs/developers/threat-model.md](docs/developers/threat-model.md) — design-time threat model
 - [docs/runbooks/](docs/runbooks) — operational procedures (docker, testnet, deploy, environments)
-- [audits/](audits) — security reviews ([SECURITY.md](SECURITY.md) for disclosure)
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — contributor workflow, test tiers, hard rules
+- [docs/SECURITY.md](docs/SECURITY.md) — security policy & vulnerability disclosure
 - [docs/README.md](docs/README.md) — how this documentation is organized
 
 ## Security
 
-See [SECURITY.md](SECURITY.md). The security program (10 gates, capped beta mandatory before caps lift) is summarized in [docs/security-properties.md](docs/security-properties.md).
+See [docs/SECURITY.md](docs/SECURITY.md). The security program (10 gates, capped beta mandatory before caps lift) is specified in [docs/spec.md](docs/spec.md) §10.
 
 ## License
 

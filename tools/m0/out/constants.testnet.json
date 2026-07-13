@@ -15,7 +15,7 @@
   },
   "fees": {
     "tradeFeeBps": 100,
-    "creatorFeeBps": 0,
+    "creatorFeeBps": 50,
     "creationFeeWei": "847000000000000",
     "maxCreationFeeWei": "16940000000000000",
     "graduationFeeWei": "450000000000000",

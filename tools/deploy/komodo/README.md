@@ -1,7 +1,7 @@
 # ROBBED_ backend — Komodo Stack (`tools/deploy/komodo/`)
 
 Git-synced infra-as-code for the **backend** half of the hosting split
-(spec **§12.45**, `docs/runbooks/deploy-komodo-cloudflare.md` **Part A**). The
+(spec **§12.45**, `docs/runbooks/docker.md` (Komodo backend stack)). The
 frontend deploys separately to **Cloudflare Workers** (Part B) — there is **no
 `web` service and no web Dockerfile here**.
 

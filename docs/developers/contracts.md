@@ -141,7 +141,9 @@ function globalCurveEth() external view returns (uint256);
 function setPauseCreates(bool paused) external onlyOwner;
 function setPauseBuys(bool paused) external onlyOwner;
 function setTreasury(address newTreasury) external onlyOwner;              // != address(0)
-function setTradeFeeBps(uint16 newBps) external onlyOwner;                 // ≤ MAX_TRADE_FEE_BPS (200); applies to FUTURE curves only
+function setTradeFeeBps(uint16 newBps) external onlyOwner;                 // treasury leg; newBps + creatorFeeBps ≤ 200; FUTURE curves only
+function setCreatorFeeBps(uint16 newBps) external onlyOwner;               // creator leg (§7/§12.63); tradeFeeBps + newBps ≤ 200; FUTURE curves only
+function setCreatorVault(address vault) external onlyOwner;                // ONE-TIME (§12.63): reverts AlreadyInitialized; != address(0)
 function setCreationFee(uint256 newFee) external onlyOwner;                // ≤ maxCreationFee (immutable)
 function setGraduationFee(uint256 newFee) external onlyOwner;              // ≤ maxGraduationFee (immutable); future curves only
 function setCallerReward(uint256 newReward) external onlyOwner;            // ≤ maxCallerReward (immutable); future curves only
@@ -153,7 +155,7 @@ function setMigrator(address migrator_) external onlyOwner;                // ON
 
 **Config mutability model (§6.4 "existing curves immutable"):**
 
-- **Snapshotted into each curve at creation** (owner changes affect future launches only): `virtualEth0`, `virtualToken0`, `curveSupply`, `lpTranche`, `graduationEth`, `tradeFeeBps`, `creatorFeeBps` (always 0), `graduationFee`, `callerReward`, `earlyWindowSeconds`, `maxEarlyBuyWei`.
+- **Snapshotted into each curve at creation** (owner changes affect future launches only): `virtualEth0`, `virtualToken0`, `curveSupply`, `lpTranche`, `graduationEth`, `tradeFeeBps`, `creatorFeeBps` (§7/§12.63 — configurable, default 0; mainnet 0, testnet 50), `creator`, `creatorVault`, `graduationFee`, `callerReward`, `earlyWindowSeconds`, `maxEarlyBuyWei`.
 - **Read live from the factory at call time** (operational, never blocks sells, never alters economics): `treasury` (fee destination), `pauseBuys` (buy-side kill switch), `perTokenEthCap` / `globalEthCap` (beta risk caps, buy-side only).
 
 **Factory read surface (ratified — spec §12.39, amended 2026-07-12: SPLIT surface is canonical).** The current-config read consumed by Router, the UI/Trust-panel, and the indexer startup read (§12.38) spans three legs — **no invented fields, nothing unreadable**: (1) **`config()` → `FactoryConfig`** — the 12 owner-settable operational fields only; (2) **`curveDefaults()` → `CurveDefaults`** — the five immutable curve-shape defaults; the canonical pre-create economics read (Create-page preview, indexer startup cache — safe before any curve exists, unlike `curveParameters()` which is all-zero outside `createToken`); (3) **dedicated getters** — `router()`, `migrator()`, `weth()`, `treasury()`, plus the setter ceilings `maxCreationFee`/`maxGraduationFee`/`maxCallerReward` as `public immutable` (constructor-asserted, incl. `maxCallerReward + maxGraduationFee < graduationEth` → `GraduationUnfundable`). The §12.40d caveat stands across all three legs: these values are *factory-current* — an owner `setTradeFeeBps`/`setGraduationFee`/… affects **future curves only**, so per-token live economics (e.g. an older curve's `TRADE_FEE_BPS`) are read from **that curve**, never from the factory. Both structs are separate from `CurveParameters` (the staged per-curve deploy struct, valid only mid-`createToken`).
@@ -162,8 +164,8 @@ function setMigrator(address migrator_) external onlyOwner;                // ON
 struct FactoryConfig {
     // operational, owner-settable (govern future curves for snapshotted economics)
     address treasury;             // fee destination (read live by curves)
-    uint16  tradeFeeBps;          // default for future curves, ≤ 200
-    uint16  creatorFeeBps;        // ≡ 0 (§7), no fee-path reader
+    uint16  tradeFeeBps;          // treasury leg; tradeFeeBps + creatorFeeBps ≤ 200
+    uint16  creatorFeeBps;        // creator leg (§7/§12.63): default 0, configurable, additive under the cap
     uint256 creationFee;
     uint256 graduationFee;
     uint256 callerReward;
@@ -197,8 +199,9 @@ The landed M1-8 implementation diverged from the original single-struct itemizat
 | `maxCreationFee`, `maxGraduationFee`, `maxCallerReward` | `uint256` | `immutable` (deploy-time ceilings for admin setters) |
 | `MAX_TRADE_FEE_BPS` | `uint16` constant = `200` | `constant` (§6.4 hard cap ≤2%) |
 | `treasury` | `address` | storage, owner-settable |
-| `tradeFeeBps` | `uint16` | storage, owner-settable ≤200; init from constants.json (100) |
-| `creatorFeeBps` | `uint16` | storage, **hardcoded 0: no setter, no read in any fee path** (§7) |
+| `creatorVault` | `address` | one-time-set (§12.63), then effectively immutable; required non-zero only for a launch with `creatorFeeBps != 0` |
+| `tradeFeeBps` | `uint16` | storage, owner-settable; `tradeFeeBps + creatorFeeBps ≤ 200`; init from constants.json (100) |
+| `creatorFeeBps` | `uint16` | storage, owner-settable via `setCreatorFeeBps` (§7/§12.63); default 0, ADDITIVE under the ≤200 cap; snapshotted per curve |
 | `creationFee`, `graduationFee`, `callerReward` | `uint256` | storage, owner-settable ≤ immutables |
 | `earlyWindowSeconds` | `uint64` / `maxEarlyBuyWei` `uint128` | storage, owner-settable |
 | `pauseCreates`, `pauseBuys` | `bool` | storage, owner-settable. **No `pauseSells` exists.** |
@@ -226,11 +229,13 @@ event PauseCreatesSet(bool paused);
 event PauseBuysSet(bool paused);
 event RouterSet(address router);
 event MigratorSet(address migrator);
+event CreatorFeeUpdated(uint16 newBps);   // §7/§12.63 creator-leg default for future curves
+event CreatorVaultSet(address vault);     // §12.63 one-time CreatorVault wiring
 ```
 
-**Errors:** `NotRouter()`, `NotCurve()`, `AlreadyInitialized()`, `ZeroAddress()`, `InvalidName()`, `InvalidSymbol()`, `ZeroMetadataHash()`, `CreatesPaused()`, `FeeAboveCap()`, `CapExceeded()`.
+**Errors:** `NotRouter()`, `NotCurve()`, `AlreadyInitialized()`, `ZeroAddress()`, `InvalidName()`, `InvalidSymbol()`, `ZeroMetadataHash()`, `CreatesPaused()`, `FeeAboveCap()`, `CapExceeded()`, `CreatorVaultUnset()` (§12.63 — a launch with `creatorFeeBps != 0` while the vault is unwired).
 
-**Invariants owned:** registry append-only; `tradeFeeBps ≤ 200` unconditionally; `creatorFeeBps == 0` with no code path reading it into a fee computation; global cap accounting never blocks an ETH-decreasing operation.
+**Invariants owned:** registry append-only; **`tradeFeeBps + creatorFeeBps ≤ 200` unconditionally** (the ADDITIVE §6.4/§12.63 ≤2% cap — constructor + both setters); creator-leg curves fail-closed unless the CreatorVault is wired; global cap accounting never blocks an ETH-decreasing operation.
 
 ### 2.3 BondingCurve.sol (§6.2, §6.5 anti-sniper, §6.4)
 
@@ -241,7 +246,7 @@ One instance per token. Holds the full 1B token supply at birth and all raised E
 - `k = virtualEthReserves × virtualTokenReserves` (recomputed per trade; rounding drifts it upward only — the gate-2 invariant).
 - **Buy** (net ETH in `e`): `tokensOut = vT − ceilDiv(vE·vT, vE + e)`; then `vE += e; vT −= tokensOut`. Rounds tokensOut **down** (protocol-favoring).
 - **Sell** (tokens in `t`): `ethOutGross = vE − ceilDiv(vE·vT, vT + t)`; then `vT += t; vE −= ethOutGross`. Rounds ethOut **down**.
-- Fee (pull-payment, §12.25): buys — `fee = floor(msg.value · tradeFeeBps / 10_000)`, net `e = msg.value − fee`; the fee is **added to `accruedFees`** (never pushed to treasury) **before** curve math. Sells — curve math first on the token leg, then `fee = floor(ethOutGross · tradeFeeBps / 10_000)`, `ethOut = ethOutGross − fee`, fee **added to `accruedFees`**. ETH leg is fee-bearing in both directions (§6.4). **No trade path ever calls the treasury** — this is what makes sells un-freezable by construction; the treasury pulls its fees via the permissionless `sweepFees()` below.
+- Fee (pull-payment, §12.25 + Phase-2 creator leg §7/§12.63): **TWO additive ETH-leg fees, both floored independently, both accrued in-contract** — the treasury leg `fee = floor(x · tradeFeeBps / 10_000) → accruedFees` and the creator leg `creatorFee = floor(x · creatorFeeBps / 10_000) → accruedCreatorFees`, where `x = msg.value` on buys (net `e = msg.value − fee − creatorFee`, **before** curve math) and `x = ethOutGross` on sells (`ethOut = ethOutGross − fee − creatorFee`, after the token-leg curve math). `tradeFeeBps + creatorFeeBps ≤ 200` is guaranteed by the factory. On the **graduation clamp** the accepted gross is `min(grossIn, ceilDiv(remaining · 1e4, 1e4 − totBps))` — the `min` guards the two-floor rounding case where the ceilDiv would exceed `grossIn` (F-1) — and the residual `totalFee = acceptedGross − net` is split proportionally: `creatorFee = floor(totalFee · creatorFeeBps / totBps)`, `fee = totalFee − creatorFee`. At `creatorFeeBps == 0` the creator term is 0 everywhere and every path is byte-identical to the treasury-only build. **No trade path ever calls the treasury, the creator, OR the vault** — this is what makes buys/sells un-freezable by construction against BOTH a hostile treasury (§12.25) and a hostile creator (§12.63); each leg is pulled out by its own permissionless sweep (`sweepFees()` / `sweepCreatorFees()`) below.
 - All reserve math in `uint256`; `vE·vT` for launch-scale values (vT ≤ ~1.073e27, vE ≤ ~few hundred ETH) cannot overflow 2^256; CurveMath still uses checked arithmetic except documented `unchecked` blocks with proofs in comments.
 
 **Graduation-boundary clamp.** A buy may not push `realEthReserves` past `GRADUATION_ETH`. If it would: accept `acceptedNet = GRADUATION_ETH − realEthReserves`, recompute `acceptedGross = ceilDiv(acceptedNet · 10_000, 10_000 − tradeFeeBps)`, `fee = acceptedGross − acceptedNet`, refund `msg.value − acceptedGross` to `refundTo`. `minTokensOut` is checked against the actual `tokensOut` — a clamped fill that undershoots the min reverts (`SlippageExceeded`), it does not silently partial-fill below the user's floor. The buy that lands exactly on `GRADUATION_ETH` sets `phase = ReadyToGraduate` and emits `GraduationReady`.
@@ -280,11 +285,19 @@ function sell(address trader, address recipient, uint256 tokenAmount, uint256 mi
 ///      A reverting treasury only reverts THIS call (retriable) — it can never block a buy or sell.
 function sweepFees() external nonReentrant returns (uint256 swept);
 
+/// @notice Permissionless, non-phase-gated pull-payment of the accrued CREATOR leg to the CreatorVault (§12.63).
+/// @dev nonReentrant, CEI. Zeroes `accruedCreatorFees` first, then pushes to `CreatorVault.deposit{value}(creator)`.
+///      The vault deposit is a TRUSTED, non-reverting accumulate, so this ALWAYS clears the escrow regardless of
+///      creator behavior — a hostile creator can only revert its own downstream `CreatorVault.claim`, never this
+///      sweep and never a trade. No-op (sends nothing) at `CREATOR_FEE_BPS == 0`. Works in EVERY phase.
+function sweepCreatorFees() external nonReentrant returns (uint256 swept);
+
 /// @notice Permissionless graduation once realEthReserves == GRADUATION_ETH (phase ReadyToGraduate).
 /// @dev Pays CALLER_REWARD (ETH) to msg.sender, registers factory.recordEthDelta(-int256(realEthReserves))
 ///      (non-reverting; curve exits the global beta-cap sum), transfers the curve's ENTIRE token balance
-///      and (balance − accruedFees) ETH (donations included, treasury fees withheld for sweepFees) to the
-///      migrator, sets phase = Graduated, calls migrator.migrate{value: balance − reward − accruedFees}(...).
+///      and (balance − accruedFees − accruedCreatorFees) ETH (donations included, BOTH fee escrows withheld for
+///      their sweeps) to the migrator, sets phase = Graduated, calls
+///      migrator.migrate{value: balance − reward − accruedFees − accruedCreatorFees}(...).
 ///      Reverts NotReady if phase != ReadyToGraduate. Fires exactly once (phase is terminal).
 function graduate() external nonReentrant;
 
@@ -309,14 +322,17 @@ receive() external payable; // accepts donations; they are swept into graduation
 | `VIRTUAL_ETH_0`, `VIRTUAL_TOKEN_0` | `uint256` | `immutable` |
 | `CURVE_SUPPLY` (≈793.1M e18), `LP_TOKEN_TRANCHE` (≈206.9M e18) | `uint256` | `immutable` |
 | `GRADUATION_ETH` | `uint256` | `immutable` (net-of-fee real reserves — ratified, spec §12.11) |
-| `TRADE_FEE_BPS` | `uint16` | `immutable` (snapshot; ≤200 guaranteed by factory) |
+| `TRADE_FEE_BPS` | `uint16` | `immutable` (treasury leg, snapshot; `TRADE_FEE_BPS + CREATOR_FEE_BPS ≤ 200`) |
+| `CREATOR_FEE_BPS` | `uint16` | `immutable` (creator leg, snapshot §7/§12.63; 0 on v1/mainnet) |
+| `creator`, `creatorVault` | `address` | `immutable` (snapshot §12.63; creator = fee beneficiary, vault = pull-payment sink) |
 | `GRADUATION_FEE`, `CALLER_REWARD` | `uint256` | `immutable` |
 | `EARLY_WINDOW_END` | `uint64` | `immutable` = `createdAt + earlyWindowSeconds` |
 | `MAX_EARLY_BUY` | `uint128` | `immutable` (gross ETH per buy tx during window) |
 | `createdAt` | `uint64` | `immutable` = `block.timestamp` at deploy |
 | `virtualEthReserves`, `virtualTokenReserves` | `uint256` | storage |
 | `realEthReserves`, `realTokenReserves` | `uint256` | storage (`realToken` = tokens still available for sale, init `CURVE_SUPPLY`) |
-| `accruedFees` | `uint256` | storage — unswept ETH-leg trade fees (§12.25); `balance ≥ realEthReserves + accruedFees` always |
+| `accruedFees` | `uint256` | storage — unswept treasury ETH-leg fees (§12.25) |
+| `accruedCreatorFees` | `uint256` | storage — unswept creator ETH-leg fees (§7/§12.63); `balance ≥ realEthReserves + accruedFees + accruedCreatorFees` always |
 | `phase` | `Phase` (uint8) | storage |
 
 **Anti-sniper (§6.5, rewritten per §2):** if `block.timestamp < EARLY_WINDOW_END`, require `msg.value ≤ MAX_EARLY_BUY` else revert `EarlyBuyCapExceeded`. **Timestamp-based, chosen over `arbBlockNumber` (both spec-sanctioned)** because a seconds-window is deployment-constant while block cadence is a marketing figure; `IArbSys` interface is still shipped for tests and any future block-window need. `block.number` appears nowhere in `src/` (grep-enforced in CI and in the pre-report self-check).
@@ -329,14 +345,15 @@ event Trade(address indexed trader, bool indexed isBuy, uint256 ethAmount /* gro
             uint256 tokenAmount, uint256 fee, uint256 virtualEthReserves,
             uint256 virtualTokenReserves, uint256 realEthReserves);
 event GraduationReady(uint256 realEthReserves);
-event FeesSwept(address indexed treasury, uint256 amount); // §12.25 pull-payment
+event FeesSwept(address indexed treasury, uint256 amount); // §12.25 pull-payment (treasury leg)
+event CreatorFeesSwept(address indexed creator, address indexed vault, uint256 amount); // §12.63 creator leg → vault
 ```
 
 (Post-trade reserve fields make candle/progress indexing stateless for Ponder.)
 
 **Errors:** `NotRouter()`, `NotTrading()`, `NotReady()`, `ZeroAmount()`, `SlippageExceeded(uint256 actual, uint256 min)`, `EarlyBuyCapExceeded(uint256 sent, uint256 cap)`, `PerTokenCapExceeded()`, `EthTransferFailed()`.
 
-**Invariants owned (gate 2):** `k` non-decreasing across any trade sequence; **`address(this).balance ≥ realEthReserves + accruedFees` always** (solvency, §12.25); every circulating token amount is sellable for a payable amount while `phase == Trading`, **regardless of the treasury address's behavior** (no trade path calls the treasury); `realEthReserves ≤ GRADUATION_ETH` always; graduation fires exactly once; post-graduation the curve holds **zero reserve/LP value** — `realEthReserves == 0` and `realToken == 0`, and any residual ETH is exactly `accruedFees`, drained to 0 by `sweepFees` (§12.25).
+**Invariants owned (gate 2, §12.63-extended):** `k` non-decreasing across any trade sequence; **`address(this).balance ≥ realEthReserves + accruedFees + accruedCreatorFees` always** (solvency, §12.25/§12.63); every circulating token amount is sellable for a payable amount while `phase == Trading`, **regardless of the treasury OR creator address's behavior** (no trade path calls the treasury, the creator, or the vault); `realEthReserves ≤ GRADUATION_ETH` always; graduation fires exactly once; post-graduation the curve holds **zero reserve/LP value** — `realEthReserves == 0` and `realToken == 0`, and any residual ETH is exactly `accruedFees + accruedCreatorFees`, drained to 0 by `sweepFees` + `sweepCreatorFees` (§12.25/§12.63).
 
 ### 2.4 Router.sol (§6.5, §7)
 
@@ -385,7 +402,7 @@ function quoteSell(address token, uint256 tokenAmount) external view returns (ui
 
 **Errors:** `DeadlineExpired()`, `UnknownToken()`, `InvalidMsgValue()`, `CreatesPaused()`, `BuysPaused()`, `ZeroAddress()`.
 
-**Access control:** none (public entrypoint). Fees: **never caller-supplied** — no fee parameter exists in any signature (§4.1); `creatorFeeBps` has no code path here (§7).
+**Access control:** none (public entrypoint). Fees: **never caller-supplied** — no fee parameter exists in any signature (§4.1); **BOTH ETH-leg fees (treasury §12.25 + creator §7/§12.63) are computed and accrued entirely in the {BondingCurve}** — the Router supplies no fee and holds no creator state.
 
 **Invariants owned:** deadline+slippage present on every trade path incl. create's atomic buy (§6.5); sell path provably pause-free; no ETH ever strands in the Router.
 
@@ -479,6 +496,36 @@ contract LPFeeVault is IERC721Receiver {
 There is no `decreaseLiquidity`, no `transferFrom` initiation, no `approve` — principal mathematically cannot leave (§6.3.4; VitaliyShulik `TokenLocker` is the reference property, §4.3). Copy language everywhere: **"LP principal permanently locked; trading fees claimable by treasury."** Never "burned."
 
 **Invariants owned:** vault can never reduce or transfer position liquidity; `collect` recipient is constant.
+
+### 2.7 CreatorVault.sol (§7, §12.63)
+
+Phase-2 pull-payment escrow for the creator-fee leg — the creator-side analogue of LPFeeVault's minimalism. **No owner, no admin withdraw, no upgrade path, no privileged functions, no `receive()`/`fallback()`.** Two external state-mutating functions. Every wei enters through `deposit` (attributed to a creator) and leaves only via `claim` (to that same creator). Wired to the factory via a one-time `setCreatorVault` (resolves the factory↔vault deploy cycle, mirroring `setRouter`/`setMigrator`).
+
+```solidity
+/// @title CreatorVault — per-creator pull-payment escrow for the creator-fee leg (§7, §12.63).
+contract CreatorVault is ICreatorVault, ReentrancyGuard {
+    address public immutable factory;                 // isCurve registry gates deposit
+    mapping(address creator => uint256) public balanceOf; // accrued, unclaimed
+
+    event CreatorFeeDeposited(address indexed creator, address indexed curve, uint256 amount);
+    event CreatorFeeClaimed(address indexed creator, address indexed caller, uint256 amount);
+
+    /// @notice Curve-only (factory.isCurve(msg.sender)): credit `creator`. A plain accumulate that
+    ///         cannot revert, so a curve's sweepCreatorFees() always clears its escrow. creator != 0.
+    function deposit(address creator) external payable;
+
+    /// @notice Permissionless: pay `creator`'s full accrued balance to the FIXED `creator` address
+    ///         (never msg.sender). CEI + nonReentrant. A reverting creator reverts ONLY this call
+    ///         (retriable, isolated) — never a curve buy/sell.
+    function claim(address creator) external returns (uint256 amount);
+}
+```
+
+**Errors:** `ZeroAddress()`, `NotCurve()`, `EthTransferFailed()`.
+
+**Design (robbed-security gate):** `deposit` is gated to factory-registered curves so the vault balance equals the sum of swept creator fees to the wei (clean exact-fee accounting) and cannot be polluted by arbitrary donations; `claim` is permissionless in WHO pays gas but FIXED in WHERE funds go (the LPFeeVault.collect property). **No trade path touches this contract** — the curve accrues the creator leg in-contract and only `sweepCreatorFees()` (permissionless, non-trade) pushes here, so a hostile/reverting creator can never freeze a buy or sell (§6.5/§12.63).
+
+**Invariants owned (gate 2):** vault balance + curve `accruedCreatorFees` + claimed == Σ computed creator fees (exact accounting, both legs); a hostile creator address cannot freeze any Trading-phase sell; a claim revert leaves the balance intact (retriable) and touches no other creator's balance.
 
 ---
 
@@ -657,7 +704,7 @@ All market-dependent values come from the **M0 parameter notebook** output, `too
 | Creation fee ~$1–2 equiv. flat | `creationFee` | factory storage, ≤ `maxCreationFee` immutable ceiling | constants.json `fees.creationFeeWei` (+ `fees.maxCreationFeeWei`) |
 | Graduation fee (small flat, cost-based ≈ V3-migration gas + thin margin — **not** %-of-raise, §12.26) | `GRADUATION_FEE` | factory storage → curve `immutable`, ≤ `maxGraduationFee` | constants.json `fees.graduationFeeWei` — M0 carries a gas-cost-derived formula/placeholder; exact number set at M1 vs real testnet gas, never a hardcoded USD figure |
 | Graduation caller reward | `CALLER_REWARD` | factory storage → curve `immutable`, ≤ `maxCallerReward` | constants.json `fees.callerRewardWei` (+ ceiling) |
-| Creator reward 0 in v1 | `creatorFeeBps` | factory storage = 0, **no setter, no fee-path read** (§7) | hardcoded 0 |
+| Creator reward (§7/§12.63) | `creatorFeeBps` + CreatorVault | factory storage, `setCreatorFeeBps` setter, ADDITIVE under the ≤200 cap; two-leg in-contract split accrues to `accruedCreatorFees` → `sweepCreatorFees()` → pull-payment CreatorVault | default 0 (mainnet 0, testnet 50) |
 | Anti-sniper window / cap | `earlyWindowSeconds`, `maxEarlyBuyWei` | factory storage → curve `immutable` | constants.json `antiSniper.*` |
 | V3 fee tier / range | `FEE_TIER = 10_000`, `TICK_LOWER/UPPER = ∓887_200` | migrator `constant` | spec §12.1, structural |
 | Graduation pool price | `SQRT_PRICE_TOKEN0/1_X96`, `TARGET_TICK_TOKEN0/1` | migrator `immutable` | constants.json `v3.*` (M0 computes both token orderings, since token vs WETH address order varies per launch) |
@@ -673,7 +720,7 @@ All market-dependent values come from the **M0 parameter notebook** output, `too
   "ethUsdSnapshot": { "source": "<feed>", "timestamp": "<ISO8601>", "value": "<informational only, never deployed>" },
   "curve": { "virtualEthWei": "…", "virtualTokenWei": "…", "curveSupplyWei": "…",
              "lpTrancheWei": "…", "graduationEthWei": "…" },
-  "fees":  { "tradeFeeBps": 100, "creatorFeeBps": 0,
+  "fees":  { "tradeFeeBps": 100, "creatorFeeBps": 0, /* §12.63: mainnet 0, testnet 50; tradeFeeBps+creatorFeeBps ≤ 200 */
              "creationFeeWei": "…", "maxCreationFeeWei": "…",
              "graduationFeeWei": "…", "maxGraduationFeeWei": "…",
              "callerRewardWei": "…", "maxCallerRewardWei": "…" },

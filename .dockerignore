@@ -1,6 +1,6 @@
 # Root .dockerignore — applies to every image whose build context is the repo
-# root (apps/indexer/Dockerfile, apps/api/Dockerfile; deploy-komodo-cloudflare.md
-# A.5). Keeps the context lean and reproducible: ship manifests + lockfile +
+# root (apps/indexer/Dockerfile, apps/api/Dockerfile; see prod-images.md).
+# Keeps the context lean and reproducible: ship manifests + lockfile +
 # source; NEVER ship host node_modules (linux-native binaries are rebuilt inside
 # the image), build caches, secrets, or contract/frontend artifacts.
 

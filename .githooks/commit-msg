@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ROBBED_ commit-msg hook — Conventional Commits header validation.
-# Canonical spec: CONTRIBUTING.md §Commit messages. Deterministic, no deps.
+# Canonical spec: docs/CONTRIBUTING.md §Commit messages. Deterministic, no deps.
 #   header:  type(scope)?: subject   — types feat|fix|docs|test|refactor|perf|chore|ci|build;
 #            scope optional (lowercase [a-z0-9,/-]); subject starts lowercase-alnum; ≤72 chars.
 #   passthrough: Merge…, Revert…, fixup!…, squash!… headers are allowed untouched.
@@ -17,7 +17,7 @@ fail() {
   echo "commit-msg: REJECTED header:" >&2
   echo "  $header" >&2
   echo "$1" >&2
-  echo "See CONTRIBUTING.md §Commit messages." >&2
+  echo "See docs/CONTRIBUTING.md §Commit messages." >&2
   exit 1
 }
 

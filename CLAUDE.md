@@ -1,6 +1,6 @@
 # ROBBED_ — Pump.fun-style launchpad on Robinhood Chain
 
-Source of truth: `docs/spec.md` (v1.1). When code and spec disagree, the spec wins; when the spec is silent, ask or record the decision in §12/§13. Contributor process (PR flow, test tiers, validate.sh): `CONTRIBUTING.md`.
+Source of truth: `docs/spec.md` (v1.2). When code and spec disagree, the spec wins; when the spec is silent, ask or record the decision in §12/§13. Contributor process (PR flow, test tiers, validate.sh): `docs/CONTRIBUTING.md`.
 
 ## Hard rules (violations are bugs, not style)
 
@@ -44,7 +44,7 @@ M0 parameter notebook → M1 contracts + gates 1–4 → M2 indexer/API → M3 f
 
 ## Docs placement
 
-Protocol docs → `docs/` (`spec.md`, `how-it-works/`, `runbooks/`). Developer docs → root (`CONTRIBUTING.md`, `SECURITY.md`) + colocated per-package READMEs. Security reviews/audits → `audits/` with an index row. **NEVER create plans/trackers/status/progress md files anywhere** (removed 2026-07-12; no flagship public DeFi repo ships them — enforced by doc-check's `docs-placement` check). Full rules + machine-consumer map: `docs/README.md`. Commits: Conventional Commits per CONTRIBUTING.md §Commit messages — enforced by `.githooks/commit-msg`.
+Protocol + contributor/security docs → `docs/` (`spec.md`, `users/`, `developers/`, `runbooks/`, `CONTRIBUTING.md`, `SECURITY.md`) + colocated per-package READMEs; the root keeps only `README.md` + `CLAUDE.md`. Security reviews → the pull request that closes each gate (not committed). **NEVER create plans/trackers/status/progress md files anywhere** (removed 2026-07-12; no flagship public DeFi repo ships them — enforced by doc-check's `docs-placement` check). Full rules + machine-consumer map: `docs/README.md`. Commits: Conventional Commits per `docs/CONTRIBUTING.md` §Commit messages — enforced by `.githooks/commit-msg`.
 
 ## Docs-first rule
 

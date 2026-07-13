@@ -122,7 +122,7 @@ forge script script/Deploy.s.sol \
   --skip-simulation --slow --gas-estimate-multiplier 200 \
   --verify --verifier blockscout \
   --verifier-url "$TESTNET_BLOCKSCOUT_URL/api"
-bun script/emit-testnet-env.ts   # post-broadcast: tools/deployments/testnet.json + tools/localstack/out/testnet.env
+bun script/emit-testnet-env.ts   # post-broadcast: reads canonical contracts/deployments/46630.json → writes tools/localstack/out/testnet.env
 ```
 
 ⚠ **`--skip-simulation --slow` are MANDATORY on this chain (incident 2026-07-12, first T-3 attempt).**
@@ -137,7 +137,7 @@ forge take gas limits from the node's `eth_estimateGas` (ArbOS includes the L1 c
 receipt and **stops on the first failure**, preventing the no-op cascade. The 2026-07-12 T-3 deploy
 succeeded with exactly these flags.
 
-which per contracts.md §7.2 deploys all six contracts in order, runs the runtime V3/WETH assertions, executes the canary create+buy, initiates the Ownable2Step handoff to the treasury Safe (the Safe must `acceptOwnership()`), and Blockscout-verifies everything (this doubles as the **M1-2/O-5** solc-0.8.35+cancun verification check). *(Verifier endpoint: **RESOLVED — §12.52:** the testnet explorer runs the **Blockscout v2 verifier, no API key required, with `solc v0.8.35+commit.47b9dedd` in its supported list**.)* The `emit-testnet-env.ts` step (contracts-owned, mirrors the local `deploychain` one-shot) reads the deploy artifact `contracts/deployments/46630.json` + the broadcast receipts (for `START_BLOCK` = first deploy block, so the indexer backfill includes the canary events) and writes `tools/deployments/testnet.json` (addresses + verification-GUID placeholders) and `tools/localstack/out/testnet.env` with the **same keys as the local `local.env`** (`CURVE_FACTORY_ADDRESS`, `ROUTER_ADDRESS`, `MIGRATOR_ADDRESS`, `TREASURY_ADDRESS`, `LP_FEE_VAULT_ADDRESS`, `START_BLOCK`) — the fail-closed prerequisite of the §5 stack.
+which per contracts.md §7.2 deploys all six contracts in order, runs the runtime V3/WETH assertions, executes the canary create+buy, initiates the Ownable2Step handoff to the treasury Safe (the Safe must `acceptOwnership()`), and Blockscout-verifies everything (this doubles as the **M1-2/O-5** solc-0.8.35+cancun verification check). *(Verifier endpoint: **RESOLVED — §12.52:** the testnet explorer runs the **Blockscout v2 verifier, no API key required, with `solc v0.8.35+commit.47b9dedd` in its supported list**.)* The `emit-testnet-env.ts` step (contracts-owned, mirrors the local `deploychain` one-shot) reads the canonical deploy artifact `contracts/deployments/46630.json` + the broadcast receipts (for `START_BLOCK` = first deploy block, so the indexer backfill includes the canary events) and writes `tools/localstack/out/testnet.env` with the **same keys as the local `local.env`** (`CURVE_FACTORY_ADDRESS`, `ROUTER_ADDRESS`, `MIGRATOR_ADDRESS`, `TREASURY_ADDRESS`, `LP_FEE_VAULT_ADDRESS`, `START_BLOCK`) — the fail-closed prerequisite of the §5 stack. (`contracts/deployments/<chainId>.json`, i.e. `46630.json`, is the **canonical** deploy artifact — D-2, spec §12.49 annotation; the legacy `tools/deployments/*.json` path is superseded.)
 
 **Treasury (T-2):** the constants file's `treasurySafe` is the zero address until the dev-signer Safe exists, and the deploy fails closed without it. Testnet uses **canonical Safe v1.4.1 contracts with dev signers** (§6.6 — canonical, never bespoke; CONFIRMED on 46630, spec §12.52). The mainnet signer set stays OPEN (§13 O-6, NEEDS-USER).
 

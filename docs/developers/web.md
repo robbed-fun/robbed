@@ -12,21 +12,22 @@ The product is **soft-confirmed trading UX** on Robinhood Chain (chain ID 4663):
 
 > This is an **AMM / bonding curve with soft confirmations** — never an order book, never a "real-time exchange." Copy, marketing strings, tooltips, and docs must not claim order-book or exchange semantics (§1).
 
-We win on **perceived speed, trust transparency, and a tighter three-page product** (§1). Exactly three pages (§5):
+We win on **perceived speed, transparency, and a tight, focused product** (§1). The v1 app ships **four pages** (§5, as ratified by the ROBBED_ redesign — spec §12.50/§12.56/§12.57/§12.58; the fourth, Portfolio, is a read-only surface that supersedes the earlier §5.4 Phase-2 deferral):
 
 | Page | Route | Spec |
 |---|---|---|
 | Discover | `/` | §5.1 |
 | Token Detail | `/t/[address]` | §5.2 |
-| Launch | `/launch` | §5.3 |
+| Create | `/create` | §5.3 (renamed from `/launch`) |
+| Portfolio | `/portfolio` | §5.4 (read-only) |
 
-There is **no fourth page**. Portfolio is Phase 2 (§5.4) — no route, no nav placeholder, no stub. ERC-4337 is Phase 2 (§12.2) — no AA code paths, classic wagmi/RainbowKit only.
+**Portfolio ships read-only** (spec §5.4/§12.50): it introduces **no new transaction types and no `collect()` UI** — it renders holdings/activity for an address from live data only. ERC-4337 is still Phase 2 (§12.2) — no AA code paths, classic wagmi/RainbowKit only.
 
 Cross-cutting product rules implemented by this app:
 
-- **Confirmation semantics (§2.1):** three explicit states — `soft-confirmed` → `posted-to-l1` → `finalized` — tracked by the indexer and surfaced in the UI where it matters. Trading UX runs on soft-confirmed; bridge/withdrawal flows and large-value displays disclose posted/finalized tiers. See §4 of this doc.
-- **Optimistic UI reconciled by WebSocket (§2.1, §5):** every trade renders immediately as soft-confirmed (badged) and reconciles to indexed truth when the WS event arrives. Never rendered as final; never dropped when the WS contradicts it.
-- **Trust panel (§5.2, §8.3):** first-class component on Token Detail — the transparency differentiator vs hood.fun.
+- **Confirmation semantics (§2.1):** three explicit states — `soft-confirmed` → `posted-to-l1` → `finalized` — tracked by the indexer and surfaced in the UI where it matters. The **tier machinery is unchanged**, but per **§12.56 the soft-confirmed tier no longer renders a status chip** — a fresh trade makes no finality claim; **posted/finalized still surface**, and large-value (≥1 ETH) displays disclose them. See §4 of this doc.
+- **Optimistic UI reconciled by WebSocket (§2.1, §5):** every trade renders immediately at the soft-confirmed tier (**no finality chip — §12.56**) and reconciles to indexed truth when the WS event arrives. Never rendered as final; never dropped when the WS contradicts it.
+- **Transparency surface (§5.2, §8.3; redesign §12.57/§12.58):** the first-class **Trust panel is deleted (§12.57)**. The differentiator vs hood.fun is now the **Top Holders table** (`widgets/holder-table`, §12.58) plus a compact **safety strip** (`widgets/safety-strip`) that relocates the hard-rule must-render floor — the §12.14 LP-copy sentence, graduation progress, and live curve reserves — so those signals never vanish.
 - **Sells always work (§6.5):** no UI path ever gates a curve sell on `pauseBuys`/`pauseCreates`. If buys are paused, the sell side stays fully live.
 - **No hardcoded market metrics (§2):** no inline ETH/USD, TVL, volume, or mcap constants anywhere in code or copy. Everything is computed from live on-chain reads or indexer data, or cited with source + timestamp.
 - **Per-token OG image (§5.2, §9):** the viral share unit; SSR'd, renders with zero client JS.
@@ -71,7 +72,9 @@ apps/web/
     │   ├── event-tape/           //   §12.50(f) Discover: seeded LAUNCH snapshot + live WS rows, tab filters
     │   │                         //     (RETIRED with §12.50(f): token-grid/, king-of-the-hill-hero/,
     │   │                         //      launch-ticker/, site-header/; token-og/ moved with OG → API, §6)
-    │   ├── price-chart/ · trade-widget/ · trade-feed/ · trust-panel/ · holder-table/
+    │   ├── price-chart/ · trade-widget/ · trade-feed/ · safety-strip/ · holder-table/
+    │   │                         //     (§12.57 deleted trust-panel/; safety-strip/ holds the relocated
+    │   │                         //      must-render floor, holder-table/ is the §12.58 Top Holders table)
     │   ├── live-status-banner/
     │   └── network-banner/       //   onboarding-friction strip (all views): composes switch-network +
     │                             //     get-testnet-eth with wrong-network-first precedence; e2e-inert
@@ -115,7 +118,7 @@ apps/web/e2e/                     // Playwright specs (§8 of this doc)
 | Route | Rendering | Client islands |
 |---|---|---|
 | `/` | Server component (§12.50(f) surface); TRENDING (`sort=volume24h`) + newest lists fetched server-side via **isolated fetches** (short revalidate, ~5s) so the page paints with content; `TrendingCarousel` is server-rendered (CSS-only marquee, no hydration) | `EventTape` (WS), header `UrlSeededSearchBox` (reads `?q=` under Suspense) |
-| `/t/[address]` | **SSR required** (§5.2): server component fetches token summary + metadata for full HTML + OG/meta tags (og:image → the API-served PNG, §6); must be meaningful without client JS (crawlers see name, ticker, mcap, progress, description) | `PriceChart`, `TradeWidget`, `TrustPanel` (live on-chain reads), `TradeFeed` (WS), `HolderTable` |
+| `/t/[address]` | **SSR required** (§5.2): server component fetches token summary + metadata for full HTML + OG/meta tags (og:image → the API-served PNG, §6); must be meaningful without client JS (crawlers see name, ticker, mcap, progress, description) | `PriceChart`, `TradeWidget`, `SafetyStrip` (live on-chain reads — the relocated must-render floor, §12.57), `TradeFeed` (WS), `HolderTable` (§12.58) |
 | `/create` | (renamed from `/launch` — ROBBED_ redesign; `/launch` redirects) Server shell (economics copy is static-per-deploy except fee values, which are read live); form is a client component | `LaunchForm` (entire flow) |
 | `/portfolio` | NEW (ROBBED_ redesign; was §5.4 Phase-2). Phase-F shell; Phase-P page agent fills: address header, stat cells, HOLDINGS/ACTIVITY/CREATED tabs, holdings table — live data only (§2) | wallet-derived content (entire screen) |
 
@@ -179,12 +182,12 @@ Order (outermost first): `WagmiProvider` → `QueryClientProvider` → `RainbowK
 | Data | Source | Why |
 |---|---|---|
 | Token lists, search, candles, trades, holders, confirmation states, metadata-hash verdict, mcap/volume/Δ% | Indexer REST API + WS | Indexed truth (§8) |
-| Curve reserves, graduation threshold, pause flags, deploy fee, quote inputs | **On-chain via viem/wagmi** | Trust panel demands live chain reads, not cached API values (§5.2); fees/thresholds are contract constants (§6.4) — reading them live is how we avoid hardcoding |
+| Curve reserves, graduation threshold, pause flags, deploy fee, quote inputs | **On-chain via viem/wagmi** | the safety strip demands live chain reads, not cached API values (§5.2); fees/thresholds are contract constants (§6.4) — reading them live is how we avoid hardcoding |
 | ETH/USD | `GET /v1/eth-usd` → `{ price, source, asOf }` (api.md §3.5; backed by `eth_usd_snapshots`) | §2: never hardcode; display always carries source + timestamp |
 
-ABIs: imported from the **full read-function ABIs in `packages/shared/src/abi/`** — the compilation-time codegen artifact ratified in spec §12.38 (emitted from `contracts/out/*.json` by `forge build`, no deploy needed; contracts.md §7.4). This is what unblocks every M3-5 live read (`reserves()`, `phase()`, `quoteBuy/quoteSell`, per-token `TRADE_FEE_BPS`, `totalSupply()`, factory `config()`); the deployed **addresses** come from the separate deploy-time codegen (`lib/addresses.ts`). **No ABI duplicated or hand-written in `apps/web`.** The Trust-panel trade-fee figure is read live from the **curve's per-token `TRADE_FEE_BPS`** (never the factory config, which governs future curves only — §12.40d), matching the API's `trust.feePolicy.tradeFeeBps` source.
+ABIs: imported from the **full read-function ABIs in `packages/shared/src/abi/`** — the compilation-time codegen artifact ratified in spec §12.38 (emitted from `contracts/out/*.json` by `forge build`, no deploy needed; contracts.md §7.4). This is what unblocks every M3-5 live read (`reserves()`, `phase()`, `quoteBuy/quoteSell`, per-token `TRADE_FEE_BPS`, `totalSupply()`, factory `config()`); the deployed **addresses** come from the separate deploy-time codegen (`lib/addresses.ts`). **No ABI duplicated or hand-written in `apps/web`.** The safety-strip trade-fee figure is read live from the **curve's per-token `TRADE_FEE_BPS`** (never the factory config, which governs future curves only — §12.40d), matching the API's `trust.feePolicy.tradeFeeBps` source.
 
-Degraded modes: WS down → banner "Live updates degraded — reconnecting", queries fall back to 5s polling on visible views. RPC down → Trust panel live reads show explicit "on-chain read unavailable" (never silently substitute API values for the reserve figures). API down → SSR error boundary with retry.
+Degraded modes: WS down → banner "Live updates degraded — reconnecting", queries fall back to 5s polling on visible views. RPC down → the safety strip's live reads show explicit "on-chain read unavailable" (never silently substitute API values for the reserve figures). API down → SSR error boundary with retry.
 
 ---
 
@@ -233,6 +236,8 @@ Card metrics (mcap, 24h Δ%, volume) come exclusively from the indexer — compu
 
 ### 3.2 Token Detail `/t/[address]` (§5.2)
 
+> **SUPERSEDED in part by §12.57/§12.58 (ROBBED_ redesign, ratified 2026-07-12):** the first-class **Trust panel is DELETED (§12.57)**. Its HARD-RULE must-render floor — the §12.14 LP-copy sentence, graduation progress, and live curve reserves — **relocates** (never vanishes) into a compact **`widgets/safety-strip`** rendered above the right-column **Top Holders table** (**`widgets/holder-table`**, §12.58: rows `rank · address · label · amount · percent`; `label` = Bonding curve / Creator / Vault plus advisory sniper/programmatic bot-flags). The "TrustPanel — all seven items" subsection below is rewritten to the **SafetyStrip + HolderTable** surfaces; the standalone organic-holder RANGE / flow-quality blocks moved off the public page to the internal §12.54 endpoint (the surviving public §8.5 signal is the holder-table flags).
+
 **Component tree**
 
 ```
@@ -241,13 +246,13 @@ TokenDetailPage (server: SSR shell, meta/OG tags, initialData)
 │                                //    status pill: Bonding curve | Graduating | Graduated → Uniswap V3
 ├── main grid (2-col desktop / stacked mobile)
 │   ├── PriceChart (client)                 // §5.2 venue-continuous candles — see below
-│   ├── TradeFeed (client, WS)              // §5.2 live feed, soft-confirmed badges (§2.1)
-│   ├── HolderTable (client)                // §5.2 top 20, creator/curve/vault flagged
+│   ├── TradeFeed (client, WS)              // §5.2 live feed; confirmation tiers (soft tier renders no chip — §12.56)
 │   └── TokenInfo                           // description, links, contract + curve + pool Blockscout links,
 │                                           //    creator profile link, created-at, metadata JSON link
 └── right rail
     ├── TradeWidget (client)                // §5.2 invisible venue switch — see below
-    └── TrustPanel (client)                 // §5.2 — see below
+    ├── SafetyStrip (client)                // §12.57 relocated must-render floor (LP sentence · graduation · reserves · fee) — see below
+    └── HolderTable (client)                // §12.58 Top Holders table (replaces the deleted Trust panel) — see below
 ```
 
 #### Chart — venue-continuous candles (§5.2, §8)
@@ -277,48 +282,44 @@ Widget rules:
 - Not connected: widget fully renders quotes read-only; CTA is Connect Wallet.
 - After submit → optimistic trade lifecycle, §4 of this doc.
 
-#### TrustPanel (§5.2, §8.3) — all seven items, exact sourcing
+#### SafetyStrip (§5.2, §8.3; §12.57) — the relocated must-render floor, exact sourcing
 
-First-class card, always visible (right rail desktop, above the fold on mobile after the widget). Each row: label, value, verify affordance (Blockscout link where applicable).
+**Supersedes the deleted TrustPanel.** After §12.57 deleted the first-class Trust panel, its signals relocate into a compact hairline-bounded **`widgets/safety-strip`** rendered above the Top Holders table (right rail desktop, above the fold on mobile after the widget). Each row: label, value, verify affordance (Blockscout link where applicable). Live reads come from `useCurveReads` (batched viem reads on the per-token curve/token addresses), refetched on every WS trade — **never the API's cached values** (§5.2). Rows **3, 4, 5** are the §12.14 **hard-rule must-render floor** (they may never vanish); rows **1, 2, 6, 7** are the cheap-to-keep verification ticks.
 
 | # | Item | Source | Render |
 |---|---|---|---|
-| 1 | **Ownerless token ✓** | Structural guarantee: indexer confirms factory provenance (token deployed by our `CurveFactory`); `LaunchToken` has no owner/mint/burn/hooks (§6.1). Verify link → verified source on Blockscout | ✓ + "No owner, no mint, no blacklist — verified contract" |
-| 2 | **Fixed 1B supply ✓** | **Live** `totalSupply()` read via viem; must equal 1e27 wei (§6.1) | ✓ + "1,000,000,000 fixed" (⚠ mismatch state exists defensively; should be impossible) |
-| 3 | **Live curve reserves** | **Live on-chain** `BondingCurve` reads: real ETH reserves + real token reserves (exact getter names from the M1 interface via shared ABIs). Poll every ~5s + refresh on each WS trade. **Never the API's cached values** (§5.2). Post-grad: row becomes "Curve retired — 0 ETH held" (live read; §10 invariant: post-grad curve holds zero value) | "X.XXXX ETH · N tokens — read from chain just now" |
-| 4 | **Graduation threshold + progress** | Threshold: on-chain constant (`GRADUATION_ETH`, §6.2). Progress: live reserve read ÷ threshold | ProgressBar + "X of Y ETH raised". Post-grad: "Graduated ✓" + timestamp + pool link |
-| 5 | **LP destination** | Static copy + LPFeeVault/pool links post-grad | Exactly: **"LP principal permanently locked; trading fees claimable by treasury."** (canonical sentence, ratified spec §12.14 — spec §5.2 amended to match; see §5 of this doc) |
-| 6 | **Fee policy** | Fee bps read live from Router/Factory config (hard-capped ≤2% in code, §6.5) | "1% curve fee → treasury" — the number rendered from the on-chain value, not a string literal, so copy can never drift from code |
-| 7 | **Metadata hash verdict** | Indexed: on-chain `metadataHash` from `TokenCreated`/token storage vs indexer's keccak256 of the fetched canonical JSON (§8.3) | ✓ "Metadata matches on-chain commitment" or ⚠ "MISMATCH — metadata changed after launch" (red, prominent, links both hash values + R2 JSON). Verdict comes **from the indexer**; the frontend never recomputes-and-overrides it |
+| 1 | **Ownerless token ✓** | Structural guarantee: indexer confirms factory provenance (token deployed by our `CurveFactory`); `LaunchToken` has no owner/mint/burn/hooks (§6.1). Verify link → verified source on Blockscout | ✓ + "Ownerless token" tick + "verify ↗" Blockscout link |
+| 2 | **Fixed 1B supply ✓** | **Live** `totalSupply()` read via viem; must equal 1e27 wei (§6.1) | ✓ + "1,000,000,000 fixed" (derived from the shared supply constant, not a literal; ⚠ mismatch state exists defensively; should be impossible) |
+| 3 | **Live curve reserves** *(hard-rule floor)* | **Live on-chain** `BondingCurve` reads: real ETH reserves + real token reserves (exact getter names from the M1 interface via shared ABIs). Refresh on each WS trade. **Never the API's cached values** (§5.2). Post-grad: row becomes "curve retired — N ETH held" (live read; §10 invariant: post-grad curve holds zero value) | "X.XXXX ETH · N tokens — read from chain" |
+| 4 | **Graduation threshold + progress** *(hard-rule floor)* | Threshold: on-chain constant (`GRADUATION_ETH`, §6.2). Progress: live reserve read ÷ threshold, via the shared `GraduationProgress` (full variant) | ProgressBar + "X of Y ETH raised". Post-grad: "Graduated ✓" + pool link |
+| 5 | **LP destination** *(hard-rule floor)* | The ONE shared `LP_DESTINY_COPY` constant, VERBATIM + LPFeeVault/pool links post-grad | Exactly: **"LP principal permanently locked; trading fees claimable by treasury."** (canonical sentence, ratified spec §12.14 — spec §5.2 amended to match; see §5 of this doc) |
+| 6 | **Fee policy** | Fee bps read live from the curve's per-token `TRADE_FEE_BPS` (hard-capped ≤2% in code, §6.5) | "1% → treasury" — the number rendered from the on-chain value, not a string literal, so copy can never drift from code |
+| 7 | **Metadata hash verdict** | Indexed: on-chain `metadataHash` from `TokenCreated`/token storage vs indexer's keccak256 of the fetched canonical JSON (§8.3) | ✓ "Metadata matches" or ⚠ "Metadata MISMATCH" (red, prominent). Verdict comes **from the indexer**; the frontend never recomputes-and-overrides it |
 
-Items 2, 3, 4 (partially), 6 are **live on-chain reads**; 1 and 7 are indexer verdicts; 5 is fixed copy. If RPC reads fail, rows 2–4/6 show "on-chain read unavailable — retry", never a cached substitute.
+Items 2, 3, 4, 6 are **live on-chain reads**; 1 and 7 are indexer verdicts; 5 is fixed copy. If RPC reads fail, rows 2–4/6 show "on-chain read unavailable — retry" (a "Retry reads" button re-drives `useCurveReads`), never a cached substitute.
 
-**Organic-flow metrics (v1.2, spec §5.2/§8.5) — appended to the Trust panel, all from the indexer, NO new on-chain surface.** Source: `GET /v1/tokens/:address` `trust.organic` (api.md §3.4; indexer `token_flow_stats`, §8.5). Three rows:
-
-| Item | Source | Render |
-|---|---|---|
-| **Organic holder estimate** | `trust.organic.holderPctLow/High` | a **RANGE** ("~55–70% organic holders"), **never a single false-precise number**; info tooltip links the §8.5 methodology; while stats are null (fresh token) show "estimating…" |
-| **Flow quality** | `trust.organic.volumePct` + `flaggedClusterVolPct24h` | "X% organic curve volume (24h)" / "Y% from flagged clusters"; neutral wording, no accusation |
-| **Funding-cluster grouping** | holder rows' `clusterId`/`botFlags` (below) | see HolderTable |
-
-These are **advisory estimates** (spec §8.5 is labeling-only, never gates anything); copy must frame them as heuristic, never as fact. They are the cheapest differentiation vs pump.fun/hood.fun (spec §5.2 rationale) — do not over-state confidence.
+**Organic-flow metrics — REMOVED from the public page (§12.57).** The standalone organic-holder RANGE + flow-quality blocks (formerly appended here, from `GET /v1/tokens/:address` `trust.organic`, indexer `token_flow_stats`, §8.5) are **no longer rendered on Token Detail**; they are preserved on the internal §12.54 endpoint. The **only surviving public §8.5 signal** is the advisory **bot-flags on the Top Holders table** (below) — heuristic, labeling-only, never gating anything (spec §8.5), framed as such and never over-stating confidence.
 
 #### TradeFeed (§5.2, §2.1)
 
 - Initial `GET /v1/tokens/:address/trades?limit=50`; live prepend via WS `trade` messages on `token:{address}:trades`; user's own optimistic trades merge in (§4).
 - Row: side (buy/sell color), ETH amount, token amount, price, trader (address, creator-flagged), age, **ConfirmationBadge**, Blockscout tx link.
-- Badges: `soft-confirmed` (default state, subtle pulse) → `posted` → `finalized` as the indexer upgrades states (§2.1/§8). Rows never render as unqualified-final while soft-confirmed.
+- Badges (§12.56): a soft-confirmed row renders **no settlement chip** — a fresh trade makes no finality claim. The `ConfirmationBadge` surfaces only once the indexer upgrades the row: `posted` (blue) → `finalized` (green). Rows never render as unqualified-final. The tier machinery (soft → posted-to-l1 → finalized) is unchanged (§2.1/§8) — only the soft-confirmed chip is dropped.
 
-#### HolderTable (§5.2)
+#### HolderTable — Top Holders (§5.2/§12.58) — replaces the deleted Trust panel
 
-`GET /v1/tokens/:address/holders?limit=20`: rank, address (flags: **creator / bonding curve / LP fee vault**), balance, % of supply, bar. Refresh on WS trade events (throttled ≥5s). Empty pre-first-trade: curve row at ~100%. **(v1.2, spec §5.2/§8.5) Funding-cluster grouping:** rows carrying the same `clusterId` (shared gas-funding source, from the API `botFlags`/`clusterId` fields) are **visually grouped** and `botFlags` (`farm`/`sniper`/`programmatic`/`wash`/`arb_exit`) render as small advisory badges — heuristic labels only, never presented as fact, never gating anything.
+The right-column **Top Holders table** is the §12.57/§12.58 transparency surface that replaces the deleted Trust panel. RULED row shape: **`rank · address · label · amount · percent`**. `GET /v1/tokens/:address/holders` is **server-authoritative** (§12.59/§12.22): column headers dispatch a `?sort=&dir=` refetch and pagination is an opaque keyset cursor — the **browser never re-ranks**. Balances are the indexer's Transfer-derived truth (§12.16) — no new on-chain surface. Refresh on WS trade events (throttled ≥5s). Empty pre-first-trade: message that the bonding curve holds the full supply until the first trade.
+
+The **`label`** column carries the structural role (**Bonding curve / Creator / LP fee vault**, §12.16) **plus** the advisory §8.5 bot-flags (`farm`/`sniper`/`programmatic`/`wash`/`arb_exit`) rendered as small badges — heuristic labels only, never presented as fact, never gating anything. This is now the surviving **public** organic-flow signal (the standalone organic-range / flow-quality blocks moved to the internal §12.54 endpoint).
 
 **Page states**
 - SSR 404 → `not-found.tsx` ("Token not found on ROBBED_" + address echo + Blockscout link).
 - Moderation-hidden token (§8.4): render a minimal "listing hidden" page — moderation gates listing, never chain state; the Blockscout link remains.
 - Brand-new token (arriving from Launch): page renders from WS/optimistic data immediately; chart shows "first trades incoming" empty state until candles exist.
 
-### 3.3 Launch `/launch` (§5.3)
+### 3.3 Create `/create` (§5.3) — renamed from Launch `/launch` (ROBBED_ redesign, §12.50)
+
+> The **route is `/create`** (`/launch` 308-redirects, next.config.ts); the FSD slice name stays `features/launch-token` and the internal component names below (`LaunchPage`/`LaunchForm`/`LaunchProgress`) are unchanged.
 
 **Component tree**
 
@@ -348,7 +349,7 @@ Validation: zod schema **imported from `packages/shared`** — byte-identical co
 2. **Metadata:** `POST /v1/metadata` with `{ name, ticker, description, links, imageUrl, imageHash }`; the API canonicalizes with the shared canonicalizer, keccak256-hashes, and stores the canonical bytes at `metadata/{hash}.json` on R2 — done **before** the tx so the indexer verifies instantly on `TokenCreated`. Returns `{ metadataHash, metadataUri, canonicalJson }`. (Ratified contract — api.md §3.2.)
 3. **Client verification (normative, api.md §3.2):** the client independently runs `canonicalizeMetadata` + `keccak256` from `packages/shared` on the same object and **must** verify its own hash equals the API's `metadataHash` before signing — a buggy or malicious server cannot commit the user to metadata they didn't write.
 4. **Transaction:** `Router.createToken(name, symbol, metadataHash, metadataUri, minTokensOut, deadline){ value: deployFee + initialBuy }` (contracts.md §2.4, spec §12.15). `deployFee` read live from factory config in the same render — never a constant. `minTokensOut` from the quote path at 2% default slippage when `initialBuy > 0`, else 0.
-5. **Post-submit:** `LaunchProgress` stepper — Uploading ✓ → Metadata pinned ✓ → Transaction sent → **Soft-confirmed** → redirect to `/t/[address]` (token address from receipt logs or the WS `launch` message on `global:launches`, whichever first). Token is tradeable in **<1s, soft-confirmed** (§5.3) — the redirect target renders immediately from optimistic + WS data.
+5. **Post-submit:** `LaunchProgress` stepper — Uploading ✓ → Metadata pinned ✓ → Transaction sent → **Live** (§12.56: the visible "Soft-confirmed" step label became **Live**; the internal `soft-confirmed` step name is unchanged, and the stepper's shared `ConfirmationBadge` renders no chip at the soft tier) → redirect to `/t/[address]` (token address from receipt logs or the WS `launch` message on `global:launches`, whichever first). Token is tradeable in **<1s at the soft-confirmed tier** (§5.3) — the redirect target renders immediately from optimistic + WS data.
 
 **States & errors**
 - Image too large / bad MIME: inline error pre-upload (client) and again on API rejection.
@@ -360,6 +361,8 @@ Validation: zod schema **imported from `packages/shared`** — byte-identical co
 ---
 
 ## 4. Optimistic UI & confirmation semantics (§2.1)
+
+> **§12.56 (USER-DIRECTED, ratified 2026-07-12) — soft-confirmed chip removed:** the visible "Soft-confirmed" status chip + its L2-finality tooltip are **removed** from the trade UI. The **tier machinery is unchanged and still binding** — the reducer/reconcile still tracks the soft tier, the §12.20 `global:confirmations` watermark still upgrades rows, `posted`/`finalized` still surface, and large-value (≥1 ETH) displays still disclose them. Only the soft tier's **visible badge** is dropped: the shared `ConfirmationBadge` **returns null** for a soft-confirmed row, so a fresh trade makes **no finality claim** until it upgrades to posted/finalized. The never-final-while-soft rule then holds trivially (no chip at all). This applies everywhere below where the pre-§12.56 text still says "soft-confirmed badge".
 
 Wire vocabulary: confirmation states on the wire are `packages/shared` `ConfirmationState` values — `soft_confirmed | posted_to_l1 | finalized` (indexer.md §3, api.md §2). The hyphenated forms in this doc ("soft-confirmed", "posted-to-l1") are display labels only; no second enum exists in `apps/web`.
 
@@ -373,7 +376,7 @@ submitted ───────────────▶ removed (toast)
 optimistic:pending  ──── rpc receipt: reverted ──▶ failed (row turns error, toast, quote refreshed)
     │ rpc receipt: success  (FCFS sequencer inclusion ⇒ soft-confirmed, sub-second)
     ▼
-optimistic:soft-confirmed        // badge: "Soft-confirmed" — values still OUR estimate
+optimistic:soft-confirmed        // NO settlement chip (§12.56) — values still OUR estimate
     │ WS `trade` event with matching txHash
     ▼
 indexed:soft-confirmed           // RECONCILED — amounts/price replaced by indexed truth
@@ -385,21 +388,21 @@ indexed:posted-to-l1  ──▶  indexed:finalized
 ```
 
 Rules (constraint-level, from §2.1/§5):
-1. **Immediate render:** the moment the tx is sent, an optimistic row appears in TradeFeed (and the widget shows the pending state) with the soft-confirmed badge treatment. Perceived latency is the product (§1).
+1. **Immediate render:** the moment the tx is sent, an optimistic row appears in TradeFeed (and the widget shows the pending state) — **no soft-confirmed chip (§12.56)**; the row is visually distinguished by opacity + the transient pre-inclusion pulse until reconciled. Perceived latency is the product (§1).
 2. **Reconcile, never trust self:** when the indexed event arrives, its amounts/price/ordering **replace** the optimistic values (match key: `txHash`, fallback `sender + nonce`). Optimistic rows are visually distinguishable (slight opacity + pulsing badge) until reconciled.
-3. **Never final while soft-confirmed:** no checkmark-final treatment, no "confirmed" wording without the tier qualifier, anywhere a soft-confirmed trade renders.
+3. **Never final while soft-confirmed:** no checkmark-final treatment, no "confirmed" wording without the tier qualifier, anywhere a soft-confirmed trade renders. Post-§12.56 this holds trivially — a soft-confirmed trade shows **no settlement chip at all** until it upgrades to posted/finalized.
 4. **Never drop on contradiction:** if the WS event disagrees (different amounts, e.g. graduation-clamp partial fill or fee rounding), the row updates to indexed truth with a brief "updated" shimmer — it is not removed. If the indexer reports the tx failed/absent while RPC said success, show "unverified — awaiting indexer" and poll `GET /v1/trades/:txHash` (api.md §3.4); escalate to error state only on indexer-confirmed absence after timeout (default 30s).
-5. **WS silence:** optimistic-soft-confirmed with no WS event within 10s → keep the row, badge gains "awaiting index" tooltip, REST poll fallback kicks in. Never silently promoted, never silently dropped.
+5. **WS silence:** optimistic-soft-confirmed with no WS event within 10s → keep the row in an "awaiting index" state, REST poll fallback kicks in (no chip is shown at the soft tier — §12.56; the awaiting-index note surfaces on the posted/finalized badge once the row upgrades). Never silently promoted, never silently dropped.
 
 ### 4.2 Where each tier surfaces
 
 | Tier | Surfaces |
 |---|---|
-| **Soft-confirmed** | Default badge on every fresh trade: TradeFeed rows, TradeWidget result toast, Launch stepper, ticker entries (§2.1.1) |
+| **Soft-confirmed** | **No visible chip (§12.56)** — a fresh trade makes no finality claim. The tier is still tracked (reconcile + `global:confirmations` watermark) and drives the optimistic row's presence, but the `ConfirmationBadge` renders null across TradeFeed rows, TradeWidget result toast, Create stepper, and ticker entries (§2.1.1) |
 | **Posted to L1** | Badge upgrade in TradeFeed (on hover/detail); **required disclosure** on large-value displays — trade rows above a notional threshold (config, ETH-denominated) show the explicit tier; any future bridge/withdrawal UI must gate on it (§2.1.2) |
 | **Finalized** | Final badge state in trade detail; withdrawal-grade disclosures (§2.1.3). v1 has no bridge UI, but `ConfirmationBadge` supports all three states from day 1 so the semantics are product-wide |
 
-`ConfirmationBadge` is one shared component: `soft-confirmed` (amber, pulse) → `posted` (blue) → `finalized` (green). Tooltip explains the tier in one sentence each, including the single-sequencer dependency disclosure language (§10.10).
+`ConfirmationBadge` is one shared component: the **soft-confirmed tier renders null (§12.56)**; `posted` (blue) → `finalized` (green) render with a tooltip explaining the tier in one sentence each, including the single-sequencer dependency disclosure language (§10.10). (The transient pre-inclusion `pending` state still shows an amber pulse — that is a broadcast-awaiting-inclusion indicator, not a soft-confirmed finality claim.)
 
 Global mutations follow the same pattern: token creation (Launch stepper), graduation (status pill flips on the WS `graduated` message, chart annotation appears, widget re-engines — all WS-driven, no reload).
 
@@ -407,7 +410,7 @@ Global mutations follow the same pattern: token creation (Launch stepper), gradu
 
 ## 5. Copy rules (enforced, not aspirational)
 
-1. **The LP sentence** — everywhere LP destiny is described (Trust panel item 5, Launch EconomicsPanel, tooltips, OG alt text, FAQ strings), the string is exactly:
+1. **The LP sentence** — everywhere LP destiny is described (SafetyStrip LP row — §12.57, formerly Trust-panel item 5 — the Create EconomicsPanel, tooltips, OG alt text, FAQ strings), the string is exactly:
    > **"LP principal permanently locked; trading fees claimable by treasury."**
    The word **"burned" is forbidden in any LP context** (CLAUDE.md, §5.3, §6.3). It flips only if the documented V2 fallback is ever adopted — a spec-level decision, not ours. Implementation: the sentence lives in **one exported constant** (`LP_DESTINY_COPY` in `packages/shared` or `lib/copy.ts`) and every render site imports it; the copy-lint test asserts no second spelling exists.
 2. **Never order-book / exchange claims** (§1): forbidden in copy — "order book", "orderbook", "real-time exchange", "instant finality", "instantly final". Allowed framing: "soft-confirmed in under a second", "AMM", "bonding curve".
@@ -450,18 +453,18 @@ The per-token OG image is **the viral share unit** — a link paste into X/Teleg
 - **Component model: atomic × FSD.** Atoms/molecules = `shared/ui` (MonoText/MonoLabel, Chip, Tab/TabBar, SideBadge, Delta, StatCell, TokenAvatar, ProgressBar, CursorTag, Wordmark, Divider, AddressChip, LiveDot, AmountInput); shadcn primitives stay vendored under `shared/ui/kit` restyled to tokens; organisms = `widgets/*`; templates = `views/*`.
 - **Re-theming = token swap (unchanged rule, lint-enforced §8.3):** no raw hex/rgb/hsl or arbitrary color classes outside `globals.css` (+ `shared/ui/kit` and non-presentational `shared/lib|api|config`).
 - **Dark-only** (`<html class="dark">`, §12.23) — the terminal skin is inherently dark; no toggle.
-- **Tokens (`globals.css`, Tailwind v4 `@theme`) — EXACT values, sampled from `docs/Robbed.html` computed styles (Playwright, 2026-07-10):**
+- **Tokens (`globals.css`, Tailwind v4 `@theme`) — EXACT values, sampled from the ratified redesign mockup (spec §12.50) computed styles (Playwright, 2026-07-10):**
   - surfaces `--color-bg #0B0D0B` · `--color-surface #0F130F` · `--color-surface-2 #141914` · `--color-border #1C221C` · `--color-border-soft #141914` (row hairlines) · `--color-border-strong #2A342A` · `--color-active #1C221C` (active tab/chip fill)
   - text ramp `--color-text #EDF3ED` · `--color-text-secondary #C9D3C9` · `--color-text-tertiary #8FA08F` · `--color-muted #6E7A6E` · `--color-faint #54604F`
   - accents `--color-green #4ADE80` (primary/BUY/+Δ/CTAs) · `--color-green-dim #16301F` · `--color-green-soft #2E4A34` (up-candles) · `--color-red #F87171` (SELL/−Δ) · `--color-red-dim #4A2E2E` (down-candles) · `--color-purple #A78BFA` (GRADUATE) · `--color-accent = green`, `--color-accent-foreground #0B0D0B`
-  - tiers (§2.1) `--color-soft-confirmed #F59E0B` · `--color-posted #3B82F6` · `--color-finalized #4ADE80` (kept distinct from trade hues; mockup shows none — Phase-F decision)
+  - tiers (§2.1) `--color-soft-confirmed #F59E0B` · `--color-posted #3B82F6` · `--color-finalized #4ADE80` (kept distinct from trade hues; mockup shows none — Phase-F decision). **§12.56:** the soft tier no longer renders a status chip on a trade — the amber `--color-soft-confirmed` token now only backs the transient pre-inclusion "Pending" pulse and the advisory holder bot-flag chips; `--color-posted`/`--color-finalized` still surface.
   - type: **IBM Plex Mono self-hosted** (`next/font/local`, `src/app/fonts/`, OFL — no external fetch/CSP-safe), weights 400/500/600; mono-everywhere (`--font-sans` == `--font-mono`); scale `--text-2xs 10.5px` / `xs 11` / `sm 12` / `base 13` / `md 14` (wordmark) / `lg 15` / `xl 17`; `--tracking-label 0.12em` (wordmark + micro-labels)
   - radii: **square** — `--radius-sm/md/lg/xl: 0px` (every sampled control is 0); `rounded-full` only for avatars + the live dot; `--animate-blink` = the cursor motif
   - RainbowKit theme: `darkTheme({ accentColor: "var(--color-green)", borderRadius: "none" })` — CSS-var indirection keeps hexes out of `providers.tsx`.
 - **Density:** base 13px mono, `leading-[1.45]`; hairline `border-soft` row dividers (tape rows ≈45px, pad `11px 24px` desktop); `tabular-nums` for every numeric column; flat — no shadows.
 - **Speed:** skeletons with fixed dimensions (no CLS); WS patches over refetch loops; route prefetch on card hover; `next/image` for token images via R2 CDN; no heavyweight animation lib — CSS transitions only; ticker animates with CSS transform.
 - **lightweight-charts config:** `layout.background: --bg`, grid lines `--border` at low alpha, up/down colors = buy/sell tokens, `timeScale.secondsVisible: true` for 1s/15s intervals, `rightPriceScale` autoscale, crosshair magnet. Chart height 420px desktop / 280px mobile.
-- **Mobile:** single column — header → chart → TradeWidget (sticky Buy/Sell bottom bar) → TrustPanel → TradeFeed → holders → info. Discover grid becomes a card list; ticker stays. All tap targets ≥40px despite density.
+- **Mobile:** single column — header → chart → TradeWidget (sticky Buy/Sell bottom bar) → SafetyStrip → Top Holders → TradeFeed → info. Discover grid becomes a card list; ticker stays. All tap targets ≥40px despite density.
 - **Numbers:** `Amount` component — ETH to 4 significant decimals, token amounts compact (1.24M), percents 1 decimal; `UsdAmount` renders **only** with a live price object and exposes source+timestamp on hover (§2).
 
 ---
@@ -475,7 +478,7 @@ The per-token OG image is **the viral share unit** — a link paste into X/Teleg
 | `quotes.test.ts` | Widget display math (min-received, price impact, fee line) against `packages/shared` reference vectors — the same vectors the contracts' Foundry tests use, so UI quotes can't drift from chain math |
 | `canonicalizer.test.ts` | Launch flow produces byte-identical canonical JSON + keccak256 for shared fixtures (indexer uses the same fixtures — §8.3 hash must match cross-service) |
 | `trade-reducer.test.ts` | §4 state machine: optimistic insert → WS reconcile replaces values; contradiction updates-not-drops; revert removal; WS-silence keeps row with awaiting-index state; **no path renders `final` from an optimistic state** |
-| `badge.test.tsx` | `ConfirmationBadge` renders exactly the three §2.1 tiers; soft-confirmed never displays final treatment |
+| `badge.test.tsx` | `ConfirmationBadge` surfaces the `posted`/`finalized` tiers; the **soft-confirmed tier renders null (§12.56)** — a soft-confirmed trade shows no settlement chip and never a final treatment |
 | `sell-gating.test.tsx` | With `pauseBuys=true` and `pauseCreates=true` mocked, Sell tab is enabled and submits; Buy tab disabled with the exact pause copy (§6.5) |
 | `format.test.ts` | `UsdAmount` throws/renders-nothing without `{price, source, asOf}`; never a bare USD figure |
 | `copy-lint.test.ts` | See 8.3 — runs as a unit test in CI |
@@ -487,10 +490,10 @@ Environment: anvil fork of Robinhood Chain (real WETH `0x0Bd7…AD73`, deployed 
 | Scenario | Covers |
 |---|---|
 | **Launch flow** | Fill form → API-mediated image upload → metadata canonicalize/pin + client hash re-verify → single `createToken` tx with initial buy → soft-confirmed <1s → redirect → token tradeable; EconomicsPanel contains the LP sentence verbatim (§5.3) |
-| **Buy pre-grad, optimistic→reconcile** | Submit buy → optimistic row w/ soft-confirmed badge appears before the WS event → WS event arrives → row values reconcile to indexed amounts (assert value replacement, badge persists) — the DoD "reconciliation demonstrated in a test" |
+| **Buy pre-grad, optimistic→reconcile** | Submit buy → optimistic row appears before the WS event (no soft-confirmed chip — §12.56) → WS event arrives → row values reconcile to indexed amounts (assert value replacement; row persists, not dropped) — the DoD "reconciliation demonstrated in a test" |
 | **Sell while buys paused** | Set `pauseBuys` on fork Router → sell executes end-to-end; buy UI disabled (§6.5) |
-| **Graduation venue switch** | Drive curve past threshold → `graduate()` → status pill flips via WS, widget quotes via QuoterV2, chart series continuous across the boundary (no gap: assert candle timestamps contiguous), Trust panel rows 3/4 flip to post-grad states |
-| **Trust panel truth** | Reserves row equals direct `eth_call` values (not API); metadata-mismatch fixture renders the ⚠ verdict (§8.3) |
+| **Graduation venue switch** | Drive curve past threshold → `graduate()` → status pill flips via WS, widget quotes via QuoterV2, chart series continuous across the boundary (no gap: assert candle timestamps contiguous), SafetyStrip reserves + graduation rows flip to post-grad states |
+| **SafetyStrip truth** | Reserves row equals direct `eth_call` values (not API); metadata-mismatch fixture renders the ⚠ verdict (§8.3) |
 | **OG metadata** | Page HTML contains OG meta tags without JS (`javaScriptEnabled: false` context), with `og:image` pointing at the **API-served** PNG (`{API_ORIGIN}/v1/og/{address}.png`, §6); the PNG's 200/`image/png`/1200×630 contract is asserted against that API route |
 | **WS reconnect** | Kill WS mid-session → degraded banner → restore → queries invalidated, feed gap closed |
 | **Stored-link XSS** (UM-5) | Token whose `links` include a `javascript:`/`data:` payload → Token Detail renders no executable href (https-only allowlist + `rel=noopener noreferrer`); no script executes |
@@ -530,7 +533,7 @@ Plus: LP sentence exists **only** as the single exported constant (grep for the 
    - **Robinhood Wallet connector:** docs-first finding — RainbowKit 2.2.11 ships **no `robinhoodWallet`** export (verified: no entry in `walletConnectors/`; GitHub code search `robinhood repo:rainbow-me/rainbowkit` → 0 hits). The `robinhoodWallet` in web.md §2.4 was an assumed export. Interim (safest-correct, `src/shared/lib/wallets/robinhoodWallet.ts`): a **custom RainbowKit wallet wrapping the shared WalletConnect connector** via the documented `getWalletConnectConnector` (web.md §2.4: "WalletConnect-based under the hood"). It is **UNVERIFIED on a real Robinhood Wallet on chain 4663** — no on-device / deep-link / WC-metadata test, and it only appears when a projectId is present. **NEEDS-USER:** a real Robinhood Wallet device connection test on 4663 + official WC metadata + brand icon (§13 brand pending). Flagged to robbed-architect (§13).
 7. **Runtime verifications at M3 start** — **RESOLVED (both legs).**
    - **OG raster runtime (web-7):** **RESOLVED — SUPERSEDED (2026-07-12).** The question ("`next/og`/satori under Bun self-hosting", later retargeted to workerd/`ImageResponse`) is moot: OG rendering was **relocated to the API** (`GET /v1/og/{address}.png`, native satori + resvg on Bun, R2-cached — commit `9528121`; see §6). The web renders no OG raster, carries no satori/resvg/`next/og` dependency, and only points `og:image` at the absolute API URL (`src/views/token-detail/model/metadata.ts`, proven by `tests/token-detail-og.test.ts`).
-   - **Multicall3 on 4663:** **UNCONFIRMED** — canonical `0xcA11…` deployment on 4663 is not verified. Disposition: `src/shared/lib/chain.ts` **omits** `contracts.multicall3` (commented, with rationale); Trust-panel batch reads use **parallel `readContract` / `useReadContracts` without a multicall aggregator** (viem falls back to individual `eth_call`s when no `multicall3` is configured). No behavior depends on Multicall3; if/when it is confirmed on 4663, adding the address is a pure optimization. Flagged to robbed-architect (§13) as an infra confirmation item, not a blocker.
+   - **Multicall3 on 4663:** **UNCONFIRMED** — canonical `0xcA11…` deployment on 4663 is not verified. Disposition: `src/shared/lib/chain.ts` **omits** `contracts.multicall3` (commented, with rationale); the SafetyStrip's batch reads use **parallel `readContract` / `useReadContracts` without a multicall aggregator** (viem falls back to individual `eth_call`s when no `multicall3` is configured). No behavior depends on Multicall3; if/when it is confirmed on 4663, adding the address is a pure optimization. Flagged to robbed-architect (§13) as an infra confirmation item, not a blocker.
 10. **Large-value disclosure threshold** — §2.1 requires posted/finalized disclosure on "large-value displays"; ETH notional threshold needs an M0/architect number before M3 exit (config value, not a literal). Spec §13.
 11. **Pending §13 upstream:** V3 Factory/NPM/Quoter/SwapRouter addresses on 4663 **RESOLVED (spec §12.28)** — recorded in CLAUDE.md/constants; the post-grad widget + `addresses.ts` codegen consume them (codegen still comes from the M1 deploy pipeline, never hand-edited). Name/domain/brand (blocks OG brand mark and header); legal wrapper/ToS jurisdiction (blocks footer links); final curve constants + graduation tick (M0 — blocks economics display values, all read live regardless) remain open.
 
@@ -538,9 +541,9 @@ Plus: LP sentence exists **only** as the single exported constant (grep for the 
 
 ## Definition of done (M3 exit for `apps/web`)
 
-- [ ] Exactly three pages; each matches its §5 subsection point-for-point (checklists in §3 of this doc); no Portfolio/fourth page, no AA code paths
+- [ ] Four pages (Discover · Token Detail · Create · Portfolio); each matches its §5 subsection (checklists in §3 of this doc); Portfolio ships **read-only** — no new tx types, no `collect()` UI; no AA code paths
 - [ ] Chain config: 4663, ETH gas, Blockscout explorer, RPC from env; WETH `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` the only inline literal; all other addresses from generated `addresses.ts`; connectors = injected + WalletConnect + Robinhood Wallet
-- [ ] Trust panel: all seven items with the exact sourcing table (live reads live, indexed verdicts indexed); reserve rows never show cached API values; **(v1.2) organic-flow metrics (organic-holder estimate as a RANGE + tooltip, flow quality, funding-cluster grouping on the holder list) from `trust.organic`/holder `clusterId` — advisory framing, no new on-chain surface**
+- [ ] SafetyStrip (§12.57): the §12.14 must-render floor (LP sentence · graduation progress · live curve reserves) plus ownerless / fixed-supply / metadata-verdict / fee ticks, with the exact sourcing table (live reads live, indexed verdicts indexed); reserve rows never show cached API values. Top Holders table (§12.58): rows `rank · address · label · amount · percent`; `label` = role (creator / curve / vault) + advisory §8.5 bot-flags; server-authoritative sort (no client re-rank); the standalone organic-range / flow-quality blocks moved off the public page to the §12.54 internal endpoint
 - [ ] LP sentence verbatim from a single constant at every LP-destiny surface; `burned` absent (grep-verified)
 - [ ] Optimistic trade lifecycle per §4: immediate soft-confirmed render, WS reconciliation, contradiction handling, posted/finalized surfacing — reconciliation demonstrated in Playwright
 - [ ] Venue-continuous chart across graduation (no seam) and invisible venue switch in the widget; slippage default 2% + deadline on every trade

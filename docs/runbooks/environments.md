@@ -40,14 +40,10 @@ Cross-references:
 
 ### TESTNET — Robinhood testnet (Phase T = §14 Phase A)
 
-- **Chain id:** `46630`.
-- **RPC:** public `https://rpc.testnet.chain.robinhood.com` (rate-limited); **recommended** Alchemy `https://robinhood-testnet.g.alchemy.com/v2/{KEY}`.
-- **WS:** public `wss://feed.testnet.chain.robinhood.com`; Alchemy `wss://robinhood-testnet.g.alchemy.com/v2/{KEY}`.
-- **Explorer / verifier:** `explorer.testnet.chain.robinhood.com` (Blockscout — contracts verified here at Phase-T deploy; the O-5 `0.8.35` + `cancun` verifier check, §12.44, runs against this explorer).
-- **Domain:** **`testnet.robbed.fun`** (subdomain of the `robbed.fun` Cloudflare zone).
-- **Contracts:** the Phase-T deploy broadcast → `tools/deployments/testnet.json` → addresses codegen (§4). V3/WETH addresses come from the **testnet deploy artifact** (do not assume the 4663 mainnet constants exist on testnet — assert at startup, fail closed if unset).
-- **Faucet:** URL still **OPEN** (§13) — pull from official Robinhood docs at Phase-T deploy start; deploy fails if unset. Owner: robbed-contracts.
-- **Backend host:** Komodo Stack (a testnet Stack or the `testnet` deploy of the Stack); frontend: Cloudflare Worker `robbed-testnet` (§3).
+- **Chain id:** `46630`. **Network params (RPC / WS / explorer / faucet):** see `testnet.md` §1 for the canonical chain-46630 network params (retrieval-dated, incl. the 46630-vs-46646 caveat) — not restated here.
+- **Domain:** **`testnet.robbed.fun`** (subdomain of the `robbed.fun` Cloudflare zone), served by the `robbed-testnet` Worker custom domain (§3, §4).
+- **Contracts:** the Phase-T deploy broadcast → `contracts/deployments/46630.json` → addresses codegen (§4; the **canonical** deploy artifact — D-2, spec §12.49 annotation). V3/WETH addresses come from the **testnet deploy artifact** (do not assume the 4663 mainnet constants exist on testnet — assert at startup, fail closed if unset).
+- **Backend host:** the testnet compose stack (`docker-compose.testnet.yml`, `docker.md`) fronted by its Cloudflare Tunnel; frontend: Cloudflare Worker `robbed-testnet` (§3).
 - **Legal/fees:** none in Phase A (§14) — testnet-only, no fees collected, no legal wrapper required until G-A.
 
 ### MAINNET — Robinhood mainnet (Phase B, Gate-G-A-gated)
@@ -56,97 +52,61 @@ Cross-references:
 - **RPC:** public `https://rpc.mainnet.chain.robinhood.com` (rate-limited); **recommended** Alchemy `https://robinhood-mainnet.g.alchemy.com/v2/{KEY}`.
 - **WS:** public `wss://feed.mainnet.chain.robinhood.com`; Alchemy `wss://robinhood-mainnet.g.alchemy.com/v2/{KEY}`.
 - **Explorer / verifier:** `robinhoodchain.blockscout.com`.
-- **Domain:** **`robbed.fun`**.
-- **Contracts:** Phase-B deploy → `tools/deployments/mainnet.json` → codegen. V3/WETH = the **§12.28 / CLAUDE.md 4663 constants** (Factory `0x1f7d…2EfA`, NPM `0x7399…E0D3`, SwapRouter02 `0xcaf6…5cb2`, QuoterV2 `0x33e8…a9e7`, WETH `0x0Bd7…AD73`), still asserted at deploy (`feeAmountTickSpacing(10000)==200`, `NPM.factory()`/`NPM.WETH9()`).
-- **Gating:** entered only after **Gate G-A** passes (§14). Treasury = canonical Gnosis Safe on 4663 (O-6, §13, NEEDS-USER signer set). Legal wrapper blocking at G-A.
-- **Backend host:** Komodo Stack (`production`); frontend: Cloudflare Worker `robbed` / `robbed-production` (§3).
+- **Domain:** **`robbed.fun`**, served by the `robbed` Worker custom domain (§3, §4).
+- **Contracts:** Phase-B deploy → `contracts/deployments/4663.json` → codegen (the **canonical** deploy artifact — D-2, spec §12.49 annotation). V3/WETH = the **§12.28 / CLAUDE.md 4663 constants** (Factory `0x1f7d…2EfA`, NPM `0x7399…E0D3`, SwapRouter02 `0xcaf6…5cb2`, QuoterV2 `0x33e8…a9e7`, WETH `0x0Bd7…AD73`), still asserted at deploy (`feeAmountTickSpacing(10000)==200`, `NPM.factory()`/`NPM.WETH9()`).
+- **Gating:** entered only after **Gate G-A** passes (§14). Treasury = canonical Gnosis Safe on 4663 (O-6, §13, NEEDS-USER signer set). Legal wrapper blocking at G-A. **Interim (2026-07-12):** the mainnet compose stack and `robbed.fun` currently boot the **testnet values** (chain `46630`, real 46630 contracts) pending the Phase-B swap to `4663` (`docker-compose.mainnet.yml` / `apps/web/wrangler.jsonc` headers).
+- **Backend host:** the mainnet compose stack (`docker-compose.mainnet.yml`, `docker.md`) fronted by its Cloudflare Tunnel; frontend: Cloudflare Worker `robbed` (§3).
 
 ---
 
-## 2. Config matrix (per variable × env)
+## 2. Per-environment resolutions (env-defining endpoints / domains / chain-ids)
 
-This maps `env-inventory.md`'s dev/testnet/prod columns onto the three envs. `env-inventory.md` remains authoritative for each variable's secret-class, source, and owner; the values below are the env-specific resolutions. **`SECRET` never committed** (Komodo secret store / Workers secret); **`CONFIG`/`PUBLIC`** environment-specific.
+**`env-inventory.md` is authoritative per *variable*** — every var's secret-class, source, owner, and dev/testnet/prod value lives there (it is the machine-consumed table the `.env.example` files sync against, G-9). This section does **not** restate that per-variable matrix; it records only the **env-defining resolutions** — the ROBBED-owned endpoints, domains, chain-ids, and artifact paths that distinguish the three environments. For any variable's per-env value or metadata, see `env-inventory.md`. `SECRET`-class values are never committed — they live in the compose stack's host `.env` (gitignored, auto-loaded by compose) or the Workers secret store.
 
-### 2a. Indexer (`apps/indexer` — Ponder, Komodo Stack) — env-inventory.md §1
-
-| Var | LOCAL | TESTNET | MAINNET |
+| Resolution | LOCAL | TESTNET | MAINNET |
 |---|---|---|---|
-| `INDEXER_RPC_WS` | `ws://localhost:8545` | `wss://feed.testnet.chain.robinhood.com` or Alchemy WS (SECRET) | `wss://feed.mainnet.chain.robinhood.com` or Alchemy WS (SECRET) |
-| `INDEXER_RPC_HTTP` | `http://localhost:8545` | `https://rpc.testnet.chain.robinhood.com` or Alchemy (SECRET) | `https://rpc.mainnet.chain.robinhood.com` or Alchemy (SECRET) |
-| `CURVE_FACTORY_ADDRESS`, `ROUTER_ADDRESS` | local deploy artifact | `tools/deployments/testnet.json` | `tools/deployments/mainnet.json` |
-| `V3_FACTORY_ADDRESS`, `V3_NPM_ADDRESS` | local V3 core deploy (or fork) | testnet artifact | §12.28 4663 constants |
-| `WETH_ADDRESS` | `MockWETH9` (or fork) | testnet artifact | `0x0Bd7…AD73` (assert == constant) |
-| `START_BLOCK` | `0` | testnet factory-deploy block | mainnet factory-deploy block |
-| `DATABASE_URL`, `REDIS_URL` | local compose | Stack-internal (Komodo) | Stack-internal (Komodo) |
-| `ETH_USD_SOURCE_URL` | DefiLlama/Coinbase HTTP | config-driven (§12.48a: Chainlink-on-4663-if-present else DefiLlama/Coinbase; env-gated verify at M2 start) | same, env-gated verify |
-| `R2_METADATA_BASE_URL` | MinIO public URL | R2 public base (`robbed-assets`) | R2 public base |
-| `METRICS_PORT` | `9464` | `9464` | `9464` |
-| `L1_RPC_URL` + rollup/inbox addrs (§1a) | n/a | only if OI-8 tags unsupported (§12.48b) | only if OI-8 tags unsupported |
+| Chain id | anvil `31337` (or `4663` fork) | `46630` | `4663` (interim `46630`, §1) |
+| Chain RPC / WS / explorer | `localhost:8545` (`docker.md`) | see `testnet.md` §1 (canonical 46630 params) | see §1 MAINNET + CLAUDE.md 4663 chain facts |
+| Web domain (Worker custom domain, §3/§4) | `localhost` | `testnet.robbed.fun` | `robbed.fun` |
+| Web → API base (`NEXT_PUBLIC_API_BASE_URL`) | `http://localhost:3001` | `https://api-testnet.robbed.fun` | `https://api.robbed.fun` |
+| Web → WS (`NEXT_PUBLIC_WS_URL`) | `ws://localhost:3002/v1/ws` | `wss://api-testnet.robbed.fun/ws` | `wss://api.robbed.fun/ws` |
+| API CORS origin (`CORS_ALLOWED_ORIGINS`) | local web origin | `https://testnet.robbed.fun` | `https://robbed.fun` |
+| Contracts deploy artifact (D-2, §12.49) | local broadcast (`contracts/deployments/31337.json`) | `contracts/deployments/46630.json` | `contracts/deployments/4663.json` |
+| R2 public base (`NEXT_PUBLIC_R2_PUBLIC_BASE_URL`) | MinIO public URL | R2 public base (`robbed-assets`) | R2 public base (`robbed-assets`) |
 
-### 2b. API + WS (`apps/api` — Bun, Komodo Stack) — env-inventory.md §2
+The public `api-testnet.robbed.fun` / `api.robbed.fun` hostnames (REST + `/ws` WebSocket fanout) are the **shipped** endpoints each compose stack exposes through its Cloudflare Tunnel (`tools/localstack/cloudflared/{testnet,mainnet}.yml`, §4) — no longer proposals. The only cross-cutting constraint is that a given env's `CORS_ALLOWED_ORIGINS` and its `NEXT_PUBLIC_*` (API base, WS, RPC) agree.
 
-| Var | LOCAL | TESTNET | MAINNET |
-|---|---|---|---|
-| `DATABASE_URL`, `REDIS_URL` | local compose | Stack-internal | Stack-internal (distinct roles) |
-| `PORT` / `WS_PORT` | `3001` / `3002` | `3001` / `3002` (behind TLS/CDN) | `3001` / `3002` (behind TLS/CDN) |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | `https://testnet.robbed.fun` | `https://robbed.fun` |
-| `SESSION_SECRET` | dev random | rotated secret | rotated secret |
-| `ADMIN_ALLOWLIST` | dev signer addr | dev/testnet signer addr | O-6 Safe signer set (§13, NEEDS-USER) |
-| `MODERATION_ALLOW_STUBS` | `true` | `true` | `false` (unless logged capped-beta escape) |
-| `MODERATION_*_VENDOR_*` | unset (stub) | unset (stub) | OI-A7 vendor keys (§13, NEEDS-USER) |
-| `R2_ACCOUNT_ID` / `R2_BUCKET` | MinIO / `robbed-assets` | `0b1b0b…f6b72` / `robbed-assets` | `0b1b0b…f6b72` / `robbed-assets` |
-| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | MinIO creds | R2 API token (SECRET) | R2 API token (SECRET) |
-| `R2_PUBLIC_BASE_URL` | MinIO public URL | R2 CDN base | R2 CDN base |
-
-### 2c. Web (`apps/web` — Next.js 16 on Cloudflare Workers) — env-inventory.md §3
-
-`NEXT_PUBLIC_*` are inlined at **build** time → they are **Wrangler/Workers-Builds per-env build vars**, not runtime secrets, and are public-by-design (never put a secret in `NEXT_PUBLIC_*`).
-
-| Var | LOCAL | TESTNET | MAINNET |
-|---|---|---|---|
-| `NEXT_PUBLIC_RPC_HTTP` | `http://localhost:8545` | `https://rpc.testnet.chain.robinhood.com` (or Alchemy) | `https://rpc.mainnet.chain.robinhood.com` (or Alchemy) |
-| `NEXT_PUBLIC_RPC_WS` | `ws://localhost:8545` | `wss://feed.testnet.chain.robinhood.com` | `wss://feed.mainnet.chain.robinhood.com` |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:3001` | `https://api-testnet.robbed.fun` (testnet Stack endpoint) | `https://api.robbed.fun` (Stack endpoint) |
-| `NEXT_PUBLIC_WS_URL` | `ws://localhost:3002/v1/ws` | `wss://ws.testnet.robbed.fun/v1/ws` | `wss://ws.robbed.fun/v1/ws` |
-| `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` | MinIO public URL | R2 CDN base | R2 CDN base |
-| `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | unset (injected wallets only) | project id (web-6, §13) | project id (web-6, NEEDS-USER) |
-| `NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD` | `1.0` | `1.0` | `1.0` (§12.47 config, retunable in beta) |
-
-> The `api.*` / `ws.*` subdomain shapes above are **proposals** — the concrete public endpoints are whatever the backend compose stack exposes via its Cloudflare Tunnel. Whether TESTNET/MAINNET APIs live under `robbed.fun` subdomains or separate hostnames is a robbed-indexer ops call at Phase-T/Phase-B deploy; the constraint is only that `CORS_ALLOWED_ORIGINS` and these three `NEXT_PUBLIC_*` agree per env.
-
-### 2d. Chain constants (NOT env vars) — asserted, not configured
-
-`chainId` (`46630` testnet / `4663` mainnet / anvil local) and canonical `WETH` are `@robbed/shared` constants asserted against the connected RPC at startup (env-inventory.md §Conventions). A mismatch (e.g. web pointed at the wrong RPC for its build-time chain) must fail closed, not silently run cross-chain.
+**Chain constants are asserted, not configured.** `chainId` (`46630` testnet / `4663` mainnet / anvil local) and canonical `WETH` are `@robbed/shared` constants asserted against the connected RPC at startup (env-inventory.md §Conventions). A mismatch (e.g. web pointed at the wrong RPC for its build-time chain) must fail closed, never silently run cross-chain.
 
 ---
 
-## 3. Cloudflare Workers — per-env strategy
+## 3. Cloudflare Workers — per-target deploy model
 
-**Decision (docs-first, `developers.cloudflare.com/workers/wrangler/environments`):** one Worker codebase, **Wrangler named environments**, not separate repos/Workers-by-hand.
+**Shipped model (docs-first, `developers.cloudflare.com/workers/wrangler/configuration`):** one Worker codebase, **two per-target Wrangler config files** built + deployed via OpenNext (`@opennextjs/cloudflare`) — **not** `env.*` named environments in one file, and not separate repos.
 
-- **Named environments** in `apps/web/wrangler.jsonc`: `env.testnet` and `env.production` (LOCAL uses `wrangler dev` / OpenNext preview — no deploy, no env block needed). Cloudflare deploys each as `<top-level-name>-<env>` → **`robbed-testnet`** and **`robbed-production`** (top-level `name` stays `robbed`; the bare `robbed` Worker is used only if you deploy with no `--env`, which we avoid for clarity — always deploy with an explicit `--env`).
-- **Non-inheritable per env (must be repeated in each `env.*` block):** `vars`, secrets, and **bindings**. So the `ASSETS_R2` R2 binding (`robbed-assets`), `ASSETS` static binding, and the per-env `NEXT_PUBLIC_*` build vars are declared **under each** `env.testnet` / `env.production` — they do **not** inherit from top-level. `routes`/custom domains are per-env (below).
-- **Deploy per env** via the OpenNext pipeline with an explicit target:
-  - `opennextjs-cloudflare build && wrangler deploy --env testnet` → `robbed-testnet`
-  - `opennextjs-cloudflare build && wrangler deploy --env production` → `robbed-production`
-  - (or set `CLOUDFLARE_ENV`; `--env` wins over it). Wrap these as `deploy:testnet` / `deploy:production` scripts (robbed-frontend, at Workers adaptation).
-- **`compatibility_flags = ["nodejs_compat"]` + a recent `compatibility_date`** apply to every env (OpenNext SSR on workerd, `apps/web/wrangler.jsonc`) — these are inheritable, set once at top level.
-- **Custom domains** (Cloudflare Workers custom domains, per-env): `testnet.robbed.fun` → `robbed-testnet`; `robbed.fun` → `robbed-production`. Both live in the **single `robbed.fun` Cloudflare zone** (testnet is a subdomain). **These attach only after the DNS prerequisite (§4) is met.** Until then, use the auto-assigned `*.workers.dev` names (`robbed-testnet.<subdomain>.workers.dev`, etc.) for interim testing.
+- **Two config files → two Workers** (LOCAL uses `bun run preview:cf` / `next dev` — no deploy, no config file of its own):
+  - `apps/web/wrangler.jsonc` — `"name": "robbed"` → the **production** Worker `robbed`; its `robbed.fun` custom domain is attached account-side.
+  - `apps/web/wrangler.testnet.jsonc` — `"name": "robbed-testnet"`, `"workers_dev": true`, and `routes: [{ "pattern": "testnet.robbed.fun", "custom_domain": true }]` → the testnet Worker `robbed-testnet`.
+  - The production Worker is **`robbed`** (NOT `robbed-production`); the testnet Worker is **`robbed-testnet`**.
+- **Deploy per target** (scripts in `apps/web/package.json`) — each sources its `.env.<target>` build sheet, then OpenNext builds + deploys against the selected config file:
+  - `bun run deploy:cf:mainnet` → `opennextjs-cloudflare build && opennextjs-cloudflare deploy` (default `wrangler.jsonc`) → `robbed`.
+  - `bun run deploy:cf:testnet` → `opennextjs-cloudflare build --config wrangler.testnet.jsonc && … deploy --config wrangler.testnet.jsonc` → `robbed-testnet`.
+- **Each file carries its own full config** — `vars` (the per-target `NEXT_PUBLIC_*` runtime mirror), the `r2_buckets` bindings (`robbed-assets`, read leg only, §12.19), `assets`, `compatibility_flags` (`nodejs_compat`, `global_fetch_strictly_public`), and `compatibility_date`. There is **no cross-file inheritance**: the testnet file mirrors `wrangler.jsonc` and intentionally differs only in `name`, `workers_dev`, `routes`, the testnet `vars`, and an isolated incremental-cache prefix (`NEXT_INC_CACHE_R2_PREFIX`). Keeping the two files mirror-identical except those deltas is the anti-drift discipline for this surface.
+- **Custom domains** (Cloudflare Workers custom domains): `testnet.robbed.fun` → `robbed-testnet` (declared in `wrangler.testnet.jsonc` `routes`); `robbed.fun` → `robbed` (attached account-side). Both live in the **single `robbed.fun` Cloudflare zone** (testnet is a subdomain); Cloudflare provisions the edge cert + proxied DNS record. The DNS cutover is **done** (§4).
 
-> **Alternative considered and rejected:** two entirely separate Workers/projects. Rejected because named environments keep one codebase, one build, one `wrangler.jsonc` diff surface, and Cloudflare's own `<name>-<env>` convention — matching the anti-drift discipline (no duplicated config). Separate Workers would duplicate every binding by hand.
+> **Alternative considered and rejected:** `env.*` named environments in a single `wrangler.jsonc` (Cloudflare's `<name>-<env>` convention, deploy `--env`). Rejected for the OpenNext pipeline: `opennextjs-cloudflare build|deploy` selects a Wrangler config with `--config`, so two config files is the clean per-target seam, and each build sheet (`.env.testnet` / `.env.mainnet`) inlines its own `NEXT_PUBLIC_*` at build time regardless. The two files are kept mirror-identical except the intended per-target deltas.
 
 ---
 
-## 4. DNS prerequisite (BLOCKING for custom domains)
+## 4. DNS + serving topology (DONE — 2026-07-12)
 
-**`robbed.fun` is registered but NOT yet on Cloudflare DNS.** Cloudflare Worker **custom domains** require the domain's zone to be active in *this* Cloudflare account. Ordered steps (owner: ops/user — this is a §13 open item, the "domain" leg):
+**DNS cutover is complete** (spec §12.49 annotation, 2026-07-12). `robbed.fun` and `testnet.robbed.fun` are on Cloudflare DNS in the account `0b1b0b8753489a11d35ee922961f6b72` (§12.45), and both are **served** (interim) as follows:
 
-1. **Add `robbed.fun` as a zone** in the Cloudflare account `0b1b0b8753489a11d35ee922961f6b72` (§12.45) — Full setup (Cloudflare-hosted DNS).
-2. **Point the registrar's nameservers** to the two Cloudflare-assigned nameservers; wait for the zone to go **Active**.
-3. Once active, attach Worker custom domains: `testnet.robbed.fun` → `robbed-testnet`, `robbed.fun` → `robbed-production` (Cloudflare auto-provisions the edge cert and the proxied DNS record for a Workers custom domain). `testnet.robbed.fun` needs **no separate zone** — it is a subdomain record in the `robbed.fun` zone.
-4. Point the API/WS public hostnames (whatever the Komodo Stack exposes, §2c note) at the Stack via DNS records in the same zone, behind TLS/CDN.
+- **Frontend (web)** — the branded domains resolve to the Cloudflare Workers custom domains: `robbed.fun` → the `robbed` Worker (attached account-side), `testnet.robbed.fun` → the `robbed-testnet` Worker (`wrangler.testnet.jsonc` `routes`, §3). Each compose stack's Cloudflare Tunnel keeps a **standby** `web` ingress rule for its hostname (`tools/localstack/cloudflared/{mainnet,testnet}.yml`) that takes over if DNS is ever moved off the Worker.
+- **Backend (API + WS)** — the public API/WS hostnames are published **from inside each compose stack** by its `cloudflared` service (a compose-managed Cloudflare Tunnel connector), not by a separate host: `api.robbed.fun` → mainnet stack `api` (REST) with `wss://api.robbed.fun/ws` → the Bun WS fanout; `api-testnet.robbed.fun` (+ `/ws`) → the testnet stack. Ingress is in-repo (no secrets — the tunnel UUID is routing metadata): `tools/localstack/cloudflared/{mainnet,testnet}.yml`.
+- The first-level `api-testnet.robbed.fun` (not `api.testnet.robbed.fun`) is deliberate — a second-level subdomain is outside Universal SSL's `*.robbed.fun` coverage and fails TLS at the edge (see `docker.md` "Public exposure").
 
-**Until step 2 completes:** every Worker is reachable on its `*.workers.dev` name; `NEXT_PUBLIC_API_BASE_URL`/`NEXT_PUBLIC_WS_URL` may temporarily use the Stack's raw public endpoint. No LOCAL or `*.workers.dev` testing is blocked by DNS — only the branded custom domains are.
+The old `*.workers.dev`-interim framing is retired; `wrangler.testnet.jsonc` still sets `workers_dev: true` only as a **secondary** access path next to the custom domain.
 
 ---
 
@@ -156,18 +116,18 @@ This runbook is docs/spec only. The concrete wiring below is routed; each owner 
 
 | # | Task | Owner | Notes |
 |---|---|---|---|
-| E-1 | Per-env `.env` files: `.env.local` (LOCAL, committed-safe defaults, zero secrets), `.env.testnet`, `.env.production` (secrets → Komodo/Workers stores, never committed); keep `.env.example` ⇄ `env-inventory.md` in sync (G-9 CI check). | robbed-shared (workspace/env owner) + robbed-frontend (web vars) | Do NOT commit secrets. LOCAL file is the only fully-committable one. |
-| E-2 | `apps/web/wrangler.jsonc` gains `env.testnet` + `env.production` blocks (non-inheritable `vars`/bindings repeated per env per §3); `deploy:testnet` / `deploy:production` scripts. | robbed-frontend (executed after `apps/web` redesign lands) + robbed-shared (workspace scripts) | Adds the per-env layer to the Cloudflare Workers deploy (§12.45). |
-| E-3 | Per-env addresses codegen: deploy broadcasts → `tools/deployments/{testnet,mainnet}.json`; codegen emits `@robbed/shared` `addresses.ts` per env (LOCAL from the local broadcast). | robbed-contracts (deploy artifacts) + robbed-shared (codegen in `packages/shared`) | Extends the §12.38/M1-14 codegen. `packages/*` owned by robbed-shared. |
-| E-4 | Per-env indexer/API config: `INDEXER_RPC_*`, `START_BLOCK`, `ETH_USD_SOURCE_URL`, `CORS_ALLOWED_ORIGINS`, R2 bases resolved per env; Komodo Stack `testnet`/`production` variants (or one Stack, per-env secret sets). | robbed-indexer (owns indexer/api infra + root compose, P-9) | Komodo secret store per env; §12.48a/b env-gated checks run at Phase-T/M2 start against the live RPC. |
-| E-5 | DNS: add `robbed.fun` zone to the Cloudflare account, point nameservers, attach Worker custom domains (§4). | ops / user (§13 domain open item) | BLOCKING for branded domains; `*.workers.dev` until done. |
+| E-1 | Per-env `.env` build sheets: `.env.testnet`, `.env.mainnet` (web build vars; secrets → the compose stack's host `.env` / Workers secret store, never committed); keep `.env.example` ⇄ `env-inventory.md` in sync (G-9 CI check). | robbed-shared (workspace/env owner) + robbed-frontend (web vars) | Do NOT commit secrets. The committed-safe local defaults are the only fully-committable ones. |
+| E-2 | **DONE (§3):** shipped as two Wrangler config files — `wrangler.jsonc` (`robbed`) + `wrangler.testnet.jsonc` (`robbed-testnet`), each carrying its own full `vars`/bindings — with `deploy:cf:mainnet` / `deploy:cf:testnet` scripts (`apps/web/package.json`). | robbed-frontend + robbed-shared (workspace scripts) | Per-target file model, not `env.*` named environments (§12.45). |
+| E-3 | Per-env addresses codegen: deploy broadcasts → `contracts/deployments/<chainId>.json` (D-2, §12.49 annotation); codegen emits `@robbed/shared` `addresses.ts` per env (LOCAL from the local broadcast). | robbed-contracts (deploy artifacts) + robbed-shared (codegen in `packages/shared`) | Extends the §12.38/M1-14 codegen. `packages/*` owned by robbed-shared. |
+| E-4 | Per-env indexer/API config: `INDEXER_RPC_*`, `START_BLOCK`, `ETH_USD_SOURCE_URL`, `CORS_ALLOWED_ORIGINS`, R2 bases resolved per env; compose stack `testnet`/`mainnet` variants (`docker-compose.{testnet,mainnet}.yml`, per-env secret sets). | robbed-indexer (owns indexer/api infra + root compose, P-9) | Stack `.env` secret set per env; §12.48a/b env-gated checks run at Phase-T/M2 start against the live RPC. |
+| E-5 | **DONE (§4):** `robbed.fun` + `testnet.robbed.fun` on Cloudflare DNS (account `0b1b0b…f6b72`), Worker custom domains attached, API/WS served by the per-stack `cloudflared` tunnels. | ops / user (§13 domain open item, now closed) | DNS cutover complete 2026-07-12. |
 | E-6 | Testnet faucet URL (§13 still-open leg) pulled from official Robinhood docs at Phase-T deploy start; deploy fails if unset. | robbed-contracts | Never invented. |
 
 ---
 
 ## 6. Definition of done (for this runbook)
 
-- Every env's chain id / RPC / WS / explorer / domain is sourced from official Robinhood docs (§1), never invented, and lives in config not source (§2).
-- The config matrix (§2) resolves every `env-inventory.md` variable for all three envs without contradiction.
-- The Workers per-env strategy (§3) and DNS prerequisite (§4) are unambiguous and docs-backed.
+- Every env's chain id / RPC / WS / explorer / domain is sourced from official Robinhood docs (§1 + `testnet.md` §1 for the canonical 46630 params), never invented, and lives in config not source (§2).
+- The env-defining resolutions (§2) agree with `env-inventory.md` (authoritative per-variable) without contradiction, and restate no per-variable secret-class/source/owner metadata.
+- The Workers per-target deploy model (§3) and the DNS + serving topology (§4) are unambiguous and match the shipped config (`wrangler.jsonc` / `wrangler.testnet.jsonc`, the compose-managed Cloudflare Tunnels).
 - All implementation is **routed, not performed** (§5) — this file authors no code.

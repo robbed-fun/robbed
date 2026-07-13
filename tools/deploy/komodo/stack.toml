@@ -1,5 +1,5 @@
 # ROBBED_ backend — Komodo Stack resources (git-synced infra-as-code).
-# deploy-komodo-cloudflare.md A.2/A.3, environments.md §1/§5 (E-4), spec §12.45/§12.49.
+# docker.md, environments.md §1/§5 (E-4), spec §12.45/§12.49.
 #
 # Komodo Core syncs this file from git and reconciles two Stacks (TESTNET + PRODUCTION),
 # each pointing at the SAME compose file (compose.yaml) on a periphery-registered server.

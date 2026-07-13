@@ -16,7 +16,7 @@ Include: affected contract/component, a reproduction (tx sequence, PoC test, or 
 - `contracts/` — LaunchToken, CurveFactory, BondingCurve, Router, V3Migrator, LPFeeVault (highest severity: anything that blocks curve sells, extracts ETH beyond fair curve value, breaks graduation single-fire, or moves LP principal).
 - `apps/indexer`, `apps/api`, `apps/web` — data integrity (confirmation-tier honesty, metadata-hash verification), upload pipeline, authentication.
 
-The protocol's normative security properties and invariants are listed in [docs/security-properties.md](docs/security-properties.md); the design-time threat model is [docs/threat-model.md](docs/threat-model.md).
+The protocol's normative security invariants are specified in [spec.md](spec.md) §10 (proven by the Foundry suites under `contracts/test/`); the design-time threat model is [threat-model.md](developers/threat-model.md).
 
 ## Patch policy
 
@@ -29,4 +29,4 @@ A public bug bounty is **planned, not yet live** — the security program requir
 
 ## Audits
 
-Completed security reviews are indexed in [audits/README.md](audits/README.md). Note the program's own disclosure (spec §10, gate 10): as of today there is **no external firm audit**; assurance rests on the layered gate program (static analysis, fuzz/invariant suites, fork tests, mutation testing, multi-model audit, economic red-team, hard-capped beta) — and the caps-lift decision gate explicitly reconsiders commissioning an external review.
+There is **no external firm audit** to date (spec §10, gate 10): assurance rests on the layered gate program — static analysis, fuzz/invariant suites, fork tests, mutation testing, multi-model audit, economic red-team, and a hard-capped beta — and the caps-lift decision gate explicitly reconsiders commissioning an external review. Individual gate reviews are recorded in the pull requests that close them (history in git), not as committed tracker files.

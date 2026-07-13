@@ -4,7 +4,7 @@
 **Spec coverage:** §5.1 (search, discover data), §5.2 (token detail data), §5.3 (launch flow: uploads + metadata hash), §8 (Hono on Bun: R2 presigned uploads, moderation queue, search API; WS fanout), §8.3 (canonical metadata JSON to R2), §8.4 (moderation), §2 (no hardcoded market metrics), §2.1 (confirmation states in responses).
 **Runtime:** Hono on Bun. Storage: Cloudflare R2 + CDN. DB: read-mostly Postgres (indexer-owned tables) + API-owned moderation tables. Redis: rate limiting + WS fanout.
 
-Companion doc: `docs/how-it-works/indexer.md` — table shapes, channel taxonomy, and WS message schemas referenced below are defined there and in `packages/shared`.
+Companion doc: `docs/developers/indexer.md` — table shapes, channel taxonomy, and WS message schemas referenced below are defined there and in `packages/shared`.
 
 ---
 
@@ -119,15 +119,15 @@ GET /v1/tokens/king-of-the-hill                                 (§5.1 hero)
   ORDER BY (real_eth_reserves/graduation_eth) * ln(1+volume_eth_24h) DESC  (ratified default, spec §12.22)
   200 → { token: TokenCard }
 
-GET /v1/tokens/:address                                         (§5.2 detail + Trust panel)
+GET /v1/tokens/:address                                         (§5.2 detail + safety strip §12.57; formerly the Trust panel)
   200 → TokenDetail: TokenCard fields +
     description, links, curveAddress, v3PoolAddress?, graduatedAt?,
     lpTokenId?,                                                 -- LP NFT tokenId (graduations.lp_token_id); present iff graduated —
                                                                 --   drives LPFeeVault.collect(tokenId) (additive 2026-07-12, COLLECT-1 gap)
     supply: { total, curveHeld, lpTranche }                     -- from balances rows for curve/pool
-    reserves: { virtualEth, virtualToken, realEth, realToken }  -- live curve state (Trust panel §5.2)
+    reserves: { virtualEth, virtualToken, realEth, realToken }  -- live curve state (safety strip §5.2, §12.57)
     graduation: { thresholdEth, progressPct }
-    trust: {                                                    -- Trust panel §5.2, all derived, none hardcoded
+    trust: {                                                    -- feeds the safety strip §5.2, §12.57, all derived, none hardcoded
       metadataVerification: { status: match|mismatch|unfetched, onchainHash, computedHash?, verifiedAt? },
       lpCopy: "LP principal permanently locked; trading fees claimable by treasury",   -- exact string, CLAUDE.md hard rule
       feePolicy: { tradeFeeBps, creatorFeeBps },                -- tradeFeeBps = per-token snapshot from tokens.trade_fee_bps
@@ -505,7 +505,7 @@ Two processes from one codebase: `apps/api/src/index.ts` (Hono HTTP) and `apps/a
 - [ ] Upload pipeline: magic-byte sniff, ≤4MB cap, re-encode, EXIF strip, content-addressed R2 write, image-hash returned — tested with hostile fixtures
 - [ ] `POST /v1/metadata`: shared canonicalization, keccak256, R2 write at `metadata/{hash}.json`; client-verification contract documented for M3; golden-fixture hash parity test with indexer + frontend
 - [ ] Search returns correct results for all four fields (name, ticker, contract address, creator address) via `pg_trgm`; address-mode + similarity-mode both tested
-- [ ] All §5.1/§5.2 read endpoints live: lists with all five sorts + three filters, KotH, detail with full Trust-panel payload (exact LP copy string from `constants.ts`), trades (with `since` backfill), candles (all six intervals), holders with flags, fees dashboard, confirmations, eth-usd
+- [ ] All §5.1/§5.2 read endpoints live: lists with all five sorts + three filters, KotH, detail with full safety-strip payload (§12.57; exact LP copy string from `constants.ts`), trades (with `since` backfill), candles (all six intervals), holders with flags, fees dashboard, confirmations, eth-usd
 - [ ] Moderation: vendor interfaces + stub implementations + boot guard; csam/nsfw/impersonation state machine tested; admin queue + visibility + audit log; provably no endpoint touches chain state (route-inventory test asserts no signer/wallet module imported)
 - [ ] `confirmationState` present on every event-derived response object (§2.1)
 - [ ] No USD/market constant anywhere; every USD field carries `asOf` (§2)

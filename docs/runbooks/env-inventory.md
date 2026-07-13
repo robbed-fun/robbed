@@ -2,15 +2,15 @@
 
 **Status:** v1.2, 2026-07-12. Authored by robbed-architect (plan item **P-1**). Inputs: indexer.md §2, api.md §2/§4/§5, web.md §2.3/§9.6, `.env.example`, the compose stacks (`docker-compose.{testnet,mainnet}.yml`) + `apps/web/wrangler.jsonc`. v1.1: table re-verified against a full `process.env`/`vm.env` grep of `apps/` + `tools/` + `contracts/script` (2026-07-11) — API section rewritten from `apps/api/src/config.ts` (role-split DB URLs, `API_PORT`, NSFW thresholds, `TRUSTED_PROXY_HEADER`), indexer sidecar/flow/metrics vars added, §12.51 Chainlink rows kept, dev/test tooling section (§5) added. v1.2 (2026-07-12): re-verified against the testnet-deployed tree (chain 46630 live; `contracts/deployments/46630.json`). **§12.55 gap CLOSED (2026-07-12, robbed-indexer):** `INDEXER_CHAIN_ID` (+ the `INDEXER_ALLOW_FORK_4663` opt-in) are now rows below and keys in `apps/indexer/.env.example` (added in one change so the env-sync gate stays green both directions).
 
-This is the **authoritative per-variable table** for every service. It is the source `.env.example` and the Komodo/Workers secret stores are populated from.
+This is the **authoritative per-variable table** for every service. It is the source `.env.example` and the compose-stack and Workers secret stores are populated from.
 
 > **`.env.example` sync is ENFORCED (G-9 env leg).** `scripts/env-sync-check.ts` mechanically compares each app's `.env.example` keys against this inventory's rows in both directions — it runs inside `scripts/doc-check.ts` (which CI's docs job executes on every push) and as the `env-sync` stage of `scripts/validate.sh`. The `<!-- env-sync … -->` markers below drive it; a row carrying `sync:skip` is documented here but knowingly absent from the `.env.example` (each such row names its owner). All three per-app examples (`apps/indexer`, `apps/api`, `apps/web`) exist and are checked strictly (the v1.1 `allow-missing` interim for `apps/api/.env.example` ended 2026-07-11 when robbed-indexer authored it).
 
-> **Docs-first rule.** Before changing any endpoint/credential convention, consult current official docs (context7 MCP → fallback WebFetch): Ponder env (https://ponder.sh), Cloudflare Workers build vars (https://developers.cloudflare.com/workers/configuration/environment-variables/), Wrangler config (https://developers.cloudflare.com/workers/wrangler/configuration/), Komodo secrets (https://komo.do/docs). Docs beat assumptions; the spec beats docs (flag the conflict).
+> **Docs-first rule.** Before changing any endpoint/credential convention, consult current official docs (context7 MCP → fallback WebFetch): Ponder env (https://ponder.sh), Cloudflare Workers build vars (https://developers.cloudflare.com/workers/configuration/environment-variables/), Wrangler config (https://developers.cloudflare.com/workers/wrangler/configuration/), Docker Compose (https://docs.docker.com/compose/). Docs beat assumptions; the spec beats docs (flag the conflict).
 
 ## Conventions
 
-- **Secret?** — `SECRET` = never committed, lives in the Komodo secret store or Workers secret; `PUBLIC` = safe to commit / inline; `CONFIG` = non-secret but environment-specific (endpoints, addresses, feature values).
+- **Secret?** — `SECRET` = never committed, lives in the compose-stack `.env` or Workers secret; `PUBLIC` = safe to commit / inline; `CONFIG` = non-secret but environment-specific (endpoints, addresses, feature values).
 - **Source** — where the value comes from (deploy artifact, provider console, §13 decision, constant).
 - **Owner** — the agent/role that furnishes/rotates the value.
 - **Never hardcode market metrics (§2).** Any price/threshold value is a config var with a documented source+timestamp, never a literal in code.
@@ -18,7 +18,7 @@ This is the **authoritative per-variable table** for every service. It is the so
 
 ---
 
-## 1. Indexer (`apps/indexer` — Node/Ponder container, Komodo Stack)
+## 1. Indexer (`apps/indexer` — Node/Ponder container, compose stack)
 
 Source: indexer.md §2 + `apps/indexer/src/config.ts` / `src/sidecar.ts` / `src/jobs/*` (grep-verified 2026-07-11). Runs in the backend compose stack (`docker.md`); secrets are stack-managed.
 
@@ -35,8 +35,8 @@ Source: indexer.md §2 + `apps/indexer/src/config.ts` / `src/sidecar.ts` / `src/
 | `MIGRATOR_ADDRESS` | V3Migrator address (**required** — emits `Graduated`; factory anchor for pools) | CONFIG | M1 deploy artifact | hoodpad-contracts | local | testnet | mainnet |
 | `V3_FACTORY_ADDRESS` | Uniswap V3 factory (assert at startup) | CONFIG | **§12.28** `0x1f7d7550B1b028f7571E69A784071F0205FD2EfA` (constant on 4663; still config so startup fails-closed if unset) | hoodpad-indexer | local V3 core deploy | 4663 value | `0x1f7d7550B1b028f7571E69A784071F0205FD2EfA` |
 | `V3_NPM_ADDRESS` | NonfungiblePositionManager (assert) | CONFIG | **§12.28** `0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3` | hoodpad-indexer | local | 4663 | `0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3` |
-| `REDIS_URL` | Pub/sub + WS fanout + rate-limit + moderation queue | SECRET | Komodo Redis service | hoodpad-indexer | `redis://localhost:6379` | Stack internal | Stack internal (`redis://redis:6379`) |
-| `DATABASE_URL` | Postgres (`pg_trgm` required; migration asserts) | SECRET | Komodo Postgres service | hoodpad-indexer | `postgres://…@localhost:5432/robbed` | Stack internal | Stack internal, indexer-owner role |
+| `REDIS_URL` | Pub/sub + WS fanout + rate-limit + moderation queue | SECRET | compose Redis service | hoodpad-indexer | `redis://localhost:6379` | Stack internal | Stack internal (`redis://redis:6379`) |
+| `DATABASE_URL` | Postgres (`pg_trgm` required; migration asserts) | SECRET | compose Postgres service | hoodpad-indexer | `postgres://…@localhost:5432/robbed` | Stack internal | Stack internal, indexer-owner role |
 | `DATABASE_SCHEMA` | Ponder schema for the GIN-index migration (optional, default `public`) | CONFIG | fixed default | hoodpad-indexer | unset | unset | unset (or Ponder schema name) |
 | `R2_METADATA_BASE_URL` | CDN base for canonical metadata JSON (metadata-fetch worker) | CONFIG | Cloudflare R2 public base (`robbed-assets`) | hoodpad-indexer | minio public URL | R2 public base | R2 public base |
 | `METADATA_FETCH_REWRITE_FROM` | Split-horizon fetch-time URL rewrite (pair with `…_TO`, both or neither): the browser-visible object-URL prefix the verifier rewrites to an internal base before fetching (indexer.md §6.1; §8.3 fix 2026-07-12). **Required whenever the stored `metadata_uri` origin is unreachable from the indexer container** — that is ALL minio-backed compose stacks (dev/testnet/mainnet), where the public base is host-mapped `localhost:{MINIO_PORT}`. Unset only for a real R2/CDN deploy (the CDN base is reachable everywhere). | CONFIG | compose topology (`apps/indexer/.env.example`) | hoodpad-indexer | `http://localhost:4900/robbed-assets` | `http://localhost:4190/robbed-assets` | `http://localhost:4290/robbed-assets` (unset on real R2) |
@@ -71,7 +71,7 @@ WETH is **never** an env var for any service — it is the canonical constant `0
 
 ---
 
-## 2. API + WS (`apps/api` — Bun container, Komodo Stack)
+## 2. API + WS (`apps/api` — Bun container, compose stack)
 
 Source: api.md §4.3/§5/§6 + `apps/api/src/config.ts` / `src/ws.ts` (grep-verified 2026-07-11 — the config loader is the authoritative key list). Two processes from one image: `src/index.ts` (Hono HTTP) and `src/ws.ts` (Bun WS fanout).
 
@@ -83,9 +83,9 @@ Source: api.md §4.3/§5/§6 + `apps/api/src/config.ts` / `src/ws.ts` (grep-veri
 | `API_ENV` | `development`/`test`/`production` — prod enforces the DB role split + the moderation stub boot-guard | CONFIG | deploy environment | hoodpad-indexer | `development` | `production` | `production` |
 | `WS_PORT` | Bun WS fanout listen port | CONFIG | fixed default | hoodpad-indexer | `3002` | `3002` | `3002` (behind TLS/CDN) |
 | `DATABASE_URL` | Single-role dev fallback for both legs below (local only) | SECRET | local Postgres | hoodpad-indexer | local | unset | unset (role split mandatory) |
-| `DATABASE_URL_RO` | Read-only role on indexer-owned tables (api.md §7 role split; **required in prod** — boot refuses otherwise) | SECRET | Komodo Postgres (RO role) | hoodpad-indexer | unset (falls back) | Stack internal | Stack internal, RO role |
-| `DATABASE_URL_RW` | Read-write role on API-owned `moderation_status`/`moderation_audit_log`/`impersonation_watchlist` only | SECRET | Komodo Postgres (RW role) | hoodpad-indexer | unset (falls back) | Stack internal | Stack internal, RW role |
-| `REDIS_URL` | Subscribe `global:*`/`control:*`; moderation queue; rate-limit | SECRET | Komodo Redis | hoodpad-indexer | `redis://localhost:6379` | Stack internal | Stack internal |
+| `DATABASE_URL_RO` | Read-only role on indexer-owned tables (api.md §7 role split; **required in prod** — boot refuses otherwise) | SECRET | compose Postgres (RO role) | hoodpad-indexer | unset (falls back) | Stack internal | Stack internal, RO role |
+| `DATABASE_URL_RW` | Read-write role on API-owned `moderation_status`/`moderation_audit_log`/`impersonation_watchlist` only | SECRET | compose Postgres (RW role) | hoodpad-indexer | unset (falls back) | Stack internal | Stack internal, RW role |
+| `REDIS_URL` | Subscribe `global:*`/`control:*`; moderation queue; rate-limit | SECRET | compose Redis | hoodpad-indexer | `redis://localhost:6379` | Stack internal | Stack internal |
 | `SESSION_SECRET` | HMAC key for stateless SIWE admin session + CSRF signing (api.md §6.2) | SECRET | generated (32B random) | hoodpad-indexer + ops | dev default | random | rotated secret |
 | `ADMIN_ALLOWLIST` | Comma-separated admin SIWE addresses (api.md §6.2) | CONFIG | **§13 OI-A8** — follows Safe signer set O-6 (**NEEDS-USER**) | architect + ops | dev signer addr | dev signer addr | O-6 signer set (NEEDS-USER) |
 | `TRUSTED_PROXY_HEADER` | Header carrying the real client IP behind the CDN (e.g. `CF-Connecting-IP`); empty ⇒ socket peer (dev). Never the leftmost XFF (rate-limit bypass) | CONFIG | CDN choice | hoodpad-indexer | unset | `CF-Connecting-IP` | `CF-Connecting-IP` |
@@ -127,8 +127,8 @@ Source: web.md §2.3/§9.6, `.env.example`, `apps/web/wrangler.jsonc`. **`NEXT_P
 |---|---|---|---|---|---|---|---|
 | `NEXT_PUBLIC_RPC_HTTP` | Chain 4663 HTTP RPC (viem transport) — **required** | PUBLIC | provider (public read RPC) | hoodpad-frontend | `http://localhost:8545` | testnet HTTP RPC | 4663 public HTTP RPC |
 | `NEXT_PUBLIC_RPC_WS` | Chain 4663 WS RPC (optional live subs) | PUBLIC | provider | hoodpad-frontend | `ws://localhost:8545` | testnet WS | 4663 WS RPC |
-| `NEXT_PUBLIC_API_BASE_URL` | Indexer/API REST base, no trailing slash — **required** | PUBLIC | Komodo Stack public endpoint (A.6) | hoodpad-frontend | `http://localhost:3001` | testnet API URL | `https://api.<domain>` |
-| `NEXT_PUBLIC_WS_URL` | Bun WS fanout URL — **required** | PUBLIC | Komodo Stack public WS endpoint | hoodpad-frontend | `ws://localhost:3002/v1/ws` | testnet WS URL | `wss://ws.<domain>/v1/ws` |
+| `NEXT_PUBLIC_API_BASE_URL` | Indexer/API REST base, no trailing slash — **required** | PUBLIC | compose-stack public endpoint | hoodpad-frontend | `http://localhost:3001` | testnet API URL | `https://api.<domain>` |
+| `NEXT_PUBLIC_WS_URL` | Bun WS fanout URL — **required** | PUBLIC | compose-stack public WS endpoint | hoodpad-frontend | `ws://localhost:3002/v1/ws` | testnet WS URL | `wss://ws.<domain>/v1/ws` |
 | `API_BASE_URL_INTERNAL` | **Server-only** SSR REST base override (split-horizon, web.md §2.3): server-side fetches prefer it, browsers always use `NEXT_PUBLIC_API_BASE_URL`; unset ⇒ fallback to the public base. Deliberately NOT `NEXT_PUBLIC_`-prefixed — must never be inlined into the client bundle | CONFIG | compose topology (web container → compose-internal API origin) | hoodpad-frontend | unset (host dev) / `http://api:3001` (compose stack + CI e2e — set by the compose file) | unset | unset (Workers fetch the public API origin) |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | WalletConnect projectId (web-6 §13) — optional; WC + Robinhood Wallet connectors hidden if unset | PUBLIC | **§13 web-6** cloud.walletconnect.com (**NEEDS-USER**) | hoodpad-frontend | unset (injected wallets only) | project id | project id (NEEDS-USER) |
 | `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` | R2 public CDN base for token images (`next/image` remote host) | PUBLIC | R2 public/CDN domain (`robbed-assets`) | hoodpad-frontend | minio public URL | R2 CDN | R2 CDN base |

@@ -1,6 +1,6 @@
 # Runbook — Production images + gate-7 monitoring configs (P-3)
 
-**Status:** v1.0, 2026-07-11 (hosting refs updated 2026-07-12: the Komodo runbook is retired, §12.45). Owner: robbed-indexer (infra runbooks per plan item P-9). The hosting split is spec §12.45 (backend on the compose stacks + Cloudflare Tunnels; web on Cloudflare Workers) — this file records what P-3 actually **built and verified**: the production container images, the prod compose set, and the gate-7 monitoring/alert configs (spec §10 gate 7, `docs/how-it-works/indexer.md` §9.4).
+**Status:** v1.0, 2026-07-11 (hosting refs updated 2026-07-12: the Komodo runbook is retired, §12.45). Owner: robbed-indexer (infra runbooks per plan item P-9). The hosting split is spec §12.45 (backend on the compose stacks + Cloudflare Tunnels; web on Cloudflare Workers) — this file records what P-3 actually **built and verified**: the production container images, the prod compose set, and the gate-7 monitoring/alert configs (spec §10 gate 7, `docs/developers/indexer.md` §9.4).
 
 ## 1. Image inventory + path decision
 
@@ -20,7 +20,7 @@ Both Dockerfiles now also carry an image-level `HEALTHCHECK` (host-agnostic defa
 
 ## 2. Build fixes required (2026-07-11) — why the first builds failed
 
-The A.6b verification was deferred ("no Docker daemon"); running it live surfaced two real breaks, fixed in the Dockerfiles (build stages only, runtime unchanged):
+The production-image build verification (§3 below) was deferred ("no Docker daemon"); running it live surfaced two real breaks, fixed in the Dockerfiles (build stages only, runtime unchanged):
 
 1. **node-gyp toolchain missing.** Root `package.json` whitelists `bufferutil` / `utf-8-validate` in `pnpm.onlyBuiltDependencies`, so pnpm compiles them (ws accelerators used by viem/ponder websockets) — and `*-slim` has no `python3`/`make`/`g++`. → installed in the build stage.
 2. **Root `prepare` hook needs git + a repo.** `prepare: git config core.hooksPath .githooks` runs on any workspace install; the image has no git and `.git` is dockerignored. → build stage installs `git` and runs `git init -q .` in the workdir so the hook succeeds harmlessly.

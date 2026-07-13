@@ -13,7 +13,7 @@ The indexer is the single source of derived truth for ROBBED_:
 1. Indexes the six event families (§8, §12.15–16): `TokenCreated`, `Trade`, `Graduated`, LaunchToken `Transfer`, V3 `Swap`, V3 `Collect`.
 2. Maintains **venue-continuous** price/candle series per token across graduation (§5.2, §8) — one unbroken series from curve trades into V3 swaps.
 3. Tracks **confirmation state** per indexed event: `soft_confirmed` → `posted_to_l1` → `finalized` (§2.1) — derived at read time from the `confirmation_watermarks` sidecar (§3.8/§5, spec §12.48c; per-row storage on Ponder tables is impossible, OI-11).
-4. Verifies metadata integrity: R2 JSON vs on-chain `metadataHash` commitment (§8.3) — feeds the Trust panel (§5.2).
+4. Verifies metadata integrity: R2 JSON vs on-chain `metadataHash` commitment (§8.3) — feeds the safety strip (§5.2, §12.57; formerly the Trust panel).
 5. Maintains holder balances (portfolio-ready from day 1, §5.4) and `creator` / `creatorFeeBps` per token from day 1 (§7).
 6. Publishes every indexed event to Redis for the Bun WS fanout with a <500ms event-to-browser target (§8).
 7. Feeds the treasury fee-accrual dashboard from V3 `Collect` (§6.4 post-graduation revenue, §8).
@@ -46,7 +46,7 @@ Startup assertions: `pg_trgm` installed; V3 addresses present and non-zero; WETH
 
 ## 3. Event inventory & Postgres schema
 
-Event signatures below are the **canonical shapes ratified in spec §12.15** and normatively defined in `docs/how-it-works/contracts.md` §2 (contracts.md is authoritative for ABIs; this doc mirrors them). M1 artifacts must match byte-for-byte; **any divergence at implementation time is reported to robbed-architect, not worked around** (OI-1, resolved — the shapes are now a contract, not an assumption).
+Event signatures below are the **canonical shapes ratified in spec §12.15** and normatively defined in `docs/developers/contracts.md` §2 (contracts.md is authoritative for ABIs; this doc mirrors them). M1 artifacts must match byte-for-byte; **any divergence at implementation time is reported to robbed-architect, not worked around** (OI-1, resolved — the shapes are now a contract, not an assumption).
 
 Ponder note: tables are declared in `ponder.schema.ts`; the SQL below is the *target relational shape* Ponder must produce (Ponder generates DDL from the schema file — column names/types below are normative, exact DDL is Ponder's). Tables marked **[offchain]** are written outside Ponder's reorg-tracked store (see §7.3) because they are updated by side processes (confirmation tracker, metadata verifier, moderation sync) and must not be rolled back by Ponder reorg handling.
 
@@ -80,7 +80,7 @@ CREATE TABLE tokens (
   curve_address        text NOT NULL UNIQUE,
   creator              text NOT NULL,              -- §7: day 1, even though creator fees are Phase 2
   creator_fee_bps      integer NOT NULL DEFAULT 0, -- §7: 0 in v1; column exists so Phase 2 needs no migration
-  trade_fee_bps        integer NOT NULL,           -- §12.40d: per-token immutable snapshot, read from curve TRADE_FEE_BPS at TokenCreated (NOT factory config); Trust-panel source
+  trade_fee_bps        integer NOT NULL,           -- §12.40d: per-token immutable snapshot, read from curve TRADE_FEE_BPS at TokenCreated (NOT factory config); safety-strip source (§12.57)
   name                 text NOT NULL,
   ticker               text NOT NULL,              -- ≤10 chars enforced upstream; indexer stores verbatim
   metadata_hash        text NOT NULL,              -- bytes32 hex, verbatim from chain (§8.3)
@@ -89,7 +89,7 @@ CREATE TABLE tokens (
   description          text,                       -- extracted from verified metadata JSON
   links                jsonb,                      -- extracted from verified metadata JSON
   total_supply         numeric(78,0) NOT NULL,     -- 1e27 (1B * 1e18); stored, never assumed in queries
-  -- live curve state (updated on every Trade; read by Trust panel §5.2)
+  -- live curve state (updated on every Trade; read by the safety strip §5.2, §12.57)
   virtual_eth          numeric(78,0) NOT NULL,
   virtual_token        numeric(78,0) NOT NULL,
   real_eth_reserves    numeric(78,0) NOT NULL DEFAULT 0,
@@ -129,7 +129,7 @@ CREATE INDEX tokens_block_number_idx ON tokens (block_number);                  
 Notes:
 - `graduation_eth` is read from factory constants (event or contract read at handler time), never hardcoded (§6.4 constants are deploy-time).
 - Mcap/price are **never stored in USD**: USD is computed at query/render time as `price_eth × eth_usd_snapshot` (§2, hard rule). See §3.9.
-- `image_url`/`description`/`links` are populated **only** from metadata JSON that has been fetched (any verification verdict); the Trust panel decides how to badge mismatches. Listing visibility is the API's moderation concern, not the indexer's.
+- `image_url`/`description`/`links` are populated **only** from metadata JSON that has been fetched (any verification verdict); the safety strip (§12.57) decides how to badge mismatches. Listing visibility is the API's moderation concern, not the indexer's.
 
 ### 3.2 `Trade` (emitted by each BondingCurve)
 
@@ -384,7 +384,7 @@ CREATE TABLE metadata_verifications (
 
 ### 3.11 Moderation flags **[offchain]** (§8.4 — written by the API, read by both)
 
-Owned by the API service (see `docs/how-it-works/api.md` §4); listed here because token list queries join it. The indexer never writes it. Listing gating = `WHERE moderation.visibility != 'hidden'` applied in API list/search endpoints — chain state and raw indexed data are never touched by moderation (§8.4).
+Owned by the API service (see `docs/developers/api.md` §4); listed here because token list queries join it. The indexer never writes it. Listing gating = `WHERE moderation.visibility != 'hidden'` applied in API list/search endpoints — chain state and raw indexed data are never touched by moderation (§8.4).
 
 ```sql
 CREATE TABLE moderation_status (
@@ -400,6 +400,32 @@ CREATE TABLE moderation_status (
   updated_at           timestamptz NOT NULL
 );
 ```
+
+### 3.12 Creator-fee claimable roll-up (spec §7 / §12.63 — Phase-2, additive)
+
+Per-creator pull-payment roll-up backing `GET /v1/creators/:address/claimable`. **Ponder-managed** (in `ponder.schema.ts`, not an offchain migration): the aggregate is derived from the creator-fee events, so Ponder's own reorg revert keeps it correct — an offchain-maintained sum would silently drift on a reorg. Rebuildable from events. Additive/optional: stays **empty on v1 deployments** (`creator_fee_bps ≡ 0`, no `CreatorVault`).
+
+```sql
+CREATE TABLE creator_claimable (
+  creator            text PRIMARY KEY,
+  vault              text NOT NULL,               -- the CreatorVault the balance lives in
+  total_accrued_eth  numeric(78,0) NOT NULL DEFAULT 0,  -- Σ CreatorFeesSwept.amount
+  total_claimed_eth  numeric(78,0) NOT NULL DEFAULT 0,  -- Σ CreatorFeeClaimed.amount
+  claimable_eth      numeric(78,0) NOT NULL DEFAULT 0,  -- accrued − claimed (event-derived MIRROR)
+  last_claim_at      bigint,                      -- unix seconds of the last claim; null until first claim
+  updated_at         text NOT NULL                -- ISO from block timestamp (replay-stable)
+);
+CREATE INDEX creator_claimable_vault_idx ON creator_claimable (vault);
+```
+
+**Events → columns (handlers, `src/handlers/creatorFees.ts`):**
+- `CreatorFeesSwept` (on the existing **BondingCurve** source; always registered) → **accrued** source. `vault` is the event's indexed `vault`.
+- `CreatorFeeClaimed` (on the **CreatorVault** source; registered only when the vault address resolves) → **claimed** + `last_claim_at`.
+- `CreatorFeeDeposited` (CreatorVault source) → vault-address **corroboration only**; does NOT touch accrued (the sweep is the accrued source of record — `Σ swept == Σ deposited` by contract design, so summing both would double-count).
+
+**Optional CreatorVault source:** the `CreatorVault` Ponder source is registered **only** when `config.creatorVault` resolves (env `CREATOR_VAULT_ADDRESS` or `getDeployment(chainId).robbed.creatorVault`, both optional). On a treasury-only deployment the vault source and its two handlers are simply not registered — the indexer runs unchanged (graceful skip, mirroring the §12.55 optional-config gate). `tokens.creator_fee_bps` is populated per-token from the curve's immutable `CREATOR_FEE_BPS` at `TokenCreated` (read defensively → `0` for v1 curves that predate the leg).
+
+**Authoritative claimable:** `claimable_eth` here is the event-derived MIRROR. The API serves the **live** on-chain `CreatorVault.balanceOf(creator)` as the authoritative claimable value (falling back to this mirror only when no RPC is configured) — exactly as `/fees` reads the live NPM `tokensOwed` rather than trusting a projection.
 
 ## 4. Candle pipeline — venue-continuous (§5.2, §8)
 
@@ -483,7 +509,7 @@ Verification job:
 2. Parse JSON. **Canonicalize using the shared function in `packages/shared` (`canonicalizeMetadata`)** — RFC 8785-style: UTF-8, lexicographically sorted keys at every level, no insignificant whitespace, no non-canonical number forms. This function is the **single implementation** used by the frontend at launch time (to compute the hash sent on-chain) and the indexer at verify time; byte-identical by construction, tested with shared fixtures.
 3. `keccak256(canonicalBytes)`; compare to on-chain `metadata_hash` byte-for-byte.
 4. Persist `match` / `mismatch` (+ both hashes, sha256 of raw body). **Never `match` without an actual byte-level hash comparison** — a parse-success or schema-valid result is not a match.
-5. On `match` (and on `mismatch` — content still shown, badged): extract `name`-adjacent display fields (`image`, `description`, `links`, `imageHash`) into `tokens`. Image integrity (`imageHash` inside the JSON) is *carried*, not verified by the indexer in v1 — the Trust panel can verify client-side; server-side image-hash verification is a listed enhancement (OI-10).
+5. On `match` (and on `mismatch` — content still shown, badged): extract `name`-adjacent display fields (`image`, `description`, `links`, `imageHash`) into `tokens`. Image integrity (`imageHash` inside the JSON) is *carried*, not verified by the indexer in v1 — the safety strip (§12.57) can verify client-side; server-side image-hash verification is a listed enhancement (OI-10).
 6. On fetch failure: remain `unfetched`, exponential backoff (1m, 5m, 30m, 6h, then daily; capped attempts counter never stops the daily retry).
 7. Publish `token:{addr}:events` type `metadata_verified` with the verdict.
 
@@ -506,7 +532,7 @@ Publish happens at the end of each handler, after the DB write, fire-and-forget 
 
 ### 7.3 Table ownership
 
-Ponder-managed (schema in `ponder.schema.ts`): `tokens`, `trades`, `transfers`, `graduations`, `fee_collections`, `balances`, `candles`. Side-process-managed (plain migrations in `apps/indexer/migrations/`): the four **[offchain]** tables. **There are NO external writes into Ponder-managed tables — none.** VERDICT (2026-07-11, OI-11 verified — see §10 row + decisions §11): on the pinned ponder 0.16.8 a direct external `UPDATE` is NOT safe for `tokens` (indexing-store cache full-row flushes silently revert external column updates on rows the handlers keep mutating), and Ponder's docs forbid external writes outright ("Direct SQL queries should not insert, update, or delete rows from Ponder tables"). **REWORKED (2026-07-11): the §12.48c sidecar is implemented as pure READ-DERIVATION** — the `confirmation_watermarks` singleton is the sidecar, the per-row `confirmation_state` columns were removed from `ponder.schema.ts`, the tracker (`src/confirmation.ts`/`confirmationStore.ts`) writes only the watermark singleton, and readers derive the tier per row (§3.8/§5). A per-row `event_confirmations` join table was weighed and rejected: the tier is fully determined by `(block_number, watermarks)`, so per-row rows would re-introduce O(rows) writes for zero information.
+Ponder-managed (schema in `ponder.schema.ts`): `tokens`, `trades`, `transfers`, `graduations`, `fee_collections`, `balances`, `candles`, and `creator_claimable` (§3.12 — Phase-2 creator-fee roll-up, reorg-tracked; empty on v1). Side-process-managed (plain migrations in `apps/indexer/migrations/`): the four **[offchain]** tables. **There are NO external writes into Ponder-managed tables — none.** VERDICT (2026-07-11, OI-11 verified — see §10 row + decisions §11): on the pinned ponder 0.16.8 a direct external `UPDATE` is NOT safe for `tokens` (indexing-store cache full-row flushes silently revert external column updates on rows the handlers keep mutating), and Ponder's docs forbid external writes outright ("Direct SQL queries should not insert, update, or delete rows from Ponder tables"). **REWORKED (2026-07-11): the §12.48c sidecar is implemented as pure READ-DERIVATION** — the `confirmation_watermarks` singleton is the sidecar, the per-row `confirmation_state` columns were removed from `ponder.schema.ts`, the tracker (`src/confirmation.ts`/`confirmationStore.ts`) writes only the watermark singleton, and readers derive the tier per row (§3.8/§5). A per-row `event_confirmations` join table was weighed and rejected: the tier is fully determined by `(block_number, watermarks)`, so per-row rows would re-introduce O(rows) writes for zero information.
 
 **Offchain migration application (2026-07-12, robbed-indexer — replaces the I-5b compose stopgap).** The plain migrations are phased in `src/offchainMigrations.ts` (single implementation, consumed by `scripts/migrate.ts` and the sidecar boot): **phase 1** (offchain tables → `public`) applies any time; **phase 2** (0003 pg_trgm GIN indexes + 0005 flow views + 0007 address_pnl views, which reference Ponder-managed tables) is applied **at sidecar boot** (`startSidecars`, Ponder `:setup` hook) on **every** indexer start. Basis (verified against pinned ponder 0.16.8 source): Ponder's `database.migrate()` builds its tables before indexing starts, so `:setup` is strictly after table creation — no `/ready` polling; and Ponder drops tables **with CASCADE** on a dev schema rebuild, silently dropping external views, so one-shot application is insufficient — every-boot re-application (all statements idempotent, test-enforced) is required. Compose therefore runs `migrate` only pre-start (phase 1 + assertions); the previous `/ready`-gated re-run loop is gone. Fresh-DB ordering (PORT-1 root cause) is covered by `test/offchainMigrations.test.ts`.
 
@@ -545,7 +571,7 @@ The WS server is a small Bun process (lives in `apps/api` deployment or standalo
 | `global:confirmations` | watermark advances + reorg notices | all pages (badge upgrades) |
 | `token:{address}:trades` | trades for one token | Token Detail feed (§5.2) |
 | `token:{address}:candles:{interval}` | candle upsert per trade per interval | chart live updates |
-| `token:{address}:events` | `graduated`, `metadata_verified`, `fee_collected`, state changes | Trust panel, venue switch |
+| `token:{address}:events` | `graduated`, `metadata_verified`, `fee_collected`, state changes | safety strip (§12.57), venue switch |
 
 WS clients subscribe/unsubscribe by sending `{op:'sub'|'unsub', channel}`; the WS server maintains channel→socket maps and one Redis `PSUBSCRIBE token:*` + explicit `SUBSCRIBE global:*`.
 
@@ -573,7 +599,7 @@ WS provides *freshness*, REST provides *truth*. On reconnect (or detected `seq` 
 
 ## 8.5 Bot/farm detection heuristics (spec §8.5, v1.2)
 
-**M2 feature.** On a chain where >50% of flow is programmatic (spec §2.2), the indexer labels bot/farm activity so the Trust panel (§5.2) and an internal flow-quality dashboard can show **how much of a token's flow and holder set is organic**. Implemented as **SQL views + scheduled jobs over the existing `trades` and `transfers` tables** (§3.2/§3.6) — **no new event families, no hot-path cost** (these run as periodic jobs, like the `volume_eth_24h` decay job, §4.4). **Strictly advisory: labeling only — it never gates any chain interaction, listing, or trade** (consistent with §8.4 / spec §8.4; moderation gates listing, this labels flow). Advisory, tunable-with-data, and always presented as estimates/ranges (§5.2 forbids false precision).
+**M2 feature.** On a chain where >50% of flow is programmatic (spec §2.2), the indexer labels bot/farm activity so the Top Holders table + safety strip (§5.2, §12.57–58) and an internal flow-quality dashboard can show **how much of a token's flow and holder set is organic**. Implemented as **SQL views + scheduled jobs over the existing `trades` and `transfers` tables** (§3.2/§3.6) — **no new event families, no hot-path cost** (these run as periodic jobs, like the `volume_eth_24h` decay job, §4.4). **Strictly advisory: labeling only — it never gates any chain interaction, listing, or trade** (consistent with §8.4 / spec §8.4; moderation gates listing, this labels flow). Advisory, tunable-with-data, and always presented as estimates/ranges (§5.2 forbids false precision).
 
 ### 8.5.1 Heuristics (v1 defaults, tunable)
 
@@ -589,7 +615,7 @@ WS provides *freshness*, REST provides *truth*. On reconnect (or detected `seq` 
 
 - **Tables (offchain, indexer-owned — like the other side-process tables §3.11):** `address_flags(address, flags[], cluster_id, updated_at)` and `token_flow_stats(token_address, organic_holder_pct_low, organic_holder_pct_high, organic_volume_pct, flagged_cluster_vol_pct_24h, updated_at)`. Ranges (`_low`/`_high`) because the heuristics are estimates.
 - **Organic-holder %** = share of a token's holders (from `balances`, §3.6) NOT carrying a bot flag; **organic-volume %** = share of curve volume from unflagged addresses; **wash-flagged volume is excluded from organic volume** (heuristic 4).
-- **Consumers:** API exposes these on the token-detail `trust` payload (api.md) and an internal `/v1/admin`/dashboard endpoint; the frontend renders them (web.md Trust panel). The **gate-7 cluster-alert metric** (`funding_cluster_vol_share` vs the M0 thresholds, spec §10) reads `token_flow_stats`.
+- **Consumers:** API exposes these on the token-detail `trust` payload (api.md) and an internal `/v1/admin`/dashboard endpoint; the frontend renders them (web.md Top Holders table + safety strip, §12.57–58). The **gate-7 cluster-alert metric** (`funding_cluster_vol_share` vs the M0 thresholds, spec §10) reads `token_flow_stats`.
 - **Never** written into the Ponder reorg-tracked store's trade/balance columns; these are derived side tables, rebuildable from `trades`+`transfers` (§4.4 rebuild extends to them).
 
 ### 8.5.3 hood.fun traction snapshot (spec §3/§13/§14)
@@ -633,7 +659,7 @@ Emitted as Prometheus-style metrics + alert rules (delivery mechanism per infra 
 - `indexer_head_lag_seconds` (chain head vs last indexed) — alert > 10s.
 - `ws_publish_to_head_ms` histogram — alert p95 > 300ms (guards the 500ms budget).
 - `confirmation_safe_lag_blocks`, `finalized_lag_blocks` — alert on stall (batch poster down ⇒ user-visible badge stall).
-- `metadata_unfetched_total`, `metadata_mismatch_total` — mismatch > 0 pages review (Trust panel shows it either way).
+- `metadata_unfetched_total`, `metadata_mismatch_total` — mismatch > 0 pages review (the safety strip shows it either way, §12.57).
 - **Invariant metrics (gate 7 explicitly):** per-token `real_eth_reserves` vs on-chain balance spot-check sampler; graduation single-fire violation (second `Graduated` for a token ⇒ page immediately); `fee_collections.recipient != treasury` ⇒ page immediately; trade with `fee_eth > 2%` of leg ⇒ page (fee ceiling §6.4).
 - `redis_publish_errors_total`, `ws_connected_clients`, `eth_usd_snapshot_age_seconds` (alert > 5m — USD displays go "dated", never stale-silent, §2).
 

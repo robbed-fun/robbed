@@ -5,7 +5,7 @@
  * the V3 graduation price/tick in both token orderings (§6.3), LP tranche
  * sizing, and fee / anti-sniper proposals; validates with randomized
  * round-trip simulations; emits:
- *   out/constants.json    — canonical artifact (schema: docs/how-it-works/contracts.md §4)
+ *   out/constants.json    — canonical artifact (schema: docs/developers/contracts.md §4)
  *   out/Constants.sol.txt — generated Solidity rendering (never hand-edited)
  *   out/constants.ts      — generated TS rendering for apps/web / packages/shared
  *   out/plots/*.svg + out/plots/checkpoints.md
@@ -76,7 +76,12 @@ const LP_TOKEN_TRANCHE = 206_900_000n * E18; // §6.4: ~206.9M (20.69%)
 const GRAD_MCAP_USD = 69_000n; // §6.4: graduation mcap ≈ $69k equivalent (spec constant)
 const TRADE_FEE_BPS = 100n; // §6.4: 1% ETH leg, both directions
 const MAX_TRADE_FEE_BPS = 200; // §6.4: hard cap ≤2% (structural, hardcoded in factory)
-const CREATOR_FEE_BPS = 0; // §7: designed-in, disabled in v1
+// §7 / §12.63: creator-fee leg. MAINNET default = 0 (Phase-2 disabled until a §12.62 re-derivation
+// prices the split into the reviewed economics). TESTNET = the architect-ratified §12.63 PLACEHOLDER
+// 50 (treasury 100 + creator 50 = 150, ≤ the 200/2% additive cap) so Phase-T exercises the creator
+// leg end-to-end. NOT a mainnet commitment — see reviewRequired note. Selected per-network in run().
+const CREATOR_FEE_BPS_MAINNET = 0;
+const CREATOR_FEE_BPS_TESTNET = 50; // §12.63 placeholder (treasury 100 + creator 50)
 const V3_FEE_TIER = 10_000; // §12.1: 1% tier
 const V3_TICK_SPACING = 200; // 1% tier spacing
 
@@ -409,6 +414,8 @@ async function main(): Promise<void> {
   }
   const isTestnet = network === "testnet";
   const chainId = isTestnet ? TESTNET_CHAIN_ID : MAINNET_CHAIN_ID;
+  // §12.63 creator-fee leg: 0 on mainnet (Phase-2 disabled), 50 on testnet (ratified placeholder).
+  const creatorFeeBps = isTestnet ? CREATOR_FEE_BPS_TESTNET : CREATOR_FEE_BPS_MAINNET;
   // Resolve externals FIRST (fail-closed on a pending fixture before any network fetch).
   const external: ExternalAddresses = isTestnet ? loadTestnetExternal() : MAINNET_EXTERNAL;
   const outName = isTestnet ? "constants.testnet.json" : "constants.json";
@@ -763,6 +770,7 @@ async function main(): Promise<void> {
     "§13 GATE: ALL constants below are open item §13 until hoodpad-architect reviews this output; gate approval closes the item.",
     "fees.graduationFeeWei: COST-BASED per §12.26 (decision 26) — a small flat fee = migrationGasEstimate × gasPriceWei × margin (see derivation.graduationFeeModel), NOT a %-of-raise and never a hardcoded USD figure. M1 RE-VALIDATION DONE (2026-07-12): migrationGasEstimate is now FORK-MEASURED (real §12.28 V3 factory/NPM, graduate()+V3 = ~817845 gas worst-case), not the old 3,000,000 placeholder. gasPrice is fetched live when ROBINHOOD_RPC_URL is set; the exact fee is still re-confirmed at deploy against live gas per §12.26.",
     "fees.callerRewardWei: O-9 (§12.34) — sized ≈$5 equivalent at snapshot. M1 RE-VALIDATION DONE (2026-07-12): asserted ≥10× the FORK-MEASURED graduate() gas × live gas price (see derivation.graduationFeeModel.callerRewardCoversGasFloor); passes with margin.",
+    "fees.creatorFeeBps: §7/§12.63 Phase-2 creator-fee leg. MAINNET = 0 (Phase-2 disabled — enabling it on mainnet requires a §12.62 economics re-derivation that prices the split, NOT shipped here). TESTNET = 50 (architect-ratified PLACEHOLDER: treasury 100 + creator 50 = 150 ≤ the 200/2% additive cap), so Phase-T exercises the creator leg end-to-end. NOT a mainnet commitment; the final mainnet value is a §13/§12.62 knob.",
     "antiSniper.*: PROPOSAL (O-7) — 8s timestamp window (§12.18) with per-tx cap = 2.5% of GRADUATION_ETH; multi-wallet bypass documented.",
     "v3.toleranceTicks / maxArbIterations / migrationSlippageBps: PROPOSAL (O-8) — needed before gate-2 fuzz bounds are final.",
     "beta.*: PLACEHOLDER (O-10) — mainnet values set with hoodpad-security before beta deploy.",
@@ -793,7 +801,7 @@ async function main(): Promise<void> {
     },
     fees: {
       tradeFeeBps: Number(TRADE_FEE_BPS),
-      creatorFeeBps: CREATOR_FEE_BPS,
+      creatorFeeBps,
       creationFeeWei: creationFeeWei.toString(),
       maxCreationFeeWei: maxCreationFeeWei.toString(),
       graduationFeeWei: c.graduationFeeWei.toString(),
@@ -998,7 +1006,7 @@ library RobbedConstants {
     // ── fees (§6.4, §7) ────────────────────────────────────────────────────
     uint16  internal constant TRADE_FEE_BPS       = ${c.fees.tradeFeeBps};
     uint16  internal constant MAX_TRADE_FEE_BPS   = ${MAX_TRADE_FEE_BPS};  // hard cap, structural
-    uint16  internal constant CREATOR_FEE_BPS     = ${c.fees.creatorFeeBps};    // §7: exists, disabled
+    uint16  internal constant CREATOR_FEE_BPS     = ${c.fees.creatorFeeBps};    // §7/§12.63: additive under the 200 cap (mainnet 0)
     uint256 internal constant CREATION_FEE        = ${c.fees.creationFeeWei};
     uint256 internal constant MAX_CREATION_FEE    = ${c.fees.maxCreationFeeWei};
     uint256 internal constant GRADUATION_FEE      = ${c.fees.graduationFeeWei}; // cost-based flat, §12.26 (M0 placeholder; finalized at M1 vs testnet gas)

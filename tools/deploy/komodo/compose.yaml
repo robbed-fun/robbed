@@ -1,4 +1,4 @@
-# ROBBED_ backend Stack — Komodo (deploy-komodo-cloudflare.md Part A, spec §12.45).
+# ROBBED_ backend Stack — Komodo (docker.md — Komodo backend stack; spec §12.45).
 # Four services: postgres (+pg_trgm), redis, indexer (Ponder/Node), api (Hono/Bun)
 # + a ws service (Bun WS fanout) from the SAME api image, co-located with Redis for
 # the §8 <500ms budget. NO `web` service — the frontend deploys to Cloudflare

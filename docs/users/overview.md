@@ -49,5 +49,5 @@ What safety does *not* mean: token prices are set purely by trading. Most launch
 | Trading, or wondering if you can always sell | [trading.md](trading.md) |
 | Checking what everything costs and who earns what | [fees.md](fees.md) |
 | Watching a token near its graduation target | [graduation.md](graduation.md) |
-| An engineer after ABIs, storage layouts, invariants | [contracts.md](contracts.md), [indexer.md](indexer.md), [api.md](api.md), [web.md](web.md) |
+| An engineer after ABIs, storage layouts, invariants | [contracts.md](../developers/contracts.md), [indexer.md](../developers/indexer.md), [api.md](../developers/api.md), [web.md](../developers/web.md) |
 | After the normative protocol definition | [../spec.md](../spec.md) |

@@ -1,17 +1,17 @@
 # Contributing to ROBBED_
 
-Thanks for contributing. This project is spec-driven: [`docs/spec.md`](docs/spec.md) is the single source of truth, and `CLAUDE.md` distills its hard rules. When code and spec disagree, the spec wins — flag the conflict, don't reinterpret it.
+Thanks for contributing. This project is spec-driven: [`spec.md`](spec.md) is the single source of truth, and [`../CLAUDE.md`](../CLAUDE.md) distills its hard rules. When code and spec disagree, the spec wins — flag the conflict, don't reinterpret it.
 
 ## Authority chain
 
 ```
 docs/spec.md                      ← root authority; §12 resolved decisions, §13 open items
   └── CLAUDE.md                   ← distilled hard rules (violations are bugs, not style)
-        └── docs/how-it-works/*.md ← implementable designs, one per component
+        └── docs/developers/*.md   ← implementable designs, one per component
               └── code            ← a transcription of the design doc; nothing more, nothing less
 ```
 
-- **Docs precede code.** Every change must be traceable to a section of a `docs/how-it-works/*.md` doc (or a spec §) that describes the behavior. New behavior → update the design doc first (same PR is fine; the doc diff must stand on its own).
+- **Docs precede code.** Every change must be traceable to a section of a `docs/developers/*.md` doc (or a spec §) that describes the behavior. New behavior → update the design doc first (same PR is fine; the doc diff must stand on its own).
 - **Never self-resolve spec ambiguities.** If the spec is silent or self-contradictory, raise it — resolved decisions are recorded in spec §12 (numbered, dated), genuinely open questions in §13 with an owner. Until resolved, proceed only on paths the ambiguity doesn't touch.
 - Official library documentation beats memory (always check current docs before coding), but the spec beats library docs.
 
@@ -33,7 +33,7 @@ These are enforced by `.claude/hooks/check-hard-rules.sh`, CI greps, and `script
 - Branch from `main` (`feat/…`, `fix/…`, `docs/…`); PRs into `main`.
 - The pre-commit hook (`.githooks/pre-commit`, installed by `pnpm install` via the `prepare` script) runs the **entire local CI mirror** — `scripts/validate.sh --staged`. Emergency bypass: `SKIP_VALIDATION=1 git commit …` (CI still enforces everything).
 - Deviations forced by open items reference the item ID (e.g. `O-5`) in the commit message.
-- Contract diffs additionally get an adversarial security review before merge (see [docs/security-properties.md](docs/security-properties.md)).
+- Contract diffs additionally get an adversarial security review before merge (invariants in [spec.md](spec.md) §10; the review is recorded on the PR).
 
 ## Test requirements per tier
 
@@ -92,4 +92,4 @@ feat: WIP new trade widget + misc cleanups + CI fix   ← WIP; three unrelated c
 
 ## Adding documentation
 
-Placement rules (protocol docs vs developer docs vs audits) live in [docs/README.md](docs/README.md). Short version: protocol behavior → `docs/`; contributor process → this file; test catalogs → next to the tests; security reviews → `audits/`; plans/trackers/status documents → nowhere (don't commit them).
+Placement rules live in [README.md](README.md). Short version: protocol behavior → `docs/`; contributor process → this file; test catalogs → next to the tests; security reviews → the pull request that closes the gate; plans/trackers/status documents → nowhere (don't commit them).

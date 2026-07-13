@@ -1,6 +1,6 @@
 # Contracts toolchain — install + pin record
 
-Transcribes: `docs/how-it-works/contracts.md` §6 (gate 1 — static analysis) and §7.1 (deployment/verification toolchain).
+Transcribes: `docs/developers/contracts.md` §6 (gate 1 — static analysis) and §7.1 (deployment/verification toolchain).
 Owner: `hoodpad-contracts`. Scope: everything under `contracts/`.
 
 This file is the authoritative record of the static-analysis / build toolchain for the Foundry

@@ -39,7 +39,7 @@ Verify the CURRENT API before coding — these move fast. Primary channel: conte
 - wagmi `mock` connector: https://wagmi.sh/react/api/connectors/mock · wagmi core actions (connect/switchAccount/getAccount)
 - viem test client (anvil actions: mine, increaseTime, setCode, snapshot/revert): https://viem.sh/docs/clients/test
 - Foundry/anvil: https://book.getfoundry.sh (fork mode, unlocked dev accounts, time cheats)
-- The catalog + waivers: `apps/web/e2e/user-flows.md`, `apps/web/e2e/user-flows-waivers.md`; web service design `docs/how-it-works/web.md` §8.
+- The catalog + waivers: `apps/web/e2e/user-flows.md`, `apps/web/e2e/user-flows-waivers.md`; web service design `docs/developers/web.md` §8.
 
 ## Industry best practices this harness MUST follow (researched, non-negotiable)
 
