@@ -73,6 +73,29 @@ export const api = {
   },
   // LP fee collections (api.md §3.4) — COLLECT-1's indexed surface.
   fees: (address: string) => get<any>(`/v1/tokens/${address.toLowerCase()}/fees`),
+  // ── creator-fee claim reads (api.md §3 / spec §12.63 / §12.69) — the CFEE-1/2
+  // INDEXED layer. Both endpoints return the AUTHORITATIVE live vault balance
+  // (CreatorVault.balanceOf / tokenBalanceOf) once the indexer has materialized a
+  // `creator_claimable` / `creator_token_claimable` roll-up row for the (creator[,
+  // token]) — before any accrual they 404 (no vault to read), so poll via
+  // `waitForIndexed` (which swallows the throw) after a real sweep/collect.
+  creatorClaimable: (address: string) =>
+    get<{
+      creator: string;
+      vault: string;
+      claimableEth: string;
+      totalAccruedEth: string;
+      totalClaimedEth: string;
+    }>(`/v1/creators/${address.toLowerCase()}/claimable`),
+  creatorTokenClaimable: (address: string, token: string) =>
+    get<{
+      creator: string;
+      token: string;
+      vault: string;
+      claimable: string;
+      totalAccrued: string;
+      totalClaimed: string;
+    }>(`/v1/creators/${address.toLowerCase()}/claimable/${token.toLowerCase()}`),
   // ── portfolio reads (api.md §3.4a) — the PORT-* indexed layer ───────────────
   portfolioSummary: (address: string) => get<any>(`/v1/portfolio/${address.toLowerCase()}`),
   portfolioHoldings: (address: string, q = "") =>

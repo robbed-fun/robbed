@@ -26,6 +26,9 @@ test(
     const token = await seedToken({ name: "Graduate Coin", ticker: "GRAD" });
     // Cross the threshold (keeper-safe — never buys a curve the keeper already
     // graduated). The compose keeper may fire graduate() the moment this locks.
+    // `crossGraduationThreshold` reads GRADUATION_ETH() LIVE off the curve, so the
+    // buy-to-graduation math already targets the new flat G≈2.484-ETH threshold
+    // (§12.67) with no hardcoded figure — nothing to rescale here.
     await crossGraduationThreshold(token.token, token.curve);
 
     // Observe the flip live: land on the page around the graduation moment.

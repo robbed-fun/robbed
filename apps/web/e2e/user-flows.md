@@ -260,6 +260,37 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 
 ---
 
+## 4b. Creator fees — post-graduation 0.5% split (§12.67 / §12.68 / §12.69)
+
+> _**AUTHORED 2026-07-13 (Phase-2 creator-fee factory generation — §12.63(a)):** a NEW immutable factory generation (new CurveFactory + BondingCurve + Router + pull-payment `CreatorVault` + creator-aware `LPFeeVault`) pays token creators **0.5% for the token's life** — venue-invariant: **0.5% pre-grad** as the additive §12.68 curve leg (`creatorFeeBps = 50`, treasury 100 + creator 50 = 150 ≤ the 200/2% cap), and **0.5% post-grad** by splitting the graduated V3 pool's 1% trading fees **50/50** treasury/creator on BOTH legs (§12.69). LP principal stays permanently locked (only fees are collected, never `decreaseLiquidity`). The creator's cut routes to the pull-payment `CreatorVault` (token-leg + WETH/ETH-leg); the creator claims it. Graduation target is now the flat **G≈2.484 ETH** (§12.67). `AUTHORED-BY: robbed-e2e  DATE: 2026-07-13`._
+> _**DEPLOYED + RUNNING 2026-07-13 (creator-fee generation live on the fork):** the §12.63(a)/§12.69 factory generation is deployed to the anvil fork (new CurveFactory + BondingCurve + Router + pull-payment `CreatorVault` + creator-aware `LPFeeVault`; `creatorLpShareBps == 5000`, `CREATOR_FEE_BPS == 50`, flat graduation target). All four `CFEE-*` specs are un-skipped (the `test.fixme`/`@pending:phase2` guards removed) and RUN green against the fork; the on-chain layer uses the shared creator-fee ABIs (`harness/creator-fee.ts`, `@robbed/shared/abi`). **`CFEE-1`/`CFEE-2` WIDENED to on-chain · indexed:** robbed-indexer's split-Collect/CreatorVault accrual now materializes `creator_claimable` (ETH leg) + `creator_token_claimable` (per-(creator,token) ERC20 legs), served over REST at `GET /v1/creators/:a/claimable` and `GET /v1/creators/:a/claimable/:token` (authoritative live vault balances) — the indexed leg reconciles the API claimable to the on-chain vault credit. The **UI layer stays WAIVED** (endpoint-shape gap: the frontend `CreatorEarningsPanel` enumerates buckets from a `GET /v1/creators/:a/token-claimable` LIST endpoint the API does not implement, so its post-grad buckets fall back to an on-chain read that does not reliably surface end-to-end — reported to robbed-indexer/robbed-frontend). `CFEE-3`/`CFEE-4` remain on-chain invariants (pull-payment isolation / a set-once mapping) with no required indexed/UI surface. **DEV-STACK FIX (robbed-e2e):** the deploychain one-shot now emits `CREATOR_VAULT_ADDRESS` + `WETH_ADDRESS` into `local.env` — without them the indexer never registers the `CreatorVault`/`FeesSplit` sources and the split roll-up (hence the CFEE-1/2 indexed leg) is silent._
+
+### `@flow:CFEE-1` — Post-grad creator-fee accrual + claim (LP-fee 50/50 split → CreatorVault → claim) · tx type `collect(tokenId)` + `claim`
+- **Actors:** Creator (claims); anyone (permissionless `collect()`); Trader (post-grad V3 volume).
+- **Preconditions:** graduated token in the creator-fee generation; `LPFeeVault.creatorOf[tokenId]` registered at graduation; `creatorLpShareBps = 5000`.
+- **Steps:** (1) Post-grad V3 swaps accrue fees in BOTH legs (WETH-leg on buys, token-leg on sells). (2) Permissionless `collect(tokenId)` harvests both legs and splits **50/50**: treasury share `safeTransfer`'d to the fixed treasury as ERC20 (treasury-first, keeps the odd wei), creator share credited to `creatorOf[tokenId]` in the `CreatorVault` — BOTH legs as ERC20 per `(creator, token)` via `depositERC20`, never unwrapped (§12.69 C / `LPFeeVault._route`). (3) `creatorAmt + treasuryAmt == collected` EXACTLY per leg (§12.69 F(i)); `creatorAmt = amount × 5000/10000` (floor). (4) The creator PULLS both legs via `claimERC20(creator, WETH)` + `claimERC20(creator, token)` and receives them; the buckets drain to zero.
+- **assertable-layers:** on-chain · indexed. _(UI waived — the frontend CreatorEarningsPanel enumerates post-grad buckets from a `GET /v1/creators/:a/token-claimable` LIST endpoint the API does not implement (it serves single-row `/claimable/:token`); the widget degrades to an on-chain fallback that does not reliably surface the bucket end-to-end — a doc-lockstep endpoint gap. See waivers.)_
+
+### `@flow:CFEE-2` — Venue-invariant 0.5% creator rate end-to-end (curve pre-grad AND V3 post-grad) · §12.68/§12.69
+- **Actors:** Creator; Trader (curve + V3 volume).
+- **Preconditions:** creator-fee generation; `CREATOR_FEE_BPS = 50` on the curve; graduated pool for the post-grad leg.
+- **Steps:** (1) Pre-grad: a known curve buy volume accrues EXACTLY 0.5% (`fee = gross × 50 / 10000`, in-contract §4.1) into the curve creator escrow; `sweepCreatorFees()` lands it in the `CreatorVault`. (2) Post-grad: a known V3 buy volume accrues a 1% pool fee; the 50/50 `collect()` split credits the creator ~0.5% of that volume. (3) The creator's absolute rate is ~0.5% BOTH pre- and post-grad — one honest "0.5% of your token's lifetime volume, on the curve and on Uniswap" story, no discontinuity at graduation.
+- **assertable-layers:** on-chain · indexed. _(UI waived — same frontend enumerating-endpoint gap as CFEE-1; see waivers.)_
+
+### `@flow:CFEE-3` — Un-brickable post-grad: a hostile creator can't freeze `collect()` or trades; only its own claim reverts (retriable) · §12.69(C)/§12.25
+- **Actors:** Trader; a hostile/reverting creator address.
+- **Preconditions:** graduated token in the creator-fee generation with a swept PRE-GRAD native-ETH creator leg (§12.68) in the `CreatorVault`; the registered creator is (made) a reverting contract via `anvil_setCode` (a fork manipulation, like ERR-5 — never a contract change).
+- **Steps:** (1) Post-grad V3 trades still succeed (the creator is never on the trade path). (2) `collect(tokenId)` still succeeds — it PUSHES the creator share to the non-reverting `CreatorVault`, never to the hostile EOA — and still credits the creator's ERC20 balance. (3) The creator's OWN PRE-GRAD native-ETH `claim()` reverts while hostile; the credit is NOT lost. (The post-grad legs are ERC20 — `claimERC20` transfers never call the creator, so a hostile creator can't even brick those; native-ETH `claim` is the only pull it bricks.) (4) After the address is restored to a plain EOA, the same `claim()` succeeds (retriable). The §12.25 / §12.69(C) "accrue-in-contract, pull-withdraw, never push to a hostile address on a critical path" property.
+- **assertable-layers:** on-chain. _(indexed · UI N/A — the un-brickable property is a chain-level pull-payment invariant; post-grad trades' indexed legs are asserted in TD-4/TD-5; see waivers.)_
+
+### `@flow:CFEE-4` — Set-once, unspoofable creator registration (`tokenId → creator`) · §12.69(B)
+- **Actors:** the V3Migrator (registers at graduation); an attacker (non-migrator).
+- **Preconditions:** graduated token in the creator-fee generation.
+- **Steps:** (1) `LPFeeVault.creatorOf[tokenId]` equals the graduating curve's creator (captured at the authoritative moment). (2) A NON-migrator caller cannot OVERWRITE the mapping (set-once → revert). (3) A NON-migrator caller cannot register a fresh, never-graduated tokenId (migrator-gated → revert). The mapping is unchanged throughout.
+- **assertable-layers:** on-chain. _(indexed · UI N/A — a contract-level set-once mapping invariant with no indexed/UI surface; see waivers.)_
+
+---
+
 ## 5. Error & edge paths
 
 ### `@flow:ERR-1` — Slippage revert (buy or sell)
@@ -441,8 +472,9 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 - Portfolio (addendum §3b, 2026-07-11 — ratified): PORT-1..8 (8)
 - Transaction-only: COLLECT-1 (1)
 - Automated graduation (compose keeper, §4a): GRAD-AUTO (1)
+- Creator fees (post-grad 0.5% split, §4b — **DEPLOYED + running**; CFEE-1/CFEE-2 on-chain · indexed, CFEE-3/CFEE-4 on-chain invariants): CFEE-1..4 (4)
 - Errors/edges: ERR-1..ERR-14 with ERR-6 split a/b, ERR-13 RETIRED (§12.57) → 14 active flows
-- **Total: 46 active flows** (the prior 44-flow baseline + `TD-6b` (F-1 donation-freeze regression) + `GRAD-AUTO` (compose-keeper auto-graduation), both authored 2026-07-13 and both full three-layer — no waiver; the `e2e:coverage` gate reports 46/46). The §12.57 retirement + the `TD-7`/`ERR-6b` layer changes remain **FLAGGED for robbed-architect ratification** alongside the §12.57 amendment.
+- **Total: 50 catalogued flows** (the 46-flow baseline + the four `CFEE-*` creator-fee flows authored 2026-07-13 against the ratified §12.67/§12.68/§12.69 design). The 46-flow baseline = the prior 44 + `TD-6b` (F-1 donation-freeze regression) + `GRAD-AUTO` (compose-keeper auto-graduation), both full three-layer. The four `CFEE-*` flows are **DEPLOYED + running** (2026-07-13): `CFEE-1`/`CFEE-2` widened to **on-chain · indexed** (the split-Collect/CreatorVault roll-up is served over REST; UI waived for the frontend enumerating-endpoint gap), `CFEE-3`/`CFEE-4` are **on-chain invariants** (pull-payment isolation / a set-once mapping). All four run green against the fork; the `e2e:coverage` gate reports 50/50. The §12.57 retirement + the `TD-7`/`ERR-6b` layer changes remain **FLAGGED for robbed-architect ratification**.
 
 See `user-flows-waivers.md` for every flow declaring fewer than three assertable layers.
 

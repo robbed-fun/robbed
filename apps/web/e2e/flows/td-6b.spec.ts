@@ -11,9 +11,9 @@ import {
   ensureFunded,
   expect,
   loadDeployedAddresses,
-  parseEther,
   publicClient,
   readAccruedFees,
+  readGraduationEth,
   readLpNftOwner,
   routes,
   seedToken,
@@ -50,10 +50,14 @@ test(
     const token = await seedToken({ name: "Donation Coin", ticker: "DONG" });
     const { lpFeeVault } = loadDeployedAddresses();
 
-    // A donation WELL over the pre-fix freeze threshold (~1% of GRADUATION_ETH ≈
-    // 0.079 ETH). Sent BEFORE crossing the threshold so it is in the curve balance
-    // at graduation — the exact scenario that froze pre-fix.
-    const donation = parseEther("0.2");
+    // A donation WELL over the pre-fix freeze threshold (~1% of GRADUATION_ETH).
+    // Derived LIVE from the on-chain threshold so it tracks the new flat G≈2.484-ETH
+    // target: 8% of GRADUATION_ETH (~0.199 ETH) is comfortably over the ~1% (~0.025
+    // ETH) freeze line the F-1 fix addresses — never a fixed ETH figure. Sent BEFORE
+    // crossing the threshold so it is in the curve balance at graduation — the exact
+    // scenario that froze pre-fix.
+    const gradEth = await readGraduationEth(token.curve);
+    const donation = (gradEth * 8n) / 100n;
     const donateHash = await donateToCurveOnChain(token.curve, donation);
     await publicClient.waitForTransactionReceipt({ hash: donateHash });
 

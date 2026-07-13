@@ -2,10 +2,24 @@
 
 Owner: **robbed-e2e** (`.claude/agents/robbed-e2e.md`). Plan rows **I-5a** (harness) + **I-5b** (all flows).
 
-This suite runs the **44 catalog flows** in `user-flows.md` (DISC-1..4, TD-1..12 + TD-3b,
-LAUNCH-1..3, COLLECT-1, ERR-1..14 with ERR-6 split a/b, PORT-1..8 = **44 stable IDs**) against a **running**
-stack — one `@flow`-tagged spec per catalog ID, each asserting **exactly** its declared
-`assertable-layers` (on-chain → indexed → UI), honouring `user-flows-waivers.md`.
+This suite runs the **50 catalog flows** in `user-flows.md` (DISC-1..4, TD-1..13 + TD-3b/TD-6b,
+LAUNCH-1..3, COLLECT-1, GRAD-AUTO, PORT-1..8, ERR-1..14 with ERR-6 split a/b, **CFEE-1..4** = **50 stable IDs**)
+against a **running** stack — one `@flow`-tagged spec per catalog ID, each asserting **exactly** its
+declared `assertable-layers` (on-chain → indexed → UI), honouring `user-flows-waivers.md`.
+
+**`CFEE-1..4` are DEPLOYED + running (2026-07-13).** The post-graduation creator-fee generation
+(§12.67/§12.68/§12.69: new CurveFactory + BondingCurve + Router + `CreatorVault` + creator-aware
+`LPFeeVault`; `creatorLpShareBps == 5000`, `CREATOR_FEE_BPS == 50`) is deployed to the fork, so the
+`test.fixme`/`@pending:phase2` guards are removed and all four run green. `CFEE-1`/`CFEE-2` are widened
+to **on-chain · indexed** — the split-Collect/CreatorVault roll-up is served over REST (`GET /v1/creators/
+:a/claimable[/:token]`, authoritative live vault balances) and reconciled to the on-chain credit;
+`CFEE-3`/`CFEE-4` stay **on-chain** invariants. The **UI leg of CFEE-1/CFEE-2 stays waived** — the
+frontend `CreatorEarningsPanel` enumerates post-grad buckets from a `GET /v1/creators/:a/token-claimable`
+LIST endpoint the API does not implement (it serves single-row `/claimable/:token`), so its buckets fall
+back to an on-chain read that doesn't reliably surface end-to-end (reported to robbed-indexer/robbed-frontend).
+**Dev-stack dependency:** the deploychain one-shot now emits `CREATOR_VAULT_ADDRESS` + `WETH_ADDRESS`
+into `local.env` — without them the indexer never registers the `CreatorVault`/`FeesSplit` sources and the
+CFEE-1/2 indexed leg is silent.
 
 ## Layout
 
@@ -66,8 +80,16 @@ flake. Playwright drives connect/switch through the in-app bridge `window.__ROBB
 `harness/seed.ts` builds fixtures the product's own way (API image upload → metadata pin + shared
 hash re-verify → `Router.createToken`) and drives curves to/over graduation. `harness/anvil.ts`
 adds time-warp (`increaseTime`/`mine`), snapshot/revert, granular pause setters, and the
-`anvil_setCode` hostile-treasury manipulation for ERR-5 (§12.25) — all harness-side, never a
-contract edit.
+`anvil_setCode` hostile-sink manipulation (`makeTreasuryRevert` for ERR-5 §12.25; the generic
+`makeAddressRevert` for CFEE-3's hostile creator) — all harness-side, never a contract edit.
+`harness/creator-fee.ts` (§12.67/§12.68/§12.69) drives the post-grad path: real SwapRouter02
+volume generation (both legs), the split `collect()` outcome (`FeesCollected` + `FeesSplit`), the
+pre-grad `sweepCreatorFees`, and the `CreatorVault` `claim`/`claimERC20` + `creatorOf`/registration
+reads. The ENTIRE surface is imported from `@robbed/shared/abi` (the §12.69 additions —
+`FeesSplit`/`creatorOf`/`creatorLpShareBps`/`registerCreator`/`tokenBalanceOf`/`claimERC20` — landed
+in the shared codegen 2026-07-13; the harness was authored against local stubs matching
+`contracts/src/interfaces/` and swapped to the shared ABIs the moment they regenerated — no local
+ABI stub remains).
 
 ## Known dependencies / gaps
 

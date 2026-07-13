@@ -547,4 +547,20 @@ export async function restoreTreasury(): Promise<void> {
   await testClient.setCode({ address: treasury, bytecode: "0x" });
 }
 
+/**
+ * Make an ARBITRARY address a hostile, reverting sink via `anvil_setCode` — the
+ * generic form of `makeTreasuryRevert`, used by CFEE-3 to turn a registered token
+ * CREATOR into a reverting contract AFTER graduation. This proves the §12.69(C) /
+ * §12.25 pull-payment isolation: `collect()` (which PUSHES the creator share to
+ * our non-reverting `CreatorVault`, never to the creator EOA) and post-grad V3
+ * trades still succeed; only the creator's OWN `claim()` reverts (retriable once
+ * the code is cleared). A pure fork manipulation (like ERR-5's), never a contract
+ * change — ALWAYS paired with `sanitizeAccount(address)` in a `finally`/`afterEach`
+ * so the reverting code can't wedge later flows.
+ */
+export async function makeAddressRevert(address: Address): Promise<void> {
+  // Minimal runtime that reverts on any call / value receipt: PUSH1 0 DUP1 REVERT.
+  await testClient.setCode({ address, bytecode: "0x60006000fd" });
+}
+
 export { parseEther };

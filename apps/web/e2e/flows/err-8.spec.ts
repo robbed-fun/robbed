@@ -46,13 +46,18 @@ test(
       // The paused state is disclosed on the form (§6.5).
       await expect(page.getByText(copy.createsPaused).first()).toBeVisible();
 
-      // The submit is now CLICKABLE (so it can explain itself) but a paused
-      // factory can never enter the launch flow — clicking surfaces the reason
-      // and no `createToken` is broadcast (button never reaches "Launching…",
-      // the page never leaves /create).
+      // The submit carries the accessible blocked state: `aria-disabled="true"`
+      // whenever a block reason holds (here `pauseCreates`) — LaunchForm sets
+      // `aria-disabled={blockReason}` but leaves the real `disabled` prop for the
+      // mid-flight double-submit guard only, so the button stays CLICKABLE and can
+      // explain itself (persistent helper line + error toast on click). A paused
+      // factory can never enter the launch flow: clicking surfaces the reason and
+      // broadcasts no `createToken` — the button never reaches "Launching…" and the
+      // page never leaves /create. (NB: `toBeEnabled()` treats `aria-disabled` as
+      // disabled, so we assert the attribute + a forced click, not `toBeEnabled`.)
       const submit = launch.submit(page);
-      await expect(submit).toBeEnabled();
-      await submit.click();
+      await expect(submit).toHaveAttribute("aria-disabled", "true");
+      await submit.click({ force: true });
       await expect(submit).not.toHaveText(/launching/i);
       await expect(page).toHaveURL(/\/create/);
 

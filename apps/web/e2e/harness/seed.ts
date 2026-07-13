@@ -92,6 +92,14 @@ export function antiSniperWindowSeconds(): number {
   return Number(forkConstants().antiSniper.windowSeconds);
 }
 
+/** Graduated-pool V3 params from the M0 notebook (fee tier / tick spacing) — the
+ *  post-grad venue's 1% pool. Read from the notebook, never hardcoded (§2). Used
+ *  by the CFEE-* creator-fee flows' SwapRouter02 volume-generation leg. */
+export function forkV3(): { feeTier: number; tickSpacing: number } {
+  const v3 = forkConstants().v3;
+  return { feeTier: Number(v3.feeTier), tickSpacing: Number(v3.tickSpacing) };
+}
+
 /** A minimal valid PNG (1×1) for the API upload path (it re-encodes anyway). */
 const ONE_PX_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC",

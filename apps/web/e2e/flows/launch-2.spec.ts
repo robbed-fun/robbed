@@ -42,7 +42,14 @@ test(
       // Live preview of tokens received + min-received (anti-self-snipe §5.3/§6.5).
       await expect(page.getByText(/min|slippage|receive/i).first()).toBeVisible();
       await launch.submit(page).click();
-      await expect(page.getByText(/Soft-confirmed/i).first()).toBeVisible({ timeout: 20_000 });
+      // §12.56 dropped the visible "Soft-confirmed" launch label; the receipt-success
+      // node now reads "Tradeable" (`launchStepLabel` + LaunchProgress), exactly as
+      // LAUNCH-1 asserts — the shared ConfirmationBadge stays absent for the soft-
+      // confirmed tier. (Was a stale `Soft-confirmed` selector — updated 2026-07-13.)
+      await expect(page.getByRole("heading", { name: "Launching" })).toBeVisible({
+        timeout: 20_000,
+      });
+      await expect(page.getByText("Tradeable").first()).toBeVisible({ timeout: 20_000 });
       await page.waitForURL(/\/t\/0x[0-9a-fA-F]{40}/, { timeout: 20_000 });
       tokenAddress = new URL(page.url()).pathname.split("/t/")[1] ?? "";
       expect(tokenAddress).toMatch(/^0x[0-9a-fA-F]{40}$/);

@@ -12,15 +12,12 @@ import {
   ensureFunded,
   expect,
   loadDeployedAddresses,
-  parseEther,
   publicClient,
   pushCurveNearThreshold,
   readAccruedFees,
   readCallerReward,
-  readGraduationEth,
   readLpNftOwner,
   readMaxEarlyBuy,
-  readReserves,
   routes,
   seedToken,
   sel,
@@ -65,26 +62,22 @@ test(
     // Pre-position the curve a SMALL gap short of GRADUATION_ETH server-side; the
     // final threshold-crossing buy goes through the UI below and must stay under
     // MAX_EARLY_BUY (the browser's wall-clock early-window cap), so the gap it
-    // closes has to be smaller than that cap.
-    await pushCurveNearThreshold(token.token, token.curve, parseEther("0.08"));
+    // closes has to be smaller than that cap. Both the gap and the crossing buy are
+    // derived LIVE from the on-chain MAX_EARLY_BUY (= 2.5% × GRADUATION_ETH, §12.32)
+    // so the math tracks the new flat G≈2.484-ETH target (MAX_EARLY_BUY ≈ 0.062 ETH)
+    // — a previously-fixed 0.08-ETH gap is now UNcloseable by one sub-cap buy.
+    const maxEarly = await readMaxEarlyBuy(token.curve);
+    await pushCurveNearThreshold(token.token, token.curve, maxEarly / 2n);
 
     await page.goto(routes.token(token.token));
     await connectAs(page, "trader");
 
     await assertUi("send the threshold-crossing buy through the widget (real tx via the mock connector)", async () => {
-      // Compute a buy that crosses the remaining gap; the curve CLAMPS net to the
-      // exact threshold and refunds the overshoot (§12.11), so a small margin over
-      // the fee-grossed gap is safe.
-      const target = await readGraduationEth(token.curve);
-      const { realEth } = await readReserves(token.curve);
-      const remaining = target - realEth;
-      // Gross the remaining gap up by the fee + a small margin so the buy's net
-      // crosses (the curve CLAMPS net to the threshold + refunds the overshoot,
-      // §12.11), but CAP it under MAX_EARLY_BUY so the widget doesn't disable the
-      // submit under its (wall-clock) early-window cap.
-      const maxEarly = await readMaxEarlyBuy(token.curve);
-      const want = (remaining * 100n) / 99n + parseEther("0.03");
-      const cross = want < (maxEarly * 90n) / 100n ? want : (maxEarly * 90n) / 100n;
+      // Buy 90% of MAX_EARLY_BUY: comfortably under the widget's wall-clock early-
+      // window cap (so the submit stays enabled) yet more than the ≤ maxEarly/2
+      // remaining gap, so it crosses — the curve CLAMPS the net to the exact
+      // threshold and refunds the overshoot (§12.11).
+      const cross = (maxEarly * 90n) / 100n;
 
       await sel.buyTab(page).click();
       await sel.amountInput(page).fill(formatEther(cross));
