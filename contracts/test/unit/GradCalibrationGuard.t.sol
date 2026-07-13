@@ -43,6 +43,10 @@ contract GradCalibrationGuardTest is Test {
     /// @dev constants.testnet-mode.json with `v3.toleranceTicks = 200` — violates the relation.
     string internal constant FIXTURE_BAD_CALIBRATION = "test/fixtures/deploy/constants.badcalibration.json";
 
+    /// @dev constants.testnet-mode.json with `beta.perTokenEthCapWei` (8 ETH) below `graduationEthWei`
+    ///      (≈8.077 ETH) — the config-discipline cap-reachability guard must fail it closed.
+    string internal constant FIXTURE_LOW_CAP = "test/fixtures/deploy/constants.lowcap.json";
+
     /// @dev `⌈1.0001^100⌉`-style round-up WAD value the {Deploy._powTickWad} algorithm produces —
     ///      derived offline with exact integer arithmetic (python3 Fraction(10001,10000)**100,
     ///      mirroring the round-up square-and-multiply step by step). True floor is
@@ -120,5 +124,22 @@ contract GradCalibrationGuardTest is Test {
         vm.chainId(46_630); // fixture declares chainId 46630 → passes the chain pin, fails calibration
         vm.expectRevert(abi.encodeWithSelector(Deploy.MinFloorToleranceBandViolated.selector, int24(200), uint16(100)));
         harness.loadFrom(FIXTURE_BAD_CALIBRATION);
+    }
+
+    // ── config-discipline: the deploy-side cap-reachability guard fails a below-threshold cap ──
+
+    /// @notice `Deploy._consistencyChecks` mirrors the factory constructor's `_requireCapsReachGraduation`:
+    ///         a `perTokenEthCap` below `graduationEth` bricks graduation reachability (§12.11), so a
+    ///         constants file with such a cap must fail closed pre-broadcast with `CapBelowGraduation`.
+    function test_deploy_lowCapConstants_failsClosed() public {
+        vm.chainId(46_630);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Deploy.CapBelowGraduation.selector,
+                uint256(8_000_000_000_000_000_000),
+                uint256(8_076_868_822_140_981_824)
+            )
+        );
+        harness.loadFrom(FIXTURE_LOW_CAP);
     }
 }

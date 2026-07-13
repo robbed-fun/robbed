@@ -21,7 +21,9 @@ import {
     GraduationUnfundable,
     CreatesPaused,
     FeeAboveCap,
-    CapExceeded
+    CapExceeded,
+    CapBelowGraduation,
+    EarlyWindowTooLong
 } from "src/errors/Errors.sol";
 
 /// @title Factory unit suite (M1-7) — CREATE2 staging, validation, F4, pauses, caps, one-time setters
@@ -128,6 +130,59 @@ contract FactoryTest is BaseFixture {
         assertLt(p.maxCallerReward + p.maxGraduationFee, p.graduationEth, "M0 ceilings must be fundable");
         CurveFactory f = new CurveFactory(p);
         assertEq(f.owner(), safeOwner, "owner not set");
+    }
+
+    // ─────────── Config-discipline: cap-reachability + anti-sniper-window bounds ───────────
+
+    function test_setCaps_revertsWhenPerTokenBelowGraduation() public {
+        uint256 g = TestConstants.GRADUATION_ETH;
+        vm.prank(safeOwner);
+        vm.expectRevert(CapBelowGraduation.selector);
+        factory.setCaps(uint128(g - 1), type(uint128).max); // perToken below threshold bricks graduation
+    }
+
+    function test_setCaps_revertsWhenGlobalBelowGraduation() public {
+        uint256 g = TestConstants.GRADUATION_ETH;
+        vm.prank(safeOwner);
+        vm.expectRevert(CapBelowGraduation.selector);
+        factory.setCaps(type(uint128).max, uint128(g - 1)); // global below threshold bricks graduation
+    }
+
+    function test_setCaps_okAtExactlyGraduation_andAllowsPerTokenAboveGlobal() public {
+        uint256 g = TestConstants.GRADUATION_ETH;
+        vm.startPrank(safeOwner);
+        // Exactly at the threshold is admissible (a fill lands ON, not past, GRADUATION_ETH).
+        factory.setCaps(uint128(g), uint128(g));
+        assertEq(factory.perTokenEthCap(), uint128(g), "perTokenEthCap not set");
+        // perToken may legitimately EXCEED global (a non-binding per-token limit) — only the graduation
+        // floor is enforced, not their mutual ordering.
+        factory.setCaps(type(uint128).max, uint128(g));
+        assertEq(factory.globalEthCap(), uint128(g), "globalEthCap not set");
+        vm.stopPrank();
+    }
+
+    function test_constructor_revertsWhenCapBelowGraduation() public {
+        CurveFactory.FactoryInit memory p = TestConstants.factoryInit(treasury, safeOwner);
+        p.perTokenEthCap = uint128(p.graduationEth - 1); // a deploy below the threshold fails closed
+        vm.expectRevert(CapBelowGraduation.selector);
+        new CurveFactory(p);
+    }
+
+    function test_setAntiSniper_revertsWhenWindowTooLong() public {
+        uint64 maxWin = factory.MAX_EARLY_WINDOW_SECONDS(); // read before pranking (a call consumes it)
+        vm.prank(safeOwner);
+        vm.expectRevert(EarlyWindowTooLong.selector);
+        factory.setAntiSniper(maxWin + 1, 1 ether);
+    }
+
+    function test_setAntiSniper_okAtMaxWindow_andCreateStillWorks() public {
+        uint64 maxWin = factory.MAX_EARLY_WINDOW_SECONDS();
+        vm.prank(safeOwner);
+        factory.setAntiSniper(maxWin, 1 ether); // boundary is admissible
+        assertEq(factory.earlyWindowSeconds(), maxWin, "window not set");
+        // The bound keeps `createdAt + earlyWindowSeconds` from overflowing uint64 — createToken works.
+        (, BondingCurve curve) = _create();
+        assertEq(curve.EARLY_WINDOW_END(), uint64(block.timestamp) + maxWin, "EARLY_WINDOW_END overflow-guard mismatch");
     }
 
     function test_create_revertsWhenPaused() public {

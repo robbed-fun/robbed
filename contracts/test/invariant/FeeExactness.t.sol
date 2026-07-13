@@ -24,19 +24,22 @@ contract FeeExactnessInvariant is Test {
     }
 
     /// @notice EXACT ASSERTION (contracts.md §6 row 3, §12.25-updated):
-    ///         treasury.balance + curve.accruedFees == ghost_feeSum, to the wei.
+    ///         Σ(treasuries).balance + curve.accruedFees == ghost_feeSum, to the wei.
     /// @dev Under §12.25 trade fees accrue in-contract (`accruedFees`) and are pulled by
     ///      `sweepFees()`; only the creation-fee and graduation-fee legs are pushed to the treasury.
     ///      So the treasury receipts plus the still-escrowed fees must equal every computed
-    ///      in-contract fee (treasury is a plain EOA with no other inflows). Native-ETH leg only:
+    ///      in-contract fee (each treasury is a plain EOA with no other inflows). The
+    ///      `churnTreasury` admin action repoints the LIVE treasury between two tracked EOAs, so the
+    ///      receipts are summed via {CurveHandler.sumTreasuryBalances} — a treasury churn cannot break
+    ///      the identity (proof that `setTreasury` never leaks or strands fees). Native-ETH leg only:
     ///      graduation WETH dust also goes to the treasury but as WETH (spec §12.13) — excluded here,
     ///      asserted separately in unit tests.
     function invariant_feeExactness() public view {
         IBondingCurve curve = handler.curve();
         assertEq(
-            handler.treasury().balance + curve.accruedFees(),
+            handler.sumTreasuryBalances() + curve.accruedFees(),
             handler.ghost_feeSum(),
-            "gate-2 row 3 (12.25): treasury receipts + accruedFees != sum of computed fees (wei-exact)"
+            "gate-2 row 3 (12.25): sum treasury receipts + accruedFees != sum of computed fees (wei-exact)"
         );
     }
 }

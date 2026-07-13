@@ -12,7 +12,7 @@ import {ILaunchToken} from "src/interfaces/ILaunchToken.sol";
 import {IRouter} from "src/interfaces/IRouter.sol";
 
 import {CurveFactory} from "src/CurveFactory.sol";
-import {TestRouter, MockMigrator} from "test/harness/Harness.sol";
+import {TestRouter, MockMigrator, Reverter} from "test/harness/Harness.sol";
 import {TestConstants} from "test/harness/TestConstants.sol";
 import {MockArbSys} from "test/mocks/MockArbSys.sol";
 
@@ -38,8 +38,17 @@ contract CurveHandler is CommonBase, StdAssertions, StdCheats, StdUtils {
     /// @notice EOA-like address with NO other inflows — makes gate-2 row 3 exact-to-the-wei
     ///         (contracts.md §6 row 3: "treasury = plain EOA-like address in tests").
     address public treasury;
+    /// @notice Second fee-destination EOA the `churnTreasury` admin action repoints to (also codeless,
+    ///         no other inflows). Fee-exactness (row 3) sums BOTH via {sumTreasuryBalances} so a
+    ///         treasury churn preserves the wei-exact identity (spec §12.25: no trade path calls the
+    ///         treasury, `sweepFees()` follows the LIVE pointer).
+    address public altTreasury;
     /// @notice Factory owner stand-in (Gnosis Safe in production, spec §6.6).
     address public safeOwner;
+    /// @notice Reverting CONTRACT actor: rejects all incoming ETH. Used to prove a hostile
+    ///         recipient/refundTo can only ever revert ITS OWN trade in isolation — never poison
+    ///         shared curve state nor freeze the curve for others (spec §5.4, §12.25).
+    Reverter public hostile;
 
     /// @notice False until M1 `_deployStack()` wires real contracts. All actions no-op before.
     bool public wired;
@@ -76,6 +85,7 @@ contract CurveHandler is CommonBase, StdAssertions, StdCheats, StdUtils {
             _actors.push(makeAddr(string(abi.encodePacked("actor", vm.toString(i)))));
         }
         treasury = makeAddr("treasury"); // EOA-like, no other inflows (row 3 wei-exactness)
+        altTreasury = makeAddr("altTreasury"); // second churn destination, also codeless/no-inflow
         safeOwner = makeAddr("safeOwner");
         _deployStack();
     }
@@ -112,6 +122,8 @@ contract CurveHandler is CommonBase, StdAssertions, StdCheats, StdUtils {
         ghost_feeSum += creationFee;
         ghost_totalEthIn += creationFee;
         ghost_lastK = curve.VIRTUAL_ETH_0() * curve.VIRTUAL_TOKEN_0();
+
+        hostile = new Reverter(); // reverting contract-actor (spec §5.4 isolation proof)
 
         wired = true;
     }
@@ -267,7 +279,114 @@ contract CurveHandler is CommonBase, StdAssertions, StdCheats, StdUtils {
         vm.stopPrank();
     }
 
+    /// @notice CONTRACT-actor adversary (spec §5.4/§12.25 isolation). Routes trades through `hostile`,
+    ///         a contract that reverts on ANY incoming ETH:
+    ///         (1) a small, non-crossing BUY with recipient = hostile SUCCEEDS — LaunchToken is a plain
+    ///             ERC20 (no transfer hook) so token delivery never calls back — accumulating tokens
+    ///             into the hostile contract (ghosts: rows 1, 3, 7, identical to buy());
+    ///         (2) a SELL with recipient = hostile REVERTS atomically (the ETH payout hits the
+    ///             reverting `receive()`) and commits nothing. That is an ISOLATED failure of the
+    ///             seller's OWN tx — a bad recipient, NOT a pause — so it deliberately does NOT touch
+    ///             `ghost_sellRevertedWhilePaused`. The solvency / k / fee-exactness / no-extraction
+    ///             invariants staying green under this action IS the proof that a reverting
+    ///             recipient/refundTo cannot poison shared state or freeze the curve for anyone else.
+    function hostileContractActor(uint256 ethSeed) external onlyWired {
+        if (curve.phase() != IBondingCurve.Phase.Trading) return;
+
+        // (1) Accumulate via a small buy that cannot clamp (refund == 0 ⇒ no ETH is ever sent back to
+        //     `hostile`, so the only revert sources are pauseBuys/caps/early-cap — all caught).
+        uint256 buyEth = bound(ethSeed, 1e14, 0.05 ether); // < MAX_EARLY_BUY, safe in/out of the window
+        (uint256 expectTokens, uint256 fee, uint256 acceptedGross, uint256 refund) = curve.quoteBuy(buyEth);
+        if (expectTokens != 0 && refund == 0) {
+            vm.deal(address(hostile), address(hostile).balance + buyEth);
+            vm.prank(address(hostile));
+            try router.buy{value: buyEth}(address(token), address(hostile), 0, block.timestamp) returns (uint256) {
+                ghost_totalEthIn += acceptedGross;
+                ghost_feeSum += fee;
+                _recordK();
+            } catch {}
+        }
+
+        // (2) Reverting-recipient sell — must revert atomically, committing nothing.
+        uint256 bal = token.balanceOf(address(hostile));
+        if (bal == 0 || curve.phase() != IBondingCurve.Phase.Trading) return;
+        vm.startPrank(address(hostile));
+        token.approve(address(router), bal);
+        try router.sell(address(token), bal, address(hostile), 0, block.timestamp) returns (uint256) {} catch {}
+        vm.stopPrank();
+        assertEq(token.balanceOf(address(hostile)), bal, "hostile sell must revert atomically (no partial commit)");
+    }
+
+    /// @notice ADMIN CHURN: owner retunes the beta caps within their valid range (both ≥ GRADUATION_ETH,
+    ///         enforced by `setCaps`). Proves a cap retune never breaks solvency / k / fee-exactness /
+    ///         sells and never strands graduation (the caps stay ≥ threshold, so reachability holds).
+    ///         Buys tolerate the resulting cap reverts (buy() catches them); sells are never affected.
+    function churnCaps(uint256 perSeed, uint256 globalSeed) external onlyWired {
+        uint256 floor = curve.GRADUATION_ETH();
+        uint128 perTokenEthCap = uint128(bound(perSeed, floor, type(uint128).max));
+        uint128 globalEthCap = uint128(bound(globalSeed, floor, type(uint128).max));
+        vm.prank(safeOwner);
+        factory.setCaps(perTokenEthCap, globalEthCap);
+    }
+
+    /// @notice ADMIN CHURN: owner repoints the fee-destination treasury between two plain EOAs. Proves
+    ///         a treasury churn preserves the wei-exact fee identity (row 3, summed over both via
+    ///         {sumTreasuryBalances}) and never freezes a sell — no trade path calls the treasury
+    ///         (§12.25) and `sweepFees()` follows the LIVE pointer, so every fee still lands in a
+    ///         tracked EOA. A reverting-contract treasury is deliberately NOT used here (it would only
+    ///         revert `sweepFees()`, retriably — covered by the TM-T1 unit/fork tests).
+    function churnTreasury(bool useAlt) external onlyWired {
+        vm.prank(safeOwner);
+        factory.setTreasury(useAlt ? altTreasury : treasury);
+    }
+
+    /// @notice DETERMINISTIC graduation driver (row 4/5 coverage). Fills the curve to GRADUATION_ETH in
+    ///         one shot then graduates, so the post-graduation-zero-value invariant reaches the
+    ///         Graduated phase on EVERY run instead of only when random buys happen to sum exactly onto
+    ///         the threshold. Ghost accounting matches buy()+graduate(); a single graduation stays
+    ///         single-fire by construction (terminal phase ⇒ a later attempt reverts, caught).
+    function forceGraduate(uint256 actorSeed) external onlyWired {
+        if (curve.phase() != IBondingCurve.Phase.Trading) return;
+        vm.warp(uint256(curve.EARLY_WINDOW_END())); // past the anti-sniper per-tx cap
+        (,, uint256 realEth,) = curve.reserves();
+        uint256 remaining = curve.GRADUATION_ETH() - realEth;
+        if (remaining == 0) return;
+        // acceptedGross = ceilDiv(net · 10_000, 10_000 − TRADE_FEE_BPS) — CREATOR_FEE_BPS == 0 here.
+        uint256 denom = BPS - curve.TRADE_FEE_BPS();
+        uint256 gross = (remaining * BPS + denom - 1) / denom;
+        (uint256 expectTokens, uint256 fee, uint256 acceptedGross,) = curve.quoteBuy(gross);
+        if (expectTokens == 0) return;
+
+        address filler = _actors[bound(actorSeed, 0, _actors.length - 1)];
+        vm.deal(filler, filler.balance + gross);
+        vm.prank(filler);
+        try router.buy{value: gross}(address(token), filler, 0, block.timestamp) returns (uint256) {
+            ghost_totalEthIn += acceptedGross; // clamp refund never entered the system (buy() convention)
+            ghost_feeSum += fee;
+            _recordK();
+        } catch {
+            return; // pauseBuys / caps may block this fill; a later call retries (always reachable)
+        }
+        if (curve.phase() != IBondingCurve.Phase.ReadyToGraduate) return;
+
+        address caller = _actors[bound(actorSeed >> 128, 0, _actors.length - 1)];
+        uint256 balBefore = caller.balance;
+        vm.prank(caller);
+        try curve.graduate() {
+            ghost_graduatedCount += 1;
+            ghost_feeSum += curve.GRADUATION_FEE(); // native-ETH leg → treasury FIRST (§3.4 step 2)
+            ghost_callerRewards += caller.balance - balBefore;
+        } catch {}
+    }
+
     // ─────────────────────────────── Helpers ──────────────────────────────────
+
+    /// @notice Σ of every treasury the owner has churned through (both plain EOAs, no other inflows) —
+    ///         the wei-exact fee-accounting invariant (row 3) sums this so a `setTreasury` churn keeps
+    ///         `Σ treasuries + accruedFees == ghost_feeSum` (spec §12.25).
+    function sumTreasuryBalances() external view returns (uint256) {
+        return treasury.balance + altTreasury.balance;
+    }
 
     /// @dev Row 1 transcription: assertGe(vE·vT, ghost_lastK) after every action
     ///      (contracts.md §6 row 1).

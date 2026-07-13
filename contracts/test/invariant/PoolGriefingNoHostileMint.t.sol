@@ -67,5 +67,13 @@ contract PoolGriefingNoHostileMintInvariant is Test {
             0,
             "M-10-A: no token-leg-direction griefed pool ever graduated (liveness uncovered)"
         );
+        // F-1: at least one real-migrator graduation must have carried an above-threshold CURVE ETH
+        // donation. Pre-fix that path froze (NPM.mint "Price slippage check"); post-fix the WETH mint
+        // floor is donation-invariant and the surplus surfaces as dust — proven across the campaign.
+        assertGt(
+            handler.ghost_curveDonationGraduations(),
+            0,
+            "F-1: no graduation exercised an above-threshold curve ETH donation (freeze coverage missing)"
+        );
     }
 }

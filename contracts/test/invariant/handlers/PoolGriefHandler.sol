@@ -49,6 +49,13 @@ contract PoolGriefHandler is V3Fixture {
     ///         arb-back self-heal token-side mispricing across the fuzz campaign, not just in the
     ///         directed unit PoC.
     uint256 public ghost_tokenLegLivenessGraduations;
+    /// @notice F-1 coverage: count of real-migrator graduations that succeeded while the CURVE carried
+    ///         an above-threshold ETH donation (> ~MIGRATION_SLIPPAGE_BPS of GRADUATION_ETH ≈ 0.08 ETH).
+    ///         Pre-fix these froze — the mint's WETH `amount1Min`, anchored to the donation-inflated
+    ///         `wethForMint`, was unmeetable and `NPM.mint` reverted "Price slippage check". This
+    ///         counter proves the fuzz campaign exercises the donation-invariant WETH floor, not just
+    ///         the directed `test_F1_*` unit regressions.
+    uint256 public ghost_curveDonationGraduations;
 
     receive() external payable {} // accept curve refunds + graduation caller reward
 
@@ -224,9 +231,22 @@ contract PoolGriefHandler is V3Fixture {
         (, int24 tickBefore,,,,,) = IUniswapV3Pool(pool).slot0();
         bool tokenLegDirection =
             (tokenIsToken0 && tickBefore > target + tolTicks) || (!tokenIsToken0 && tickBefore < target - tolTicks);
+
+        // F-1 coverage: donate ETH ABOVE the ~0.08 ETH freeze threshold to the CURVE (not the pool) so
+        // EVERY real-migrator graduation in the campaign exercises the donation-invariant WETH mint
+        // floor. The curve forwards its entire balance (donations included) to the migrator, inflating
+        // `wethForMint = W* + donation`; pre-fix the WETH `amount1Min` anchored to that inflated value
+        // and `NPM.mint` reverted once the donation exceeded ~MIGRATION_SLIPPAGE_BPS of GRADUATION_ETH.
+        // The donation never affects the pool tick / arb-back, so it changes no tolerance/stranding
+        // outcome — it only surfaces as WETH dust to the treasury post-mint.
+        uint256 donation = 0.2 ether;
+        vm.deal(address(this), address(this).balance + donation);
+        (bool donated,) = address(curve).call{value: donation}("");
+
         try curve.graduate() {
             ghost_graduated = true;
             ghost_graduations += 1;
+            if (donated) ghost_curveDonationGraduations += 1; // F-1 donation-invariant WETH-floor coverage
             if (tokenLegDirection) ghost_tokenLegLivenessGraduations += 1; // M-10-A liveness coverage
             (, int24 tickAfter,,,,,) = IUniswapV3Pool(pool).slot0();
             int24 tol = tolTicks;

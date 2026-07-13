@@ -119,7 +119,12 @@ contract LifecycleForkTest is Test {
     address internal grad = makeAddr("forkGraduator");
     address internal collector = makeAddr("forkCollector");
 
-    uint256 internal constant ETH_DONATION = 0.01 ether;
+    /// @dev ABOVE the F-1 freeze threshold (~`MIGRATION_SLIPPAGE_BPS` of `GRADUATION_ETH` ≈ 0.08 ETH):
+    ///      pre-fix a curve donation this large made the migrator's WETH `amount1Min` (anchored to the
+    ///      donation-inflated `wethForMint`) unmeetable → `NPM.mint` "Price slippage check" → frozen
+    ///      curve. This exercises the F-1 fix against the REAL vendored V3 on the live-chain fork; the
+    ///      surplus must still surface as WETH dust to the treasury (`_stage5_graduate` assertions).
+    uint256 internal constant ETH_DONATION = 0.25 ether;
     bytes32 internal constant META_HASH = keccak256("robbed-fork-meta");
 
     function setUp() public {

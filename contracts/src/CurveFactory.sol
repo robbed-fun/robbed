@@ -23,6 +23,8 @@ import {
     CreatesPaused,
     FeeAboveCap,
     CapExceeded,
+    CapBelowGraduation,
+    EarlyWindowTooLong,
     CreatorVaultUnset
 } from "./errors/Errors.sol";
 
@@ -74,6 +76,14 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
 
     /// @inheritdoc ICurveFactory
     uint16 public constant override MAX_TRADE_FEE_BPS = 200; // 2% hard cap (spec §6.4)
+
+    /// @notice Upper bound on the anti-sniper `earlyWindowSeconds` an owner may set (config-discipline
+    ///         finding). The early-buy window is a short front-running device (M0 = 8s); 7 days is an
+    ///         astronomically generous ceiling for it (≈75_600× the calibrated value) yet keeps the
+    ///         `uint64` `createdAt + earlyWindowSeconds` sum in {BondingCurve}'s constructor from ever
+    ///         overflowing (block.timestamp ~1.7e9 + 6.05e5 ≪ 1.8e19), so the setter can never brick
+    ///         `createToken`. Any window beyond this is a distinct product mechanism, not anti-sniper.
+    uint64 public constant MAX_EARLY_WINDOW_SECONDS = 7 days;
 
     /// @inheritdoc ICurveFactory
     address public immutable override weth;
@@ -200,6 +210,11 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
         // immutable CEILINGS (not the current values) makes the guarantee hold for every admissible
         // future setting. Strict `<` leaves headroom for the LP tranche's WETH leg (spec §12.11).
         if (p.maxCallerReward + p.maxGraduationFee >= p.graduationEth) revert GraduationUnfundable();
+        // Beta caps must never be set below the graduation threshold, or a curve could never raise
+        // enough to graduate (the cap binds before real reserves reach GRADUATION_ETH). Fail a bad
+        // deploy closed here; `setCaps` re-checks for owner retunes. `p.graduationEth != 0` was
+        // asserted above, so a zero cap also trips this (config-discipline finding, guards §12.11).
+        _requireCapsReachGraduation(p.perTokenEthCap, p.globalEthCap, p.graduationEth);
 
         weth = p.weth;
         _virtualEth0 = p.virtualEth0;
@@ -471,17 +486,39 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
     }
 
     /// @inheritdoc ICurveFactory
+    /// @dev `windowSeconds ≤ MAX_EARLY_WINDOW_SECONDS` (7 days) — bounds the setter so it can never
+    ///      overflow the `uint64` `createdAt + earlyWindowSeconds` sum in the curve constructor (which
+    ///      would brick every future `createToken`) and stays within a sane anti-sniper horizon
+    ///      (config-discipline finding, spec §12.18). `maxEarlyBuyWei_` is deliberately left
+    ///      unbounded: a larger value only WEAKENS the (buy-only) early cap and can never block a sell.
     function setAntiSniper(uint64 windowSeconds, uint128 maxEarlyBuyWei_) external override onlyOwner {
+        if (windowSeconds > MAX_EARLY_WINDOW_SECONDS) revert EarlyWindowTooLong();
         earlyWindowSeconds = windowSeconds;
         maxEarlyBuyWei = maxEarlyBuyWei_;
         emit AntiSniperUpdated(windowSeconds, maxEarlyBuyWei_);
     }
 
     /// @inheritdoc ICurveFactory
+    /// @dev Both caps must stay `≥ _graduationEth` so graduation remains reachable (a cap below the
+    ///      threshold means no buy can ever push real reserves to GRADUATION_ETH — config-discipline
+    ///      finding, guards §12.11). The M5 caps-lift value `type(uint128).max` satisfies it.
     function setCaps(uint128 perTokenEthCap_, uint128 globalEthCap_) external override onlyOwner {
+        _requireCapsReachGraduation(perTokenEthCap_, globalEthCap_, _graduationEth);
         perTokenEthCap = perTokenEthCap_;
         globalEthCap = globalEthCap_;
         emit CapsUpdated(perTokenEthCap_, globalEthCap_);
+    }
+
+    /// @dev Shared cap-reachability guard (constructor + {setCaps}): a beta cap below the graduation
+    ///      threshold would permanently strand every curve below graduation. `globalEthCap` bounds the
+    ///      SUM across all curves, so it too must clear a single curve's threshold for ANY curve to
+    ///      graduate. `perTokenEthCap` may legitimately exceed `globalEthCap` (a non-binding per-token
+    ///      limit), so only the graduation floor — not their mutual ordering — is enforced.
+    function _requireCapsReachGraduation(uint256 perTokenEthCap_, uint256 globalEthCap_, uint256 graduationEth_)
+        internal
+        pure
+    {
+        if (perTokenEthCap_ < graduationEth_ || globalEthCap_ < graduationEth_) revert CapBelowGraduation();
     }
 
     /// @inheritdoc ICurveFactory

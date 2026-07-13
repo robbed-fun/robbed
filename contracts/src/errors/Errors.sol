@@ -66,6 +66,22 @@ error FeeAboveCap();
 ///         (contracts.md §2.2). Never raised on ETH-decreasing operations (sells/graduation).
 error CapExceeded();
 
+/// @notice An owner-set (or deploy-time) beta cap — `perTokenEthCap` or `globalEthCap` — is below
+///         `GRADUATION_ETH`, which would make graduation permanently UNREACHABLE (a buy can never
+///         push real reserves to the threshold once the cap binds below it). Enforced in the factory
+///         constructor and `setCaps` so a misconfigured cap fails closed rather than silently
+///         bricking every future curve's graduation (config-discipline finding; guards §12.11
+///         reachability). The caps-lift target `type(uint128).max` trivially satisfies it.
+error CapBelowGraduation();
+
+/// @notice An owner-set anti-sniper `earlyWindowSeconds` exceeds `MAX_EARLY_WINDOW_SECONDS`. The
+///         window is a short front-running-protection device (M0 = 8s); an unbounded value both
+///         overshoots any sane anti-sniper horizon AND risks overflowing the `uint64`
+///         `createdAt + earlyWindowSeconds` sum in the curve constructor (which would revert every
+///         future `createToken`). Bounded in `setAntiSniper` so the setter cannot brick launches
+///         (config-discipline finding; guards spec §12.18).
+error EarlyWindowTooLong();
+
 /// @notice A launch with a non-zero `creatorFeeBps` was attempted while the CreatorVault is unwired
 ///         (spec §7, §12.63). Fail-closed so creator-fee ETH can never accrue with nowhere to sweep
 ///         it (a call to the zero-address vault would burn it). At `creatorFeeBps == 0` the vault is

@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {IV3Migrator} from "./interfaces/IV3Migrator.sol";
 import {ICurveFactory} from "./interfaces/ICurveFactory.sol";
@@ -99,6 +100,33 @@ import {
 ///         callback authorises `msg.sender` against `_activePool` (set for the duration of `migrate`
 ///         only), so no stray/hostile pool can invoke it — chosen over a SwapRouter dependency to
 ///         keep the graduation path free of an extra trusted integration.
+///
+///      5. **Curve-donation graduation freeze — WETH `amount1Min` anchored to the target, not the
+///         balance (finding F-1, HIGH).** `BondingCurve` exposes an ungated `receive()`, so anyone
+///         can donate ETH to a curve; at graduation the curve forwards its ENTIRE ETH balance
+///         (donations included) so `msg.value == GRADUATION_ETH + donation − CALLER_REWARD` and hence
+///         `wethForMint = W* + donation`, where `W* = GRADUATION_ETH − CALLER_REWARD − GRADUATION_FEE`
+///         is the WETH that pairs with `LP_TOKEN_TRANCHE` at the graduation price (== M0
+///         `ethToLpWei`; verified against `tools/m0/lib/curve.ts` constraint (c): `G − F − R = p·L`).
+///         A full-range V3 position at the (verified) target price can only ABSORB `W*` WETH — the
+///         donation has no paired token — so anchoring the mint's WETH `amount1Min` to the
+///         donation-inflated `wethForMint` demanded `≈ (W* + donation)·(1 − MIGRATION_SLIPPAGE_BPS)`,
+///         which `NPM.mint` cannot deposit once `donation > W*·bps/(1−bps)` (~0.08 ETH on the
+///         fixture) → "Price slippage check" revert → `graduate()` reverts → curve permanently frozen
+///         in `ReadyToGraduate` (both directions locked, §12.12). Fix: anchor `amount1Min` to
+///         `min(wethForMint, W*)·(1 − bps)` (== `W*·(1 − bps)` whenever a donation is present), so the
+///         floor is invariant to donations and the surplus surfaces as WETH dust to the treasury
+///         (already the `_settleDust` design intent). `amountDesired` stays the LIVE balance on both
+///         sides (unchanged): at the fixed target price the token side binds and only `W*` WETH is
+///         pulled, the rest is dust. Alternatives weighed: (a) also cap the WETH ARB budget to `W*` —
+///         unnecessary: the budget is `wethForMint·bps`, but a price-limited WETH arb can leave at
+///         most `(W* + donation)·(1 − bps) ≥ W*·(1 − bps) = amount1Min` (the floor still holds by
+///         construction), so the extra donation only ever widens the arb headroom, never underfunds
+///         the mint; (b) thread an explicit `wethForMintTarget` immutable from M0 — rejected: the
+///         three curve immutables already encode it exactly (`G − R − F`), so reading them keeps the
+///         constant off the migrator's config surface. Token leg unchanged (already donation-invariant
+///         — anchored to the FIXED `lpTranche`). Proven by the F-1 unit regression (`Migrator.t.sol`,
+///         scanning 0.08–1.0 ETH donations) + the gate-3 fork lifecycle's above-threshold donation.
 contract V3Migrator is IV3Migrator {
     using SafeERC20 for IERC20;
 
@@ -218,6 +246,12 @@ contract V3Migrator is IV3Migrator {
         uint160 targetSqrt;
         int24 targetTick;
         uint256 wethForMint;
+        // F-1: the DONATION-INVARIANT target WETH leg — `W* = GRADUATION_ETH − CALLER_REWARD −
+        // GRADUATION_FEE`, i.e. exactly the WETH that pairs with `LP_TOKEN_TRANCHE` at the graduation
+        // price (== M0 `constants.json.derivation.ethToLpWei`). `wethForMint` is `W* + donation` (see
+        // decision #5); the mint's WETH `amount1Min` MUST anchor to `min(wethForMint, W*)`, never to
+        // the donation-inflated `wethForMint`, or a curve donation freezes graduation.
+        uint256 wethForMintTarget;
         uint256 lpTranche;
         uint256 gradFee;
         address treasury;
@@ -239,11 +273,18 @@ contract V3Migrator is IV3Migrator {
         c.targetTick = c.tokenIsToken0 ? TARGET_TICK_TOKEN0 : TARGET_TICK_TOKEN1;
         c.lpTranche = IBondingCurve(msg.sender).LP_TOKEN_TRANCHE();
         c.gradFee = IBondingCurve(msg.sender).GRADUATION_FEE();
+        // F-1 (decision #5): the target WETH leg `W* = GRADUATION_ETH − CALLER_REWARD − GRADUATION_FEE`.
+        // All three are per-curve immutables read from the calling curve; the factory constructor
+        // guarantees `maxCallerReward + maxGraduationFee < graduationEth`, so `W* > 0` (no underflow).
+        c.wethForMintTarget =
+            IBondingCurve(msg.sender).GRADUATION_ETH() - IBondingCurve(msg.sender).CALLER_REWARD() - c.gradFee;
 
         // Wrap the whole raise to WETH up front. The graduation fee is then paid in WETH, which has
         // no recipient callback — a hostile treasury cannot revert it (TM-T1, decision #1).
         IWETH9(weth).deposit{value: msg.value}();
         if (c.gradFee != 0) IERC20(weth).safeTransfer(c.treasury, c.gradFee); // → treasury FIRST (§6.3 step 1)
+        // `wethForMint = W* + donation`: `msg.value == GRADUATION_ETH + donation − CALLER_REWARD`
+        // (BondingCurve.graduate forwards `balance − fee escrows`, donations included), minus gradFee.
         c.wethForMint = msg.value - c.gradFee;
 
         c.pool = IUniswapV3Factory(v3Factory).getPool(token, weth, FEE_TIER);
@@ -359,8 +400,21 @@ contract V3Migrator is IV3Migrator {
         // Amount-mins from the PRE-arb expectation (parity floor, decision #2 defense-in-depth). The
         // arb (either leg) may skew a side by at most `slippageBps`, so both actual balances are ≥
         // their min; `NPM.mint` reverts `InsufficientLiquidityMinted`/amount-min otherwise.
+        //
+        // F-1 (decision #5): the WETH floor anchors to the TARGET WETH `min(wethForMint, W*)`, NOT the
+        // donation-inflated `wethForMint`. A full-range position at the target price can only ABSORB the
+        // WETH that pairs with `LP_TOKEN_TRANCHE` (= `W*`); donated ETH (which arrives in `wethForMint`
+        // via the curve's ungated `receive()`) has no paired token and surfaces as WETH dust to the
+        // treasury (see `_settleDust`). Anchoring `wethMin` to `wethForMint` instead demanded the mint
+        // deposit ≈ `(W* + donation)·(1−bps)` WETH — unachievable once `donation > W*·bps/(1−bps)`
+        // (~0.08 ETH on the M0 fixture) — so `NPM.mint` reverted "Price slippage check", `graduate()`
+        // reverted, and the curve froze in `ReadyToGraduate` (§12.12). `Math.min` floors cleanly at
+        // `W*·(1−bps)` whenever a donation is present (`wethForMint ≥ W*`), and degrades to the old
+        // `wethForMint·(1−bps)` in the (unreachable) `wethForMint < W*` case — the universally correct
+        // WETH floor. The token leg stays anchored to the FIXED `lpTranche` (already donation-invariant:
+        // token donations become surplus that binds out and is burned as dust).
         uint256 tokenMin = (c.lpTranche * (BPS - MIGRATION_SLIPPAGE_BPS)) / BPS;
-        uint256 wethMin = (c.wethForMint * (BPS - MIGRATION_SLIPPAGE_BPS)) / BPS;
+        uint256 wethMin = (Math.min(c.wethForMint, c.wethForMintTarget) * (BPS - MIGRATION_SLIPPAGE_BPS)) / BPS;
 
         if (c.tokenIsToken0) {
             (m.token0, m.token1) = (c.token, weth_);
