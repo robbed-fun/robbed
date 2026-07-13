@@ -7,9 +7,17 @@
 
 - Anyone can launch a token in **one transaction** for a flat fee of roughly a dollar or two (§5.3, §6.4). No code, no presale, no team allocation, no vesting.
 - Every token starts on a **bonding curve** — an automated market where a formula sets the price: buys push it up, sells push it down (§4.1, §6.2). ROBBED_ is an AMM with soft confirmations, not an order book or real-time exchange (§1).
-- Every trade pays a **1% fee** (§6.4). In v1 creators earn nothing per trade — creator fees are designed in but switched off until Phase 2 (§7). Full breakdown: [fees.md](fees.md).
+- Every trade pays a **1% fee** to the treasury (§6.4) — and, where it is switched on, a second small leg to the token's **creator** (currently **0.5%** on testnet; additive, total hard-capped at **2%** in code). Creators earning a cut of every trade on their own token is a **live feature**, not a promise (§7, §12.63). Full breakdown: [fees.md](fees.md).
 - **Selling is always possible.** No flag, pause, or code path can ever block a curve sell — this is a hard protocol rule, enforced by construction, not policy (§6.5, §12.25). Details: [trading.md](trading.md).
 - When the curve raises its ETH target, the token **graduates**: anyone can trigger the move of its liquidity into a Uniswap v3 pool, where trading continues outside anyone's control (§6.3). LP principal permanently locked; trading fees claimable by treasury (§12.14). Details: [graduation.md](graduation.md).
+
+## How you can earn on ROBBED_
+
+Two honest paths — and one that is no longer yours:
+
+- **Launch a token and earn creator fees.** This is the one built-in way the launchpad pays *you*. As a creator you earn a cut of **every** trade on your token while it is on the curve — the creator-fee leg, live now at **0.5%** on testnet, symmetric on buys *and* sells, additive to the 1% treasury fee and hard-capped at 2% total. It accrues automatically, you claim it anytime, and it can never be redirected or freeze anyone's sell (§7, §12.63). On mainnet the rate is a deploy-time decision — the spec's v1 default is 0, so it may launch at 0 or a re-locked non-zero value. Details: [fees.md](fees.md).
+- **Trade the curve (or the Uniswap pool after graduation).** You can buy low and sell higher — but this is **speculation, not yield**: the price is set purely by trading, the curve math rounds a hair in the protocol's favor, and most launchpad tokens go to zero. There is no staking, no yield, no airdrop, no dividend — just the market ([trading.md](trading.md)).
+- **The graduation reward is now the keeper's.** `graduate()` pays its caller a small flat reward and stays permissionless, but the platform keeper auto-fires it, so in normal operation the keeper collects it, not you (§12.66, [graduation.md](graduation.md)).
 
 ## The lifecycle, step by step
 
@@ -25,7 +33,7 @@ About 79% of the supply is for sale on the bonding curve; the rest is reserved f
 
 ### 3. Graduate
 
-When the curve has raised its fixed ETH target — about $69k in market cap terms, set at deploy time (§6.4, §12.4) — trading on the curve stops and **anyone** can call `graduate()` (and is paid a small reward for doing so). The raised ETH plus the reserved token tranche become a full-range Uniswap v3 position; the position's ownership NFT goes into a vault that no one can withdraw from. From that moment the token trades on Uniswap like any other asset, and no ROBBED_ contract has any authority over it (§6.3, §6.5). Details: [graduation.md](graduation.md).
+When the curve has raised its fixed ETH target — about $69k in market cap terms, set at deploy time (§6.4, §12.4) — trading on the curve stops and the token **graduates**. `graduate()` is permissionless: anyone may call it and collect a small reward. In normal operation you never have to — ROBBED_ runs a **keeper** (a bot) that auto-fires graduation within a block or two of the target and collects that reward; the permissionless path stays as a fallback if the keeper is ever down (§12.66). The raised ETH plus the reserved token tranche become a full-range Uniswap v3 position; the position's ownership NFT goes into a vault that no one can withdraw from. From that moment the token trades on Uniswap like any other asset, and no ROBBED_ contract has any authority over it (§6.3, §6.5). Details: [graduation.md](graduation.md).
 
 Graduation is a milestone, not a promise: a token that never reaches the target simply keeps trading on the curve, and its price can go to zero.
 

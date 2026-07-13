@@ -11,7 +11,7 @@
 | **Creator fee** | **0.5%** of the ETH side, on **both** buys and sells (testnet; additive with the trade fee, total hard-capped at **2%** in code) | trader, on every curve trade | accrues in the curve; swept to the **`CreatorVault`** via `sweepCreatorFees()`, then claimed by **the token's creator** (§7, §12.63) |
 | Creation fee | flat **0.000847 ETH** (§6.4, §12.62) | creator, once, at launch | treasury Safe |
 | Graduation fee | flat, cost-based (migration gas + thin margin), **not** a % of the raise; **0.00045 ETH** (§6.4, §12.26, §12.62) | deducted from the raised ETH at graduation | treasury Safe |
-| Graduation caller reward | flat **0.002822 ETH** (§12.34, §12.62) | protocol (from the curve's balance) | **whoever calls `graduate()`** — that could be you |
+| Graduation caller reward | flat **0.002822 ETH** (§12.34, §12.62) | protocol (from the curve's balance) | **whoever calls `graduate()`** — in normal operation the platform **keeper** bot, which auto-fires graduation; permissionless, so anyone who calls first claims it (§12.66) |
 | Post-graduation pool fee | Uniswap v3 **1% fee tier** (§12.28) | traders on Uniswap, after graduation | the LP position; claimable by the **treasury** through the fee vault (§6.3) |
 
 **Total on a curve trade (testnet): 1.5%** — 1% to the treasury + 0.5% to the creator, both on the ETH side of every buy and sell. The two are separate, independently-floored legs and their sum can never exceed the **2%** ceiling written into the contract (§6.4, §12.63).
@@ -58,5 +58,6 @@ The canonical description — the only one used anywhere in the product: **LP pr
 - **Do creators earn after graduation?** No — post-graduation, the Uniswap pool's 1% fees go to the treasury, not the creator (§6.3, §12.14).
 - **Do I pay the trade fee on sells too?** Yes — 1% treasury + 0.5% creator of the ETH you receive, symmetric with buys (§6.4).
 - **Can fees be raised on my token later?** The total trade fee is capped at 2% in code, and fee parameters for a launched curve are **immutable** — an owner retune can never touch a live curve (§4.1, §6.4).
-- **Who pays for graduation?** A flat cost-based fee comes out of the raise, and the caller reward incentivizes anyone to trigger it — both are protocol constants, not percentages (§12.26, §12.34).
+- **Who pays for graduation?** A flat cost-based fee comes out of the raise, and the caller reward incentivizes triggering it — the platform keeper claims that reward in normal operation, though `graduate()` stays permissionless. Both the fee and the reward are protocol constants, not percentages (§12.26, §12.34, §12.66).
+- **Can I earn the graduation reward?** In principle yes — `graduate()` is permissionless — but a keeper bot auto-fires graduation within a block or two, so in practice it collects the reward. The reliable way a user earns on ROBBED_ is by **launching a token and collecting its creator fees** (above), not by racing the keeper (§12.66).
 - **Does the team earn from LP after graduation?** The treasury claims the Uniswap position's trading fees via the vault; the principal is untouchable (§6.3, §12.14).

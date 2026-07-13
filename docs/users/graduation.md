@@ -1,6 +1,6 @@
 # Graduation
 
-**Audience:** anyone holding or watching a token near its target. What triggers graduation, the brief lock, who can trigger it (anyone — for a reward), and what the token looks like afterwards.
+**Audience:** anyone holding or watching a token near its target. What triggers graduation, the brief lock, who fires it (a keeper bot in normal operation; anyone as a fallback — for a reward), and what the token looks like afterwards.
 **Source of truth:** [../spec.md](../spec.md) (§6.2, §6.3, §12.11, §12.12). This page is a derived view; when they disagree, the spec wins.
 
 ## What graduation is
@@ -22,11 +22,11 @@ The moment the target is hit, the curve enters a `ReadyToGraduate` state: **both
 - **No one has authority over it.** No admin caused it, and no admin can extend it — it is a deterministic consequence of the curve filling, defined in immutable code.
 - **Anyone can end it**, by calling `graduate()` — and gets paid for doing so.
 
-The UI shows the token as “Graduating…” in both directions while this state lasts. In practice it lasts as long as it takes anyone to claim the reward below.
+The UI shows the token as “Graduating…” in both directions while this state lasts. In practice it lasts a block or two: ROBBED_'s keeper fires `graduate()` almost immediately (see below).
 
-## Anyone can pull the trigger — and gets paid
+## Who pulls the trigger — the keeper, or anyone
 
-`graduate()` is **permissionless**: any address may call it, and the caller receives a fixed reward — currently **0.002751 ETH** (~$5 equivalent at the §12.62 snapshot), deliberately sized at a multiple of the gas cost so triggering is always profitable (§12.34). The protocol does not depend on the team being awake: if a bot, a holder, or a stranger calls it first, the system works exactly the same.
+`graduate()` is **permissionless**: any address may call it, and the caller receives a fixed reward — currently **0.002751 ETH** (~$5 equivalent at the §12.62 snapshot), deliberately sized at a multiple of the gas cost so triggering is always profitable (§12.34). In normal operation ROBBED_'s **keeper** — a small off-chain bot that watches for curves hitting the target — fires `graduate()` within a block or two and collects that reward (§12.66). Nothing depends on it, though: the keeper holds **no special authority** and cannot block or delay anyone; if it is ever down, any bot, holder, or stranger can call `graduate()` first, claim the reward, and the system works exactly the same. On the single first-come-first-served sequencer the keeper is simply one more caller racing for the reward — which is why the graduation reward is the keeper's in practice, not a reliable way for a user to earn (§12.66, §12.12).
 
 What the call does, in order (§6.3):
 

@@ -27,7 +27,7 @@ The strongest guarantee in the protocol (§6.5): **no flag, pause, or code path 
 - Trade fees never touch the treasury during a trade — they accrue in-contract and move only via a separate permissionless sweep — so even a hostile or broken fee recipient cannot freeze exits (§12.25).
 - After graduation, the token trades on Uniswap and no ROBBED_ contract retains pause authority of any kind (§6.5).
 
-The one deliberate carve-out: in the moments between a curve hitting its graduation target and someone calling `graduate()`, **both** buys and sells lock (§12.12). This is not a pause — no one has the authority to cause, extend, or keep it; it is a deterministic protocol state that anyone can end (and get paid for ending). See [graduation.md](graduation.md).
+The one deliberate carve-out: in the moments between a curve hitting its graduation target and `graduate()` executing, **both** buys and sells lock (§12.12). This is not a pause — no one has the authority to cause, extend, or keep it; it is a deterministic protocol state that anyone can end. In normal operation ROBBED_'s **keeper** ends it within a block or two (and collects the small reward); it stays permissionless as a fallback, so a stuck lock is not something an admin could cause or prolong (§12.66). See [graduation.md](graduation.md).
 
 ## Confirmations: what “done” means
 

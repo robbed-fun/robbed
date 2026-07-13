@@ -59,4 +59,9 @@ This is the honest trade-off of the launchpad model: creators get instant, free-
 
 ## What creators earn
 
-In v1: **nothing per trade** — the creator-fee parameter exists in the fee config but is hardcoded to zero, with no code path that reads it (§7). Creator earnings are a designed Phase 2 feature; the protocol already records the creator of every token on-chain, so when Phase 2 ships it can apply cleanly. See [fees.md](fees.md) for the current state and the Phase 2 plan.
+You earn the **creator-fee leg of every trade on your token** while it is on the curve — a live feature, not a promise (§7, §12.63). On the current testnet that is **0.5%** of the ETH side of every buy *and* sell, additive to the 1% treasury fee and hard-capped at 2% total in code. It accrues to your token's curve automatically — there is nothing to claim per trade — and you can pull the accumulated total to your address anytime with a one-click claim (a permissionless `sweepCreatorFees()` then `CreatorVault.claim()`); the ETH can **only ever** reach the creator address that earned it, and it can never be redirected or freeze anyone's sell.
+
+Two honest caveats:
+
+- **The earning window is the curve phase.** After graduation, trading moves to the token's Uniswap pool and those 1% pool fees go to the treasury, not to you (§6.3, §12.14).
+- **On mainnet the rate is a deploy-time decision.** The spec's v1 default is 0, so mainnet may launch with the creator fee at 0 or at a re-locked non-zero value — the plumbing (a per-creator escrow, `CreatorVault`) ships either way, and the creator of every token is recorded on-chain from day one (§7, §12.63). Full mechanics, numbers, and how it compares to pump.fun / Raydium: [fees.md](fees.md).
