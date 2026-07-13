@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
- * emit-testnet-env.ts — Phase T-3 deploy-artifact emitter (docs/runbooks/testnet.md §6;
- * docker-compose.testnet.yml contract documented in docs/runbooks/docker.md "Testnet stack").
+ * emit-testnet-env.ts — Phase T-3 deploy-artifact emitter (docs/developers/runbooks/testnet.md §6;
+ * docker-compose.testnet.yml contract documented in docs/developers/runbooks/docker.md "Testnet stack").
  *
  * The LOCAL stack's `deploychain` compose one-shot emits tools/localstack/out/local.env inline
  * (docker-compose.yml) because it also runs the deploy. On TESTNET there is no deploychain — the
@@ -35,7 +35,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Official Robinhood Chain testnet id (spec §12.49; docs/runbooks/testnet.md §1).
+// Official Robinhood Chain testnet id (spec §12.49; docs/developers/runbooks/testnet.md §1).
 const TESTNET_CHAIN_ID = 46630;
 
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;

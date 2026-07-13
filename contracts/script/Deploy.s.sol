@@ -44,7 +44,7 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 ///          fork pipeline can NEVER produce a `mode:"live"` 4663 registry entry (§12.55 / T-5). A
 ///          real deploy later overwrites `4663.json` with `mode:"live"`.
 ///        - TESTNET (`block.chainid == 46630`, official Robinhood Chain testnet — chain id per
-///          docs.robinhood.com/chain/connecting, recorded in docs/runbooks/testnet.md §1): public-
+///          docs.robinhood.com/chain/connecting, recorded in docs/developers/runbooks/testnet.md §1): public-
 ///          chain discipline, exactly like LIVE — a real `DEPLOYER_PRIVATE_KEY` is REQUIRED (the
 ///          anvil account-0 fallback is local-only, never on ANY public chain), ALL external
 ///          addresses (WETH, V3 factory/NPM/router/quoter, treasury Safe) come from the constants
@@ -108,7 +108,7 @@ contract Deploy is Script {
     uint256 internal constant LIVE_CHAIN_ID = 4663;
 
     /// @notice The OFFICIAL Robinhood Chain testnet id — docs.robinhood.com/chain/connecting,
-    ///         recorded in docs/runbooks/testnet.md §1 (beware: some third-party lists print 46646).
+    ///         recorded in docs/developers/runbooks/testnet.md §1 (beware: some third-party lists print 46646).
     ///         Selects TESTNET mode: public-chain discipline (real key, constants-file externals,
     ///         fail-closed treasury), minus only the F-2 canonical-WETH literal (a 4663-only fact).
     uint256 internal constant TESTNET_CHAIN_ID = 46_630;
@@ -543,7 +543,7 @@ contract Deploy is Script {
     /// @dev Blockscout verification is env-gated (M1-2 / Phase-T, O-5); print the exact command per
     ///      contracts.md §7.2 step 8 rather than run it here (verification needs a public repo +
     ///      settled bytecode). Documented, not executed. Testnet additionally points at the
-    ///      testnet.env emitter (docker-compose.testnet.yml contract — docs/runbooks/docker.md).
+    ///      testnet.env emitter (docker-compose.testnet.yml contract — docs/developers/runbooks/docker.md).
     function _logVerifyHints() internal view {
         // No Blockscout verification for the dev contexts (local anvil smoke OR a 4663 fork).
         if (mode == Mode.Local || mode == Mode.Fork) return;
