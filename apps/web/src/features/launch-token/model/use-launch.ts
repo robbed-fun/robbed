@@ -7,7 +7,7 @@ import { type Abi, type Address, BaseError, parseEventLogs } from "viem";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 
 import { type TrackedTrade, useOptimisticTrades } from "@/entities/trade";
-import { computeDeadline } from "@/entities/curve";
+import { computeChainDeadline } from "@/entities/curve";
 import {
   ApiError,
   getToken,
@@ -222,7 +222,11 @@ export function useLaunch(opts: UseLaunchOptions = {}): UseLaunchApi {
 
         // 3. Single createToken tx (deployFee + optional atomic initial buy).
         setStep("signing");
-        const deadline = computeDeadline();
+        // DEADLINE from the CHAIN clock (fresh, right before estimate/write), not
+        // the browser clock: a machine clock lagging the chain would otherwise
+        // ship an already-expired deadline → the createToken estimate/tx reverts
+        // "Deadline expired". Falls back to the browser clock if the read fails.
+        const deadline = await computeChainDeadline(publicClient);
         const req = buildCreateTokenRequest({
           router,
           name: input.name,

@@ -12,7 +12,7 @@ import {
   type TradeSide,
   applySlippageFloor,
   buildV3SwapRequest,
-  computeDeadline,
+  computeChainDeadline,
   venueForStatus,
 } from "@/entities/curve";
 import { ROBBED, V3, requireAddress } from "@/shared/config/addresses";
@@ -39,8 +39,14 @@ import { ROBBED, V3, requireAddress } from "@/shared/config/addresses";
  *   via `multicall([exactInputSingle→router, unwrapWETH9(minEthOut, user)])` — the
  *   native-ETH leg the shared periphery subset exists for (§12.28). V3 buys send
  *   native ETH as `value` (SwapRouter02 wraps it); no allowance needed.
- * - The DEADLINE is recomputed HERE from `Date.now()` (not from the quote) so a
- *   stale on-screen quote can never ship an expired deadline (web.md decide-self).
+ * - The DEADLINE is recomputed HERE from the CHAIN's latest block timestamp
+ *   (`computeChainDeadline`), fresh at submit time — never from the quote and
+ *   never from the browser clock. The contract's guard compares against
+ *   `block.timestamp`, so a machine clock lagging the chain would ship an
+ *   already-expired deadline → "Deadline expired" on the estimate/tx (the
+ *   diagnosed root cause); it falls back to the browser clock only if the read
+ *   fails. This also keeps a stale on-screen quote from shipping an old deadline
+ *   (web.md decide-self).
  * - GAS IS PRE-ESTIMATED node-side, then passed explicitly to `writeContractAsync`
  *   (`estimateContractGas` → `gas = estimate * 2`, capped). On the Robinhood Orbit
  *   L2 the wallet's OWN client-side gas estimation fails on the ArbOS L1-data-fee
@@ -92,9 +98,6 @@ export function useTradeSubmit(token: TokenDetail): {
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random()}`;
-      // DEADLINE recomputed HERE (not from the quote) so a stale on-screen quote
-      // can never ship an expired deadline (web.md decide-yourself).
-      const deadline = computeDeadline();
       const minOut = applySlippageFloor(expectedOut, slippageBps);
 
       // Immediate optimistic row (§4 rule 1). Values are our estimate until the
@@ -111,6 +114,11 @@ export function useTradeSubmit(token: TokenDetail): {
 
       setSubmitting(true);
       try {
+        // DEADLINE from the CHAIN clock, computed fresh right before the write (not
+        // from the quote, not from the browser clock): a machine clock lagging the
+        // chain would otherwise ship an already-expired deadline. Falls back to the
+        // browser clock if the read fails — never undefined.
+        const deadline = await computeChainDeadline(publicClient);
         const venueArgs: VenueSubmitArgs = {
           writeContractAsync,
           publicClient,

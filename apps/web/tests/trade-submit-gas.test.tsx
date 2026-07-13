@@ -42,6 +42,9 @@ vi.mock("wagmi", () => ({
     estimateContractGas: m.estimateContractGas,
     readContract: m.readContract,
     waitForTransactionReceipt: m.waitForTransactionReceipt,
+    // Deadlines derive from CHAIN time (computeChainDeadline); model it so the
+    // gas path here runs against a realistic client, not the browser-clock fallback.
+    getBlock: async () => ({ timestamp: 2_000_000_000n }),
   }),
   useWriteContract: () => ({ writeContractAsync: m.writeContractAsync }),
 }));

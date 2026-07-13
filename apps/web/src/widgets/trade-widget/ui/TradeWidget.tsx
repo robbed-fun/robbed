@@ -7,6 +7,7 @@ import { formatEther, formatUnits, parseEther, parseUnits, type Address } from "
 import { useAccount, useBalance, useReadContract } from "wagmi";
 
 import {
+  DEFAULT_DEADLINE_MINUTES,
   DEFAULT_SLIPPAGE_BPS,
   SLIPPAGE_WARN_BPS,
   V3_FEE_TIER,
@@ -418,8 +419,9 @@ function InfoRows({
             <span className={cn("tabular-nums", slippageWarn && "text-soft-confirmed")}>
               {(slippageBps / 100).toFixed(1)}%
             </span>
-            {/* §5.2: the deadline on every trade stays disclosed. */}
-            <span className="text-faint">· deadline 10m</span>
+            {/* §5.2: the deadline on every trade stays disclosed. Copy is derived
+                from the constant so it never drifts from the shipped window. */}
+            <span className="text-faint">· deadline {DEFAULT_DEADLINE_MINUTES}m</span>
           </span>
         </Row>
         <div className="flex items-center justify-end gap-1.5">

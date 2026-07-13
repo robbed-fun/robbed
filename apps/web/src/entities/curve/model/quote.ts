@@ -22,8 +22,14 @@ import type { Address } from "viem";
  *   key). The widget additionally DEBOUNCES the amount (~250ms) before it reaches
  *   this hook to avoid a read per keystroke (web.md decide-yourself "quote
  *   debounce").
- * - The DEADLINE is recomputed at submit time from `Date.now()`, never from the
- *   quote timestamp, so a quote that sat on screen can't ship an expired deadline.
+ * - The DEADLINE is recomputed at submit time from the CHAIN's latest block
+ *   timestamp (`computeChainDeadline`), never from the quote timestamp and never
+ *   from the browser clock: the contract's deadline guard compares against
+ *   `block.timestamp`, so a machine clock lagging the chain by more than the
+ *   window would ship an already-expired deadline → "Deadline expired" on the
+ *   estimate/tx (the diagnosed root cause). Reading chain time removes the
+ *   dependency on the user's clock. `computeDeadline` (browser clock) survives as
+ *   the fallback when no client is present or the read throws.
  */
 
 /** Default slippage tolerance — 2% (§5.2). */
@@ -32,8 +38,13 @@ export const DEFAULT_SLIPPAGE_BPS = 200;
 export const SLIPPAGE_WARN_BPS = 500;
 export const SLIPPAGE_MIN_BPS = 10; // 0.1%
 export const SLIPPAGE_MAX_BPS = 5000; // 50%
-/** Default trade deadline — now + 10 min (§5.2, "deadline on every trade"). */
-export const DEFAULT_DEADLINE_MINUTES = 10;
+/**
+ * Default trade deadline window — now + 20 min (§5.2, "deadline on every trade").
+ * 20 (bumped from 10) is belt-and-suspenders headroom on top of the real fix
+ * (`computeChainDeadline`, which derives the absolute deadline from chain time,
+ * not the browser clock).
+ */
+export const DEFAULT_DEADLINE_MINUTES = 20;
 
 export type TradeSide = "buy" | "sell";
 
@@ -48,12 +59,53 @@ export function clampSlippageBps(bps: number): number {
   return Math.max(SLIPPAGE_MIN_BPS, Math.min(SLIPPAGE_MAX_BPS, Math.round(bps)));
 }
 
-/** Absolute deadline (unix seconds, as bigint) computed at call time. */
+/**
+ * Absolute deadline (unix seconds, as bigint) from the BROWSER clock. Retained as
+ * the fallback for {@link computeChainDeadline} and for the pure display/unit
+ * tests; prefer the chain-derived value at submit time.
+ */
 export function computeDeadline(
   nowMs = Date.now(),
   minutes = DEFAULT_DEADLINE_MINUTES,
 ): bigint {
   return BigInt(Math.floor(nowMs / 1000) + minutes * 60);
+}
+
+/**
+ * A minimal structural view of the viem public client — just the ability to read
+ * the latest block's timestamp. Kept structural (not the full `PublicClient`) so
+ * this entity stays free of a wagmi/viem client-type dependency and is trivially
+ * fakeable in unit tests.
+ */
+export interface ChainTimeClient {
+  getBlock: () => Promise<{ timestamp: bigint }>;
+}
+
+/**
+ * Absolute deadline (unix seconds, as bigint) derived from the CHAIN's own clock
+ * — the real fix for spurious "Deadline expired" reverts. viem
+ * `publicClient.getBlock()` with no args returns the LATEST block, whose
+ * `timestamp` is a bigint in unix SECONDS — the exact unit the contract's
+ * deadline guard compares against `block.timestamp` (docs verified via
+ * context7/viem, 2026-07-13). Deriving the deadline from that value makes it
+ * independent of the user's machine clock, which — if it lags the chain by more
+ * than the window — otherwise ships an already-past deadline that reverts on the
+ * estimate and the tx.
+ *
+ * Falls back to the browser-clock {@link computeDeadline} when no client is
+ * present or `getBlock()` throws, so the deadline is NEVER left undefined.
+ */
+export async function computeChainDeadline(
+  client: ChainTimeClient | null | undefined,
+  minutes = DEFAULT_DEADLINE_MINUTES,
+): Promise<bigint> {
+  if (!client) return computeDeadline(undefined, minutes);
+  try {
+    const block = await client.getBlock();
+    return block.timestamp + BigInt(minutes * 60);
+  } catch {
+    return computeDeadline(undefined, minutes);
+  }
 }
 
 /**

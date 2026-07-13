@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_DEADLINE_MINUTES,
   DEFAULT_SLIPPAGE_BPS,
   applySlippageFloor,
   clampSlippageBps,
+  computeChainDeadline,
   computeDeadline,
   isGraduatingLock,
   isInEarlyWindow,
@@ -51,6 +53,54 @@ describe("deadline is recomputed at call time (never a stale quote's) — §5.2"
   it("returns now + N minutes in unix seconds", () => {
     const now = 1_800_000_000_000; // fixed ms
     expect(computeDeadline(now, 10)).toBe(BigInt(1_800_000_000 + 600));
+  });
+
+  it("defaults to a 20-minute window (headroom over the chain-time fix)", () => {
+    expect(DEFAULT_DEADLINE_MINUTES).toBe(20);
+  });
+});
+
+describe("computeChainDeadline — derives the deadline from CHAIN time, not the browser clock", () => {
+  it("is blockTimestamp + window when a publicClient is present", async () => {
+    // Chain clock is AHEAD of the browser clock by ~1h — the exact skew that
+    // makes a browser-derived deadline expire on-chain. The chain-derived value
+    // must anchor to block.timestamp, NOT Date.now().
+    const chainTs = 2_000_000_000n;
+    const client = { getBlock: async () => ({ timestamp: chainTs }) };
+    const nowSeconds = 1_999_996_400; // browser lags the chain by 1h
+
+    const deadline = await computeChainDeadline(client, 20);
+    expect(deadline).toBe(chainTs + BigInt(20 * 60));
+    // Proves it did NOT use the browser clock (which would be far smaller).
+    expect(deadline).not.toBe(BigInt(nowSeconds + 20 * 60));
+  });
+
+  it("uses the default 20-minute window when none is given", async () => {
+    const chainTs = 1_700_000_000n;
+    const client = { getBlock: async () => ({ timestamp: chainTs }) };
+    expect(await computeChainDeadline(client)).toBe(chainTs + BigInt(DEFAULT_DEADLINE_MINUTES * 60));
+  });
+
+  it("falls back to the browser clock when no client is present (never undefined)", async () => {
+    const before = computeDeadline(undefined, 20);
+    const deadline = await computeChainDeadline(undefined, 20);
+    const after = computeDeadline(undefined, 20);
+    expect(typeof deadline).toBe("bigint");
+    expect(deadline).toBeGreaterThanOrEqual(before);
+    expect(deadline).toBeLessThanOrEqual(after);
+  });
+
+  it("falls back to the browser clock when getBlock() throws", async () => {
+    const client = {
+      getBlock: async () => {
+        throw new Error("rpc down");
+      },
+    };
+    const before = computeDeadline(undefined, 20);
+    const deadline = await computeChainDeadline(client, 20);
+    const after = computeDeadline(undefined, 20);
+    expect(deadline).toBeGreaterThanOrEqual(before);
+    expect(deadline).toBeLessThanOrEqual(after);
   });
 });
 

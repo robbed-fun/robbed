@@ -43,11 +43,12 @@ test(
       await connectAs(page, "trader");
       await sel.buyTab(page).click();
       await sel.amountInput(page).fill("0.01");
-      // The §5.2 disclosure ("· deadline 10m") is ALWAYS rendered, so a bare
+      // The §5.2 disclosure ("· deadline 20m") is ALWAYS rendered, so a bare
       // "no deadline text" check can never pass — assert the disclosure exists,
-      // then that the submit SUCCEEDS (the deadline was recomputed at submit;
-      // a stale one reverts on-chain, as proven above) with no expiry error.
-      await expect(page.getByText(/deadline 10m/i).first()).toBeVisible();
+      // then that the submit SUCCEEDS (the deadline is recomputed at submit from
+      // CHAIN time; a stale one reverts on-chain, as proven above) with no expiry
+      // error.
+      await expect(page.getByText(/deadline 20m/i).first()).toBeVisible();
       await sel.submitTrade(page).click();
       // §12.56: soft-confirmed chip removed — prove the trade landed via the feed row.
       await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 15_000 });
