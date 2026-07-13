@@ -12,7 +12,7 @@
  *   locally from `global:confirmations` watermark broadcasts (spec §12.20).
  */
 import { z } from "zod";
-import { CANDLE_INTERVALS, COMMENT_BODY_MAX } from "./constants";
+import { CANDLE_INTERVALS } from "./constants";
 import { confirmationStateSchema } from "./confirmation";
 
 // ── Shared wire scalars ─────────────────────────────────────────────────────
@@ -118,54 +118,6 @@ export const wsFeeCollectedDataSchema = z.object({
   confirmationState: confirmationStateSchema,
 });
 
-// ── Comments (off-chain, SIWE-authored, §8.4-moderation-gated — spec §12.63b) ─
-//
-// The comment shape is single-sourced HERE, in the lowest common module: api-types
-// imports from ws-messages (never the reverse), so defining the shared base here
-// lets the WS union reference it AND the REST layer EXTEND it with no import cycle.
-
-/**
- * Off-chain comment body validator — SINGLE SOURCE for the length bound, reused by
- * the WS fanout payload, the persisted REST `commentSchema` (api-types.ts, via
- * `commentBaseSchema`) AND the `postCommentRequestSchema` request DTO — so what a
- * client may POST, what is stored, and what is broadcast can never differ. Code-unit
- * `.max()` (off-chain free text — no on-chain byte gate, unlike metadata name/ticker
- * which use `byteBoundedString`); `.min(1)` forbids an empty comment (whitespace
- * normalization is an API concern, not a wire-schema one).
- */
-export const commentBodySchema = z.string().min(1).max(COMMENT_BODY_MAX);
-
-/**
- * Fields common to the persisted comment and its live-fanout projection — defined
- * ONCE so REST and WS can't drift a field name/type (anti-drift rule 1). The REST
- * `commentSchema` = this base `.extend({ moderationStatus })`; the WS `comment`
- * event carries this base verbatim. `author` is the SIWE-authenticated poster —
- * identity is embedded as a plain address exactly like `tradeRow.trader` /
- * `holderRow.address` (no display bundle; ENS/avatar resolve client-side). Comments
- * are off-chain, so — unlike trade/graduated/fee_collected — there is NO
- * `confirmationState` (like `holderRow`/`portfolioSummary`, which also carry none).
- */
-export const commentBaseSchema = z.object({
-  id: z.string(),
-  tokenAddress: addressSchema,
-  author: addressSchema,
-  body: commentBodySchema,
-  createdAt: z.number().int().nonnegative(), // server insert time, unix seconds
-});
-
-/**
- * WS `comment` fanout payload (spec §12.63b live comments panel). Equals the shared
- * base with NO `moderationStatus`: live fanout is §8.4-moderation-gated, so only
- * listed/visible comments are ever published — the moderation state is 'visible' by
- * construction, so the field is omitted rather than duplicating the api-types
- * moderation enum here (mirrors how `wsTradeDataSchema` omits the REST-only `id`).
- * Rides the existing `token:{address}:events` channel with the other token-scoped
- * events (channels.ts). NOTE (robbed-indexer/robbed-frontend): if a comments-only
- * subscribe granularity is wanted, add a dedicated `token:{address}:comments`
- * channel — a fanout-granularity decision, not a type-layer one.
- */
-export const wsCommentDataSchema = commentBaseSchema;
-
 // ── Envelope + discriminated union ──────────────────────────────────────────
 
 const envelopeBase = {
@@ -184,7 +136,6 @@ export const wsMessageSchema = z.discriminatedUnion("type", [
   z.object({ ...envelopeBase, type: z.literal("reorg"), data: wsReorgDataSchema }),
   z.object({ ...envelopeBase, type: z.literal("metadata_verified"), data: wsMetadataVerifiedDataSchema }),
   z.object({ ...envelopeBase, type: z.literal("fee_collected"), data: wsFeeCollectedDataSchema }),
-  z.object({ ...envelopeBase, type: z.literal("comment"), data: wsCommentDataSchema }),
 ]);
 
 export type WsMessage = z.infer<typeof wsMessageSchema>;
@@ -197,8 +148,6 @@ export type WsConfirmationsData = z.infer<typeof wsConfirmationsDataSchema>;
 export type WsReorgData = z.infer<typeof wsReorgDataSchema>;
 export type WsMetadataVerifiedData = z.infer<typeof wsMetadataVerifiedDataSchema>;
 export type WsFeeCollectedData = z.infer<typeof wsFeeCollectedDataSchema>;
-export type WsCommentData = z.infer<typeof wsCommentDataSchema>;
-export type CommentBase = z.infer<typeof commentBaseSchema>;
 
 // ── Client → server ops (indexer.md §8.1; api.md §6.5: sub/unsub/ping only) ─
 

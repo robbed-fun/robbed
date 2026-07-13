@@ -28,7 +28,6 @@ import type {
 import type { Config } from "../config";
 import type {
   Change24hAnchor,
-  CommentRowDb,
   Db,
   HolderJoinedRow,
   ListTokensInput,
@@ -193,17 +192,6 @@ function mapModeration(r: Record<string, unknown>): ModerationStatusRow {
     reason: nstr(r.reason),
     reviewed_by: nstr(r.reviewed_by),
     updated_at: iso(r.updated_at),
-  };
-}
-
-function mapComment(r: Record<string, unknown>): CommentRowDb {
-  return {
-    id: String(r.id),
-    token_address: String(r.token_address),
-    author: String(r.author),
-    body: String(r.body),
-    moderation_status: r.moderation_status as CommentRowDb["moderation_status"],
-    created_at: num(r.created_at),
   };
 }
 
@@ -796,39 +784,6 @@ export function createBunDb(config: Config): Db {
         ORDER BY t.address DESC LIMIT $${params.length}`;
       const rows = (await rw.unsafe(text, params)) as Record<string, unknown>[];
       return rows.map((r) => ({ ...mapTokenList(r), m: mapModeration(r) }));
-    },
-
-    async insertComment(input) {
-      // RW role, API-owned `comments` table. `author`/`moderation_status`/
-      // `created_at` are all server-set (never from the client body). RETURNING
-      // gives the assigned bigserial id back for the DTO + WS payload with no
-      // second read.
-      const rows = (await rw.unsafe(
-        `INSERT INTO comments (token_address, author, body, moderation_status, created_at)
-         VALUES ($1,$2,$3,$4,$5)
-         RETURNING id::text AS id, token_address, author, body, moderation_status, created_at`,
-        [input.tokenAddress, input.author, input.body, input.moderationStatus, input.createdAt],
-      )) as Record<string, unknown>[];
-      return mapComment(rows[0]!);
-    },
-
-    async listComments(input) {
-      // Newest-first keyset: (created_at, id) DESC, strictly-less predicate. Hidden
-      // comments are excluded from the public list (visible + pending_review only —
-      // pending_review REMAINS LISTED, §12.21). The (token_address, created_at DESC,
-      // id DESC) index (002) serves this scan directly.
-      const params: unknown[] = [input.token];
-      let where = "token_address = $1 AND moderation_status IN ('visible','pending_review')";
-      if (input.cursorKey != null && input.cursorId != null) {
-        params.push(input.cursorKey, input.cursorId);
-        where += ` AND (created_at, id) < ($${params.length - 1}::bigint, $${params.length}::bigint)`;
-      }
-      params.push(input.limit);
-      const text = `SELECT id::text AS id, token_address, author, body, moderation_status, created_at
-        FROM comments WHERE ${where}
-        ORDER BY created_at DESC, id DESC LIMIT $${params.length}`;
-      const rows = (await rw.unsafe(text, params)) as Record<string, unknown>[];
-      return rows.map(mapComment);
     },
 
     async insertAudit(entry) {

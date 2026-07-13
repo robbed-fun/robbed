@@ -21,7 +21,7 @@
 #   - bun.com Docker guide: multi-stage, run as the non-root `bun` user.
 
 # ── build: Node 22 + pnpm does the install (strict), NOT the runtime ──────────
-# Exact pin 22.22.0 = the recorded toolchain Node (docs/runbooks/toolchain.md);
+# Exact pin 22.22.0 = the recorded toolchain Node (docs/developers/runbooks/toolchain.md);
 # tag existence verified against the registry 2026-07-11 (P-3 pinned-base rule).
 FROM node:22.22.0-bookworm-slim AS build
 ENV PNPM_HOME=/pnpm PATH=/pnpm/bin:$PATH

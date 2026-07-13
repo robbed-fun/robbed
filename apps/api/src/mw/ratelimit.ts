@@ -88,12 +88,6 @@ export const ROUTE_LIMITS = {
   search: { name: "search", limit: scaled(60), windowMs: 60 * 1000 },
   reads: { name: "reads", limit: scaled(300), windowMs: 60 * 1000 },
   admin: { name: "admin", limit: scaled(60), windowMs: 60 * 1000 },
-  // User SIWE lifecycle (/v1/auth/*) — per-IP nonce/login/logout guard (§12.63b).
-  auth: { name: "auth", limit: scaled(30), windowMs: 60 * 1000 },
-  // Per-AUTHOR comment anti-spam (spec §12.63b) — keyed by SIWE address inside
-  // the POST handler (post-auth), not by IP. Simple default (10/min); flagged to
-  // the architect for tuning (exact window is an open product knob).
-  commentsPerAuthor: { name: "comments_author", limit: scaled(10), windowMs: 60 * 1000 },
 } as const satisfies Record<string, RouteLimit>;
 
 /**

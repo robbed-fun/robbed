@@ -25,8 +25,6 @@ import type { CreatorVaultBalanceReader } from "./lib/creator-vault";
 import { createRpcCreatorVaultBalance, nullCreatorVaultBalance } from "./lib/creator-vault";
 import type { ModerationVendors } from "./moderation/vendors";
 import { stubVendors } from "./moderation/vendors";
-import type { CommentModerator } from "./moderation/comment";
-import { stubCommentModerator } from "./moderation/comment";
 import {
   type ImpersonationWatchlist,
   impersonationWatchlistSchema,
@@ -49,12 +47,6 @@ export interface AppDeps {
   storage: Storage;
   reencoder: Reencoder;
   vendors: ModerationVendors;
-  /**
-   * Swappable comment moderation hook (spec §12.63b; §8.4). Stub → `visible` by
-   * default; a real text-moderation vendor (§13 OPEN) drops in with no route
-   * change. Separate from the image `vendors` (those score image bytes).
-   */
-  commentModerator: CommentModerator;
   rateLimit: RateLimitStore;
   watchlist: ImpersonationWatchlist;
   uncollectedFees: UncollectedFeesReader;
@@ -114,8 +106,6 @@ export function buildDeps(dbFactory: (cfg: Config) => Db): AppDeps {
     }),
     reencoder: createSharpReencoder(),
     vendors: stubVendors(), // real vendors OPEN §13 OI-A7; boot guard enforces prod
-    commentModerator: stubCommentModerator(), // real text vendor OPEN §13; swappable hook
-
     rateLimit: new InMemoryRateLimitStore(),
     watchlist: loadWatchlist(),
     uncollectedFees: zeroUncollectedFees,

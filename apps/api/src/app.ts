@@ -15,9 +15,7 @@ import { ERROR_CODES } from "@robbed/shared";
 import { publicCors } from "./mw/cors";
 import { ROUTE_LIMITS, rateLimit } from "./mw/ratelimit";
 import { adminRoutes } from "./admin/routes";
-import { authRoutes } from "./auth/routes";
 import { candleRoutes } from "./routes/candles";
-import { commentRoutes } from "./routes/comments";
 import { creatorRoutes } from "./routes/creators";
 import { feeRoutes } from "./routes/fees";
 import { healthRoutes } from "./routes/health";
@@ -61,10 +59,6 @@ export function createApp(deps: AppDeps) {
   app.use("/v1/uploads/*", rateLimit(rlDeps, ROUTE_LIMITS.uploadsHour, ROUTE_LIMITS.uploadsMin));
   app.use("/v1/metadata", rateLimit(rlDeps, ROUTE_LIMITS.metadata));
   app.use("/v1/search", rateLimit(rlDeps, ROUTE_LIMITS.search));
-  // User SIWE lifecycle (nonce/login/logout) — per-IP guard (§12.63b). Comment
-  // reads/writes ride the /v1/tokens/* reads limiter below; the comment POST adds
-  // a per-AUTHOR window inside its handler (post-auth).
-  app.use("/v1/auth/*", rateLimit(rlDeps, ROUTE_LIMITS.auth));
   app.use("/v1/admin/*", rateLimit(rlDeps, ROUTE_LIMITS.admin));
   // Internal dashboard (api.md §3.7) — admin-SIWE-gated, same limit class.
   app.use("/internal/*", rateLimit(rlDeps, ROUTE_LIMITS.admin));
@@ -89,9 +83,7 @@ export function createApp(deps: AppDeps) {
   app.route("/", healthRoutes(deps));
   app.route("/", metaRoutes(deps));
   app.route("/", searchRoutes(deps));
-  app.route("/", authRoutes(deps));
   app.route("/", tokenRoutes(deps));
-  app.route("/", commentRoutes(deps));
   app.route("/", creatorRoutes(deps));
   app.route("/", tradeRoutes(deps));
   app.route("/", portfolioRoutes(deps));

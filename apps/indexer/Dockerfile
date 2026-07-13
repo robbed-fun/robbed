@@ -18,7 +18,7 @@
 # Multi-stage: base (pnpm) → build (install + codegen + deploy bundle) → runtime.
 
 # ── base: Node 22 + corepack-pinned pnpm (matches root packageManager) ────────
-# Exact pin 22.22.0 = the recorded toolchain Node (docs/runbooks/toolchain.md);
+# Exact pin 22.22.0 = the recorded toolchain Node (docs/developers/runbooks/toolchain.md);
 # tag existence verified against the registry 2026-07-11 (P-3 pinned-base rule).
 FROM node:22.22.0-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm/bin:$PATH

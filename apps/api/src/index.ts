@@ -9,7 +9,6 @@ import { getConfig } from "./config";
 import { createBunDb } from "./lib/db.bun";
 import { buildDeps } from "./deps";
 import { assertVendorsBootable } from "./moderation/vendors";
-import { assertCommentModeratorBootable } from "./moderation/comment";
 import { startModerationWorker } from "./moderation/worker";
 
 const config = getConfig();
@@ -17,8 +16,6 @@ const deps = buildDeps(createBunDb);
 
 // Prod boot guard: refuse to run on stub moderation vendors (§4.3).
 assertVendorsBootable(deps.vendors, config.API_ENV, config.MODERATION_ALLOW_STUBS);
-// Same fail-closed guard for the off-chain comment moderator (spec §12.63b).
-assertCommentModeratorBootable(deps.commentModerator, config.API_ENV, config.MODERATION_ALLOW_STUBS);
 
 // X-10 moderation seam — subscribe to launches (best-effort; logs on failure).
 void startModerationWorker(deps).catch((err) =>

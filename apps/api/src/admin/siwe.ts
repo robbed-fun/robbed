@@ -49,18 +49,12 @@ export interface VerifiedLogin {
 /**
  * Verify a SIWE login. Steps: parse → allowlist check → signature check → nonce
  * burn (delete after successful use so a replay fails). Throws `unauthorized`.
- *
- * `allowlist` is `Set<string> | null`: a Set gates to those addresses (the ADMIN
- * path — `adminAllowlist`, behaviour unchanged), `null` admits ANY valid signer
- * (the USER-session path, spec §12.63b — anyone signed-in may post). The rest of
- * the machinery (SIWE parse, single-use nonce, EOA signature recovery) is reused
- * verbatim by both, so there is one SIWE verifier, not two.
  */
 export async function verifySiweLogin(
   args: { message: string; signature: `0x${string}` },
   deps: {
     redis: Redis;
-    allowlist: Set<string> | null;
+    allowlist: Set<string>;
     verify?: SignatureVerifier;
     nowSec?: number;
   },
@@ -73,9 +67,7 @@ export async function verifySiweLogin(
   if (parsed.expirationTime && parsed.expirationTime.getTime() < (deps.nowSec ?? Date.now() / 1000) * 1000) {
     throw errors.unauthorized("SIWE message expired");
   }
-  if (deps.allowlist && !deps.allowlist.has(address)) {
-    throw errors.unauthorized("address not in admin allowlist");
-  }
+  if (!deps.allowlist.has(address)) throw errors.unauthorized("address not in admin allowlist");
 
   // Nonce must exist (issued + unused); burn it now to prevent replay.
   const present = await deps.redis.get(nonceKey(nonce));

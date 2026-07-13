@@ -39,8 +39,6 @@ tags:
     description: pg_trgm search over name / ticker / contract / creator (spec §5.1)
   - name: meta
     description: Confirmations, ETH/USD, health (spec §2, §2.1)
-  - name: auth
-    description: User SIWE sign-in — session cookie for off-chain comment authoring (spec §12.63b)
   - name: admin
     description: Moderation admin — SIWE session auth, listing visibility only (spec §8.4)
   - name: internal
@@ -301,81 +299,6 @@ paths:
                       nextCursor: { $ref: "#/components/schemas/NextCursor" }
                   error: { type: "null" }
         "400": { $ref: "#/components/responses/BadRequest" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "429": { $ref: "#/components/responses/RateLimited" }
-
-  /v1/tokens/{address}/comments:
-    get:
-      tags: [tokens]
-      operationId: listTokenComments
-      summary: Per-token comments — public, keyset-paginated newest-first (spec §12.63b)
-      description: |
-        Off-chain, SIWE-authored, §8.4-moderation-gated, flat comments for one token.
-        Newest-first (created_at DESC, id tiebreak) keyset page via the shared
-        `{ items, nextCursor }` envelope. HIDDEN comments are excluded (visible +
-        pending_review only — pending_review remains listed, §12.21).
-      parameters:
-        - $ref: "#/components/parameters/TokenAddress"
-        - $ref: "#/components/parameters/Cursor"
-        - $ref: "#/components/parameters/Limit"
-      responses:
-        "200":
-          description: Comments (newest-first; hidden excluded)
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [data, error]
-                properties:
-                  data:
-                    type: object
-                    required: [items, nextCursor]
-                    properties:
-                      items:
-                        type: array
-                        items: { $ref: "#/components/schemas/Comment" }
-                      nextCursor: { $ref: "#/components/schemas/NextCursor" }
-                  error: { type: "null" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "429": { $ref: "#/components/responses/RateLimited" }
-    post:
-      tags: [tokens]
-      operationId: postTokenComment
-      summary: Post a comment — SIWE-authenticated (spec §12.63b)
-      description: |
-        Requires a `userSession` cookie (POST /v1/auth/login). `author` is taken
-        from the session and `tokenAddress` from the path — NEVER the request body,
-        which carries ONLY `body` (bounded by COMMENT_BODY_MAX). The comment runs
-        through the §8.4 moderation hook; a `visible` result is fanned out on
-        `token:{address}:events`. Per-author rate limit (anti-spam). Moderation
-        gates listing/broadcast only — never chain state (§8.4).
-      security:
-        - userSession: []
-      parameters:
-        - $ref: "#/components/parameters/TokenAddress"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/PostCommentRequest" }
-      responses:
-        "201":
-          description: Comment created (returned with its moderation status)
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [data, error]
-                properties:
-                  data:
-                    type: object
-                    required: [comment]
-                    properties:
-                      comment: { $ref: "#/components/schemas/Comment" }
-                  error: { type: "null" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
@@ -842,96 +765,6 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
-  /v1/auth/nonce:
-    get:
-      tags: [auth]
-      operationId: userNonce
-      summary: Issue a single-use SIWE nonce for user sign-in (spec §12.63b)
-      description: >-
-        Mints the single-use nonce (Redis, 10-min TTL) a user embeds in the
-        EIP-4361 message they sign for POST /v1/auth/login. Reuses the admin SIWE
-        nonce machinery; public (no session yet).
-      security: []
-      responses:
-        "200":
-          description: A fresh single-use nonce
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [data, error]
-                properties:
-                  data: { $ref: "#/components/schemas/AdminNonceResponse" }
-                  error: { type: "null" }
-        "429": { $ref: "#/components/responses/RateLimited" }
-
-  /v1/auth/login:
-    post:
-      tags: [auth]
-      operationId: userLogin
-      summary: User SIWE (EIP-4361) login → session cookie (spec §12.63b)
-      description: >-
-        Verifies the signed SIWE message and burns the single-use nonce
-        (replay-proof). UNLIKE admin login there is NO address allowlist — any
-        valid signer may sign in to post comments. On success sets the HttpOnly,
-        SameSite=Lax `userSession` cookie. EOA (ECDSA) signatures only in v1.
-        Public (mints the session).
-        NOTE (flagged to architect): when the web app and API are on different
-        ORIGINS this cookie surface needs `Access-Control-Allow-Credentials: true`
-        — the public /v1 CORS is currently cookie-less (api.md §6.1), a system
-        guarantee to be re-ratified for the user-session surface.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/AdminLoginRequest" }
-      responses:
-        "200":
-          description: Authenticated; user session cookie set
-          headers:
-            Set-Cookie:
-              description: HttpOnly, SameSite=Lax user session cookie
-              schema: { type: string }
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [data, error]
-                properties:
-                  data: { $ref: "#/components/schemas/UserLoginResponse" }
-                  error: { type: "null" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "429": { $ref: "#/components/responses/RateLimited" }
-
-  /v1/auth/logout:
-    post:
-      tags: [auth]
-      operationId: userLogout
-      summary: Clear the user session cookie (spec §12.63b)
-      description: Clears the `userSession` cookie via Set-Cookie. Idempotent; no session required.
-      security: []
-      responses:
-        "200":
-          description: Session cookie cleared
-          headers:
-            Set-Cookie:
-              description: Expired/empty user session cookie
-              schema: { type: string }
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [data, error]
-                properties:
-                  data:
-                    type: object
-                    required: [ok]
-                    properties:
-                      ok: { type: boolean, const: true }
-                  error: { type: "null" }
-
   /v1/admin/nonce:
     get:
       tags: [admin]
@@ -1294,15 +1127,6 @@ components:
         SIWE (EIP-4361) against a config address allowlist → short-lived signed session
         cookie (HttpOnly, SameSite=strict, 12h). Mutations additionally require the
         `X-CSRF-Token` header (api.md §6.2). Cookie name is implementation-defined.
-    userSession:
-      type: apiKey
-      in: cookie
-      name: robbed_user_session
-      description: |
-        User SIWE (EIP-4361) sign-in — NO address allowlist (any valid signer) → signed
-        session cookie (HttpOnly, SameSite=Lax). Reuses the admin SIWE machinery with a
-        null allowlist (spec §12.63b). CSRF defense is the SameSite=Lax cookie (no
-        double-submit token). Cookie name is implementation-defined.
 
   parameters:
     Cursor:
@@ -2032,37 +1856,3 @@ components:
         csrfToken:
           type: string
           description: Send as `X-CSRF-Token` on every admin mutation (bound to the session)
-    UserLoginResponse:
-      type: object
-      required: [address]
-      properties:
-        address:
-          allOf: [{ $ref: "#/components/schemas/Address" }]
-          description: The authenticated signer address (recovered; no allowlist — spec §12.63b)
-
-    # ── Comments (off-chain, SIWE-authored; spec §12.63b — mirror @robbed/shared) ─
-    Comment:
-      type: object
-      required: [id, tokenAddress, author, body, createdAt, moderationStatus]
-      description: >-
-        Persisted per-token comment (packages/shared commentSchema). Flat; no
-        threading, no edit — a "delete" is a moderation-hide (moderationStatus →
-        hidden), never a physical delete.
-      properties:
-        id: { type: string, description: bigserial id (keyset tiebreak) }
-        tokenAddress: { $ref: "#/components/schemas/Address" }
-        author:
-          allOf: [{ $ref: "#/components/schemas/Address" }]
-          description: SIWE-authenticated poster — never client-supplied
-        body: { type: string, minLength: 1, maxLength: 500, description: COMMENT_BODY_MAX = 500 }
-        createdAt: { type: integer, minimum: 0, description: server insert time, unix seconds }
-        moderationStatus: { $ref: "#/components/schemas/ModerationVisibility" }
-    PostCommentRequest:
-      type: object
-      required: [body]
-      description: >-
-        POST body carries ONLY `body` (packages/shared postCommentRequestSchema).
-        `author` comes from the session and `tokenAddress` from the path; any extra
-        key is stripped, never trusted.
-      properties:
-        body: { type: string, minLength: 1, maxLength: 500 }

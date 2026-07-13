@@ -7,7 +7,6 @@ import { loadRankingConfig } from "../src/config/ranking";
 import type { Config } from "../src/config";
 import type {
   Change24hAnchor,
-  CommentRowDb,
   Db,
   HolderJoinedRow,
   ListTokensInput,
@@ -23,7 +22,6 @@ import type { Reencoder } from "../src/media/reencode";
 import type { Storage } from "../src/media/storage";
 import { InMemoryRateLimitStore } from "../src/mw/ratelimit";
 import { stubVendors } from "../src/moderation/vendors";
-import { stubCommentModerator } from "../src/moderation/comment";
 import type {
   AddressPnlRow,
   CandleRow,
@@ -467,55 +465,6 @@ export class FakeDb implements Db {
       return { ...(token as TokenListRow), m };
     });
   }
-  // ── comments (API-owned; spec §12.63b) ──
-  comments: CommentRowDb[] = [];
-  private commentSeq = 0;
-  async insertComment(input: {
-    tokenAddress: string;
-    author: string;
-    body: string;
-    moderationStatus: CommentRowDb["moderation_status"];
-    createdAt: number;
-  }): Promise<CommentRowDb> {
-    const row: CommentRowDb = {
-      id: String(++this.commentSeq),
-      token_address: input.tokenAddress,
-      author: input.author,
-      body: input.body,
-      moderation_status: input.moderationStatus,
-      created_at: input.createdAt,
-    };
-    this.comments.push(row);
-    return row;
-  }
-  async listComments(input: {
-    token: string;
-    cursorKey: string | null;
-    cursorId: string | null;
-    limit: number;
-  }): Promise<CommentRowDb[]> {
-    // Mirrors db.bun.ts: token match, hidden EXCLUDED (visible + pending_review),
-    // newest-first (created_at DESC, id DESC), strictly-less keyset predicate.
-    const rows = this.comments.filter(
-      (r) =>
-        r.token_address === input.token &&
-        (r.moderation_status === "visible" || r.moderation_status === "pending_review"),
-    );
-    const sorted = [...rows].sort((a, b) =>
-      a.created_at !== b.created_at
-        ? b.created_at - a.created_at
-        : Number(BigInt(b.id) - BigInt(a.id)),
-    );
-    const filtered =
-      input.cursorKey != null && input.cursorId != null
-        ? sorted.filter((r) => {
-            const k = Number(input.cursorKey);
-            if (r.created_at !== k) return r.created_at < k;
-            return BigInt(r.id) < BigInt(input.cursorId!);
-          })
-        : sorted;
-    return filtered.slice(0, input.limit);
-  }
 
   async insertAudit(entry: { actor: string; action: string; target: string; reason: string | null }) {
     this.audit.push({ id: String(this.audit.length + 1), ...entry, ts: new Date().toISOString() });
@@ -609,7 +558,6 @@ export function makeTestDeps(overrides: Partial<AppDeps> = {}): AppDeps {
     storage: overrides.storage ?? makeFakeStorage(config.R2_PUBLIC_BASE_URL),
     reencoder: overrides.reencoder ?? makeFakeReencoder(),
     vendors: overrides.vendors ?? stubVendors(),
-    commentModerator: overrides.commentModerator ?? stubCommentModerator(),
     rateLimit: overrides.rateLimit ?? new InMemoryRateLimitStore(),
     watchlist:
       overrides.watchlist ??
