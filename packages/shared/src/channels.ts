@@ -10,7 +10,7 @@
  * | global:confirmations               | watermark advances + reorg notices (§12.20)        |
  * | token:{address}:trades             | trades for one token (§5.2 feed)                   |
  * | token:{address}:candles:{interval} | candle upsert per trade per interval               |
- * | token:{address}:events             | graduated / metadata_verified / fee_collected / …  |
+ * | token:{address}:events             | graduated / metadata_verified / fee_collected / comment / … |
  *
  * Token addresses in channel names are lowercased (addresses are stored
  * lowercase throughout — indexer.md §3 conventions).

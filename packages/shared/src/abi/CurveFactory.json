@@ -53,6 +53,11 @@
             "internalType": "uint16"
           },
           {
+            "name": "creatorFeeBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
             "name": "creationFee",
             "type": "uint256",
             "internalType": "uint256"
@@ -292,6 +297,19 @@
   },
   {
     "type": "function",
+    "name": "creatorVault",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "curveDefaults",
     "inputs": [],
     "outputs": [
@@ -371,6 +389,16 @@
           },
           {
             "name": "migrator",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "creator",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "creatorVault",
             "type": "address",
             "internalType": "address"
           },
@@ -732,6 +760,32 @@
   },
   {
     "type": "function",
+    "name": "setCreatorFeeBps",
+    "inputs": [
+      {
+        "name": "newBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setCreatorVault",
+    "inputs": [
+      {
+        "name": "vault",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setGraduationFee",
     "inputs": [
       {
@@ -971,6 +1025,32 @@
   },
   {
     "type": "event",
+    "name": "CreatorFeeUpdated",
+    "inputs": [
+      {
+        "name": "newBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "CreatorVaultSet",
+    "inputs": [
+      {
+        "name": "vault",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "GraduationFeeUpdated",
     "inputs": [
       {
@@ -1166,6 +1246,11 @@
   {
     "type": "error",
     "name": "CreatesPaused",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CreatorVaultUnset",
     "inputs": []
   },
   {

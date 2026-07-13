@@ -4,9 +4,9 @@
  * Sources (transcribed, not invented):
  * - CLAUDE.md "Chain facts" (chain id, WETH)
  * - docs/spec.md §5.3, §12.14, §12.17
- * - docs/how-it-works/api.md §3.1-§3.4, §5
- * - docs/how-it-works/indexer.md §3, §6.1
- * - docs/how-it-works/contracts.md §2.2 (on-chain input validation)
+ * - docs/developers/api.md §3.1-§3.4, §5
+ * - docs/developers/indexer.md §3, §6.1
+ * - docs/developers/contracts.md §2.2 (on-chain input validation)
  *
  * Hard rule (spec §2): NO market metrics (prices, TVL, ETH/USD, volumes) may
  * ever live in this file or anywhere else as constants.
@@ -108,6 +108,20 @@ export const MAX_METADATA_JSON_BYTES = 64 * 1024;
 
 /** Version tag written into every canonical metadata JSON (api.md §3.2 "fixed field set + version tag"). */
 export const METADATA_VERSION = 1;
+
+// ── Comments (Phase-2 "final version" — off-chain, SIWE-authored; spec §12.63b) ─
+
+/**
+ * Off-chain comment body cap, UTF-16 code units. Spec §12.63(b) scopes comments
+ * but does NOT fix a body length, so this is a product-tunable DEFAULT recorded
+ * here (never inlined — §2), enforced everywhere via the shared `commentBodySchema`
+ * (ws-messages.ts). Value mirrors the §5.3 metadata `description` cap (500) as the
+ * sane default for a single free-text field. Code-unit `.max()` — NOT a byte cap
+ * like metadata name/ticker (those mirror an on-chain gate; a comment never touches
+ * chain). FLAGGED for architect/§13: the final cap (and any rate-limit fields) is a
+ * product/anti-abuse knob, retunable like §12.32 — this is not a spec number.
+ */
+export const COMMENT_BODY_MAX = 500;
 
 // ── Read-API conventions (api.md §2, §3.3) ──────────────────────────────────
 

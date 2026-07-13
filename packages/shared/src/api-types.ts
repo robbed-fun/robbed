@@ -26,6 +26,8 @@ import {
 import { byteBoundedString } from "./text";
 import {
   addressSchema,
+  commentBaseSchema,
+  commentBodySchema,
   decimalStringSchema,
   hex32Schema,
   signedDecimalStringSchema,
@@ -183,7 +185,13 @@ export const trustPanelSchema = z.object({
   lpCopy: z.literal(LP_COPY),
   feePolicy: z.object({
     tradeFeeBps: z.number().int().nonnegative(),
-    /** Present from day 1, value 0 in v1 (§7). */
+    /**
+     * Present from day 1 (§7). 0 for v1/mainnet curves; NONZERO under the landed
+     * creator-fee factory (§12.63; testnet default 50). Combined cap holds:
+     * `tradeFeeBps + creatorFeeBps ≤ MAX_TRADE_FEE_BPS` (200). The schema already
+     * admitted any nonnegative int, so surfacing a nonzero value is non-breaking —
+     * the per-token snapshot comes from `tokens.creator_fee_bps` (db-rows.ts).
+     */
     creatorFeeBps: z.number().int().nonnegative(),
   }),
   /** v1.2 organic-flow metrics (§5.2/§8.5); null until stats computed. */
@@ -524,6 +532,53 @@ export const feesResponseSchema = z.object({
   }),
 });
 
+// ── Creator-fee claim surface (spec §7 / §12.63 — pull-payment CreatorVault) ─
+// ADDITIVE Phase-2 fold-in mirroring the landed on-chain surface (ICreatorVault /
+// IBondingCurve creator leg). The Portfolio CreatedTab claim widget reads the
+// claimable balance and submits a `CreatorVault.claim(creator)` tx. Anti-drift: every
+// scalar reuses the shared wire conventions (addressSchema / decimalStringSchema /
+// usdValueSchema) — no new value object. Like `feesResponseSchema` / `portfolioSummary`
+// this is an aggregate roll-up, so it carries NO `confirmationState`.
+//
+// DOC-LOCKSTEP (report): the endpoint shape (e.g. GET /v1/creators/:address/claimable)
+// + its openapi.yaml entry are api.md §3 additions the API/architect must ratify —
+// this is the single-source DTO both services build against, not a settled endpoint.
+
+export const creatorClaimableSchema = z.object({
+  creator: addressSchema,
+  /** The CreatorVault the balance lives in (constant per creator-fee factory version). */
+  vault: addressSchema,
+  /** Live on-chain `CreatorVault.balanceOf(creator)`, wei — the AUTHORITATIVE claimable value. */
+  claimableEth: decimalStringSchema,
+  /** USD mirror of `claimableEth` (derived at request time, §2). */
+  claimable: usdValueSchema,
+  /** Lifetime accrued (Σ `CreatorFeeDeposited`), wei — from the `creator_claimable` roll-up. */
+  totalAccruedEth: decimalStringSchema,
+  /** Lifetime claimed (Σ `CreatorFeeClaimed`), wei. */
+  totalClaimedEth: decimalStringSchema,
+  /** ISO-8601 timestamp of the live `balanceOf` read (mirrors `feesResponse.uncollected.asOf`). */
+  asOf: z.string(),
+});
+export type CreatorClaimable = z.infer<typeof creatorClaimableSchema>;
+
+/**
+ * `CLAIM_CREATOR_FEE` transaction metadata (spec §12.63). The shared shape the
+ * frontend attaches to a pending `CreatorVault.claim(creator)` tx so the
+ * confirmation-tier tracker/toast (§2.1) can label and reconcile it. `type` is a
+ * literal tag deliberately shaped to seed a discriminated union IF a broader shared
+ * tx-metadata catalog is later introduced — none exists in packages/shared today
+ * (flagged for architect; the web models `SideBadge`/`TapeKind` locally). `amountEth`
+ * is the expected payout (from `creatorClaimableSchema.claimableEth`), shown
+ * optimistically until the receipt confirms the actual `CreatorFeeClaimed.amount`.
+ */
+export const claimCreatorFeeTxMetaSchema = z.object({
+  type: z.literal("CLAIM_CREATOR_FEE"),
+  creator: addressSchema,
+  vault: addressSchema,
+  amountEth: decimalStringSchema,
+});
+export type ClaimCreatorFeeTxMeta = z.infer<typeof claimCreatorFeeTxMetaSchema>;
+
 /** GET /v1/stats (api.md §3.4 — "tokens launched, graduations, 24h volume, treasury fees collected"). */
 export const statsResponseSchema = z.object({
   tokensLaunched: z.number().int().nonnegative(),
@@ -809,3 +864,76 @@ export const paginatedTradesResponseSchema = paginatedResponseSchema(tradeRowSch
 export type PaginatedTradesResponse = z.infer<typeof paginatedTradesResponseSchema>;
 export const paginatedHoldersResponseSchema = paginatedResponseSchema(holderRowSchema);
 export type PaginatedHoldersResponse = z.infer<typeof paginatedHoldersResponseSchema>;
+
+// ── Comments (Phase-2 "final version" — off-chain, SIWE-authored, §8.4-moderation-
+//    gated, per-token; spec §12.63b) ─────────────────────────────────────────
+//
+// SINGLE-SOURCE TYPE LAYER ONLY (robbed-shared). The route/table/moderation/rate-
+// limit wiring is downstream (robbed-indexer/API); the panel on `/t/[address]` is
+// robbed-frontend. Flat product model: no threading, no edit — "delete" == a
+// moderation-hide (`moderationStatus` → 'hidden'), never a physical delete.
+//
+// Anti-drift decisions (basis recorded per robbed-shared "decide-it-yourself"):
+//  - The comment's COMMON fields live ONCE in `commentBaseSchema` (ws-messages.ts);
+//    the persisted/REST comment EXTENDS it with moderation visibility and the WS
+//    `comment` event carries the base verbatim, so REST↔WS can never drift a field.
+//  - `moderationStatus` REUSES `moderationVisibilitySchema` (visible / pending_review
+//    / hidden) — NO new moderation enum invented. The vendor is an undecided §13
+//    NEEDS-USER item; only the STATUS field shape is defined here (pluggable).
+//  - `author` is the SIWE-authenticated poster; NEVER client-supplied — the request
+//    DTO carries `body` only (tokenAddress from the path, author from the session),
+//    and `z.object` strips any extra key, so an injected `author`/`tokenAddress` is
+//    dropped rather than trusted (verified against zod@4.4.3 / zod.dev).
+//  - The list REUSES `paginatedResponseSchema` (`{ items, nextCursor }`) and the
+//    existing keyset cursor (`KeysetCursorPayload` = {k,i}, API-signed over
+//    createdAt+id) — no parallel pagination shape.
+
+/**
+ * Persisted per-token comment (REST). `commentBaseSchema` (id, tokenAddress, author,
+ * body, createdAt) `.extend`ed with `moderationStatus`. Sharing the base with the WS
+ * `comment` fanout makes the two wire shapes a provable superset/subset of one
+ * another. Like `holderRow`/`portfolioSummary`, a comment is not a chain event — it
+ * carries NO `confirmationState`.
+ */
+export const commentSchema = commentBaseSchema.extend({
+  moderationStatus: moderationVisibilitySchema,
+});
+export type Comment = z.infer<typeof commentSchema>;
+
+/**
+ * POST /v1/tokens/:address/comments body — `body` ONLY. `tokenAddress` comes from the
+ * path and `author` from the SIWE session; neither is accepted from the client
+ * (unknown keys are stripped, so an injected `author`/`tokenAddress` is dropped, not
+ * trusted). Body bound is the SAME `commentBodySchema` the entity uses, so the
+ * accepted-request body and the stored body can't diverge.
+ */
+export const postCommentRequestSchema = z.object({ body: commentBodySchema });
+export type PostCommentRequest = z.infer<typeof postCommentRequestSchema>;
+
+/**
+ * Response of POST …/comments — the created comment, wrapped `{ comment }` (mirrors
+ * `kingOfTheHillResponseSchema`'s single-resource `{ token }` wrap).
+ */
+export const commentResponseSchema = z.object({ comment: commentSchema });
+export type CommentResponse = z.infer<typeof commentResponseSchema>;
+
+/**
+ * GET /v1/tokens/:address/comments — keyset-paginated `{ items, nextCursor }` via the
+ * shared `paginatedResponseSchema`. Flat, newest-first (createdAt DESC, `id`
+ * tiebreak = the `KeysetCursorPayload` {k,i}); no sort param in v1 — a `top`/sort
+ * dimension is a product decision for robbed-architect (would use the existing
+ * `listQueryParamsSchema` factory with a comment sort-field enum).
+ */
+export const commentsResponseSchema = paginatedResponseSchema(commentSchema);
+export type CommentsResponse = z.infer<typeof commentsResponseSchema>;
+
+/**
+ * GET …/comments query grammar — `?cursor=&limit=`. Minimal (no sort/dir): comments
+ * are flat newest-first. REUSES `listLimitSchema` (the single-sourced clamped limit)
+ * so the comment list can't fork the `[1, PAGE_LIMIT_MAX]` bound.
+ */
+export const commentListQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: listLimitSchema,
+});
+export type CommentListQuery = z.infer<typeof commentListQuerySchema>;

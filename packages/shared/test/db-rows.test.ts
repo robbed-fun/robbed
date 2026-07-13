@@ -9,6 +9,7 @@ import type {
   AddressPnlRow,
   BalanceRow,
   CompetitorSnapshotRow,
+  CreatorClaimableRow,
   TokenFlowStatsRow,
   TransferRow,
 } from "../src/db-rows";
@@ -70,6 +71,30 @@ describe("Portfolio rows (spec §5.4; balances = holding, address_pnl = roll-up)
     // null confidence = no cost basis at all (pure transfer-in)
     const noBasis: AddressPnlRow = { ...row, pnl_confidence: null };
     expect(noBasis.pnl_confidence).toBeNull();
+  });
+});
+
+describe("creator-fee claim projection (spec §7 / §12.63 — CreatorClaimableRow)", () => {
+  it("is the per-creator pull-payment roll-up (accrued/claimed/claimable, vault)", () => {
+    const row: CreatorClaimableRow = {
+      creator: ADDR,
+      vault: ADDR,
+      total_accrued_eth: "9000000000000000",
+      total_claimed_eth: "1500000000000000",
+      claimable_eth: "7500000000000000",
+      last_claim_at: 1767960000,
+      updated_at: "2026-07-13T00:00:00Z",
+    };
+    // claimable == accrued − claimed (event-derived mirror; live balanceOf is authoritative)
+    expect(BigInt(row.claimable_eth)).toBe(BigInt(row.total_accrued_eth) - BigInt(row.total_claimed_eth));
+    // never-claimed creator: last_claim_at null, claimable == accrued
+    const neverClaimed: CreatorClaimableRow = {
+      ...row,
+      total_claimed_eth: "0",
+      claimable_eth: row.total_accrued_eth,
+      last_claim_at: null,
+    };
+    expect(neverClaimed.last_claim_at).toBeNull();
   });
 });
 

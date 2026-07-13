@@ -3,7 +3,7 @@
  * (apps/indexer) and frontend decoding (apps/web).
  *
  * Shapes are TRANSCRIBED from the ratified contract designs:
- * - `TokenCreated`  — spec §12.15; docs/how-it-works/contracts.md §2.2 (CurveFactory)
+ * - `TokenCreated`  — spec §12.15; docs/developers/contracts.md §2.2 (CurveFactory)
  * - `Trade`         — spec §12.15; contracts.md §2.3 (BondingCurve; ethAmount is GROSS, fee separate)
  * - `Graduated`     — contracts.md §2.5 (V3Migrator)
  * - `Transfer`      — canonical ERC-20; sixth indexed event family, sole source of
@@ -122,6 +122,55 @@ export const v3CollectEvent = {
   ],
 } as const;
 
+// ── Creator-fee event family (spec §7 / §12.63 — ADDITIVE, Phase-2 fold-in) ──
+//
+// Distinct from the six ratified §12.15-16 families above: these are the
+// §12.63 creator-fee leg (new CurveFactory + BondingCurve + Router + pull-payment
+// CreatorVault). TRANSCRIBED byte-for-byte from the landed contract artifacts
+// (contracts/out/{BondingCurve,CreatorVault}.sol; interfaces IBondingCurve /
+// ICreatorVault) — never invented. They are NOT added to `robbedEventsAbi` or
+// `bondingCurveEventsAbi` (which stay the frozen six families — abi.test.ts);
+// the indexer registers them via the dedicated groupings below so the ratified
+// set and the additive set can't be conflated.
+//
+// DOC-LOCKSTEP (report): the owning design doc (contracts.md §2/§7) still
+// describes v1 (`creatorFeeBps ≡ 0`, no CreatorVault) — robbed-contracts must
+// document this surface there (docs-precede-code). This mirror tracks the
+// already-landed contracts; the shapes here are the compiled truth.
+
+/** IBondingCurve (§12.63) — a curve pushed its accrued creator-fee leg to the vault. */
+export const creatorFeesSweptEvent = {
+  type: "event",
+  name: "CreatorFeesSwept",
+  inputs: [
+    { name: "creator", type: "address", indexed: true },
+    { name: "vault", type: "address", indexed: true },
+    { name: "amount", type: "uint256", indexed: false },
+  ],
+} as const;
+
+/** ICreatorVault (§12.63) — a curve credited `creator`'s claimable balance (the sweep landing). */
+export const creatorFeeDepositedEvent = {
+  type: "event",
+  name: "CreatorFeeDeposited",
+  inputs: [
+    { name: "creator", type: "address", indexed: true },
+    { name: "curve", type: "address", indexed: true },
+    { name: "amount", type: "uint256", indexed: false },
+  ],
+} as const;
+
+/** ICreatorVault (§12.63) — `caller` paid out `creator`'s full accrued balance to the creator. */
+export const creatorFeeClaimedEvent = {
+  type: "event",
+  name: "CreatorFeeClaimed",
+  inputs: [
+    { name: "creator", type: "address", indexed: true },
+    { name: "caller", type: "address", indexed: true },
+    { name: "amount", type: "uint256", indexed: false },
+  ],
+} as const;
+
 // ── Per-contract groupings (what Ponder registers per source) ───────────────
 
 /** CurveFactory root ABI slice consumed by the indexer. */
@@ -150,4 +199,27 @@ export const robbedEventsAbi = [
   transferEvent,
   v3SwapEvent,
   v3CollectEvent,
+] as const;
+
+// ── Creator-fee groupings (§12.63 — what the indexer registers for the leg) ──
+// Kept SEPARATE from the frozen six-family groupings above so `robbedEventsAbi`
+// stays the ratified §12.15-16 set. robbed-indexer registers `CreatorFeesSwept`
+// on the existing BondingCurve source (merge with `bondingCurveEventsAbi`) and a
+// NEW CreatorVault Ponder source (`getDeployment(chainId).robbed.creatorVault`,
+// present once a creator-fee factory is deployed) with `creatorVaultEventsAbi`.
+
+/** BondingCurve creator-leg slice — merge with `bondingCurveEventsAbi` on the curve source. */
+export const bondingCurveCreatorEventsAbi = [creatorFeesSweptEvent] as const;
+
+/** CreatorVault (§12.63) — new Ponder source; address from the deployment registry. */
+export const creatorVaultEventsAbi = [
+  creatorFeeDepositedEvent,
+  creatorFeeClaimedEvent,
+] as const;
+
+/** The full additive creator-fee event manifest (parallels `robbedEventsAbi`). */
+export const creatorFeeEventsAbi = [
+  creatorFeesSweptEvent,
+  creatorFeeDepositedEvent,
+  creatorFeeClaimedEvent,
 ] as const;

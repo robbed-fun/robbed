@@ -3,8 +3,10 @@ import { describe, expect, it } from "bun:test";
 import {
   apiEnvelopeSchema,
   candleSchema,
+  claimCreatorFeeTxMetaSchema,
   clampListLimit,
   confirmationsResponseSchema,
+  creatorClaimableSchema,
   ERROR_CODE_VALUES,
   ERROR_CODES,
   errorCodeSchema,
@@ -387,6 +389,42 @@ describe("Portfolio (spec §5.4; ROBBED_ redesign page 4)", () => {
     };
     expect(portfolioActivityResponseSchema.safeParse({ activity: [trade], nextCursor: "c1" }).success).toBe(true);
     expect(portfolioCreatedResponseSchema.safeParse({ tokens: [card], nextCursor: null }).success).toBe(true);
+  });
+});
+
+describe("creator-fee claim surface (spec §7 / §12.63)", () => {
+  const claimable = {
+    creator: ADDR,
+    vault: ADDR,
+    claimableEth: "7500000000000000",
+    claimable: usd,
+    totalAccruedEth: "9000000000000000",
+    totalClaimedEth: "1500000000000000",
+    asOf: "2026-07-13T00:00:00Z",
+  };
+
+  it("claimable balance DTO: wei decimal strings + usd mirror, no confirmationState", () => {
+    expect(creatorClaimableSchema.safeParse(claimable).success).toBe(true);
+    // uint256-as-decimal convention — hex/number rejected
+    expect(creatorClaimableSchema.safeParse({ ...claimable, claimableEth: "0xabc" }).success).toBe(false);
+    expect(creatorClaimableSchema.safeParse({ ...claimable, claimableEth: 7500 }).success).toBe(false);
+    // aggregate roll-up carries no confirmationState — extra key stripped, still valid
+    expect(
+      creatorClaimableSchema.safeParse({ ...claimable, confirmationState: "soft_confirmed" }).success,
+    ).toBe(true);
+    // usd mirror is required (derived §2)
+    const { claimable: _c, ...noUsd } = claimable;
+    expect(creatorClaimableSchema.safeParse(noUsd).success).toBe(false);
+  });
+
+  it("CLAIM_CREATOR_FEE tx metadata: literal-tagged, address + wei amount", () => {
+    const meta = { type: "CLAIM_CREATOR_FEE", creator: ADDR, vault: ADDR, amountEth: "7500000000000000" };
+    expect(claimCreatorFeeTxMetaSchema.safeParse(meta).success).toBe(true);
+    // the literal tag is fixed (seeds a future discriminated union)
+    expect(claimCreatorFeeTxMetaSchema.safeParse({ ...meta, type: "CLAIM" }).success).toBe(false);
+    // amount is a uint256 decimal string, not a float / number
+    expect(claimCreatorFeeTxMetaSchema.safeParse({ ...meta, amountEth: "0.0075" }).success).toBe(false);
+    expect(claimCreatorFeeTxMetaSchema.safeParse({ ...meta, creator: "not-an-address" }).success).toBe(false);
   });
 });
 

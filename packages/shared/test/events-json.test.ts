@@ -13,6 +13,9 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import {
+  creatorFeeClaimedEvent,
+  creatorFeeDepositedEvent,
+  creatorFeesSweptEvent,
   graduatedEvent,
   tokenCreatedEvent,
   tradeEvent,
@@ -62,6 +65,7 @@ describe("events.json — generated artifact shape", () => {
     expect(eventsJson.$generatedBy).toContain("contracts/script/codegen-abi.ts");
     expect(Object.keys(eventsJson.contracts).sort()).toEqual([
       "BondingCurve",
+      "CreatorVault",
       "CurveFactory",
       "INonfungiblePositionManager",
       "IUniswapV3Pool",
@@ -114,6 +118,42 @@ describe("events.json — protocol lifecycle/fee events (contracts.md §2)", () 
       "tokenId",
       "amount0",
       "amount1",
+    ]);
+  });
+});
+
+describe("events.json — creator-fee leg (spec §7 / §12.63; ADDITIVE Phase-2)", () => {
+  // The three NEW on-chain creator-fee events the indexer registers Ponder handlers
+  // for. Cross-checked byte-for-byte against the hand-authored fragments in
+  // src/abi/events.ts (same seam the six ratified families use), so events.json ↔
+  // events.ts ↔ artifact can't drift on the additive surface either.
+  const creatorPairs: [string, string, Parameters<typeof normalize>[0]][] = [
+    ["BondingCurve", "CreatorFeesSwept", creatorFeesSweptEvent],
+    ["CreatorVault", "CreatorFeeDeposited", creatorFeeDepositedEvent],
+    ["CreatorVault", "CreatorFeeClaimed", creatorFeeClaimedEvent],
+  ];
+  for (const [contract, name, specFragment] of creatorPairs) {
+    it(`${contract}.${name} matches the events.ts fragment`, () => {
+      expect(normalize(fragment(contract, name))).toBe(normalize(specFragment));
+    });
+  }
+
+  it("CreatorFeesSwept indexes (creator, vault); amount is data (BondingCurve leg)", () => {
+    const ev = fragment("BondingCurve", "CreatorFeesSwept");
+    expect(ev.inputs.map((i) => i.name)).toEqual(["creator", "vault", "amount"]);
+    expect(ev.inputs.filter((i) => i.indexed).map((i) => i.name)).toEqual(["creator", "vault"]);
+  });
+
+  it("CreatorVault carries the two pull-payment events (deposit + claim)", () => {
+    expect(fragment("CreatorVault", "CreatorFeeDeposited").inputs.map((i) => i.name)).toEqual([
+      "creator",
+      "curve",
+      "amount",
+    ]);
+    expect(fragment("CreatorVault", "CreatorFeeClaimed").inputs.map((i) => i.name)).toEqual([
+      "creator",
+      "caller",
+      "amount",
     ]);
   });
 });

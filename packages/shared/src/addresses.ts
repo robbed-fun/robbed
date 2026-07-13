@@ -34,6 +34,18 @@ export interface Deployment {
     v3Migrator: Address;
     lpFeeVault: Address;
     treasury: Address;
+    /**
+     * The Phase-2 pull-payment CreatorVault (spec §7 / §12.63). OPTIONAL +
+     * additive: absent on every v1 deployment (no vault exists until a
+     * creator-fee factory is deployed), so the existing entries below stay valid
+     * against this shape. Once a creator-fee deploy artifact carries it, codegen
+     * emits `robbed.creatorVault` and consumers (indexer CreatorVault source,
+     * web claim widget) get it typed. CODEGEN-LOCKSTEP (report): the pipeline's
+     * `contracts/script/codegen-addresses.ts` — `Artifact`/`ADDR_KEYS` + the
+     * `robbed:` emit block + this interface template — must add `creatorVault`
+     * (optional) so a regen doesn't drop this field; robbed-contracts owns that.
+     */
+    creatorVault?: Address;
   };
   /** Canonical externals wired at deploy (§12.28): WETH + the four Uniswap V3 addrs. */
   external: {
@@ -52,12 +64,12 @@ export const ROBBED_DEPLOYMENTS = {
   "4663": {
     chainId: 4663,
     mode: "fork",
-    deployedAt: 1783876253,
+    deployedAt: 1783887345,
     robbed: {
-      curveFactory: "0x67d269191c92Caf3cD7723F116c85e6E9bf55933",
-      router: "0xc3e53F4d16Ae77Db1c982e75a937B9f60FE63690",
-      v3Migrator: "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E",
-      lpFeeVault: "0xc5a5C42992dECbae36851359345FE25997F5C42d",
+      curveFactory: "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E",
+      router: "0x84eA74d481Ee0A5332c457a4d796187F6Ba67fEB",
+      v3Migrator: "0xc3e53F4d16Ae77Db1c982e75a937B9f60FE63690",
+      lpFeeVault: "0x67d269191c92Caf3cD7723F116c85e6E9bf55933",
       treasury: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
     },
     external: {
@@ -68,8 +80,8 @@ export const ROBBED_DEPLOYMENTS = {
       quoterV2: "0x33e885eD0Ec9bF04EcfB19341582aADCb4c8A9E7",
     },
     canary: {
-      token: "0xfBD745797A0fb50429f0a2b04581092798Fdf30B",
-      curve: "0xd8abD9E063611fd8Dd88008474Ee8E04847f657F",
+      token: "0x4F57F9239eFCBf43e5920f579D03B3849C588396",
+      curve: "0x0B40C66BD7BA81485527C41B3730a95f113ED89E",
     },
   },
   "31337": {
@@ -98,13 +110,14 @@ export const ROBBED_DEPLOYMENTS = {
   "46630": {
     chainId: 46630,
     mode: "testnet",
-    deployedAt: 1783856249,
+    deployedAt: 1783899730,
     robbed: {
-      curveFactory: "0x6eb955d889b6958620FBE9DC17Fb84C7d3F08414",
-      router: "0xF8D79D3D1fE742FebbbB5b82f0AAf8D8E4fD4841",
-      v3Migrator: "0x62bB59cA67eEdAAfee4edc10A8821dd08e83A2B0",
-      lpFeeVault: "0xD57dDb22ca1587AE368083f6cE0D341358E5817D",
+      curveFactory: "0x7355BD34Bc12002F2bDc79A4791463d7d6D2529a",
+      router: "0x6480534B6992419535554451BBDe79B898011BA8",
+      v3Migrator: "0x4Bc86C3fdBABbFEF82094A772bA0194e980A5567",
+      lpFeeVault: "0x3B4dD3B5741EDcE6e08CE2BcbE3106035A3E8e75",
       treasury: "0x4ae5b5Ae7D2edd7A2d43054246D6aaAcAAFC1000",
+      creatorVault: "0xE032467128A87e353b69AeDf8e97B0AA9d528eBB",
     },
     external: {
       weth: "0x7943e237c7F95DA44E0301572D358911207852Fa",
@@ -114,8 +127,8 @@ export const ROBBED_DEPLOYMENTS = {
       quoterV2: "0xDDcBe4989C8171F721c5e683C9C6339B59718213",
     },
     canary: {
-      token: "0x4efa77f362379c8c7a590AD37E830C8d04B7309E",
-      curve: "0x89A2317b9e8cA54Baa3242d7eD376Ea3Af1bE07d",
+      token: "0xFF6e101f6Ddf202F513A8f7255c61c3BAd806AB2",
+      curve: "0x7cd37Dc905C89D970F2E6952D721F49cba284aC7",
     },
   },
 } as const satisfies Record<string, Deployment>;

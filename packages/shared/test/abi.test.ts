@@ -6,7 +6,13 @@
 import { describe, expect, it } from "bun:test";
 import { toEventSelector, type AbiEvent } from "viem";
 import {
+  bondingCurveCreatorEventsAbi,
   bondingCurveEventsAbi,
+  creatorFeeClaimedEvent,
+  creatorFeeDepositedEvent,
+  creatorFeeEventsAbi,
+  creatorFeesSweptEvent,
+  creatorVaultEventsAbi,
   curveFactoryEventsAbi,
   graduatedEvent,
   robbedEventsAbi,
@@ -98,5 +104,43 @@ describe("artifact groupings (one source for Ponder config + frontend decoding)"
     // selectors are pairwise distinct
     const selectors = robbedEventsAbi.map((e) => toEventSelector(e as AbiEvent));
     expect(new Set(selectors).size).toBe(6);
+  });
+});
+
+describe("creator-fee event family (spec §7 / §12.63 — ADDITIVE, kept off the frozen 6)", () => {
+  it("signatures + indexed topics are transcribed from the landed artifacts", () => {
+    expect(signatureOf(creatorFeesSweptEvent)).toBe("CreatorFeesSwept(address,address,uint256)");
+    expect(creatorFeesSweptEvent.inputs.filter((i) => i.indexed).map((i) => i.name)).toEqual([
+      "creator", "vault",
+    ]);
+    expect(signatureOf(creatorFeeDepositedEvent)).toBe(
+      "CreatorFeeDeposited(address,address,uint256)",
+    );
+    expect(creatorFeeDepositedEvent.inputs.map((i) => i.name)).toEqual(["creator", "curve", "amount"]);
+    expect(signatureOf(creatorFeeClaimedEvent)).toBe("CreatorFeeClaimed(address,address,uint256)");
+    expect(creatorFeeClaimedEvent.inputs.map((i) => i.name)).toEqual(["creator", "caller", "amount"]);
+  });
+
+  it("does NOT contaminate the ratified six-family artifacts", () => {
+    // The frozen groupings stay exactly the six families — the creator leg lives
+    // in its own groupings so the ratified set can't be conflated.
+    expect(bondingCurveEventsAbi).toEqual([tradeEvent]);
+    expect(robbedEventsAbi.length).toBe(6);
+  });
+
+  it("Ponder groupings: curve-leg + vault source + combined manifest", () => {
+    expect(bondingCurveCreatorEventsAbi).toEqual([creatorFeesSweptEvent]);
+    expect(creatorVaultEventsAbi).toEqual([creatorFeeDepositedEvent, creatorFeeClaimedEvent]);
+    expect(creatorFeeEventsAbi).toEqual([
+      creatorFeesSweptEvent,
+      creatorFeeDepositedEvent,
+      creatorFeeClaimedEvent,
+    ]);
+    for (const ev of creatorFeeEventsAbi) expect(ev.type).toBe("event");
+    // three distinct selectors, all distinct from the six ratified families
+    const creatorSelectors = creatorFeeEventsAbi.map((e) => toEventSelector(e as AbiEvent));
+    expect(new Set(creatorSelectors).size).toBe(3);
+    const ratified = robbedEventsAbi.map((e) => toEventSelector(e as AbiEvent));
+    expect(creatorSelectors.some((s) => ratified.includes(s))).toBe(false);
   });
 });

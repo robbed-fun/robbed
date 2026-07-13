@@ -145,6 +145,31 @@
           }
         ],
         "anonymous": false
+      },
+      {
+        "type": "event",
+        "name": "CreatorFeesSwept",
+        "inputs": [
+          {
+            "name": "creator",
+            "type": "address",
+            "indexed": true,
+            "internalType": "address"
+          },
+          {
+            "name": "vault",
+            "type": "address",
+            "indexed": true,
+            "internalType": "address"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          }
+        ],
+        "anonymous": false
       }
     ],
     "V3Migrator": [
@@ -299,6 +324,58 @@
           },
           {
             "name": "amount1",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          }
+        ],
+        "anonymous": false
+      }
+    ],
+    "CreatorVault": [
+      {
+        "type": "event",
+        "name": "CreatorFeeDeposited",
+        "inputs": [
+          {
+            "name": "creator",
+            "type": "address",
+            "indexed": true,
+            "internalType": "address"
+          },
+          {
+            "name": "curve",
+            "type": "address",
+            "indexed": true,
+            "internalType": "address"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "indexed": false,
+            "internalType": "uint256"
+          }
+        ],
+        "anonymous": false
+      },
+      {
+        "type": "event",
+        "name": "CreatorFeeClaimed",
+        "inputs": [
+          {
+            "name": "creator",
+            "type": "address",
+            "indexed": true,
+            "internalType": "address"
+          },
+          {
+            "name": "caller",
+            "type": "address",
+            "indexed": true,
+            "internalType": "address"
+          },
+          {
+            "name": "amount",
             "type": "uint256",
             "indexed": false,
             "internalType": "uint256"

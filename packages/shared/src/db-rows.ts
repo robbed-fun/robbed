@@ -33,7 +33,16 @@ export interface TokenRow {
   curve_address: string;
   /** §7: tracked from day 1, even though creator fees are Phase 2. */
   creator: string;
-  /** §7: 0 in v1; column exists so Phase 2 needs no migration. */
+  /**
+   * Per-curve snapshot of the creator-fee leg, basis points (§7, §12.63). The
+   * indexer writes this from the curve's immutable `CREATOR_FEE_BPS` at
+   * TokenCreated. UN-FROZEN 2026-07-13 (robbed-shared, §12.63 creator-fee fold-in):
+   * this was pinned to 0 in v1 ("no fee-path reader") but the landed creator-fee
+   * factory makes it configurable and nonzero (testnet default 50). Constraint is
+   * the SAME combined cap as `trade_fee_bps`: `trade_fee_bps + creator_fee_bps ≤
+   * MAX_TRADE_FEE_BPS` (200) — the factory re-asserts it on every setter. Reading
+   * 0 stays valid (mainnet v1 curves), so this is additive/backward-compatible.
+   */
   creator_fee_bps: number;
   /**
    * Per-curve snapshot of the trade fee, basis points (spec §12.40d wiring
@@ -165,6 +174,39 @@ export interface FeeCollectionRow {
   log_index: number;
   /** Read-derived, never stored (§12.48c) — see file-header constraint. */
   confirmation_state: ConfirmationState;
+}
+
+/**
+ * `creator_claimable` — per-CREATOR pull-payment roll-up backing the creator-fee
+ * claim surface (spec §7 / §12.63; ROBBED_ redesign Portfolio CreatedTab). ONE row
+ * per creator address, rebuildable from the on-chain creator-fee events:
+ *  - `total_accrued_eth`  = Σ `CreatorFeeDeposited.amount` (curve→vault sweeps credited
+ *                           to this creator; == Σ `CreatorFeesSwept.amount` for its curves)
+ *  - `total_claimed_eth`  = Σ `CreatorFeeClaimed.amount` (paid out to the creator)
+ * The materialized `claimable_eth` (accrued − claimed) is an event-derived MIRROR;
+ * the AUTHORITATIVE claimable value the API serves is the live on-chain
+ * `CreatorVault.balanceOf(creator)` read (asOf), exactly like `feesResponseSchema`'s
+ * `uncollected` uses a live NPM read rather than trusting a projection. Like
+ * `AddressPnlRow` / `TokenFlowStatsRow` this is an [offchain] roll-up, NOT an event
+ * row, so it carries no `confirmation_state`. `vault` is the CreatorVault the balance
+ * lives in (constant per creator-fee factory version). Additive — absent for every
+ * pre-creator-fee (v1) deployment where no vault exists.
+ *
+ * OWNER NOTE (report / doc-lockstep): the exact table + any per-event history table
+ * (a `creator_fee_claims` mirror of `FeeCollectionRow`, if a claim-history endpoint is
+ * wanted) are robbed-indexer's to define in indexer.md §3 — this is the single-source
+ * TYPE for the projection both services build against, not a ratified schema decision.
+ */
+export interface CreatorClaimableRow {
+  creator: string;
+  vault: string;
+  total_accrued_eth: string;
+  total_claimed_eth: string;
+  /** accrued − claimed, wei decimal string (event-derived mirror; live `balanceOf` is authoritative). */
+  claimable_eth: string;
+  /** Unix seconds of the most recent `CreatorFeeClaimed`; null if never claimed. */
+  last_claim_at: number | null;
+  updated_at: string;
 }
 
 /**

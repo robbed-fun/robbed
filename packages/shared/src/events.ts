@@ -80,3 +80,30 @@ export interface V3CollectEvent {
   amount0: bigint;
   amount1: bigint;
 }
+
+// ── Creator-fee leg decoded structs (spec §7 / §12.63 — ADDITIVE) ───────────
+// Mirror the creator-fee fragments in `./abi/events.ts` (transcribed from the
+// landed BondingCurve/CreatorVault artifacts). Phase-2 fold-in, distinct from
+// the six ratified §12.15-16 families above; the indexer's creator-fee handlers
+// type their decoded args with these.
+
+/** IBondingCurve (§12.63) — `amount` wei of the creator-fee leg pushed to `vault` for `creator`. */
+export interface CreatorFeesSweptEvent {
+  creator: Address;
+  vault: Address;
+  amount: bigint;
+}
+
+/** ICreatorVault (§12.63) — `curve` credited `creator`'s claimable balance by `amount` wei. */
+export interface CreatorFeeDepositedEvent {
+  creator: Address;
+  curve: Address;
+  amount: bigint;
+}
+
+/** ICreatorVault (§12.63) — `caller` paid out `amount` wei of `creator`'s balance to `creator`. */
+export interface CreatorFeeClaimedEvent {
+  creator: Address;
+  caller: Address;
+  amount: bigint;
+}
