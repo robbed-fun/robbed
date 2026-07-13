@@ -13,6 +13,8 @@
     "dev:seed": "bun tools/localstack/seed-chain.ts",
     "dev:db:reset": "bun tools/localstack/reset-db.ts",
     "safe:create": "bun tools/deploy/create-safe.ts",
+    "safe:tx": "bun tools/deploy/safe-tx.ts",
+    "safe:drill": "bun tools/deploy/safe-drill.ts",
     "dev:real": "NEXT_PUBLIC_MOCK_DATA=false docker compose up",
     "dev:d": "docker compose up -d",
     "dev:down": "docker compose down",
@@ -37,7 +39,8 @@
     "deploy:cf:mainnet": "pnpm --filter @robbed/web run deploy:cf:mainnet",
     "deploy:cf:testnet": "pnpm --filter @robbed/web run deploy:cf:testnet",
     "deploy:robbed.fun": "pnpm --filter @robbed/web run deploy:cf:mainnet",
-    "e2e": "pnpm --filter @robbed/web exec playwright test",
+    "e2e": "bash scripts/e2e-stack.sh",
+    "e2e:pw": "pnpm --filter @robbed/web exec playwright test",
     "e2e:coverage": "bun scripts/e2e-coverage.ts"
   },
   "pnpm": {

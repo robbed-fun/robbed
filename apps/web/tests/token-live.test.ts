@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { WsMessage } from "@robbed/shared";
 
-import { applyGraduated, tradeImpliesGraduation } from "@/entities/token";
+import {
+  applyGraduated,
+  tradeImpliesGraduation,
+  tradeMovesBondingProgress,
+} from "@/entities/token";
 
 import { tokenDetail } from "./fixtures";
 
@@ -81,5 +85,46 @@ describe("tradeImpliesGraduation (v3 trade while venue still curve → reconcile
       false,
     );
     expect(tradeImpliesGraduation(undefined, tradeMsg("v3"))).toBe(false);
+  });
+});
+
+describe("tradeMovesBondingProgress (a curve buy/sell → re-serve the bonding cell)", () => {
+  it("true for a curve trade against a pre-grad token (progress moved → refetch)", () => {
+    // Every buy AND sell changes real_eth_reserves ⇒ progressPct + raised ETH.
+    expect(tradeMovesBondingProgress(tokenDetail({ status: "curve" }), tradeMsg("curve"))).toBe(
+      true,
+    );
+    const sell = tradeMsg("curve");
+    if (sell.type === "trade") sell.data.isBuy = false;
+    expect(tradeMovesBondingProgress(tokenDetail({ status: "curve" }), sell)).toBe(true);
+    // Still bonding while in the §12.12 ready-to-graduate window.
+    expect(
+      tradeMovesBondingProgress(tokenDetail({ status: "graduating" }), tradeMsg("curve")),
+    ).toBe(true);
+  });
+
+  it("false once graduated — the bonding cell is terminal and must not regress", () => {
+    expect(
+      tradeMovesBondingProgress(
+        tokenDetail({ status: "graduated", graduated: true }),
+        tradeMsg("curve"),
+      ),
+    ).toBe(false);
+    // Defensive: `graduated` latch set even if the status projection still lags.
+    expect(
+      tradeMovesBondingProgress(tokenDetail({ status: "curve", graduated: true }), tradeMsg("curve")),
+    ).toBe(false);
+  });
+
+  it("false for a v3 trade (that path is the un-throttled graduation reconcile, not this one)", () => {
+    // A v3 trade against a pre-grad cache implies graduation → handled there, so
+    // this predicate stays false and the two invalidate paths never double-fire.
+    expect(tradeMovesBondingProgress(tokenDetail({ status: "curve" }), tradeMsg("v3"))).toBe(
+      false,
+    );
+  });
+
+  it("false without a cached token (nothing to reconcile yet)", () => {
+    expect(tradeMovesBondingProgress(undefined, tradeMsg("curve"))).toBe(false);
   });
 });
