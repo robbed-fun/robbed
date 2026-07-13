@@ -1,12 +1,12 @@
 # Contributing to ROBBED_
 
-Thanks for contributing. This project is spec-driven: [`spec.md`](spec.md) is the single source of truth, and [`../CLAUDE.md`](../CLAUDE.md) distills its hard rules. When code and spec disagree, the spec wins — flag the conflict, don't reinterpret it.
+Thanks for contributing. This project is spec-driven: [`spec.md`](spec.md) is the single source of truth; [`../CLAUDE.md`](../CLAUDE.md) maps the repo and `.claude/rules/` distills the hard rules (path-scoped, loaded with the files they govern; per-workspace depth lives in nested `CLAUDE.md` files beside the code). When code and spec disagree, the spec wins — flag the conflict, don't reinterpret it.
 
 ## Authority chain
 
 ```
 docs/spec.md                      ← root authority; §12 resolved decisions, §13 open items
-  └── CLAUDE.md                   ← distilled hard rules (violations are bugs, not style)
+  └── CLAUDE.md + .claude/rules/  ← repo map + distilled hard rules (violations are bugs, not style)
         └── docs/developers/*.md   ← implementable designs, one per component
               └── code            ← a transcription of the design doc; nothing more, nothing less
 ```

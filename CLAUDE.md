@@ -2,54 +2,44 @@
 
 Source of truth: `docs/spec.md` (v1.2). When code and spec disagree, the spec wins; when the spec is silent, ask or record the decision in §12/§13. Contributor process (PR flow, test tiers, validate.sh): `docs/CONTRIBUTING.md`.
 
-## Hard rules (violations are bugs, not style)
+This file is the map. Depth lives beside the code: **every workspace below has its own `CLAUDE.md`** (loaded when you work in that subtree), and policy lives in **`.claude/rules/`** — `spec-authority` + `no-market-metrics` are always on; `solidity-orbit` (contracts), `lp-copy` (web/shared/docs), `anti-drift` (apps/packages), and `docs-placement` (any `*.md`) load with the files they govern. Rule violations are bugs, not style — write-time enforcement is in `.claude/hooks/` (hard-rule grep + forge fmt on write, secret/destructive-command guard, touched-workspace typecheck on stop). Never create plans/trackers/status/progress md files anywhere (docs-placement rule; doc-check enforces).
 
-- **Never use `block.number`** for any logic — on Orbit chains it returns an L1 estimate. Use `ArbSys(address(100)).arbBlockNumber()` or `block.timestamp` (spec §2, §6.5).
-- **Compiler: one exact pin, no ranges** across the whole Foundry workspace. Candidate `0.8.35` — must be confirmed against Robinhood Blockscout verification before first deploy (§6.7).
-- **Sells are always open.** No flag, pause, or code path may ever block curve sells. Pause flags are granular: `pauseCreates`, `pauseBuys` only. No pause authority of any kind post-graduation (§6.5). Two carve-outs are *not* pauses: the deterministic `ReadyToGraduate` lock (both directions locked pending permissionless `graduate()`, §12.12), and — critically — **trade fees never push ETH to the treasury**: the 1% fee accrues in-contract and is withdrawn by a permissionless, non-phase-gated `sweepFees()`, so a hostile/reverting treasury cannot freeze sells (§12.25).
-- **LP copy language:** always "LP principal permanently locked; trading fees claimable by treasury." Never "burned" (unless the V2 fallback is explicitly adopted, which flips the copy).
-- **Fees computed in-contract** — never caller-supplied fee amounts (§4.1).
-- **Never hardcode market metrics** (TVL, prices, ETH/USD, volumes) in code, copy, or docs — cite source + timestamp or query live (§2).
-- Immutable contracts, no proxies. Upgrade = new factory version (§6).
-- OZ v5 throughout: SafeERC20, ReentrancyGuard, Ownable2Step. Treasury = Gnosis Safe, never a bespoke multisig (§6.6).
-- LPFeeVault: no owner, no withdraw, sole external fn `collect(tokenId)` → fixed treasury. Keep it ~50 lines (§6.3, §6.6).
-- License: MIT. All contracts verified on Blockscout at deploy; repo public.
+## Map
+
+| Path | What it is | Owner agent |
+|---|---|---|
+| `contracts/` | Solidity + Foundry + OZ v5 — LaunchToken, CurveFactory, BondingCurve, Router, V3Migrator, LPFeeVault, CreatorVault | robbed-contracts |
+| `apps/web/` | Next.js 16 + React 19 App Router (FSD), wagmi v2 + viem + RainbowKit, Tailwind dark-first | robbed-frontend |
+| `apps/web/e2e/` | Playwright user-flow suite on an anvil fork — real txs, wagmi mock connector | robbed-e2e |
+| `apps/indexer/` | Ponder → Postgres (+pg_trgm) + Redis pub/sub → Bun WS fanout | robbed-indexer |
+| `apps/api/` | Hono on Bun — API-mediated R2 uploads, moderation, search | robbed-indexer |
+| `apps/keeper/` | Auto-graduation keeper — standing caller of permissionless `graduate()` | robbed-keeper |
+| `packages/shared/` | THE home of cross-service types/schemas/ABIs (Zod-first) + workspace config | robbed-shared |
+| `tools/` | m0 parameter notebook, deploy/Safe tooling, localstack, OG | robbed-architect |
+
+Cross-cutting agents: **robbed-architect** (spec interpretation, decision arbitration, authoring `.claude/` assets — agents/skills/commands go through it) and **robbed-security** (spec §10 gate sign-off; adversarial — it refutes, never fixes).
+
+Monorepo: **pnpm workspaces** (one `pnpm-lock.yaml`, `workspace:*` internal deps, catalogs for shared lib versions); **Bun stays the runtime and test runner** (§8/§9).
+
+## Golden commands
+
+- `bun run validate` — the local CI mirror (also the pre-commit hook); `bun run validate:full` adds the slow stages
+- `bun run dev:d` / `dev:down` / `dev:logs` — local compose stack; `dev:testnet:*` / `dev:mainnet:*` for the other stacks; the `/stacks-up` skill brings up and probes all three
+- Per-tier tests: `cd contracts && forge test` · `bun test` (per package) · `cd apps/web && bun run test` · `bun run e2e` + `bun run e2e:coverage` · `bun scripts/doc-check.ts`
 
 ## Chain facts (chain ID 4663)
 
-- Gas token ETH; ~100ms blocks; single FCFS sequencer — priority fees do not jump the queue.
+- Gas token ETH; ~100ms blocks; single FCFS sequencer — priority fees do not jump the queue. Explorer: robinhoodchain.blockscout.com.
 - WETH: `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73`
-- Uniswap v2 Factory `0x8bceaa40b9acdfaedf85adf4ff01f5ad6517937f`, v2 Router02 `0x89e5db8b5aa49aa85ac63f691524311aeb649eba`.
-- **Uniswap v3 confirmed on 4663 (§12.28)** — Factory `0x1f7d7550B1b028f7571E69A784071F0205FD2EfA`, NonfungiblePositionManager `0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3`, SwapRouter02 `0xcaf681a66d020601342297493863e78c959e5cb2`, QuoterV2 `0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7`. Still assert at deploy: `factory.feeAmountTickSpacing(10000)==200`, `NPM.factory()`/`NPM.WETH9()`. Trade fee stays 1%.
-- Explorer: robinhoodchain.blockscout.com
+- Uniswap v2 Factory `0x8bceaa40b9acdfaedf85adf4ff01f5ad6517937f`, v2 Router02 `0x89e5db8b5aa49aa85ac63f691524311aeb649eba`
+- **Uniswap v3 confirmed on 4663 (§12.28)** — Factory `0x1f7d7550B1b028f7571E69A784071F0205FD2EfA`, NonfungiblePositionManager `0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3`, SwapRouter02 `0xcaf681a66d020601342297493863e78c959e5cb2`, QuoterV2 `0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7`. Trade fee stays 1%.
 - Confirmation tiers everywhere in UX: soft-confirmed → posted-to-L1 → finalized (§2.1).
 
-## Stack
+## Milestones & gates
 
-- Monorepo: **pnpm workspaces** (dependency management, strict node_modules — https://pnpm.io/workspaces); **Bun stays the runtime and test runner** (§8/§9). One lockfile: `pnpm-lock.yaml`. Internal deps via `workspace:*`; shared lib versions via pnpm catalogs.
-- **Anti-drift rule:** every cross-service type/schema/ABI lives ONCE in `packages/shared` (Zod-first, TS types via `z.infer`); any logic used by ≥2 services is extracted to `packages/*`. Apps import — never redeclare. `packages/*` and workspace config are owned by the `robbed-shared` agent.
-- Contracts: Solidity + Foundry + OpenZeppelin v5, `contracts/` (LaunchToken, CurveFactory, BondingCurve, Router, V3Migrator, LPFeeVault)
-- Indexer: Ponder → Postgres (+pg_trgm) + Redis pub/sub → Bun WS
-- API: Hono on Bun (API-mediated R2 uploads — §12.19; moderation, search)
-- Frontend: Next.js 16 + React 19 (exact majors, no ranges — §12.37) App Router on Bun, wagmi v2 + viem + RainbowKit, TanStack Query, lightweight-charts, Tailwind dark-first, satori OG
-- Tests: Foundry unit/fuzz/invariant + fork tests vs live chain; Vitest units; Playwright e2e on fork
+M0 parameter notebook → M1 contracts + gates 1–4 → M2 indexer/API → M3 frontend → M4 gates 5–8 → M5 caps lift. All 10 security gates (spec §10) are required before caps lift. Portfolio/creator-fees/4337 are Phase 2 — but schema tracks `creator` per token and `creatorFeeBps` (hardcoded 0) from day 1.
 
-## Security gates (all 10 required before caps lift — §10)
+## MCP (`.mcp.json`, committed)
 
-Key invariants the test suite must hold: `k` non-decreasing from trades; curve solvency under any fill sequence; exact fee accounting; graduation single-fire and reachable; post-grad curve holds zero value; pre-seeded/donated/swapped V3 pool cannot cause hostile-ratio mint; no actor sequence extracts ETH beyond fair curve value.
-
-## Milestones
-
-M0 parameter notebook → M1 contracts + gates 1–4 → M2 indexer/API → M3 frontend → M4 gates 5–8 → M5 caps lift. Portfolio/creator-fees/4337 are Phase 2 — but schema tracks `creator` per token and `creatorFeeBps` (hardcoded 0) from day 1.
-
-## Docs placement
-
-Protocol + contributor/security docs → `docs/` (`spec.md`, `users/`, `developers/`, `runbooks/`, `CONTRIBUTING.md`, `SECURITY.md`) + colocated per-package READMEs; the root keeps only `README.md` + `CLAUDE.md`. Security reviews → the pull request that closes each gate (not committed). **NEVER create plans/trackers/status/progress md files anywhere** (removed 2026-07-12; no flagship public DeFi repo ships them — enforced by doc-check's `docs-placement` check). Full rules + machine-consumer map: `docs/README.md`. Commits: Conventional Commits per `docs/CONTRIBUTING.md` §Commit messages — enforced by `.githooks/commit-msg`.
-
-## Docs-first rule
-
-Before any implementation step, consult current official documentation for every library/tool being touched — never code from memory. Primary channel: the **context7 MCP server** (configured in `.mcp.json`: `resolve-library-id` → `get-library-docs`); fallback: WebFetch of canonical docs. Each agent in `.claude/agents/` carries its own curated doc-link list. Docs beat assumptions; the spec beats docs (flag the conflict).
-
-## Agents
-
-Specialized subagents live in `.claude/agents/`. Use `robbed-architect` for spec interpretation, decision arbitration, and authoring new agents/skills/commands. Delegate contract work to `robbed-contracts`, indexer/API to `robbed-indexer`, frontend to `robbed-frontend`, security gates to `robbed-security`, and anything in `packages/*` or workspace config to `robbed-shared`.
+- **context7** — current library docs (the docs-first rule).
+- **postgres** — Postgres MCP Pro in `--access-mode=restricted` (read-only) against the dev compose DB (host port 4432); override the URL via `ROBBED_DATABASE_URI`. Inspect real schema through it; writes go through migrations/code only. Needs `uv` installed; secrets never go in `.mcp.json`.

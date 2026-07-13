@@ -12,7 +12,8 @@ Security reviews are not committed as files: each gate's review is recorded in t
 
 ```
 README.md                       what ROBBED_ is; architecture; monorepo map; quickstart
-CLAUDE.md                       distilled hard rules + stack facts for AI-assisted development
+CLAUDE.md                       repo map + chain facts for AI-assisted development (hard rules:
+                                .claude/rules/, path-scoped; per-workspace depth: nested CLAUDE.md)
 
 docs/
 ├── README.md                   how the docs are organized (this file)
