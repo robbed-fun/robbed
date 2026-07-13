@@ -3,7 +3,13 @@
 import { launchTokenAbi, routerAbi } from "@robbed/shared/abi";
 import type { TokenDetail } from "@robbed/shared";
 import { useCallback, useState } from "react";
-import { BaseError, maxUint256, type Abi, type Address } from "viem";
+import {
+  BaseError,
+  ContractFunctionRevertedError,
+  maxUint256,
+  type Abi,
+  type Address,
+} from "viem";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 
 import { useOptimisticTradesContext } from "@/entities/trade";
@@ -337,20 +343,45 @@ async function ensureAllowance(args: {
   await publicClient.waitForTransactionReceipt({ hash });
 }
 
+/**
+ * The DECODED custom-error name of a reverted call (e.g. "DeadlineExpired",
+ * "SlippageExceeded"), or undefined for a non-revert failure. Must be used
+ * INSTEAD of substring-matching the message: viem's verbose message embeds the
+ * function signature (buy/sell carry a `deadline` param), so a naive `/deadline/i`
+ * test matches EVERY trade revert and mislabels unrelated failures as a deadline.
+ */
+function decodedErrorName(e: unknown): string | undefined {
+  if (!(e instanceof BaseError)) return undefined;
+  const revert = e.walk((err) => err instanceof ContractFunctionRevertedError);
+  if (revert instanceof ContractFunctionRevertedError) {
+    return revert.data?.errorName ?? revert.reason ?? undefined;
+  }
+  return undefined;
+}
+
 function humanizeError(e: unknown): string {
   // A pre-estimate revert surfaces as a viem BaseError; prefer its `shortMessage`
   // (the decoded revert reason) over the verbose full message so the user sees WHY
   // — the fix's whole point vs MetaMask's opaque "Network fee unavailable".
   const short = e instanceof BaseError ? e.shortMessage : undefined;
   const full = e instanceof Error ? e.message : String(e);
-  const probe = `${short ?? ""} ${full}`;
-  if (/user rejected|denied|rejected the request/i.test(probe)) {
+  const errorName = decodedErrorName(e);
+  if (/user rejected|denied|rejected the request/i.test(short ?? full)) {
     return "Transaction rejected in wallet.";
   }
-  if (/deadline|expired|transaction too old/i.test(probe))
+  // Match the DECODED error name (or the Orbit "transaction too old" node text) —
+  // never a bare "deadline"/"expired" substring of the signature dump.
+  if (errorName === "DeadlineExpired" || /transaction too old/i.test(short ?? "")) {
     return "Trade deadline expired — refresh the quote.";
-  if (/slippage|Too little received|Too much requested/i.test(probe))
+  }
+  if (
+    errorName === "SlippageExceeded" ||
+    /Too little received|Too much requested/i.test(short ?? "")
+  ) {
     return "Price moved past your slippage — retry.";
-  const surfaced = short || full;
+  }
+  // Otherwise surface the REAL reason — decoded error name if we have one, else
+  // the concise shortMessage. No more masking every failure as a deadline problem.
+  const surfaced = errorName ?? short ?? full;
   return surfaced.length > 160 ? `${surfaced.slice(0, 157)}…` : surfaced;
 }

@@ -3,7 +3,13 @@
 import { curveFactoryAbi } from "@robbed/shared/abi";
 import type { MetadataRequest } from "@robbed/shared";
 import { useCallback, useMemo, useState } from "react";
-import { type Abi, type Address, BaseError, parseEventLogs } from "viem";
+import {
+  type Abi,
+  type Address,
+  BaseError,
+  ContractFunctionRevertedError,
+  parseEventLogs,
+} from "viem";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 
 import { type TrackedTrade, useOptimisticTrades } from "@/entities/trade";
@@ -383,18 +389,46 @@ async function estimateBufferedGas(
   return buffered > GAS_LIMIT_CEILING ? GAS_LIMIT_CEILING : buffered;
 }
 
+/**
+ * The DECODED custom-error name of a reverted contract call (e.g.
+ * "DeadlineExpired", "CreatesPaused"), or undefined if the failure wasn't a
+ * decodable revert (network/transport error, out-of-gas, user rejection).
+ *
+ * This must be used INSTEAD of substring-matching the error message: viem's
+ * verbose message embeds the full function signature — `createToken(…, uint256
+ * minTokensOut, uint256 deadline)` — so a naive `/deadline/i` test matches EVERY
+ * createToken revert and mislabels unrelated failures as "Deadline expired".
+ */
+function decodedErrorName(e: unknown): string | undefined {
+  if (!(e instanceof BaseError)) return undefined;
+  const revert = e.walk((err) => err instanceof ContractFunctionRevertedError);
+  if (revert instanceof ContractFunctionRevertedError) {
+    return revert.data?.errorName ?? revert.reason ?? undefined;
+  }
+  return undefined;
+}
+
 function humanizeError(e: unknown): string {
   // A pre-estimate revert surfaces as a viem BaseError; prefer its decoded
   // `shortMessage` (the revert reason) over the verbose full message — the whole
   // point vs MetaMask's opaque "Network fee unavailable".
   const short = e instanceof BaseError ? e.shortMessage : undefined;
   const full = e instanceof Error ? e.message : String(e);
-  const probe = `${short ?? ""} ${full}`;
-  if (/user rejected|denied|rejected the request/i.test(probe)) {
+  const errorName = decodedErrorName(e);
+  // User rejection is a wallet-layer message, not a decodable revert — keep the
+  // message match, but ONLY against the concise shortMessage, never the dump.
+  if (/user rejected|denied|rejected the request/i.test(short ?? full)) {
     return "Transaction rejected in wallet. Your image and metadata are reusable — retry.";
   }
-  if (/deadline|expired|transaction too old/i.test(probe)) return "Deadline expired — retry.";
-  if (/CreatesPaused/i.test(probe)) return "New launches are temporarily paused.";
-  const surfaced = short || full;
+  // Deadline: match the DECODED error name, or "transaction too old" which some
+  // Orbit nodes return for a stale tx — never a bare "deadline"/"expired".
+  if (errorName === "DeadlineExpired" || /transaction too old/i.test(short ?? "")) {
+    return "Deadline expired — retry.";
+  }
+  if (errorName === "CreatesPaused") return "New launches are temporarily paused.";
+  // Otherwise surface the REAL reason — the decoded custom-error name if we have
+  // one (e.g. InvalidMsgValue, SlippageExceeded), else the shortMessage. No more
+  // masking every failure as a deadline problem.
+  const surfaced = errorName ?? short ?? full;
   return surfaced.length > 180 ? `${surfaced.slice(0, 177)}…` : surfaced;
 }
