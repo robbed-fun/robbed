@@ -96,7 +96,7 @@ contract BondingCurveReentrancyTest is BaseFixture {
             IRouter(address(router)), IBondingCurve(address(curve)), address(token), ReentrantActor.Mode.Sweep
         );
         vm.deal(address(attacker), 2 ether);
-        attacker.buyTokens{value: 2 ether}(); // acquire sellable tokens (not armed)
+        attacker.buyTokens{value: 0.5 ether}(); // acquire sellable tokens; leaves headroom under G=2.484
         uint256 bal = token.balanceOf(address(attacker));
 
         vm.expectRevert(); // reentrant sweepFees() trips the guard → sell reverts

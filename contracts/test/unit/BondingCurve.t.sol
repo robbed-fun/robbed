@@ -165,7 +165,7 @@ contract BondingCurveTest is BaseFixture {
     // ───────────────────────────── Sell path ─────────────────────────────────────
 
     function test_sell_paysSeller_accruesFee_returnsInventory() public {
-        _buy(curve, token, alice, 3 ether, 0);
+        _buy(curve, token, alice, 1 ether, 0); // < G=2.484 so the curve stays Trading for the sell
         uint256 amt = token.balanceOf(alice);
         (uint256 quotedOut, uint256 quotedFee) = curve.quoteSell(amt);
         (,,, uint256 realTokBefore) = curve.reserves();

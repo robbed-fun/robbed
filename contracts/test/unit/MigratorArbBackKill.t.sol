@@ -54,31 +54,32 @@ abstract contract MigratorArbBackKillBase is Test, V3Fixture {
     }
 
     // ────────────────────── exact tick-boundary sqrt prices ──────────────────────
-    // getSqrtRatioAtTick(t) for the M0 graduation targets ±170800 (TestConstants; the 2026-07-12
-    // real-gas re-derivation moved the target from ±170600 → ±170800) at the O-8 tolerance boundary
-    // ±100 and one tick beyond (spec §12.33: TOLERANCE_TICKS = 100). Pure tick↔sqrt math — NOT market
-    // data — computed offline with the bit-exact port of v3-core TickMath.getSqrtRatioAtTick in
-    // tools/m0/lib/v3tick.ts (the port reproduces SQRT_PRICE_TOKEN0/1_X96 at ±170800 exactly). Each
-    // use is self-validating: the test asserts slot0.tick equals the intended boundary tick right
-    // after setting the price, so a stale constant fails loudly here and never silently weakens a kill.
-    uint160 internal constant SQRT_T0_UP_TOL = 15_572_613_450_803_935_561_568_679; // tick −170700
-    uint160 internal constant SQRT_T0_DN_TOL = 15_417_671_066_328_217_011_167_927; // tick −170900
-    uint160 internal constant SQRT_T0_UP_TOL1 = 15_573_392_062_011_682_172_356_250; // tick −170699
-    uint160 internal constant SQRT_T0_DN_TOL1 = 15_416_900_240_586_349_498_378_959; // tick −170901
-    uint160 internal constant SQRT_T1_UP_TOL = 407_136_830_743_243_950_468_184_160_899_421; // tick 170900
-    uint160 internal constant SQRT_T1_DN_TOL = 403_085_953_120_002_836_245_435_337_839_978; // tick 170700
-    uint160 internal constant SQRT_T1_UP_TOL1 = 407_157_187_075_885_518_698_307_157_806_670; // tick 170901
-    uint160 internal constant SQRT_T1_DN_TOL1 = 403_065_800_333_793_206_964_173_353_316_543; // tick 170699
+    // getSqrtRatioAtTick(t) for the M0 graduation targets ±174000 (TestConstants; the §12.67/§12.68
+    // re-derivation, retargeted to a flat 5.7-ETH raise 2026-07-13, moved the target from ±182400 →
+    // ±174000) at the O-8 tolerance boundary ±100 and one tick beyond (spec §12.33: TOLERANCE_TICKS =
+    // 100). Pure tick↔sqrt math — NOT market data — computed offline with the bit-exact port of
+    // v3-core TickMath.getSqrtRatioAtTick in tools/m0/lib/v3tick.ts (the port reproduces
+    // SQRT_PRICE_TOKEN0/1_X96 at ±174000 exactly). Each use is self-validating: the test asserts
+    // slot0.tick equals the intended boundary tick right after setting the price, so a stale constant
+    // fails loudly here and never silently weakens a kill.
+    uint160 internal constant SQRT_T0_UP_TOL = 13_270_211_984_268_622_465_799_735; // tick −173900
+    uint160 internal constant SQRT_T0_DN_TOL = 13_138_177_737_490_687_459_419_401; // tick −174100
+    uint160 internal constant SQRT_T0_UP_TOL1 = 13_270_875_478_280_900_253_003_126; // tick −173899
+    uint160 internal constant SQRT_T0_DN_TOL1 = 13_137_520_877_867_874_119_308_261; // tick −174101
+    uint160 internal constant SQRT_T1_UP_TOL = 477_775_674_892_458_050_763_727_428_404_715; // tick 174100
+    uint160 internal constant SQRT_T1_DN_TOL = 473_021_963_991_831_318_245_719_935_450_742; // tick 173900
+    uint160 internal constant SQRT_T1_UP_TOL1 = 477_799_563_079_012_939_164_193_231_889_723; // tick 174101
+    uint160 internal constant SQRT_T1_DN_TOL1 = 472_998_314_667_316_285_218_458_002_697_789; // tick 173899
 
     /// @dev (`sqrtPriceX96`, tick) of the tolerance boundary: `up` = higher-tick side, `beyond` =
     ///      one tick past the boundary.
     function _boundary(bool up, bool beyond) internal pure returns (uint160 sqrtP, int24 tick) {
         if (_expectToken0()) {
-            if (up) return beyond ? (SQRT_T0_UP_TOL1, int24(-170_699)) : (SQRT_T0_UP_TOL, int24(-170_700));
-            return beyond ? (SQRT_T0_DN_TOL1, int24(-170_901)) : (SQRT_T0_DN_TOL, int24(-170_900));
+            if (up) return beyond ? (SQRT_T0_UP_TOL1, int24(-173_899)) : (SQRT_T0_UP_TOL, int24(-173_900));
+            return beyond ? (SQRT_T0_DN_TOL1, int24(-174_101)) : (SQRT_T0_DN_TOL, int24(-174_100));
         }
-        if (up) return beyond ? (SQRT_T1_UP_TOL1, int24(170_901)) : (SQRT_T1_UP_TOL, int24(170_900));
-        return beyond ? (SQRT_T1_DN_TOL1, int24(170_699)) : (SQRT_T1_DN_TOL, int24(170_700));
+        if (up) return beyond ? (SQRT_T1_UP_TOL1, int24(174_101)) : (SQRT_T1_UP_TOL, int24(174_100));
+        return beyond ? (SQRT_T1_DN_TOL1, int24(173_899)) : (SQRT_T1_DN_TOL, int24(173_900));
     }
 
     // ── helpers (conventions mirror test/unit/Migrator.t.sol) ────────────────────
@@ -205,7 +206,7 @@ abstract contract MigratorArbBackKillBase is Test, V3Fixture {
     // ────────────────────────────── kill-test 2 ──────────────────────────────
     // Ordering mirror of the CLEAN path. In the token0 ordering the final tolerance check's LOWER
     // bound goes hugely wrong under survivors 6 (`targetTick / TOLERANCE_TICKS`), 7 (`%`) and 19
-    // (dropped `c.targetTick`): with target −170800 every graduation then reverts
+    // (dropped `c.targetTick`): with target −174000 every graduation then reverts
     // PoolPriceUnrecoverable. The legacy suite never ran token0, so they lived. Kills: 6, 7, 19.
 
     function test_ordering_cleanGraduation_mintsExactlyAtTarget() public {
@@ -252,17 +253,20 @@ abstract contract MigratorArbBackKillBase is Test, V3Fixture {
     }
 
     // ────────────────────────────── kill-test 1b ──────────────────────────────
-    // WETH-leg budget WITHIN the boundary. Walking back costs ≈ 0.03 ETH — far above the mutated
-    // budgets of survivors 27/28 (`(wethForMint ± bps)/BPS ≈ 8e14 wei`), 29 (`/bps/BPS ≈ 8e12`) and
-    // 34 (`%`, < 1e4 wei) but comfortably inside the real `wethForMint·1% ≈ 8.08e16`. The mutants
-    // exhaust their tiny budget and revert ArbBudgetExceeded where graduation MUST succeed.
-    // Kills: 27, 28, 29, 34.
+    // WETH-leg budget WITHIN the boundary. Walking back the 0.015-ETH band costs ≈ 0.015 ETH — far
+    // above the mutated budgets of survivors 27/28 (`(wethForMint ± bps)/BPS ≈ 5.7e14 wei`), 29
+    // (`/bps/BPS ≈ 5.7e12`) and 34 (`%`, < 1e4 wei) but comfortably inside the real
+    // `wethForMint·1% ≈ 5.75e16` (G=5.749). The mutants exhaust their tiny budget and revert
+    // ArbBudgetExceeded where graduation MUST succeed. Kills: 27, 28, 29, 34.
 
     function test_budgetBoundary_wethLeg_withinBudget_graduates() public {
         (LaunchToken token, BondingCurve curve, address pool) = _subject("wethIn");
         PoolGriefer g = _newGriefer(token, curve, pool, 0.1 ether);
 
-        _mintWethSideBand(g, token, 0.03 ether);
+        // Band sized so the WETH-leg walk-back cost stays under the ~1% budget: at G=5.749,
+        // wethForMint ≈ 5.747 ETH → 1% budget ≈ 0.0575 ETH, so a 0.015-ETH band recovers within budget
+        // (even more headroom than at the prior G=2.484 / ~0.0248-ETH budget).
+        _mintWethSideBand(g, token, 0.015 ether);
         _griefTokenUnderpricedDeep(g, token);
         _assertGriefed(token, pool);
 
@@ -273,7 +277,7 @@ abstract contract MigratorArbBackKillBase is Test, V3Fixture {
     }
 
     // ────────────────────────────── kill-test 3 ──────────────────────────────
-    // 2-iteration WETH-leg spend. The band needs ≈ 2 ETH of arb WETH ≫ the 0.0808 ETH budget, so
+    // 2-iteration WETH-leg spend. The band needs ≈ 2 ETH of arb WETH ≫ the ~0.0575 ETH budget, so
     // iteration 1 consumes the ENTIRE budget as one exact-input swap (v3-core: input is fully
     // consumed unless the price limit is reached) and the loop provably ENTERS iteration 2, whose
     // budget recomputation `wethArbBudget − wethArbSpent == 0` must throw EXACTLY ArbBudgetExceeded
@@ -287,7 +291,7 @@ abstract contract MigratorArbBackKillBase is Test, V3Fixture {
     // dust swaps until iterations exhaust → PoolPriceUnrecoverable); 150, 151, 152, 154 (budget==0
     // guard weakened/removed → zero-amount pool swap → v3-core 'AS'); 157 (spend accumulator `−` →
     // Panic(0x11) underflow on iteration 1); 158, 163, 166 (accumulator zeroed/shrunk → budget
-    // refills each iteration → 8·B total ≈ 0.65 ETH < 2 ETH → PoolPriceUnrecoverable);
+    // refills each iteration → 8·B total ≈ 0.46 ETH < 2 ETH → PoolPriceUnrecoverable);
     // 104, 107 (`if (true)` leg confusion: WETH-input swap draws the TOKEN budget ≈ 2.07e24 → the
     // price-limited swap spends ≈ 2 ETH, recovers → 'Price slippage check'); 100 in the token0 run
     // and 99 in the token1 run (`==` → `>=`/`<=` on the input-asset compare: WETH input classified

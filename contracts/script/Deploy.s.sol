@@ -476,19 +476,23 @@ contract Deploy is Script {
 
     // ──────────────────────────── deploy topology ──────────────────────────────
 
-    /// @dev §7.2 order: (1) LP vault (treasury frozen forever) → (2) factory → (3) migrator →
-    ///      (4) router → (4b) CreatorVault (needs the factory address; resolves the factory↔vault
-    ///      cycle via the one-time-setter pattern, spec §12.63) → (5) one-time setters
-    ///      (migrator/router/creatorVault). Topology is immutable after the setters (spec §6).
+    /// @dev §7.2 order (creator-fee generation, §12.69): (1) factory → (2) CreatorVault (needs the
+    ///      factory address) → (3) LPFeeVault (needs the factory — reads its live creatorVault sink +
+    ///      migrator registration authority; treasury still frozen forever) → (4) migrator (needs the
+    ///      vault) → (5) router → (6) one-time setters (migrator/router/creatorVault/lpFeeVault). The
+    ///      LPFeeVault↔migrator and CreatorVault↔LPFeeVault cycles resolve via the factory's
+    ///      one-time-setter pattern (the vaults read `factory.migrator()`/`factory.lpFeeVault()` live,
+    ///      each immutable-by-convention once set). Topology is immutable after the setters (spec §6).
     function _deployTopology() internal {
-        vault = new LPFeeVault(npm, treasury); // 1
-        factory = new CurveFactory(_factoryInit()); // 2
-        migrator = new V3Migrator(_migratorInit()); // 3
-        router = new Router(ICurveFactory(address(factory))); // 4
-        creatorVault = new CreatorVault(address(factory)); // 4b — pull-payment creator-fee sink (§12.63)
-        factory.setMigrator(address(migrator)); // 5
+        factory = new CurveFactory(_factoryInit()); // 1
+        creatorVault = new CreatorVault(address(factory)); // 2 — pull-payment creator-fee sink (§12.63/§12.69)
+        vault = new LPFeeVault(npm, treasury, address(factory)); // 3 — creator-aware LP fee vault (§12.69)
+        migrator = new V3Migrator(_migratorInit()); // 4 (reads address(vault))
+        router = new Router(ICurveFactory(address(factory))); // 5
+        factory.setMigrator(address(migrator)); // 6
         factory.setRouter(address(router));
         factory.setCreatorVault(address(creatorVault));
+        factory.setLpFeeVault(address(vault)); // §12.69: gate CreatorVault.depositERC20 to this vault
     }
 
     // ─────────────────────────────── canary smoke ──────────────────────────────

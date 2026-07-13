@@ -324,7 +324,11 @@ contract CreatorFeeTest is Test {
     }
 
     function test_f1_clampBoundary_realistic() public {
-        _f1Case(8_000_000_000_000_000_067, 7_880_000_000_000_000_066); // accepted rounds to grossIn+1
+        // The F-1 clamp boundary depends only on (grossIn, remaining, totBps 150), NOT on G: net(grossIn)
+        // exceeds `remaining` by 1 wei so the clamp fires, and ceilDiv(remaining·1e4/9850) == grossIn+1 so
+        // acceptedEthGross clamps to grossIn (refund 0). remaining (1.97 ETH) sits below the G = 5.749 ETH
+        // (§12.67, retargeted) target so `_forceRemaining` can position the curve there.
+        _f1Case(1_999_999_999_999_999_999, 1_970_000_000_000_000_000); // accepted rounds to grossIn+1
     }
 
     function _f1Case(uint256 grossIn, uint256 remaining) internal {

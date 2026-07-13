@@ -306,7 +306,7 @@ contract MigratorTest is Test, V3Fixture {
     ///         NEVER spends below the LP-mint floor.
     function test_TMT2_wethBudgetCap_revertsCleanly() public {
         (LaunchToken token, BondingCurve curve, address pool) = _createSubject(makeAddr("creator11"));
-        PoolGriefer g = _newGriefer(token, curve, pool, 3 ether);
+        PoolGriefer g = _newGriefer(token, curve, pool, 0.5 ether); // < G=2.484; still ≫ enough grief tokens
         bool tokenIsToken0 = address(token) < address(weth);
         uint160 target = tokenIsToken0 ? migrator.SQRT_PRICE_TOKEN0_X96() : migrator.SQRT_PRICE_TOKEN1_X96();
 

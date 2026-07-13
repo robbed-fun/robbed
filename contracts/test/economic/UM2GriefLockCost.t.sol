@@ -206,9 +206,11 @@ contract UM2GriefLockCostToken0Test is Test, V3Fixture {
         vm.deal(address(_atk), 200 ether);
         vm.prank(address(_atk));
         weth.deposit{value: 150 ether}();
-        vm.deal(address(_atk), address(_atk).balance + 2 ether);
+        vm.deal(address(_atk), address(_atk).balance + 0.5 ether);
         vm.prank(address(_atk));
-        router.buy{value: 2 ether}(address(_t), address(_atk), 0, block.timestamp);
+        // 0.5 ETH keeps holder+attacker curve reserves under G=2.484 (headroom for _fillToReady); the
+        // new curve shape still yields ≫ the 4.5M grief-band tokens from this buy.
+        router.buy{value: 0.5 ether}(address(_t), address(_atk), 0, block.timestamp);
         _atkValStart = weth.balanceOf(address(_atk)) + _tokenValueWei(_t.balanceOf(address(_atk)));
         _atk.grief_mint(tt + 400, tt + 2400, 4_500_000e18, 0);
         _atk.grief_swap(false, 60 ether, uint160((uint256(target) * 114) / 100));

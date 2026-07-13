@@ -104,6 +104,7 @@ contract LifecycleForkTest is Test {
     Router internal router;
     V3Migrator internal migrator;
     LPFeeVault internal vault;
+    CreatorVault internal creatorVault;
 
     // subject (stage 2)
     LaunchToken internal token;
@@ -172,16 +173,17 @@ contract LifecycleForkTest is Test {
         _stage0_configAndRuntimeAsserts();
 
         // Parallel creator-fee stack (mirrors _stage1 with a live creator leg + CreatorVault).
-        LPFeeVault lpVault = new LPFeeVault(npmAddr, treasury);
         CurveFactory f = new CurveFactory(TestConstants.factoryInit(treasury, safeOwner, WETH, 50));
+        CreatorVault cVault = new CreatorVault(address(f));
+        LPFeeVault lpVault = new LPFeeVault(npmAddr, treasury, address(f));
         V3Migrator m =
             new V3Migrator(TestConstants.migratorInit(address(f), v3FactoryAddr, npmAddr, WETH, address(lpVault)));
         Router rtr = new Router(ICurveFactory(address(f)));
-        CreatorVault cVault = new CreatorVault(address(f));
         vm.startPrank(safeOwner);
         f.setMigrator(address(m));
         f.setRouter(address(rtr));
         f.setCreatorVault(address(cVault));
+        f.setLpFeeVault(address(lpVault));
         vm.stopPrank();
 
         // Create with a plain creator address, then etch reverting code onto it (TM-T1 technique).
@@ -271,8 +273,11 @@ contract LifecycleForkTest is Test {
     // ── Stage 1: deploy the production stack (deploy order contracts.md §7.2) ──
 
     function _stage1_deployStack() internal {
-        vault = new LPFeeVault(npmAddr, treasury);
+        // Creator-fee generation order (§12.69): factory → CreatorVault → LPFeeVault(factory) →
+        // migrator → router, then the four one-time setters.
         factory = new CurveFactory(TestConstants.factoryInit(treasury, safeOwner)); // WETH = canonical
+        creatorVault = new CreatorVault(address(factory));
+        vault = new LPFeeVault(npmAddr, treasury, address(factory));
         migrator =
             new V3Migrator(TestConstants.migratorInit(address(factory), v3FactoryAddr, npmAddr, WETH, address(vault)));
         router = new Router(ICurveFactory(address(factory))); // PRODUCTION router — deadline+pause surface
@@ -280,6 +285,8 @@ contract LifecycleForkTest is Test {
         vm.startPrank(safeOwner);
         factory.setMigrator(address(migrator));
         factory.setRouter(address(router));
+        factory.setCreatorVault(address(creatorVault));
+        factory.setLpFeeVault(address(vault));
         vm.stopPrank();
     }
 
@@ -561,9 +568,12 @@ contract LifecycleForkTest is Test {
         }
     }
 
-    // ── Stage 7: permissionless collect() → fees land at the fixed treasury (§6.3.4) ──
+    // ── Stage 7: permissionless collect() → 50/50 split; creator pulls its cut (§6.3.4, §12.69) ──
 
     function _stage7_collectToTreasury() internal {
+        // The migrator registered the position's creator at graduation (§12.69(B)).
+        assertEq(vault.creatorOf(gradTokenId), creator, "collect: creator not registered for the position");
+
         uint256 treasuryWethBefore = IERC20(WETH).balanceOf(treasury);
         uint256 treasuryTokenBefore = token.balanceOf(treasury);
 
@@ -573,8 +583,29 @@ contract LifecycleForkTest is Test {
         (uint256 wethFees, uint256 tokenFees) = tokenIs0 ? (amount1, amount0) : (amount0, amount1);
         assertGt(wethFees, 0, "no WETH fees accrued to the LP position");
         assertGt(tokenFees, 0, "no token fees accrued to the LP position");
-        assertEq(IERC20(WETH).balanceOf(treasury) - treasuryWethBefore, wethFees, "treasury WETH fee delta");
-        assertEq(token.balanceOf(treasury) - treasuryTokenBefore, tokenFees, "treasury token fee delta");
+
+        // §12.69: 50/50 split, exact to the wei on BOTH legs; treasury keeps the odd wei (treasury-first).
+        uint256 wethCreator = (wethFees * vault.creatorLpShareBps()) / 10_000;
+        uint256 wethTreasury = wethFees - wethCreator;
+        uint256 tokenCreator = (tokenFees * vault.creatorLpShareBps()) / 10_000;
+        uint256 tokenTreasury = tokenFees - tokenCreator;
+
+        assertEq(IERC20(WETH).balanceOf(treasury) - treasuryWethBefore, wethTreasury, "treasury WETH split");
+        assertEq(token.balanceOf(treasury) - treasuryTokenBefore, tokenTreasury, "treasury token split");
+        assertEq(creatorVault.tokenBalanceOf(creator, WETH), wethCreator, "creator WETH credit");
+        assertEq(creatorVault.tokenBalanceOf(creator, address(token)), tokenCreator, "creator token credit");
+        // Vault holds no residue after the exact split.
+        assertEq(IERC20(WETH).balanceOf(address(vault)), 0, "vault retained WETH after split");
+        assertEq(token.balanceOf(address(vault)), 0, "vault retained token after split");
+
+        // The creator pulls its part-WETH / part-token cut (permissionless; funds only go to creator).
+        assertEq(vault.creatorLpShareBps(), 5000, "creator LP share must be 50%");
+        uint256 creatorWethBefore = IERC20(WETH).balanceOf(creator);
+        uint256 creatorTokenBefore = token.balanceOf(creator);
+        creatorVault.claimERC20(creator, WETH);
+        creatorVault.claimERC20(creator, address(token));
+        assertEq(IERC20(WETH).balanceOf(creator) - creatorWethBefore, wethCreator, "creator did not receive WETH cut");
+        assertEq(token.balanceOf(creator) - creatorTokenBefore, tokenCreator, "creator did not receive token cut");
     }
 
     // ═════════════════════════ REAL-GAS MEASUREMENT (§12.26/§12.34) ═════════════════════════

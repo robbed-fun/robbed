@@ -112,6 +112,8 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
     address public override treasury; // Gnosis Safe, owner-settable, read live by curves
     /// @inheritdoc ICurveFactory
     address public override creatorVault; // pull-payment CreatorVault, one-time-set (spec §12.63)
+    /// @inheritdoc ICurveFactory
+    address public override lpFeeVault; // registered LPFeeVault ERC20 fee source, one-time-set (§12.69)
     /// @dev Default TREASURY-leg trade fee for FUTURE curves. Snapshotted per curve.
     ///      `tradeFeeBps + creatorFeeBps ≤ MAX_TRADE_FEE_BPS` (the §6.4 ≤2% cap) — enforced here.
     uint16 public tradeFeeBps;
@@ -462,6 +464,19 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
         if (vault == address(0)) revert ZeroAddress();
         creatorVault = vault;
         emit CreatorVaultSet(vault);
+    }
+
+    /// @inheritdoc ICurveFactory
+    /// @dev ONE-TIME wiring of the post-graduation ERC20 fee source (spec §12.69), mirroring
+    ///      {setCreatorVault}. Immutable-by-convention: reverts once set. Gates
+    ///      {CreatorVault.depositERC20} to this single trusted LPFeeVault so the per-token creator
+    ///      balance equals the sum of collect-routed shares (exact accounting). §6.6 owner-reach: adds
+    ///      no authority over live curves/token economics/the vaults — pure wiring, like setMigrator.
+    function setLpFeeVault(address lpFeeVault_) external override onlyOwner {
+        if (lpFeeVault != address(0)) revert AlreadyInitialized();
+        if (lpFeeVault_ == address(0)) revert ZeroAddress();
+        lpFeeVault = lpFeeVault_;
+        emit LpFeeVaultSet(lpFeeVault_);
     }
 
     /// @inheritdoc ICurveFactory

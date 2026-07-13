@@ -5,56 +5,62 @@ import {CurveFactory} from "src/CurveFactory.sol";
 import {V3Migrator} from "src/V3Migrator.sol";
 
 /// @title TestConstants — M0 economics fixture for unit/fuzz/invariant tests
-/// @notice TEST-ONLY. Mirrors `tools/m0/out/constants.json` (generatedAt 2026-07-12 — the M1 real-gas
-///         re-derivation: fork-measured graduate() gas + a fresh sourced ETH/USD snapshot $1817.62,
-///         coingecko, replacing the 2026-07-10 $1771.51 snapshot; same reviewed derivation methodology
-///         — $69k mcap target, $1.50 creation fee, 2.5%-of-G early cap, cost-based graduation fee) so
-///         the gate-2 suites exercise the curve against the REAL launch economics without depending on
-///         `vm.readFile` / `fs_permissions`. Production deploys read the JSON via `script/Deploy.s.sol`
-///         — values are NEVER inlined in `src/` (spec §2, §6.4). Kept in one place so a re-run of the
-///         M0 notebook is a single-file diff here. Still §13-pending (architect ratifies final values).
+/// @notice TEST-ONLY. Mirrors `tools/m0/out/constants.json` (generatedAt 2026-07-13T19:57 — the
+///         §12.67/§12.68 re-derivation, retargeted 2026-07-13: MAINNET FLAT graduation target
+///         G = 5.749693 ETH net-of-fee (solver-derived + tick-aligned from a flat 5.7-ETH raise,
+///         §12.11, matching RobinFun's ~5.74 ETH / ~$44k bar; replaces the earlier flat 2.5-ETH /
+///         G=2.484-ETH default and the retired $69k-mcap ~7.9166-ETH target), ETH/USD snapshot
+///         $1770.30 (coingecko), $1.50 creation fee, 2.5%-of-G early cap, cost-based graduation
+///         fee) so the gate-2 suites exercise the curve against the
+///         SHIPPED launch economics without depending on `vm.readFile` / `fs_permissions`. Production
+///         deploys read the JSON via `script/Deploy.s.sol` — values are NEVER inlined in `src/`
+///         (spec §2, §6.4). Kept in one place so a re-run of the M0 notebook is a single-file diff
+///         here. Still §13-pending (architect ratifies final values).
 library TestConstants {
-    // ── curve economics (constants.json.curve) ──
-    uint256 internal constant VIRTUAL_ETH_0 = 2_795_549_696_042_257_634;
-    uint256 internal constant VIRTUAL_TOKEN_0 = 1_073_163_119_713_500_705_850_232_259;
+    // ── curve economics (constants.json.curve) — G = 5.749693 ETH flat target (§12.67, retargeted) ──
+    uint256 internal constant VIRTUAL_ETH_0 = 2_030_818_236_177_600_249;
+    uint256 internal constant VIRTUAL_TOKEN_0 = 1_073_226_583_912_778_964_568_548_738;
     uint256 internal constant CURVE_SUPPLY = 793_100_000_000_000_000_000_000_000;
     uint256 internal constant LP_TRANCHE = 206_900_000_000_000_000_000_000_000;
-    uint256 internal constant GRADUATION_ETH = 7_916_609_892_081_533_890;
+    uint256 internal constant GRADUATION_ETH = 5_749_693_301_560_943_464;
 
     // ── fees (constants.json.fees) ──
     uint16 internal constant TRADE_FEE_BPS = 100;
-    /// @dev Creator-fee leg (spec §7, §12.63). Mirrors MAINNET `constants.json.fees.creatorFeeBps`
-    ///      = 0, so the base fixture is byte-identical to the treasury-only v1 and the existing gate-2
-    ///      suite is unchanged. The Phase-2 creator-leg suites pass a non-zero override
-    ///      ({factoryInit} 4-arg form). Testnet deploys the ratified §12.63 value (50) from
-    ///      `constants.testnet.json` — never inlined into curve logic.
+    /// @dev Creator-fee (curve-leg) default for the BASE fixture. MAINNET now ships 50 bps (§12.68;
+    ///      `constants.json.fees.creatorFeeBps == 50`), but the base fixture keeps 0 so the legacy
+    ///      treasury-only gate-2 core-curve suites (fee-exactness, solvency, k, graduation) stay a
+    ///      clean creator-agnostic regression. The Phase-2 creator-LEG suites pass a non-zero override
+    ///      ({factoryInit} 4-arg form, using `CREATOR_FEE_BPS_TESTNET`). Never inlined into curve
+    ///      logic — the deploy reads `.fees.creatorFeeBps` from the constants file (spec §2/§6.4). NB:
+    ///      §12.69's post-GRADUATION 50/50 LP-fee split is INDEPENDENT of this curve-leg bps and is
+    ///      exercised for every graduation in the creator-aware {LPFeeVault} regardless of its value.
     uint16 internal constant CREATOR_FEE_BPS = 0;
-    /// @dev The ratified §12.63 testnet placeholder split (treasury 100 + creator 50 = 150 ≤ 200).
-    ///      Used by the Phase-2 creator-fee test suites; the final mainnet value is a §13/§12.62 knob.
+    /// @dev The ratified §12.68 mainnet + testnet split (treasury 100 + creator 50 = 150 ≤ 200).
+    ///      Used by the Phase-2 creator-fee test suites.
     uint16 internal constant CREATOR_FEE_BPS_TESTNET = 50;
-    uint256 internal constant CREATION_FEE = 825_000_000_000_000;
-    uint256 internal constant MAX_CREATION_FEE = 16_500_000_000_000_000;
-    uint256 internal constant GRADUATION_FEE = 122_085_000_000_000;
-    uint256 internal constant MAX_GRADUATION_FEE = 1_220_850_000_000_000;
-    uint256 internal constant CALLER_REWARD = 2_751_000_000_000_000;
-    uint256 internal constant MAX_CALLER_REWARD = 13_755_000_000_000_000;
+    uint256 internal constant CREATION_FEE = 847_000_000_000_000;
+    uint256 internal constant MAX_CREATION_FEE = 16_940_000_000_000_000;
+    uint256 internal constant GRADUATION_FEE = 225_000_000_000_000;
+    uint256 internal constant MAX_GRADUATION_FEE = 2_250_000_000_000_000;
+    uint256 internal constant CALLER_REWARD = 2_824_000_000_000_000;
+    uint256 internal constant MAX_CALLER_REWARD = 14_120_000_000_000_000;
 
     // ── anti-sniper (constants.json.antiSniper) ──
     uint64 internal constant EARLY_WINDOW_SECONDS = 8;
-    uint128 internal constant MAX_EARLY_BUY_WEI = 197_915_000_000_000_000;
+    uint128 internal constant MAX_EARLY_BUY_WEI = 143_742_000_000_000_000;
 
     // ── beta caps (constants.json.beta) ──
-    uint128 internal constant PER_TOKEN_ETH_CAP = 11_874_914_838_122_300_835;
-    uint128 internal constant GLOBAL_ETH_CAP = 395_830_494_604_076_694_500;
+    uint128 internal constant PER_TOKEN_ETH_CAP = 8_624_539_952_341_415_196;
+    uint128 internal constant GLOBAL_ETH_CAP = 287_484_665_078_047_173_200;
 
     // ── external (constants.json.external) ──
     address internal constant WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
 
-    // ── V3 graduation price + arb-back (constants.json.v3) ──
-    uint160 internal constant SQRT_PRICE_TOKEN0_X96 = 15_494_948_590_672_169_390_171_897;
-    uint160 internal constant SQRT_PRICE_TOKEN1_X96 = 405_106_328_598_304_867_947_102_422_407_779;
-    int24 internal constant TARGET_TICK_TOKEN0 = -170_800;
-    int24 internal constant TARGET_TICK_TOKEN1 = 170_800;
+    // ── V3 graduation price + arb-back (constants.json.v3) — target tick ±174000 ──
+    uint160 internal constant SQRT_PRICE_TOKEN0_X96 = 13_204_029_826_666_559_621_110_533;
+    uint160 internal constant SQRT_PRICE_TOKEN1_X96 = 475_392_877_612_983_594_562_764_446_848_307;
+    int24 internal constant TARGET_TICK_TOKEN0 = -174_000;
+    int24 internal constant TARGET_TICK_TOKEN1 = 174_000;
     int24 internal constant TOLERANCE_TICKS = 100;
     uint8 internal constant MAX_ARB_ITERATIONS = 8;
     uint16 internal constant MIGRATION_SLIPPAGE_BPS = 100;

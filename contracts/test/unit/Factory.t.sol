@@ -236,6 +236,32 @@ contract FactoryTest is BaseFixture {
         vm.stopPrank();
     }
 
+    /// @dev §12.63/§12.69: the two vault wires (creatorVault, lpFeeVault) mirror setRouter/setMigrator —
+    ///      one-time-set, non-zero, owner-only.
+    function test_setCreatorVault_setLpFeeVault_oneTimeOnly() public {
+        CurveFactory f = new CurveFactory(TestConstants.factoryInit(treasury, safeOwner));
+        // owner-only
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(this)));
+        f.setLpFeeVault(makeAddr("v"));
+
+        vm.startPrank(safeOwner);
+        // non-zero
+        vm.expectRevert(ZeroAddress.selector);
+        f.setCreatorVault(address(0));
+        vm.expectRevert(ZeroAddress.selector);
+        f.setLpFeeVault(address(0));
+        // set-once
+        f.setCreatorVault(makeAddr("creatorVault1"));
+        assertEq(f.creatorVault(), makeAddr("creatorVault1"), "creatorVault not set");
+        vm.expectRevert(AlreadyInitialized.selector);
+        f.setCreatorVault(makeAddr("creatorVault2"));
+        f.setLpFeeVault(makeAddr("lpFeeVault1"));
+        assertEq(f.lpFeeVault(), makeAddr("lpFeeVault1"), "lpFeeVault not set");
+        vm.expectRevert(AlreadyInitialized.selector);
+        f.setLpFeeVault(makeAddr("lpFeeVault2"));
+        vm.stopPrank();
+    }
+
     function test_setters_onlyOwner() public {
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(this)));
         factory.setPauseBuys(true);

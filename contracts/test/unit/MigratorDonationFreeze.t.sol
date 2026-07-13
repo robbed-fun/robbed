@@ -19,9 +19,9 @@ import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
 ///         absorb (it pairs with `LP_TOKEN_TRANCHE`; donated ETH has no paired token). Pre-fix, the
 ///         mint's WETH amount-min anchored to the donation-inflated `wethForMint`, demanding
 ///         `(W* + donation)·(1 − slippageBps)` in the position — unachievable once
-///         `donation > W*·bps/(1−bps)` (~1% of G ≈ 0.08 ETH on the M0 fixture) — so `NPM.mint`
+///         `donation > W*·bps/(1−bps)` (~1% of G ≈ 0.058 ETH on the M0 fixture) — so `NPM.mint`
 ///         reverted "Price slippage check", `graduate()` reverted FOREVER, and the curve froze in
-///         `ReadyToGraduate` where BOTH buys and sells revert `NotTrading` (§12.12): a ~0.08 ETH
+///         `ReadyToGraduate` where BOTH buys and sells revert `NotTrading` (§12.12): a ~0.058 ETH
 ///         donation permanently locked the whole raise and every holder's exit, on a pristine
 ///         at-target pool. Post-fix the floor anchors to `min(wethForMint, W*)` (V3Migrator decision
 ///         #5), so a donation surfaces as MORE treasury WETH dust — never a revert.
@@ -87,17 +87,17 @@ abstract contract MigratorDonationFreezeBase is Test, V3Fixture {
 
     // ───────────────────────────── directed regressions ─────────────────────────
 
-    /// @notice 2% of G ≈ 0.158 ETH — ~2× the pre-fix freeze threshold. Pre-fix: frozen forever.
+    /// @notice 2% of G ≈ 0.115 ETH — ~2× the pre-fix freeze threshold. Pre-fix: frozen forever.
     function test_F1_donation2pctOfG_graduates_dustExact() public {
         _runDonationRegression((TestConstants.GRADUATION_ETH * 2) / 100);
     }
 
-    /// @notice 10% of G ≈ 0.79 ETH. Pre-fix: frozen forever.
+    /// @notice 10% of G ≈ 0.575 ETH. Pre-fix: frozen forever.
     function test_F1_donation10pctOfG_graduates_dustExact() public {
         _runDonationRegression(TestConstants.GRADUATION_ETH / 10);
     }
 
-    /// @notice 10× G ≈ 79 ETH — donation an order of magnitude beyond the whole raise.
+    /// @notice 10× G ≈ 57.5 ETH — donation an order of magnitude beyond the whole raise.
     function test_F1_donation10xG_graduates_dustExact() public {
         _runDonationRegression(TestConstants.GRADUATION_ETH * 10);
     }

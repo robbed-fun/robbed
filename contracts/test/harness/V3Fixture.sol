@@ -10,6 +10,7 @@ import {BondingCurve} from "src/BondingCurve.sol";
 import {LaunchToken} from "src/LaunchToken.sol";
 import {V3Migrator} from "src/V3Migrator.sol";
 import {LPFeeVault} from "src/LPFeeVault.sol";
+import {CreatorVault} from "src/CreatorVault.sol";
 import {ICurveFactory} from "src/interfaces/ICurveFactory.sol";
 import {IUniswapV3Factory} from "src/interfaces/external/IUniswapV3Factory.sol";
 import {INonfungiblePositionManager} from "src/interfaces/external/INonfungiblePositionManager.sol";
@@ -38,6 +39,7 @@ abstract contract V3Fixture is CommonBase, StdCheats, StdUtils {
     TestRouter internal router;
     V3Migrator internal migrator;
     LPFeeVault internal vault;
+    CreatorVault internal creatorVault;
     MockWETH9 internal weth;
     IUniswapV3Factory internal v3Factory;
     INonfungiblePositionManager internal npm;
@@ -70,8 +72,11 @@ abstract contract V3Fixture is CommonBase, StdCheats, StdUtils {
         }
         (v3Factory, npm) = _deployRealV3(address(weth));
 
+        // Creator-fee generation order (§12.69): factory → CreatorVault → LPFeeVault(factory) →
+        // migrator → router, then wire the four one-time setters.
         factory = new CurveFactory(TestConstants.factoryInit(treasury, owner, address(weth)));
-        vault = new LPFeeVault(address(npm), treasury);
+        creatorVault = new CreatorVault(address(factory));
+        vault = new LPFeeVault(address(npm), treasury, address(factory));
         migrator = new V3Migrator(
             TestConstants.migratorInit(
                 address(factory), address(v3Factory), address(npm), address(weth), address(vault), migrationSlippageBps
@@ -82,6 +87,8 @@ abstract contract V3Fixture is CommonBase, StdCheats, StdUtils {
         vm.startPrank(owner);
         factory.setMigrator(address(migrator));
         factory.setRouter(address(router));
+        factory.setCreatorVault(address(creatorVault));
+        factory.setLpFeeVault(address(vault));
         vm.stopPrank();
     }
 

@@ -2,17 +2,22 @@
 pragma solidity 0.8.35;
 
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {ICreatorVault} from "./interfaces/ICreatorVault.sol";
 import {ICurveFactory} from "./interfaces/ICurveFactory.sol";
-import {ZeroAddress, NotCurve, EthTransferFailed} from "./errors/Errors.sol";
+import {ZeroAddress, NotCurve, NotLpFeeVault, EthTransferFailed} from "./errors/Errors.sol";
 
-/// @title CreatorVault — pull-payment escrow for the Phase-2 creator-fee leg (spec §7, §12.63)
-/// @notice Per-creator ETH escrow. No owner, no admin withdraw, no upgrade path, no privileged
-///         functions — mirrors the {LPFeeVault} / §12.25 `sweepFees` minimalism discipline. Two
-///         external state-mutating functions: `deposit(creator)` (curve-only, credits a creator) and
-///         `claim(creator)` (permissionless, pays the creator). The ONLY way ETH leaves is `claim`,
-///         and it can only ever go to the address that earned it.
+/// @title CreatorVault — pull-payment escrow for the creator-fee legs (spec §7, §12.63, §12.69)
+/// @notice Per-creator escrow with two pull-payment custody tracks. No owner, no admin withdraw, no
+///         upgrade path, no privileged functions — mirrors the {LPFeeVault} / §12.25 `sweepFees`
+///         minimalism discipline. Four external state-mutating functions:
+///           • `deposit(creator)`         — curve-only ETH credit (pre-graduation creator leg, §12.63)
+///           • `claim(creator)`           — permissionless ETH payout to the creator
+///           • `depositERC20(c, tok, amt)`— LPFeeVault-only ERC20 credit (post-graduation split, §12.69)
+///           • `claimERC20(c, tok)`       — permissionless ERC20 payout to the creator
+///         Value leaves ONLY via a `claim*`, and only ever to the address that earned it.
 ///
 /// @dev THE load-bearing property (spec §6.5 "sells always open" / §12.25 / CLAUDE.md hard rule):
 ///      a hostile/reverting creator address can NEVER freeze a curve buy or sell. Proven by
@@ -49,12 +54,26 @@ import {ZeroAddress, NotCurve, EthTransferFailed} from "./errors/Errors.sol";
 ///        `recipient` parameter would let anyone redirect a creator's fees to themselves; rejected.
 ///      - **No `receive()`/`fallback()`.** Every wei enters through `deposit` and is attributed to a
 ///        creator on the way in, so there is never stray, unattributed ETH.
+///      - **ERC20 legs (§12.69) mirror the ETH leg's discipline exactly.** `depositERC20` is gated to
+///        the factory-registered LPFeeVault (the ERC20 fee source), just as `deposit` is gated to
+///        factory-registered curves — so the per-`(creator, token)` balance equals the sum of
+///        collect-routed shares to the wei (exact accounting, no donation pollution). It PULLS via
+///        `safeTransferFrom(msg.sender=vault, ...)` (the vault approves the exact amount first), a
+///        credit that cannot revert for a legit vault → a `collect()` can never be bricked here.
+///        `claimERC20` pays the fixed `creator` under CEI + `nonReentrant`; a plain-ERC20 `transfer`
+///        has no recipient hook (both legs are the hookless launch token and canonical WETH9), so a
+///        hostile creator cannot even brick its OWN claim — strictly safer than the native-ETH leg.
 contract CreatorVault is ICreatorVault, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
     /// @inheritdoc ICreatorVault
     address public immutable override factory;
 
     /// @inheritdoc ICreatorVault
     mapping(address creator => uint256) public override balanceOf;
+
+    /// @inheritdoc ICreatorVault
+    mapping(address creator => mapping(address token => uint256)) public override tokenBalanceOf;
 
     /// @param factory_ The CurveFactory whose `isCurve` registry gates `deposit`.
     constructor(address factory_) {
@@ -87,5 +106,28 @@ contract CreatorVault is ICreatorVault, ReentrancyGuard {
             if (!ok) revert EthTransferFailed();
         }
         emit CreatorFeeClaimed(creator, msg.sender, amount);
+    }
+
+    /// @inheritdoc ICreatorVault
+    /// @dev LPFeeVault-only (the post-graduation ERC20 fee source, §12.69). PULLS the exact amount the
+    ///      vault approved via `safeTransferFrom`, then accumulates — cannot revert for a legit vault,
+    ///      so a `collect()` split can never be frozen here. Never calls the creator (the creator is
+    ///      only ever paid by `claimERC20`), so a hostile creator cannot brick a collect or a trade.
+    function depositERC20(address creator, address token, uint256 amount) external override {
+        if (msg.sender != ICurveFactory(factory).lpFeeVault()) revert NotLpFeeVault();
+        if (creator == address(0)) revert ZeroAddress();
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        tokenBalanceOf[creator][token] += amount;
+        emit CreatorTokenDeposited(creator, token, msg.sender, amount);
+    }
+
+    /// @inheritdoc ICreatorVault
+    /// @dev CEI: zero the per-token balance before the send; `nonReentrant` for defense-in-depth. Pays
+    ///      the fixed `creator` (never the caller). Zero balance is a no-op send (still emits).
+    function claimERC20(address creator, address token) external override nonReentrant returns (uint256 amount) {
+        amount = tokenBalanceOf[creator][token];
+        tokenBalanceOf[creator][token] = 0;
+        if (amount != 0) IERC20(token).safeTransfer(creator, amount);
+        emit CreatorTokenClaimed(creator, token, msg.sender, amount);
     }
 }

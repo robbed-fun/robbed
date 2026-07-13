@@ -20,6 +20,9 @@
  *
  * Usage: bun run derive [--source=coingecko|defillama] [--reuse-snapshot]
  *                       [--network=mainnet|testnet]   (or M0_NETWORK env)
+ *   Graduation-target env overrides (network-scoped, fail-closed cross-network):
+ *     M0_MAINNET_GRADUATION_ETH=<decimal ETH>  — mainnet only; overrides the flat 5.7-ETH default.
+ *     M0_TESTNET_GRADUATION_ETH=<decimal ETH>  — testnet only; faucet-scale small-G rescale.
  *   --reuse-snapshot re-derives from the ETH/USD snapshot already recorded in
  *   out/constants.json (recompute-only mode; provenance is preserved).
  *   --network=testnet (Phase T-1) emits out/constants.testnet.json — same schema,
@@ -51,6 +54,17 @@
  *   creationFee is independent of G and is NOT rescaled. FAILS CLOSED if the env
  *   var is set while deriving mainnet (--network=mainnet or default): the override
  *   must never be able to influence the reviewed mainnet economics.
+ *
+ * ── MAINNET flat graduation target (approved change 2026-07-13; retargeted 5.7 ETH 2026-07-13) ──────
+ *   Mainnet G is now a FLAT net-of-fee ETH raise (§12.11): DEFAULT 5.7 ETH (MAINNET_GRADUATION_ETH;
+ *   matches RobinFun's ~5.74 ETH / ~$44k graduation bar), env-overridable via M0_MAINNET_GRADUATION_ETH=<decimal ETH>.
+ *   Same MECHANISM as the testnet override — invert constraint (c) `G = p·L + F + R` around the target —
+ *   but the MAINNET fee policy is UNCHANGED (USD-sized ~$5 caller reward, cost-based §12.26 graduation fee,
+ *   10× gas floor): at 5.7 ETH those fees are ≪ G, so NO faucet-scale %-of-G rescale and NO gas-floor
+ *   relaxation apply.
+ *   The `smallGOverride` flag (TRUE only for the testnet faucet path) gates every rescale; the mainnet
+ *   flat-G path shares ONLY the constraint-(c) inversion. FAILS CLOSED if M0_MAINNET_GRADUATION_ETH is
+ *   set under --network=testnet (and M0_TESTNET_GRADUATION_ETH under mainnet).
  */
 
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
@@ -93,15 +107,27 @@ const E18 = 10n ** 18n;
 const TOTAL_SUPPLY = 1_000_000_000n * E18; // §6.4: fixed 1B
 const CURVE_SUPPLY = 793_100_000n * E18; // §6.4: ~793.1M (79.31%), pump.fun ratio
 const LP_TOKEN_TRANCHE = 206_900_000n * E18; // §6.4: ~206.9M (20.69%)
-const GRAD_MCAP_USD = 69_000n; // §6.4: graduation mcap ≈ $69k equivalent (spec constant)
+const GRAD_MCAP_USD = 69_000n; // LEGACY $69k-mcap parity target — retained for provenance ONLY. The
+// mainnet graduation target is now a FLAT ETH raise (MAINNET_GRADUATION_ETH below), not mcap-derived;
+// this constant only still drives the (vestigial) testnet-without-override mcap fallback path.
+// ── MAINNET graduation target (approved product change 2026-07-13; retargeted 5.7 ETH 2026-07-13) ──
+// A FLAT net-of-fee ETH raise (§12.11), DEFAULT 5.7 ETH (matches RobinFun's ~5.74 ETH / ~$44k bar),
+// replacing the earlier flat 2.5-ETH default (itself replacing the retired $69k-mcap derivation,
+// ~7.9166 ETH). Env-overridable via M0_MAINNET_GRADUATION_ETH (mirrors the testnet
+// M0_TESTNET_GRADUATION_ETH mechanism): the solver INVERTS constraint (c) `G = p·L + F + R` around
+// this target while keeping the §6.4 supply split (793.1M curve / 206.9M LP tranche). Unlike the
+// testnet faucet-scale override, the MAINNET fee policy is UNCHANGED (USD-sized ~$5 caller reward +
+// cost-based §12.26 graduation fee, 10× gas floor) — 5.7 ETH funds those fees with ≳300× headroom vs
+// the GraduationUnfundable ceiling, so NO faucet-scale %-of-G rescale is applied.
+const MAINNET_GRADUATION_ETH = 5_700_000_000_000_000_000n; // 5.7 ETH (net-of-fee real reserves, §12.11; RobinFun ~5.74 ETH / ~$44k bar)
 const TRADE_FEE_BPS = 100n; // §6.4: 1% ETH leg, both directions
 const MAX_TRADE_FEE_BPS = 200; // §6.4: hard cap ≤2% (structural, hardcoded in factory)
-// §7 / §12.63: creator-fee leg. MAINNET default = 0 (Phase-2 disabled until a §12.62 re-derivation
-// prices the split into the reviewed economics). TESTNET = the architect-ratified §12.63 PLACEHOLDER
-// 50 (treasury 100 + creator 50 = 150, ≤ the 200/2% additive cap) so Phase-T exercises the creator
-// leg end-to-end. NOT a mainnet commitment — see reviewRequired note. Selected per-network in run().
-const CREATOR_FEE_BPS_MAINNET = 0;
-const CREATOR_FEE_BPS_TESTNET = 50; // §12.63 placeholder (treasury 100 + creator 50)
+// §7 / §12.63: creator-fee leg. MAINNET = 50 bps (approved 2026-07-13: 0.5% creator leg; treasury 100
+// + creator 50 = 150 ≤ the 200/2% additive cap, asserted in run() AND in the factory constructor).
+// TESTNET = the architect-ratified §12.63 value 50 (identical split) so Phase-T exercises the creator
+// leg end-to-end. Selected per-network in run(); NEVER inlined into curve logic (read from constants).
+const CREATOR_FEE_BPS_MAINNET = 50;
+const CREATOR_FEE_BPS_TESTNET = 50; // §12.63 (treasury 100 + creator 50 = 150)
 const V3_FEE_TIER = 10_000; // §12.1: 1% tier
 const V3_TICK_SPACING = 200; // 1% tier spacing
 
@@ -212,24 +238,24 @@ const SIM_SEEDS = Array.from({ length: 25 }, (_, i) => i + 1);
 const bmin = (a: bigint, b: bigint): bigint => (a < b ? a : b);
 
 /**
- * Exact decimal-ETH → wei parser for the TESTNET graduation-target override (no floats —
- * `0.005` must land on exactly 5_000_000_000_000_000 wei). Fail-closed on anything that is
- * not a plain decimal, and on out-of-band magnitudes (a fat-fingered target would silently
- * produce a degenerate fee set otherwise).
+ * Exact decimal-ETH → wei parser for a graduation-target override (no floats — `0.005` must land on
+ * exactly 5_000_000_000_000_000 wei, `2.5` on exactly 2_500_000_000_000_000_000). Fail-closed on
+ * anything that is not a plain decimal, and on out-of-band magnitudes (a fat-fingered target would
+ * silently produce a degenerate fee set otherwise). `envName` names the offending env var in the
+ * error so the mainnet (M0_MAINNET_GRADUATION_ETH) and testnet (M0_TESTNET_GRADUATION_ETH) paths
+ * report against the right knob.
  */
-function parseGradOverrideEthToWei(raw: string): bigint {
+function parseGradOverrideEthToWei(raw: string, envName: string): bigint {
   const m = /^(\d+)(?:\.(\d{1,18}))?$/.exec(raw.trim());
   if (!m) {
-    console.error(`FATAL: M0_TESTNET_GRADUATION_ETH="${raw}" is not a plain decimal ETH amount (e.g. 0.005).`);
+    console.error(`FATAL: ${envName}="${raw}" is not a plain decimal ETH amount (e.g. 0.005 or 2.5).`);
     process.exit(1);
   }
   const wei = BigInt(m[1]!) * E18 + BigInt((m[2] ?? "0").padEnd(18, "0"));
-  const MIN_WEI = 10n ** 15n; // 0.001 ETH — below this the 10%-of-G fee/reward set degenerates to dust
-  const MAX_WEI = 100n * E18; // sanity ceiling: a "testnet" target beyond 100 ETH is a typo, not a plan
+  const MIN_WEI = 10n ** 15n; // 0.001 ETH — below this the fee/reward set degenerates to dust
+  const MAX_WEI = 100n * E18; // sanity ceiling: a graduation target beyond 100 ETH is a typo, not a plan
   if (wei < MIN_WEI || wei > MAX_WEI) {
-    console.error(
-      `FATAL: M0_TESTNET_GRADUATION_ETH=${raw} is outside the sane testnet band [0.001, 100] ETH — refusing.`,
-    );
+    console.error(`FATAL: ${envName}=${raw} is outside the sane band [0.001, 100] ETH — refusing.`);
     process.exit(1);
   }
   return wei;
@@ -460,31 +486,73 @@ async function main(): Promise<void> {
   }
   const isTestnet = network === "testnet";
   const chainId = isTestnet ? TESTNET_CHAIN_ID : MAINNET_CHAIN_ID;
-  // §12.63 creator-fee leg: 0 on mainnet (Phase-2 disabled), 50 on testnet (ratified placeholder).
+  // §12.63 creator-fee leg: 50 bps on mainnet (approved 2026-07-13) AND testnet (ratified). Both
+  // satisfy the additive ≤2% cap (treasury 100 + creator 50 = 150 ≤ 200); asserted below AND in the
+  // factory constructor.
   const creatorFeeBps = isTestnet ? CREATOR_FEE_BPS_TESTNET : CREATOR_FEE_BPS_MAINNET;
+  if (Number(TRADE_FEE_BPS) + creatorFeeBps > MAX_TRADE_FEE_BPS) {
+    console.error(
+      `FATAL: tradeFeeBps ${TRADE_FEE_BPS} + creatorFeeBps ${creatorFeeBps} > ${MAX_TRADE_FEE_BPS} bps additive cap ` +
+        "(§6.4/§7/§12.63). Refusing to emit a constant set the factory constructor would reject.",
+    );
+    process.exit(1);
+  }
   // Resolve externals FIRST (fail-closed on a pending fixture before any network fetch).
   const external: ExternalAddresses = isTestnet ? loadTestnetExternal() : MAINNET_EXTERNAL;
   const outName = isTestnet ? "constants.testnet.json" : "constants.json";
 
-  // ── TESTNET-ONLY graduation-target override (header doc). FAIL-CLOSED on mainnet:
-  //    the env var being merely PRESENT in mainnet mode aborts the run — the override
-  //    can never influence the reviewed mainnet economics, not even by accident. ──
-  const gradOverrideRaw = process.env.M0_TESTNET_GRADUATION_ETH;
-  if (gradOverrideRaw != null && gradOverrideRaw !== "" && !isTestnet) {
+  // ── graduation-target resolution (network-scoped, fail-closed cross-network) ──────────────────
+  //   TESTNET: M0_TESTNET_GRADUATION_ETH override → faucet-scale small-G rescale (smallGOverride).
+  //   MAINNET: a FLAT ETH target — DEFAULT MAINNET_GRADUATION_ETH (5.7 ETH), env-overridable via
+  //     M0_MAINNET_GRADUATION_ETH; the MAINNET fee policy is kept (no rescale). Each override env is
+  //     FORBIDDEN in the other mode: merely being PRESENT aborts the run, so neither knob can leak
+  //     across networks or influence the reviewed economics by accident.
+  const testnetOverrideRaw = process.env.M0_TESTNET_GRADUATION_ETH;
+  const mainnetOverrideRaw = process.env.M0_MAINNET_GRADUATION_ETH;
+  if (testnetOverrideRaw != null && testnetOverrideRaw !== "" && !isTestnet) {
     console.error(
-      `FATAL: M0_TESTNET_GRADUATION_ETH=${gradOverrideRaw} is set while --network=${network}. ` +
-        "The graduation-target override is TESTNET-ONLY; unset it before deriving mainnet constants.",
+      `FATAL: M0_TESTNET_GRADUATION_ETH=${testnetOverrideRaw} is set while --network=${network}. ` +
+        "The testnet faucet-scale override is TESTNET-ONLY; unset it before deriving mainnet constants.",
     );
     process.exit(1);
   }
-  const gradTargetWei: bigint | null =
-    isTestnet && gradOverrideRaw != null && gradOverrideRaw !== "" ? parseGradOverrideEthToWei(gradOverrideRaw) : null;
+  if (mainnetOverrideRaw != null && mainnetOverrideRaw !== "" && isTestnet) {
+    console.error(
+      `FATAL: M0_MAINNET_GRADUATION_ETH=${mainnetOverrideRaw} is set while --network=${network}. ` +
+        "The mainnet graduation override is MAINNET-ONLY; unset it before deriving testnet constants.",
+    );
+    process.exit(1);
+  }
+
+  // smallGOverride = the TESTNET faucet-scale fee rescale + relaxed gas floor (NEVER mainnet).
+  const smallGOverride = isTestnet && testnetOverrideRaw != null && testnetOverrideRaw !== "";
+  // gradTargetWei = the flat net-of-fee graduation target that INVERTS solver constraint (c). Present
+  // for the testnet override AND every mainnet run (mainnet is now flat-G by default). `null` only on
+  // a testnet run WITHOUT the override (legacy $69k-mcap fallback, unused in practice — kept for the
+  // reuse-snapshot compat path).
+  let gradTargetWei: bigint | null;
+  let gradTargetSource: string;
+  if (isTestnet) {
+    gradTargetWei = smallGOverride ? parseGradOverrideEthToWei(testnetOverrideRaw!, "M0_TESTNET_GRADUATION_ETH") : null;
+    gradTargetSource = smallGOverride ? `env M0_TESTNET_GRADUATION_ETH=${testnetOverrideRaw}` : "legacy $69k-mcap fallback";
+  } else if (mainnetOverrideRaw != null && mainnetOverrideRaw !== "") {
+    gradTargetWei = parseGradOverrideEthToWei(mainnetOverrideRaw, "M0_MAINNET_GRADUATION_ETH");
+    gradTargetSource = `env M0_MAINNET_GRADUATION_ETH=${mainnetOverrideRaw}`;
+  } else {
+    gradTargetWei = MAINNET_GRADUATION_ETH;
+    gradTargetSource = `default MAINNET_GRADUATION_ETH=${eth(MAINNET_GRADUATION_ETH)} ETH`;
+  }
 
   console.log(`ROBBED_ M0 parameter notebook — deriving deploy constants (network=${network}, chainId=${chainId})`);
-  if (gradTargetWei !== null) {
+  if (smallGOverride) {
     console.log(
-      `TESTNET OVERRIDE ACTIVE: M0_TESTNET_GRADUATION_ETH=${gradOverrideRaw} → target G = ${gradTargetWei} wei ` +
-        `(${eth(gradTargetWei)} ETH); full constant set re-derived around it (header doc).`,
+      `TESTNET FAUCET OVERRIDE ACTIVE: ${gradTargetSource} → target G = ${gradTargetWei} wei ` +
+        `(${eth(gradTargetWei!)} ETH); full constant set re-derived around it, small-G fee rescale (header doc).`,
+    );
+  } else if (!isTestnet) {
+    console.log(
+      `MAINNET FLAT-G TARGET: ${gradTargetSource} → target G = ${gradTargetWei} wei (${eth(gradTargetWei!)} ETH ` +
+        "net-of-fee, §12.11); full constant set re-solved around it, MAINNET fee policy unchanged.",
     );
   }
   console.log("NOTE: final tick/constants are OPEN ITEM (spec §13) until reviewed.\n");
@@ -547,16 +615,19 @@ async function main(): Promise<void> {
   let callerRewardWei: bigint;
   let maxCallerRewardWei: bigint;
   let graduationFeeWei: bigint;
-  if (gradTargetWei !== null) {
+  if (smallGOverride) {
     // TESTNET small-G override policy (header doc): the mainnet USD-sized reward (~$5) and its 5×/10×
     // ceilings would dwarf a faucet-scale G and trip Deploy.s.sol's GraduationUnfundable guard
     // (`maxCallerReward + maxGraduationFee >= graduationEth` reverts). Rescale: reward = 10% of G
     // (ceiling 2× → 20% of G); fee stays cost-based but is capped at 10% of G (its ceiling —
-    // min(10×, 20% of G) — is applied post-solve where maxGraduationFeeWei is defined).
-    callerRewardWei = roundWei(gradTargetWei / 10n);
+    // min(10×, 20% of G) — is applied post-solve where maxGraduationFeeWei is defined). MAINNET
+    // (including the flat-5.7-ETH target) never takes this branch: its USD-sized fees are ≪ G.
+    callerRewardWei = roundWei(gradTargetWei! / 10n);
     maxCallerRewardWei = callerRewardWei * 2n;
-    graduationFeeWei = bmin(costBasedGraduationFeeWei, gradTargetWei / 10n);
+    graduationFeeWei = bmin(costBasedGraduationFeeWei, gradTargetWei! / 10n);
   } else {
+    // MAINNET fee policy (applies to the flat-G target too — reward/fee are USD/cost-sized, not
+    // G-scaled, and 5.7 ETH funds them with ≳300× headroom).
     callerRewardWei = roundWei(usdToWei(CALLER_REWARD_USD));
     maxCallerRewardWei = callerRewardWei * 5n; // ceiling ≈ $25 equiv.
     graduationFeeWei = costBasedGraduationFeeWei;
@@ -565,7 +636,7 @@ async function main(): Promise<void> {
     `\nGraduation fee (COST-BASED §12.26, gas ${gas.basis}): ` +
       `${MIGRATION_GAS_ESTIMATE} gas × ${gasPriceWei} wei × ${GRAD_FEE_MARGIN_NUM}/${GRAD_FEE_MARGIN_DEN} ` +
       `= ${costBasedGraduationFeeWei} wei (${eth(costBasedGraduationFeeWei)} ETH); applied = ${graduationFeeWei} wei` +
-      `${gradTargetWei !== null ? " (TESTNET override cap: ≤10% of target G)" : ""}; source=${gas.source}`,
+      `${smallGOverride ? " (TESTNET override cap: ≤10% of target G)" : ""}; source=${gas.source}`,
   );
 
   // §12.34 M1 re-validation (O-9): the permissionless graduate() caller reward must clear a multiple
@@ -577,9 +648,9 @@ async function main(): Promise<void> {
   // Validated against the FORK-MEASURED graduate() gas × the LIVE gas price — not the placeholder.
   // Advisory when gas is a placeholder (no live RPC), hard when live.
   const graduateGasCostWei = MEASURED_GRADUATE_GAS * gasPriceWei;
-  const floorNum = gradTargetWei !== null ? 3n : 10n;
-  const floorDen = gradTargetWei !== null ? 2n : 1n;
-  const floorLabel = gradTargetWei !== null ? "1.5x (TESTNET small-G override)" : "10x";
+  const floorNum = smallGOverride ? 3n : 10n;
+  const floorDen = smallGOverride ? 2n : 1n;
+  const floorLabel = smallGOverride ? "1.5x (TESTNET small-G override)" : "10x";
   const callerRewardFloorWei = (floorNum * graduateGasCostWei) / floorDen;
   const callerRewardCoversGas = callerRewardWei >= callerRewardFloorWei;
   check(
@@ -597,26 +668,26 @@ async function main(): Promise<void> {
   }
 
   // ── 3. Graduation price target and tick alignment ─────────────────────────
-  // §6.4: graduation mcap ≈ $69k equivalent. mcap = spot price × TOTAL_SUPPLY,
-  // so raw target spot = (69000/ethUsd) ETH / 1e9 tokens (wei/wei ratio, both
-  // legs 18 decimals). We then snap to the NEAREST USABLE TICK of the 1% tier
-  // (spacing 200) and use THAT exact tick price as the curve's terminal price,
-  // so curve terminal price == pool init price == tick-aligned (contracts.md §4:
-  // "sqrtPriceX96 values are the tick-aligned V3 encoding of the curve's spot
-  // price at graduation") and the LP mint is zero-dust by construction.
-  // TESTNET small-G override: constraint (c) is INVERTED instead — the raw price
-  // is chosen as p = (G − F − R)/L so the DERIVED G lands on the requested target;
-  // tick alignment then shifts it by ≤~1% (asserted by override.gTracksTarget).
+  // FLAT-G target (every mainnet run + the testnet faucet override): constraint (c)
+  // `G = p·L + F + R` is INVERTED — the raw graduation price is chosen as
+  // p = (G − F − R)/L so the DERIVED G lands on the requested flat target; tick
+  // alignment then shifts it by ≤~1% (asserted by grad.gTracksTarget). We snap to
+  // the NEAREST USABLE TICK of the 1% tier (spacing 200) and use THAT exact tick
+  // price as the curve's terminal price, so curve terminal price == pool init price
+  // == tick-aligned (contracts.md §4) and the LP mint is zero-dust by construction.
+  // LEGACY mcap fallback (testnet-without-override only): raw target spot =
+  // (69000/ethUsd) ETH / 1e9 tokens — the old $69k-mcap derivation, kept solely for
+  // the reuse-snapshot compat path; the mainnet default no longer uses it.
   let gradMcapRawWei: bigint;
   if (gradTargetWei !== null) {
     const ethToLpTarget = gradTargetWei - graduationFeeWei - callerRewardWei;
     if (ethToLpTarget <= 0n) {
-      console.error("FATAL: override graduation target is smaller than graduationFee + callerReward.");
+      console.error("FATAL: graduation target is smaller than graduationFee + callerReward.");
       process.exit(1);
     }
     gradMcapRawWei = (ethToLpTarget * TOTAL_SUPPLY) / LP_TOKEN_TRANCHE;
   } else {
-    gradMcapRawWei = (GRAD_MCAP_USD * E18 * E8) / ethUsdE8; // $69k in ETH-wei
+    gradMcapRawWei = (GRAD_MCAP_USD * E18 * E8) / ethUsdE8; // legacy $69k in ETH-wei
   }
   // Ordering A = launch token is token0 (token address < WETH): price = WETH/token.
   const sqrtRawA = sqrtPriceX96FromPrice(gradMcapRawWei, TOTAL_SUPPLY);
@@ -633,11 +704,14 @@ async function main(): Promise<void> {
   const gradMcapWei = (priceNum * TOTAL_SUPPLY) / priceDen;
   const gradMcapUsd = weiToUsd(gradMcapWei);
 
+  // Target label: flat-G targets report the requested ETH raise; the legacy fallback reports $69k mcap.
+  const gradTargetLabel =
+    gradTargetWei !== null ? `target ${eth(gradTargetWei)} ETH flat raise (§12.11)` : `target $${GRAD_MCAP_USD} mcap`;
   console.log("\nGraduation price / tick (1% tier, spacing 200):");
-  console.log(`  raw $69k-parity tick (token0=token):  ${rawTickA}`);
+  console.log(`  raw target-price tick (token0=token): ${rawTickA}`);
   console.log(`  aligned target tick token0=token:     ${tickA}   sqrtPriceX96 ${sqrtA}`);
   console.log(`  aligned target tick token0=WETH:      ${tickB}   sqrtPriceX96 ${sqrtB}`);
-  console.log(`  tick-aligned graduation mcap:         ${eth(gradMcapWei, 4)} ETH ≈ $${gradMcapUsd.toFixed(2)} (target $${GRAD_MCAP_USD})`);
+  console.log(`  tick-aligned graduation mcap:         ${eth(gradMcapWei, 4)} ETH ≈ $${gradMcapUsd.toFixed(2)} (${gradTargetLabel})`);
 
   // ── 4. Solve virtual reserves (§6.2 — algebra documented in lib/curve.ts) ─
   const targets: CurveTargets = {
@@ -653,9 +727,10 @@ async function main(): Promise<void> {
   // Graduation-fee ceiling: 10× the applied fee; under the TESTNET small-G override it is
   // additionally capped at 20% of the target G so maxCallerReward (20% of G) + maxGraduationFee
   // (≤20% of G) ≤ 40% of G — Deploy.s.sol's GraduationUnfundable guard (`maxes >= G` reverts)
-  // passes with ≥60% margin (asserted by override.feeCeilingsFundable below).
+  // passes with ≥60% margin (asserted by grad.feeCeilingsFundable below). MAINNET (incl. the flat-G
+  // target) keeps the plain 10× ceiling: the USD-sized fees are ≪ 5.7 ETH, so no %-of-G cap is needed.
   const maxGraduationFeeWei =
-    gradTargetWei !== null ? bmin(c.graduationFeeWei * 10n, gradTargetWei / 5n) : c.graduationFeeWei * 10n;
+    smallGOverride ? bmin(c.graduationFeeWei * 10n, gradTargetWei! / 5n) : c.graduationFeeWei * 10n;
   const maxEarlyBuyWei = roundWei((c.graduationEthWei * MAX_EARLY_BUY_BPS_OF_G) / 10_000n);
   const perTokenEthCapWei = (c.graduationEthWei * PER_TOKEN_CAP_X_G.num) / PER_TOKEN_CAP_X_G.den;
   const globalEthCapWei = c.graduationEthWei * GLOBAL_CAP_X_G;
@@ -697,6 +772,16 @@ async function main(): Promise<void> {
     "CURVE_SUPPLY + LP_TOKEN_TRANCHE == 1e9 tokens exactly",
   );
 
+  // Additive fee cap (§6.4/§7/§12.63): treasury leg + creator leg ≤ the 2% structural ceiling. This
+  // is the SAME invariant the factory constructor enforces (`FeeAboveCap`); asserting it here keeps a
+  // bad constant set from ever reaching the deploy. MAINNET now carries a non-zero creator leg (50).
+  check(
+    "fees.additiveCap",
+    Number(TRADE_FEE_BPS) + creatorFeeBps <= MAX_TRADE_FEE_BPS,
+    `tradeFeeBps ${TRADE_FEE_BPS} + creatorFeeBps ${creatorFeeBps} = ${Number(TRADE_FEE_BPS) + creatorFeeBps} ` +
+      `≤ ${MAX_TRADE_FEE_BPS} bps cap`,
+  );
+
   // Solver self-consistency: selling exactly CURVE_SUPPLY raises exactly G.
   const vTGrad = c.virtualTokenWei - CURVE_SUPPLY;
   const gImplied = c.k / vTGrad - c.virtualEthWei;
@@ -712,13 +797,14 @@ async function main(): Promise<void> {
   const termErrPpb = ((termCross < 0n ? -termCross : termCross) * 1_000_000_000n) / (vTGrad * priceNum);
   check("curve.terminalPrice", termErrPpb <= 1000n, `terminal spot vs V3 init price: ${termErrPpb} ppb error`);
 
-  // TESTNET small-G override self-checks: the derived G must track the requested target (only the
-  // tick-alignment shift, ≤~1%, separates them) and the fee CEILINGS must leave Deploy.s.sol's
-  // GraduationUnfundable guard (maxCallerReward + maxGraduationFee >= G → revert) ≥2× margin.
+  // Flat-G target self-checks (every mainnet run + the testnet faucet override): the derived G must
+  // track the requested flat target (only the tick-alignment shift, ≤~1%, separates them) and the fee
+  // CEILINGS must leave Deploy.s.sol's GraduationUnfundable guard (maxCallerReward + maxGraduationFee
+  // >= G → revert) with ≥2× margin. At mainnet's 5.7 ETH the USD-sized ceilings clear it by ~350×.
   if (gradTargetWei !== null) {
     const maxes = maxCallerRewardWei + maxGraduationFeeWei;
     check(
-      "override.feeCeilingsFundable",
+      "grad.feeCeilingsFundable",
       maxes * 2n <= c.graduationEthWei,
       `maxCallerReward ${maxCallerRewardWei} + maxGraduationFee ${maxGraduationFeeWei} = ${maxes} wei ` +
         `≤ 50% of derived G ${c.graduationEthWei} wei (GraduationUnfundable clears with ≥2× margin)`,
@@ -726,7 +812,7 @@ async function main(): Promise<void> {
     const gDev =
       c.graduationEthWei > gradTargetWei ? c.graduationEthWei - gradTargetWei : gradTargetWei - c.graduationEthWei;
     check(
-      "override.gTracksTarget",
+      "grad.gTracksTarget",
       gDev * 50n <= gradTargetWei,
       `derived G ${c.graduationEthWei} wei (${eth(c.graduationEthWei)} ETH) within ±2% of requested ` +
         `${gradTargetWei} wei (${eth(gradTargetWei)} ETH); Δ ${gDev} wei (tick-alignment shift)`,
@@ -902,13 +988,18 @@ async function main(): Promise<void> {
     "§13 GATE: ALL constants below are open item §13 until hoodpad-architect reviews this output; gate approval closes the item.",
     "fees.graduationFeeWei: COST-BASED per §12.26 (decision 26) — a small flat fee = migrationGasEstimate × gasPriceWei × margin (see derivation.graduationFeeModel), NOT a %-of-raise and never a hardcoded USD figure. M1 RE-VALIDATION DONE (2026-07-12): migrationGasEstimate is now FORK-MEASURED (real §12.28 V3 factory/NPM, graduate()+V3 = ~817845 gas worst-case), not the old 3,000,000 placeholder. gasPrice is fetched live when ROBINHOOD_RPC_URL is set; the exact fee is still re-confirmed at deploy against live gas per §12.26.",
     "fees.callerRewardWei: O-9 (§12.34) — sized ≈$5 equivalent at snapshot. M1 RE-VALIDATION DONE (2026-07-12): asserted ≥10× the FORK-MEASURED graduate() gas × live gas price (see derivation.graduationFeeModel.callerRewardCoversGasFloor); passes with margin.",
-    "fees.creatorFeeBps: §7/§12.63 Phase-2 creator-fee leg. MAINNET = 0 (Phase-2 disabled — enabling it on mainnet requires a §12.62 economics re-derivation that prices the split, NOT shipped here). TESTNET = 50 (architect-ratified PLACEHOLDER: treasury 100 + creator 50 = 150 ≤ the 200/2% additive cap), so Phase-T exercises the creator leg end-to-end. NOT a mainnet commitment; the final mainnet value is a §13/§12.62 knob.",
+    "fees.creatorFeeBps: §7/§12.63 creator-fee leg = 50 bps (0.5%) on BOTH mainnet and testnet (approved product change 2026-07-13). treasury 100 + creator 50 = 150 ≤ the 200/2% additive cap (asserted by fees.additiveCap here AND the factory constructor's FeeAboveCap). The on-chain fee SPLIT/routing (post-graduation LP-fee share) is a SEPARATE new-factory-version phase, being designed by a spec agent — NOT shipped in this M0 re-derivation; here the leg is only priced into the fee schedule.",
     "antiSniper.*: PROPOSAL (O-7) — 8s timestamp window (§12.18) with per-tx cap = 2.5% of GRADUATION_ETH; multi-wallet bypass documented.",
     "v3.toleranceTicks / maxArbIterations / migrationSlippageBps: PROPOSAL (O-8) — needed before gate-2 fuzz bounds are final.",
     "beta.*: PLACEHOLDER (O-10) — mainnet values set with hoodpad-security before beta deploy.",
-    ...(gradTargetWei !== null
+    ...(smallGOverride
       ? [
           "TESTNET SMALL-G OVERRIDE ACTIVE (M0_TESTNET_GRADUATION_ETH): curve.*, fees.graduationFee/callerReward (+ their ceilings), antiSniper.maxEarlyBuyWei, beta.* and governance.organicVolumeFloor are re-derived around the faucet-scale graduation target — see derivation.testnetGraduationOverride for the policy. The §12.34 caller-reward gas floor is relaxed 10×→1.5× (still strictly profitable) FOR TESTNET ONLY. Derive fails closed if this env var is set in mainnet mode; the mainnet derivation path is untouched. hoodpad-architect re-ratifies the override policy before it is treated as anything but a lifecycle-testing device.",
+        ]
+      : []),
+    ...(!isTestnet
+      ? [
+          "curve.graduationEthWei: MAINNET FLAT graduation target (approved product change 2026-07-13; retargeted 5.7 ETH 2026-07-13) — see derivation.mainnetGraduationTarget. The solver inverts constraint (c) `G = p·L + F + R` around a FLAT ETH raise (§12.11), DEFAULT 5.7 ETH (matches RobinFun's ~5.74 ETH / ~$44k bar; env-overridable M0_MAINNET_GRADUATION_ETH), replacing the earlier flat 2.5-ETH default (itself replacing the retired $69k-mcap derivation, ~7.9166 ETH). The MAINNET fee policy is UNCHANGED (USD-sized ~$5 caller reward, cost-based §12.26 graduation fee, 10× gas floor) — at 5.7 ETH the fees are ≪ G, so GraduationUnfundable clears by ~350×. hoodpad-architect gate-approves the new target before deploy (§13).",
         ]
       : []),
     "governance.organicVolumeFloor: M0-4 DEFAULT (§14 Gate G-A.1) — floor = 5 × GRADUATION_ETH / 7d of OWN-INDEXER organic curve volume (§8.5); NOT a headline metric (§2). The magnitude ('what counts as not-collapsed') is a product/policy call → hoodpad-architect ratifies before Gate G-A; recalibrate at M2 with real organic series.",
@@ -1024,6 +1115,10 @@ async function main(): Promise<void> {
     },
     derivation: {
       note: "vT0 = S²/(2S−T−f), vE0 = p·(L+f)²/(2S−T−f), G = p·(L+f) with f=(gradFee+callerReward)/p; p = exact price of targetTickToken0. Full algebra in tools/m0/lib/curve.ts.",
+      graduationTargetBasis: gradTargetWei !== null ? "flat net-of-fee ETH raise (§12.11)" : "legacy $69k mcap",
+      // LEGACY $69k-mcap parity figure — retained for provenance only; NOT the graduation driver on any
+      // flat-G run (every mainnet run + the testnet faucet override). See mainnetGraduationTarget /
+      // testnetGraduationOverride for the operative target.
       gradMcapTargetUsd: GRAD_MCAP_USD.toString(),
       graduationFeeModel: {
         basis: "cost-based (§12.26) — migrationGasEstimate × gasPriceWei × (marginNum/marginDen); NOT %-of-raise, no hardcoded USD",
@@ -1050,12 +1145,12 @@ async function main(): Promise<void> {
       rawTickToken0BeforeAlignment: rawTickA,
       k: c.k.toString(),
       ethToLpWei: c.ethToLpWei.toString(),
-      ...(gradTargetWei !== null
+      ...(smallGOverride
         ? {
             testnetGraduationOverride: {
               envVar: "M0_TESTNET_GRADUATION_ETH",
-              requested: gradOverrideRaw,
-              requestedWei: gradTargetWei.toString(),
+              requested: testnetOverrideRaw,
+              requestedWei: gradTargetWei!.toString(),
               derivedGraduationEthWei: c.graduationEthWei.toString(),
               policy: {
                 priceTarget: "constraint (c) inverted: raw p = (G − F − R)/L, then tick-aligned (±≤~1%)",
@@ -1069,6 +1164,29 @@ async function main(): Promise<void> {
             },
           }
         : {}),
+      ...(!isTestnet
+        ? {
+            mainnetGraduationTarget: {
+              basis:
+                "MAINNET FLAT graduation target (approved product change 2026-07-13; retargeted 5.7 ETH 2026-07-13): G is a flat net-of-fee ETH raise (§12.11), matching RobinFun's ~5.74 ETH / ~$44k bar, NOT the retired $69k-mcap derivation (~7.9166 ETH) nor the earlier flat 2.5-ETH default. Same solver MECHANISM as the testnet override (constraint (c) `G = p·L + F + R` inverted around the target), but the MAINNET fee policy is kept intact — no faucet-scale rescale.",
+              source: gradTargetSource,
+              envVar: "M0_MAINNET_GRADUATION_ETH",
+              envOverridden: mainnetOverrideRaw != null && mainnetOverrideRaw !== "",
+              defaultWei: MAINNET_GRADUATION_ETH.toString(),
+              requestedWei: gradTargetWei!.toString(),
+              derivedGraduationEthWei: c.graduationEthWei.toString(),
+              policy: {
+                priceTarget: "constraint (c) inverted: raw p = (G − F − R)/L, then tick-aligned (±≤~1%)",
+                callerReward: "MAINNET USD-sized ≈$5; ceiling 5× (unchanged)",
+                graduationFee: "MAINNET cost-based §12.26; ceiling 10× (unchanged; no %-of-G cap)",
+                callerRewardGasFloor: "MAINNET 10× of fork-measured graduate() gas (unchanged)",
+                creationFee: "unchanged (independent of G)",
+              },
+              status:
+                "OPEN ITEM §13 — hoodpad-architect gate-approves the 5.7-ETH target before deploy. Fails closed if M0_MAINNET_GRADUATION_ETH is set under --network=testnet.",
+            },
+          }
+        : {}),
       lpDust: {
         token0IsToken: { tokenWei: dustTokA.toString(), wethWei: dustWethA.toString(), liquidity: mintA.liquidity.toString() },
         token0IsWeth: { tokenWei: dustTokB.toString(), wethWei: dustWethB.toString(), liquidity: mintB.liquidity.toString() },
@@ -1078,7 +1196,7 @@ async function main(): Promise<void> {
       virtualEth0: `${eth(c.virtualEthWei)} ETH`,
       virtualToken0: `${tokensM(c.virtualTokenWei)} tokens`,
       graduationEth: `${eth(c.graduationEthWei)} ETH (net-of-fee, §12.11) ≈ $${weiToUsd(c.graduationEthWei).toFixed(2)} @snapshot`,
-      graduationMcap: `${eth(gradMcapWei, 4)} ETH ≈ $${gradMcapUsd.toFixed(2)} @snapshot (target $${GRAD_MCAP_USD})`,
+      graduationMcap: `${eth(gradMcapWei, 4)} ETH ≈ $${gradMcapUsd.toFixed(2)} @snapshot (${gradTargetLabel})`,
       initialMcap: `${eth(initialMcapWei, 4)} ETH ≈ $${weiToUsd(initialMcapWei).toFixed(2)} @snapshot`,
       graduationFee: `${eth(c.graduationFeeWei)} ETH ≈ $${weiToUsd(c.graduationFeeWei).toFixed(2)} @snapshot — cost-based flat (§12.26), gas ${gas.basis} (USD shown is informational only)`,
       creationFee: `${eth(creationFeeWei)} ETH ≈ $${weiToUsd(creationFeeWei).toFixed(2)} @snapshot`,
@@ -1162,7 +1280,7 @@ library RobbedConstants {
     // ── fees (§6.4, §7) ────────────────────────────────────────────────────
     uint16  internal constant TRADE_FEE_BPS       = ${c.fees.tradeFeeBps};
     uint16  internal constant MAX_TRADE_FEE_BPS   = ${MAX_TRADE_FEE_BPS};  // hard cap, structural
-    uint16  internal constant CREATOR_FEE_BPS     = ${c.fees.creatorFeeBps};    // §7/§12.63: additive under the 200 cap (mainnet 0)
+    uint16  internal constant CREATOR_FEE_BPS     = ${c.fees.creatorFeeBps};    // §7/§12.63: additive under the 200 cap (0.5% = 50 bps)
     uint256 internal constant CREATION_FEE        = ${c.fees.creationFeeWei};
     uint256 internal constant MAX_CREATION_FEE    = ${c.fees.maxCreationFeeWei};
     uint256 internal constant GRADUATION_FEE      = ${c.fees.graduationFeeWei}; // cost-based flat, §12.26 (M0 placeholder; finalized at M1 vs testnet gas)

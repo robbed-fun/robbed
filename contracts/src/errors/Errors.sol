@@ -27,6 +27,23 @@ error NotPool();
 /// @notice ERC721 sender is not the NonfungiblePositionManager (contracts.md §2.6).
 error NotPositionManager();
 
+/// @notice `LPFeeVault.registerCreator` caller is not the factory's registered V3Migrator (spec
+///         §12.69(B)). The post-graduation `tokenId → creator` binding may ONLY be written by the
+///         migrator (which mints the LP position and authoritatively knows the graduating curve's
+///         creator), so a non-migrator caller cannot spoof a creator for a position.
+error NotMigrator();
+
+/// @notice `LPFeeVault.registerCreator` called twice for the same `tokenId` (spec §12.69(B),
+///         set-once). The creator binding is captured exactly once at graduation and can never be
+///         overwritten — a graduated position's post-grad fee beneficiary is immutable.
+error CreatorAlreadyRegistered();
+
+/// @notice `CreatorVault.depositERC20` caller is not the factory's registered LPFeeVault (spec
+///         §12.69(C)). The per-(creator, token) ERC20 custody is credited ONLY by the trusted
+///         fee-source vault, mirroring the ETH-leg `deposit` curve-gate so the vault's per-token
+///         balance equals the sum of collect-routed creator shares to the wei (no donation pollution).
+error NotLpFeeVault();
+
 // ─────────────────────────────── Factory (§2.2) ────────────────────────────────
 
 /// @notice One-time setter (setRouter/setMigrator) called a second time (contracts.md §2.2).

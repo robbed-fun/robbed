@@ -100,6 +100,9 @@ interface ICurveFactory {
     event CreatorFeeUpdated(uint16 newBps);
     /// @notice One-time CreatorVault wiring (spec §12.63) — the pull-payment sink for the creator leg.
     event CreatorVaultSet(address vault);
+    /// @notice One-time LPFeeVault wiring (spec §12.69) — the registered post-graduation ERC20 fee
+    ///         source; gates `CreatorVault.depositERC20`.
+    event LpFeeVaultSet(address lpFeeVault);
     event CreationFeeUpdated(uint256 newFee);
     event GraduationFeeUpdated(uint256 newFee);
     event CallerRewardUpdated(uint256 newReward);
@@ -189,6 +192,10 @@ interface ICurveFactory {
     ///         into each curve at creation.
     function creatorVault() external view returns (address);
 
+    /// @notice The registered LPFeeVault of this generation, one-time-set (spec §12.69). Gates
+    ///         `CreatorVault.depositERC20` — the single trusted post-graduation ERC20 fee source.
+    function lpFeeVault() external view returns (address);
+
     /// @notice Flat creation fee, collected by the Router (contracts.md §2.4).
     function creationFee() external view returns (uint256);
 
@@ -218,6 +225,9 @@ interface ICurveFactory {
     function setCreatorFeeBps(uint16 newBps) external;
     /// @dev ONE-TIME: reverts AlreadyInitialized if already set; non-zero (spec §12.63).
     function setCreatorVault(address vault) external;
+    /// @dev ONE-TIME: reverts AlreadyInitialized if already set; non-zero (spec §12.69). Wires the
+    ///      LPFeeVault that `CreatorVault.depositERC20` trusts as the ERC20 fee source.
+    function setLpFeeVault(address lpFeeVault_) external;
     /// @dev ≤ maxCreationFee (immutable ceiling).
     function setCreationFee(uint256 newFee) external;
     /// @dev ≤ maxGraduationFee (immutable ceiling); future curves only.

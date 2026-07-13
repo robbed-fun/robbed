@@ -12,6 +12,7 @@ import {LaunchToken} from "src/LaunchToken.sol";
 import {Router} from "src/Router.sol";
 import {V3Migrator} from "src/V3Migrator.sol";
 import {LPFeeVault} from "src/LPFeeVault.sol";
+import {CreatorVault} from "src/CreatorVault.sol";
 import {ICurveFactory} from "src/interfaces/ICurveFactory.sol";
 import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
 import {IUniswapV3Factory} from "src/interfaces/external/IUniswapV3Factory.sol";
@@ -76,15 +77,18 @@ contract DonationFreezeForkTest is Test {
         address npmAddr = vm.parseJsonAddress(json, ".external.positionManager");
         assertEq(vm.parseJsonAddress(json, ".external.weth"), WETH, "constants WETH != canonical");
 
-        // Production stack (contracts.md §7.2 order), same shape as Lifecycle._stage1.
-        vault = new LPFeeVault(npmAddr, treasury);
+        // Production stack (§12.69 generation order), same shape as Lifecycle._stage1.
         factory = new CurveFactory(TestConstants.factoryInit(treasury, safeOwner));
+        CreatorVault creatorVault = new CreatorVault(address(factory));
+        vault = new LPFeeVault(npmAddr, treasury, address(factory));
         migrator =
             new V3Migrator(TestConstants.migratorInit(address(factory), v3FactoryAddr, npmAddr, WETH, address(vault)));
         router = new Router(ICurveFactory(address(factory)));
         vm.startPrank(safeOwner);
         factory.setMigrator(address(migrator));
         factory.setRouter(address(router));
+        factory.setCreatorVault(address(creatorVault));
+        factory.setLpFeeVault(address(vault));
         vm.stopPrank();
 
         // Create + clamped fill to ReadyToGraduate (pool stays pristine at the target price).

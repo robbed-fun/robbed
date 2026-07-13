@@ -147,7 +147,7 @@ contract CurveEconRedTeam is BaseFixture {
         vm.warp(uint256(curve.EARLY_WINDOW_END())); // past the anti-sniper cap so sizes are free
 
         // Seed the curve to a realistic mid-life state so we are not at the degenerate start.
-        _buy(curve, token, makeAddr("seed"), 2 ether, 0);
+        _buy(curve, token, makeAddr("seed"), 0.5 ether, 0); // headroom under G=2.484 for the sandwich legs
 
         // Baseline: what the victim receives with NO front-run (its fair fill).
         (uint256 fairFill,,,) = curve.quoteBuy(0.3 ether);
@@ -219,7 +219,7 @@ contract CurveEconRedTeam is BaseFixture {
     function test_wash_roundTrip_feeBleed() public {
         (LaunchToken token, BondingCurve curve) = _create();
         vm.warp(uint256(curve.EARLY_WINDOW_END()));
-        _buy(curve, token, makeAddr("seed3"), 2 ether, 0);
+        _buy(curve, token, makeAddr("seed3"), 0.5 ether, 0); // mid-life seed, headroom under G=2.484
 
         // Single clean round trip: buy 1 ETH notional, immediately sell it all back.
         uint256 rtLoss = _oneWashRoundTrip(curve, token, makeAddr("washerA"), 1 ether);

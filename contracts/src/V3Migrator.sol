@@ -8,6 +8,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IV3Migrator} from "./interfaces/IV3Migrator.sol";
 import {ICurveFactory} from "./interfaces/ICurveFactory.sol";
 import {IBondingCurve} from "./interfaces/IBondingCurve.sol";
+import {ILPFeeVault} from "./interfaces/ILPFeeVault.sol";
 import {IWETH9} from "./interfaces/external/IWETH9.sol";
 import {IUniswapV3Factory} from "./interfaces/external/IUniswapV3Factory.sol";
 import {IUniswapV3Pool} from "./interfaces/external/IUniswapV3Pool.sol";
@@ -34,8 +35,11 @@ import {
 ///         (`initializePool`, the pre-seed defense §6.3.2); (2) at graduation (`migrate`), read the
 ///         pool's live `slot0`, ARB the price back to target using curve inventory in a bounded loop
 ///         — reverting rather than ever minting into a hostile ratio — then mint a full-range LP
-///         position (LP tranche + raised WETH) whose NFT goes to the {LPFeeVault}. Implements
-///         `IUniswapV3SwapCallback` so the arb-back needs NO external SwapRouter.
+///         position (LP tranche + raised WETH) whose NFT goes to the {LPFeeVault}, and register the
+///         graduating curve's creator with that vault (§12.69 — binds the post-graduation 50/50 fee
+///         split's creator beneficiary; see decision #6). Implements `IUniswapV3SwapCallback` so the
+///         arb-back needs NO external SwapRouter. LP copy (§12.14 as amended by §12.69): "LP principal
+///         permanently locked; trading fees split between treasury and creator" — never "burned".
 ///
 /// @dev Load-bearing engineering decisions (recorded for the hoodpad-security gate):
 ///
@@ -127,6 +131,22 @@ import {
 ///         constant off the migrator's config surface. Token leg unchanged (already donation-invariant
 ///         — anchored to the FIXED `lpTranche`). Proven by the F-1 unit regression (`Migrator.t.sol`,
 ///         scanning 0.08–1.0 ETH donations) + the gate-3 fork lifecycle's above-threshold donation.
+///
+///      6. **Creator registration at graduation (§12.69 — post-graduation 50/50 fee split).** The
+///         graduated LP position's post-graduation V3 fees split 50/50 treasury/creator at
+///         `LPFeeVault.collect()`, so the vault must know each `tokenId`'s creator. §12.69(B) ratified
+///         passing `abi.encode(creator)` through `safeTransferFrom` into the vault's
+///         `onERC721Received`. VERIFIED against the real v3-periphery `NonfungiblePositionManager`
+///         (github.com/Uniswap/v3-periphery `mint`): it mints via `_mint` (NOT `_safeMint`), so
+///         `onERC721Received` NEVER fires on mint — and this migrator mints with `recipient = vault`
+///         directly (no transfer at all). The data-payload mechanism cannot work here. Chosen the
+///         robust alternative the spec itself carries: the migrator reads the creator from the
+///         calling curve's immutable (`IBondingCurve(msg.sender).creator()` — authoritative, snapshot
+///         at birth) and calls `vault.registerCreator(tokenId, creator)` in this same graduation tx.
+///         Set-once + migrator-gated (the vault authenticates `msg.sender == factory.migrator()`), so
+///         it is unspoofable and captured at the authoritative moment (§12.69(B) properties intact,
+///         mechanism swapped for one that actually works — the §12.69(B) transfer-data spec text is
+///         flagged to the architect as non-functional against this NPM).
 contract V3Migrator is IV3Migrator {
     using SafeERC20 for IERC20;
 
@@ -255,6 +275,10 @@ contract V3Migrator is IV3Migrator {
         uint256 lpTranche;
         uint256 gradFee;
         address treasury;
+        // §12.69: the graduating curve's creator, read from the calling curve's immutable at migrate
+        // time and registered with the vault right after the mint so post-graduation V3 fees split
+        // 50/50 treasury/creator at collect(). Authoritative source (the curve snapshots it at birth).
+        address creator;
     }
 
     /// @inheritdoc IV3Migrator
@@ -268,6 +292,7 @@ contract V3Migrator is IV3Migrator {
         Ctx memory c;
         c.token = token;
         c.treasury = ICurveFactory(factory).treasury();
+        c.creator = IBondingCurve(msg.sender).creator(); // §12.69 post-grad fee-split beneficiary
         c.tokenIsToken0 = token < weth;
         c.targetSqrt = c.tokenIsToken0 ? SQRT_PRICE_TOKEN0_X96 : SQRT_PRICE_TOKEN1_X96;
         c.targetTick = c.tokenIsToken0 ? TARGET_TICK_TOKEN0 : TARGET_TICK_TOKEN1;
@@ -431,6 +456,15 @@ contract V3Migrator is IV3Migrator {
 
         _mint(m);
         if (m.liquidity == 0) revert InsufficientLiquidityMinted();
+
+        // §12.69: bind the post-graduation fee-split beneficiary. The NFT was just minted to the vault
+        // (recipient = vault); NPM `mint` uses `_mint` (not `_safeMint`), so `onERC721Received` never
+        // fired and the §12.69(B) transfer-data mechanism cannot apply (verified against v3-periphery,
+        // decision #6). The migrator instead explicitly registers `tokenId → creator` with the vault,
+        // in this same graduation tx, set-once and migrator-gated (the vault checks
+        // `msg.sender == factory.migrator()`). This is atomic with the mint: any position ever held by
+        // the vault is already registered, so `collect()` always has a creator.
+        ILPFeeVault(vault).registerCreator(m.tokenId, c.creator);
 
         // Reset approvals (hygiene; the position is minted, no residual allowance should linger).
         IERC20(c.token).forceApprove(positionManager, 0);

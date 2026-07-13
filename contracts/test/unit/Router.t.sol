@@ -104,7 +104,7 @@ contract RouterTest is Test {
 
     function test_createToken_atomicInitialBuy_forwardsTraderAndTokens() public {
         uint256 fee = factory.creationFee();
-        uint256 buyIn = 0.1 ether;
+        uint256 buyIn = 0.05 ether; // below the new anti-sniper early cap (0.0621 ETH); create+buy is in-window
         vm.deal(alice, fee + buyIn);
         vm.prank(alice);
         (address t, address c, uint256 tokensOut) =

@@ -12,6 +12,7 @@ import {LaunchToken} from "src/LaunchToken.sol";
 import {Router} from "src/Router.sol";
 import {V3Migrator} from "src/V3Migrator.sol";
 import {LPFeeVault} from "src/LPFeeVault.sol";
+import {CreatorVault} from "src/CreatorVault.sol";
 import {ICurveFactory} from "src/interfaces/ICurveFactory.sol";
 import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
 import {IUniswapV3Factory} from "src/interfaces/external/IUniswapV3Factory.sol";
@@ -67,14 +68,17 @@ contract EconRedTeamFork is Test {
         assertEq(IUniswapV3Factory(v3FactoryAddr).feeAmountTickSpacing(10_000), 200, "live V3 1% tier spacing");
         assertEq(INonfungiblePositionManager(npmAddr).WETH9(), WETH, "live NPM.WETH9 != canonical");
 
-        vault = new LPFeeVault(npmAddr, treasury);
         factory = new CurveFactory(TestConstants.factoryInit(treasury, owner));
+        CreatorVault creatorVault = new CreatorVault(address(factory));
+        vault = new LPFeeVault(npmAddr, treasury, address(factory));
         migrator =
             new V3Migrator(TestConstants.migratorInit(address(factory), v3FactoryAddr, npmAddr, WETH, address(vault)));
         router = new Router(ICurveFactory(address(factory)));
         vm.startPrank(owner);
         factory.setMigrator(address(migrator));
         factory.setRouter(address(router));
+        factory.setCreatorVault(address(creatorVault));
+        factory.setLpFeeVault(address(vault));
         vm.stopPrank();
     }
 

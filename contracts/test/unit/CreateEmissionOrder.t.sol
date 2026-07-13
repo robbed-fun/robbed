@@ -56,7 +56,7 @@ contract CreateEmissionOrderTest is Test {
     ///         appears STRICTLY FIRST in emission order (spec §12.41 / §12.15).
     function test_emissionOrder_tokenCreatedBeforeInitialBuyTrade_spec12_41() public {
         uint256 fee = factory.creationFee();
-        uint256 buyIn = 0.1 ether;
+        uint256 buyIn = 0.05 ether; // below the new anti-sniper early cap (0.0621 ETH); create+buy is in-window
         vm.deal(creator, fee + buyIn);
 
         vm.recordLogs();
