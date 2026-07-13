@@ -92,6 +92,17 @@ export const ROLE_INDEX = {
   trader2: 3,
 } as const;
 
+/**
+ * The compose auto-graduation keeper's dev signer — anvil account #4 (ADDRESS
+ * only; the keeper container owns the private key, the e2e never signs as it).
+ * Chosen DELIBERATELY OUTSIDE the e2e roles 0-3 (creator/treasury/trader/trader2)
+ * so the keeper never contends for nonces with the harness signers. Used by the
+ * keeper-driven graduation flows (TD-6b, GRAD-AUTO) to assert the caller reward
+ * landed and that the `Graduated` event's `caller` is the keeper. Public anvil
+ * dev address — safe under `e2e/` (copy-lint `walk()` skips this dir).
+ */
+export const KEEPER_ADDRESS = "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65" as const;
+
 export const ALL_ACCOUNTS = ANVIL_ACCOUNTS;
 
 /** Comma-joined address list for `NEXT_PUBLIC_E2E_ACCOUNTS` (web server env). */

@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import {
   bondingCurveAbi,
   curveFactoryAbi,
+  graduatedEvent,
   lpFeeVaultAbi,
   routerAbi,
 } from "@robbed/shared/abi";
@@ -25,11 +26,12 @@ import {
   createTestClient,
   createWalletClient,
   defineChain,
+  erc721Abi,
   parseEther,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { ROLES, STACK, type DevAccount } from "./config";
+import { KEEPER_ADDRESS, ROLES, STACK, type DevAccount } from "./config";
 
 export const forkChain = defineChain({
   id: 4663,
@@ -63,6 +65,7 @@ export interface DeployedAddresses {
   router: Address;
   curveFactory: Address;
   lpFeeVault: Address;
+  migrator: Address;
   treasury: Address;
   startBlock: bigint;
 }
@@ -95,6 +98,7 @@ export function loadDeployedAddresses(): DeployedAddresses {
     router: need("ROUTER_ADDRESS") as Address,
     curveFactory: need("CURVE_FACTORY_ADDRESS") as Address,
     lpFeeVault: need("LP_FEE_VAULT_ADDRESS") as Address,
+    migrator: need("MIGRATOR_ADDRESS") as Address,
     treasury: need("TREASURY_ADDRESS") as Address,
     startBlock: BigInt(pick("START_BLOCK") ?? "0"),
   };
@@ -138,6 +142,77 @@ export async function revert(id: `0x${string}`): Promise<void> {
   await testClient.revert({ id });
 }
 
+/**
+ * Neutralize any inherited HOSTILE code on a well-known anvil dev account. The
+ * forked Robinhood mainnet has EIP-7702 SWEEPER delegations squatting these
+ * addresses (a 23-byte `0xef0100 || sweeper` designator): any ETH the account
+ * RECEIVES — a curve buy REFUND, a sell's proceeds, or the graduation CALLER
+ * REWARD — is force-forwarded to the squatter, draining the account to ~0. That
+ * is a fork artifact, NOT a protocol issue (graduation still succeeds and the
+ * reward is still PAID — the sweeper just drains it after). `anvil_setCode(addr,
+ * "0x")` restores a plain EOA so the account can hold received ETH — a harness
+ * fork manipulation exactly like ERR-5's hostile-treasury `setCode`, never a
+ * contract change.
+ */
+export async function sanitizeAccount(address: Address): Promise<void> {
+  const code = await publicClient.getCode({ address });
+  if (code && code !== "0x") {
+    await testClient.setCode({ address, bytecode: "0x" });
+  }
+}
+
+/**
+ * Ensure a fork account is a plain, funded EOA: first STRIP any inherited sweeper
+ * delegation (see `sanitizeAccount`), then top it up to at least `minEth` ETH via
+ * `anvil_setBalance`. Without the strip, a topped-up account is drained the
+ * instant it next receives ETH (a near-threshold buy refund, the keeper's caller
+ * reward). No-op on an already-clean, already-funded account. Used for the buyer,
+ * the donor, and the compose keeper's gas in the keeper-driven flows.
+ */
+export async function ensureFunded(address: Address, minEth = 100): Promise<void> {
+  await sanitizeAccount(address);
+  const bal = await publicClient.getBalance({ address });
+  if (bal < parseEther(String(minEth))) {
+    await testClient.setBalance({ address, value: parseEther("10000") });
+  }
+}
+
+/**
+ * Temporarily STARVE the compose keeper of gas so it cannot fire `graduate()` —
+ * used by ERR-7 to hold a curve in the deterministic ReadyToGraduate lock long
+ * enough to assert the interstitial (the keeper otherwise clears that state
+ * within ~1-2 blocks, by design). Zeroing the keeper's balance makes its
+ * graduate() send fail (insufficient funds → the keeper classifies it transient
+ * and backs off), so the lock persists. A harness fork manipulation (like ERR-5's
+ * hostile-treasury `setCode`), scoped + always paired with `restoreKeeper` in a
+ * `finally`. MUST be restored so later flows' graduations (and GRAD-AUTO) work.
+ */
+export async function pauseKeeper(): Promise<void> {
+  await testClient.setBalance({ address: KEEPER_ADDRESS, value: 0n });
+}
+/** Undo `pauseKeeper`: strip any inherited sweeper + refund the keeper's gas. */
+export async function restoreKeeper(): Promise<void> {
+  await sanitizeAccount(KEEPER_ADDRESS);
+  await testClient.setBalance({ address: KEEPER_ADDRESS, value: parseEther("10000") });
+}
+
+/** Poll on-chain `phase()` until the curve LEAVES `Trading` (ReadyToGraduate, or
+ *  Graduated if the keeper already won the race) — the deterministic lock signal
+ *  after a threshold-crossing buy that may still be a block or two from inclusion. */
+export async function waitForCurveLocked(
+  curve: Address,
+  opts: { timeoutMs?: number } = {},
+): Promise<CurvePhase> {
+  const deadline = Date.now() + (opts.timeoutMs ?? 30_000);
+  let phase: CurvePhase = "trading";
+  while (Date.now() < deadline) {
+    phase = await readCurvePhase(curve);
+    if (phase !== "trading") return phase;
+    await new Promise((r) => setTimeout(r, 1_000));
+  }
+  return phase;
+}
+
 // ── curve reads (on-chain ground truth) ──────────────────────────────────────
 // (§12.57, 2026-07-13: the token-detail SafetyStrip that rendered these live is
 // DELETED; these reads remain the harness's on-chain truth source for the trade
@@ -170,6 +245,79 @@ export async function readGraduationEth(curve: Address): Promise<bigint> {
     address: curve,
     abi: bondingCurveAbi,
     functionName: "GRADUATION_ETH",
+  })) as bigint;
+}
+
+/**
+ * On-chain curve `phase()` (IBondingCurve.Phase uint8): 0 Trading, 1
+ * ReadyToGraduate, 2 Graduated (mirrors the keeper's `decodePhase`, apps/keeper/
+ * src/chain.ts). The ground truth for the deterministic ReadyToGraduate lock
+ * (§12.12) — asserted directly rather than inferring the lock from reserves, and
+ * KEEPER-SAFE: a spec reads this before ever buying so it never sends a trade
+ * against a curve the compose keeper already graduated.
+ */
+export type CurvePhase = "trading" | "ready" | "graduated" | "unknown";
+export async function readCurvePhase(curve: Address): Promise<CurvePhase> {
+  const raw = (await publicClient.readContract({
+    address: curve,
+    abi: bondingCurveAbi,
+    functionName: "phase",
+  })) as number | bigint;
+  switch (Number(raw)) {
+    case 0:
+      return "trading";
+    case 1:
+      return "ready";
+    case 2:
+      return "graduated";
+    default:
+      return "unknown";
+  }
+}
+
+/**
+ * The two unswept in-contract fee escrows the curve retains AFTER graduation
+ * (§12.25 treasury leg + §12.63 creator leg). `graduate()` sends the curve's
+ * whole ETH balance MINUS these to the migrator, so post-graduation the curve
+ * holds EXACTLY `accruedFees + accruedCreatorFees` — the "post-grad curve holds
+ * zero value (unswept fees excluded)" invariant. A stranded donation would push
+ * the balance ABOVE this sum; the F-1 regression (TD-6b) asserts it does NOT.
+ */
+export async function readAccruedFees(curve: Address): Promise<{
+  accruedFees: bigint;
+  accruedCreatorFees: bigint;
+  total: bigint;
+}> {
+  const [accruedFees, accruedCreatorFees] = (await Promise.all([
+    publicClient.readContract({ address: curve, abi: bondingCurveAbi, functionName: "accruedFees" }),
+    publicClient.readContract({
+      address: curve,
+      abi: bondingCurveAbi,
+      functionName: "accruedCreatorFees",
+    }),
+  ])) as [bigint, bigint];
+  return { accruedFees, accruedCreatorFees, total: accruedFees + accruedCreatorFees };
+}
+
+/** LIVE caller reward the graduation trigger earns (`BondingCurve.CALLER_REWARD`,
+ *  §12.34) — read from the deployed curve, never the notebook. */
+export async function readCallerReward(curve: Address): Promise<bigint> {
+  return (await publicClient.readContract({
+    address: curve,
+    abi: bondingCurveAbi,
+    functionName: "CALLER_REWARD",
+  })) as bigint;
+}
+
+/** LIVE per-tx anti-sniper cap (`BondingCurve.MAX_EARLY_BUY`, §6.5) — the widget
+ *  disables a buy above this WHILE it believes the token is in its early window
+ *  (a wall-clock check vs the warp-inflated chain `createdAt`), so a UI crossing
+ *  buy must stay under it. Read live, never the notebook. */
+export async function readMaxEarlyBuy(curve: Address): Promise<bigint> {
+  return (await publicClient.readContract({
+    address: curve,
+    abi: bondingCurveAbi,
+    functionName: "MAX_EARLY_BUY",
   })) as bigint;
 }
 
@@ -253,6 +401,90 @@ export async function graduateOnChain(curve: Address, by?: DevAccount): Promise<
     functionName: "graduate",
     args: [],
   });
+}
+
+/**
+ * Send a raw ETH VALUE transfer to the curve address — the curve's ungated
+ * `receive()` (BondingCurve.sol §5.7) accepts it. The donation is NEVER credited
+ * to reserves; at graduation it flows into the migrator and — with the F-1 fix —
+ * surfaces as WETH dust to the treasury rather than pairing into the LP (which
+ * pre-fix demanded an unachievable WETH deposit and FROZE graduation once
+ * `donation > ~1% of GRADUATION_ETH`). A harness-side fork manipulation (a plain
+ * `sendTransaction`), never a contract change — used by the TD-6b F-1 regression.
+ */
+export async function donateToCurveOnChain(
+  curve: Address,
+  weiValue: bigint,
+  by?: DevAccount,
+): Promise<Hash> {
+  const wallet = walletFor(by ?? ROLES.trader2);
+  return wallet.sendTransaction({ to: curve, value: weiValue });
+}
+
+export interface GraduatedLog {
+  args: {
+    token: Address;
+    pool: Address;
+    tokenId: bigint;
+    liquidity: bigint;
+    wethInPosition: bigint;
+    tokensInPosition: bigint;
+    graduationFee: bigint;
+    caller: Address;
+    callerReward: bigint;
+    tokensBurned: bigint;
+    wethDustToTreasury: bigint;
+  };
+  txHash: Hash;
+  blockNumber: bigint;
+}
+
+/**
+ * The single-fire `Graduated` event for a token — its canonical home is the
+ * V3Migrator (contracts.md §2.5), and `token` is indexed, so it is recoverable
+ * over `getContractEvents` regardless of WHO called `graduate()` (the compose
+ * keeper OR a manual trigger). Returns null until graduation has happened.
+ */
+export async function readGraduatedEvent(token: Address): Promise<GraduatedLog | null> {
+  const { migrator, startBlock } = loadDeployedAddresses();
+  const logs = await publicClient.getContractEvents({
+    address: migrator,
+    abi: [graduatedEvent],
+    eventName: "Graduated",
+    args: { token },
+    fromBlock: startBlock,
+    toBlock: "latest",
+  });
+  const log = logs.at(-1);
+  if (!log) return null;
+  return {
+    args: log.args as GraduatedLog["args"],
+    txHash: log.transactionHash!,
+    blockNumber: log.blockNumber!,
+  };
+}
+
+/**
+ * The owner of an LP-position NFT — reads the NonfungiblePositionManager address
+ * from the deployed `LPFeeVault.positionManager()` (no hardcoded address) and
+ * queries the frozen ERC-721 standard `ownerOf` (viem's canonical `erc721Abi`,
+ * not a hand-written ABI). At graduation the migrator mints the position to the
+ * LPFeeVault, permanently locking the principal (§6.3/§12.14) — TD-6b/GRAD-AUTO
+ * assert `ownerOf(tokenId) == lpFeeVault`.
+ */
+export async function readLpNftOwner(tokenId: bigint): Promise<Address> {
+  const { lpFeeVault } = loadDeployedAddresses();
+  const positionManager = (await publicClient.readContract({
+    address: lpFeeVault,
+    abi: lpFeeVaultAbi,
+    functionName: "positionManager",
+  })) as Address;
+  return (await publicClient.readContract({
+    address: positionManager,
+    abi: erc721Abi,
+    functionName: "ownerOf",
+    args: [tokenId],
+  })) as Address;
 }
 
 /** Permissionless LP-fee sweep (COLLECT-1). */

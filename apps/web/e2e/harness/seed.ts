@@ -19,20 +19,44 @@ import { curveFactoryAbi } from "@robbed/shared/abi";
 
 import {
   type CreatedToken,
+  type CurvePhase,
   type DeployedAddresses,
+  type GraduatedLog,
   buyOnChain,
   createTokenOnChain,
+  ensureFunded,
   graduateOnChain,
   loadDeployedAddresses,
   publicClient,
+  readCurvePhase,
+  readGraduatedEvent,
   readGraduationEth,
   readReserves,
+  sanitizeAccount,
   setPauseBuys,
   setPauseCreates,
   warpTime,
 } from "./anvil";
 import { waitForIndexed, api } from "./api";
-import { ROLES, STACK, type DevAccount } from "./config";
+import { KEEPER_ADDRESS, ROLES, STACK, type DevAccount } from "./config";
+
+/**
+ * Neutralize the forked Robinhood mainnet's HOSTILE EIP-7702 sweeper delegations
+ * on the well-known anvil dev accounts and keep the spenders funded. Those
+ * addresses are squatted on-chain by forwarders that drain any ETH they RECEIVE
+ * (buy refund, sell proceeds, graduation caller reward), which would otherwise
+ * make trades/graduations non-deterministic across the whole suite. Idempotent
+ * (no-op once clean/funded) and called at the top of every seed so any flow —
+ * not just the keeper-driven ones — runs against plain, funded EOAs. Strip only
+ * for the treasury fee-sink (do not fund it; COLLECT-1/ERR-5 reason about it).
+ */
+export async function sanitizeDevAccounts(): Promise<void> {
+  await sanitizeAccount(ROLES.treasury.address);
+  for (const a of [ROLES.creator, ROLES.trader, ROLES.trader2]) {
+    await ensureFunded(a.address);
+  }
+  await ensureFunded(KEEPER_ADDRESS);
+}
 
 /** M0 fork constants (fees/curve). Never hardcode metrics — read the notebook. */
 function forkConstants(): any {
@@ -222,6 +246,9 @@ export async function seedToken(opts: {
   initialBuyWei?: bigint;
   pin?: boolean;
 }): Promise<SeededToken> {
+  // Restore plain, funded EOAs before any tx — the forked mainnet squats the
+  // anvil dev accounts with balance-sweeping EIP-7702 delegations (see the fn).
+  await sanitizeDevAccounts();
   await ensureCreatesEnabled();
   await ensureBuysEnabled();
   // Uniquify so search/grid/ticker assertions target THIS run's token, not a
@@ -351,18 +378,137 @@ export async function pushCurveTowardGraduation(
 }
 
 /** Cross the threshold then execute the permissionless `graduate()`.
- * Returns the graduation tx hash (its `Graduated` log carries the LP tokenId). */
+ * Returns the graduation tx hash (its `Graduated` log carries the LP tokenId).
+ *
+ * NOTE: this MANUAL trigger is retained for the non-keeper post-grad fixtures
+ * (TD-4/TD-5/COLLECT-1) that need a graduated token FAST and don't care who
+ * fired it. On a stack whose compose keeper is running, the keeper may win the
+ * race — `graduateOnChain` then reverts `NotReady()`; that revert is swallowed
+ * and we fall through to poll for the (keeper-produced) graduated status, so the
+ * fixture is correct either way. The KEEPER-DRIVEN flows (TD-6b/GRAD-AUTO) use
+ * `crossGraduationThreshold` + `waitForKeeperGraduation` instead and NEVER call
+ * graduate() themselves. */
 export async function graduateToken(
   token: Address,
   curve: Address,
 ): Promise<`0x${string}`> {
-  await pushCurveTowardGraduation(token, curve, { crossThreshold: true });
-  const hash = await graduateOnChain(curve);
-  await publicClient.waitForTransactionReceipt({ hash });
+  // Keeper-safe cross (never buys a curve the keeper already graduated). If the
+  // curve is still locked (ReadyToGraduate) the keeper hasn't fired yet — attempt
+  // the manual trigger, but TOLERATE a NotReady revert (the keeper won the race
+  // between the read and our send; graduation is permissionless — who fires it is
+  // immaterial to a "give me a graduated token" fixture).
+  const phase = await crossGraduationThreshold(token, curve);
+  if (phase === "ready") {
+    await graduateOnChain(curve)
+      .then((h) => publicClient.waitForTransactionReceipt({ hash: h }))
+      .catch(() => {});
+  }
   await waitForIndexed(
     () => api.token(token),
     (t) => t?.status === "graduated",
     { label: `token ${token} graduated` },
   );
-  return hash;
+  // The Graduated event's tx hash — whoever fired graduate() (keeper or us).
+  const ev = await readGraduatedEvent(token);
+  return ev!.txHash;
+}
+
+/**
+ * Buy the curve until it CROSSES `GRADUATION_ETH` and LOCKS — keeper-safe. Unlike
+ * `pushCurveTowardGraduation`, it re-reads on-chain `phase()` before EVERY buy, so
+ * it never sends a trade against a curve the compose keeper has already graduated
+ * (that buy would revert `NotTrading()`). Warps past the anti-sniper early window
+ * so the large buys aren't clamped by `MAX_EARLY_BUY`. Returns the phase reached:
+ * `ready` (ReadyToGraduate — the normal lock) or `graduated` (the keeper already
+ * won the race). Used by the keeper-driven graduation flows (TD-6b/GRAD-AUTO).
+ */
+export async function crossGraduationThreshold(
+  token: Address,
+  curve: Address,
+): Promise<CurvePhase> {
+  await ensureBuysEnabled();
+  await warpTime(Number(forkConstants().antiSniper.windowSeconds) + 2);
+  const target = await readGraduationEth(curve);
+  const buyer = ROLES.trader;
+  for (let i = 0; i < 30; i++) {
+    const phase = await readCurvePhase(curve);
+    if (phase !== "trading") return phase; // locked (ready) or keeper already graduated
+    const { realEth } = await readReserves(curve);
+    if (realEth >= target) return "ready";
+    const remaining = target - realEth;
+    // Below a quarter-target remaining, buy the gap grossed up 5% (> the 1% fee)
+    // so the final buy's net comfortably reaches the threshold; the contract
+    // CLAMPS net to the exact remaining and refunds the overshoot (spec §12.11).
+    const step = remaining < target / 4n ? (remaining * 105n) / 100n + 1n : target / 4n;
+    const hash = await buyOnChain({ buyer, token, ethWei: step });
+    await publicClient.waitForTransactionReceipt({ hash });
+  }
+  return readCurvePhase(curve);
+}
+
+/**
+ * Precisely buy the curve DOWN to a small remaining gap (`leaveWei` net short of
+ * `GRADUATION_ETH`) WITHOUT crossing — keeper-safe (re-reads phase before each
+ * buy) and never overshoots (the final buy nets exactly `gap − leaveWei`). Used
+ * to pre-position for a UI threshold-crossing buy: the browser's anti-sniper cap
+ * (`MAX_EARLY_BUY`, checked against WALL-clock while the harness warps CHAIN time
+ * ahead) would DISABLE an over-cap UI buy, so the crossing buy must stay under
+ * `MAX_EARLY_BUY` — which requires the remaining gap to be smaller than that cap.
+ */
+export async function pushCurveNearThreshold(
+  token: Address,
+  curve: Address,
+  leaveWei: bigint,
+): Promise<void> {
+  await ensureBuysEnabled();
+  await warpTime(Number(forkConstants().antiSniper.windowSeconds) + 2);
+  const target = await readGraduationEth(curve);
+  const buyer = ROLES.trader;
+  for (let i = 0; i < 40; i++) {
+    if ((await readCurvePhase(curve)) !== "trading") return;
+    const { realEth } = await readReserves(curve);
+    const gap = target - realEth;
+    if (gap <= leaveWei) return;
+    const wantNet = gap - leaveWei;
+    // Gross the wanted net up by the 1% fee; cap the step so a fresh curve takes
+    // several buys. Never exceeds `wantNet` net → cannot cross the threshold here.
+    const grossWant = (wantNet * 100n) / 99n + 1n;
+    const step = grossWant < target / 5n ? grossWant : target / 5n;
+    const hash = await buyOnChain({ buyer, token, ethWei: step });
+    await publicClient.waitForTransactionReceipt({ hash });
+  }
+}
+
+/**
+ * Wait for the COMPOSE KEEPER to fire the permissionless `graduate()` on a curve
+ * that has crossed the threshold — the test NEVER calls graduate() itself. Polls
+ * on-chain `phase()` until Graduated, allowing a generous window for the keeper's
+ * WS reaction (`GraduationReady` → graduate() within ~1-2 blocks) PLUS its DB-poll
+ * fallback interval (`KEEPER_POLL_MS`, default 15s). Returns the single-fire
+ * `Graduated` event (its args carry the LP `tokenId`, `caller`, `callerReward`,
+ * `wethDustToTreasury`). Throws — with the last observed phase — if the keeper
+ * never graduates (pre-F-1-fix, a large donation would brick it here: the keeper
+ * hits its persistent-revert cooldown and the curve stays `ReadyToGraduate`).
+ */
+export async function waitForKeeperGraduation(
+  curve: Address,
+  token: Address,
+  opts: { timeoutMs?: number } = {},
+): Promise<GraduatedLog> {
+  const timeoutMs = opts.timeoutMs ?? 90_000;
+  const deadline = Date.now() + timeoutMs;
+  let phase: CurvePhase = "unknown";
+  while (Date.now() < deadline) {
+    phase = await readCurvePhase(curve);
+    if (phase === "graduated") {
+      const ev = await readGraduatedEvent(token);
+      if (ev) return ev;
+    }
+    await new Promise((r) => setTimeout(r, 1_000));
+  }
+  throw new Error(
+    `[e2e] compose keeper did not graduate ${curve} within ${timeoutMs}ms (last phase=${phase}). ` +
+      `Check the keeper container (/healthz) + its GraduationReady watch; a persistent revert ` +
+      `here is the F-1 donation-brick signature.`,
+  );
 }

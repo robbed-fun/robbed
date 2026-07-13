@@ -49,7 +49,8 @@ A flow **not listed here** is asserted at all three layers.
 
 ## Notes
 
-- Flows **not** in this table (`DISC-1`, `DISC-2`, `DISC-3`, `TD-1`, `TD-2`, `TD-3`, `TD-3b`, `TD-4`, `TD-5`, `TD-6`, `TD-9`, `TD-10`, `LAUNCH-1`, `LAUNCH-2`, `ERR-4`, `ERR-5`, `ERR-7`, `ERR-14`) assert all three layers and need no waiver. (`TD-7` → UI-only and `ERR-6b` → on-chain · indexed moved INTO the table with the §12.57 SafetyStrip removal; `ERR-13` was RETIRED — all FLAGGED for architect ratification.)
+- Flows **not** in this table (`DISC-1`, `DISC-2`, `DISC-3`, `TD-1`, `TD-2`, `TD-3`, `TD-3b`, `TD-4`, `TD-5`, `TD-6`, `TD-6b`, `TD-9`, `TD-10`, `LAUNCH-1`, `LAUNCH-2`, `GRAD-AUTO`, `ERR-4`, `ERR-5`, `ERR-7`, `ERR-14`) assert all three layers and need no waiver. (`TD-7` → UI-only and `ERR-6b` → on-chain · indexed moved INTO the table with the §12.57 SafetyStrip removal; `ERR-13` was RETIRED — all FLAGGED for architect ratification.)
+- `TD-6b` (graduation survives a large curve donation — F-1 regression) and `GRAD-AUTO` (compose-keeper auto-graduation) are deliberately **full three-layer** (authored 2026-07-13): each asserts a real on-chain `Graduated`, an indexed `status=graduated` + pool, and the token-detail V3 venue. Keeper-driven, so neither calls `graduate()`; the transient ReadyToGraduate interstitial UI stays owned by `ERR-7` (which never graduates).
 - `ERR-5` (sells-open-while-treasury-reverts, §12.25) is deliberately a **full three-layer** flow: the sell must **succeed** and be **indexed** even when the treasury sink would revert, because the curve fee is a pull-payment accrual — proving that at the indexed layer is the point of the invariant.
 - `ERR-4` (sells-open-while-buys-paused) is likewise full three-layer: the sell produces a real indexed Trade while the buy path is disabled.
 - The `e2e:coverage` script (I-5a) must read this file and count a flow as covered when its tagged test asserts exactly its declared (non-N/A) layers.

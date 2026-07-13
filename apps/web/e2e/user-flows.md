@@ -98,6 +98,13 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 - **Steps:** (1) Threshold crossed → status pill flips to "Graduating…" (see ERR-7). (2) `graduate()` executes → WS `graduated` on `token:{address}:events`. (3) Status flips to "Graduated → Uniswap V3", chart annotation appears, widget re-engines to V3 (TD-4/TD-5) — all WS-driven, no reload. _(§12.57: the SafetyStrip/Trust post-grad rows were removed with the strip; the venue switch on the widget is the asserted surface.)_
 - **assertable-layers:** on-chain · indexed · UI.
 
+### `@flow:TD-6b` — Graduation succeeds despite a large curve donation (F-1 regression) · tx type `graduate()`
+> _**AUTHORED 2026-07-13 (contract HIGH-severity fix regression):** the UI/integration analog of the Foundry `MigratorDonationFreeze` regression. A curve donation ABOVE ~1% of `GRADUATION_ETH` (≈0.079 ETH on the M0 fixture) pushed the V3Migrator's WETH-min floor to the donation-inflated `wethForMint`, so `NPM.mint` reverted "Price slippage check", `graduate()` reverted, and the curve FROZE in `ReadyToGraduate` (§12.12). The fix anchors `wethMin` to `min(wethForMint, W*)` where `W* = GRADUATION_ETH − CALLER_REWARD − GRADUATION_FEE`; the donated ETH has no paired token and surfaces as WETH dust to the treasury. Graduation is KEEPER-DRIVEN (uniform with GRAD-AUTO): the flow never calls graduate() — the compose keeper can only reach `Graduated` if the fix holds (pre-fix it hits its persistent-revert / donation-brick cooldown and the flow times out). Full three-layer; no waiver. `AUTHORED-BY: robbed-e2e  DATE: 2026-07-13`._
+- **Actors:** Trader (funds the curve); the compose keeper (permissionlessly fires `graduate()`); Visitor observes.
+- **Preconditions:** a token on the curve; the deployed `V3Migrator` carries the F-1 fix; the compose keeper is running (auto-graduates `ReadyToGraduate` curves).
+- **Steps:** (1) Donate ETH to the CURVE address ABOVE the freeze threshold (≥0.2 ETH — well over ~1% of `GRADUATION_ETH`) via a raw value send (the curve's ungated `receive()`). (2) Buy the curve to `GRADUATION_ETH` → `ReadyToGraduate`. (3) The keeper fires `graduate()` and it SUCCEEDS despite the donation. (4) The donation surfaces as WETH dust to the treasury (`Graduated.wethDustToTreasury > 0`); the curve retains only its unswept fee escrow (`balance == accruedFees + accruedCreatorFees` — the donation did NOT strand); the LP-position NFT is owned by `LPFeeVault`. (5) The indexer flips `status=graduated` with the V3 pool set; token detail renders the graduated badge + the V3 venue.
+- **assertable-layers:** on-chain · indexed · UI.
+
 ### `@flow:TD-7` — Token detail: the surviving LP-destiny must-render floor (§12.14)
 > _**RE-SCOPED 2026-07-13 (USER-DIRECTED §12.57 SafetyStrip REMOVAL) — FLAGGED FOR ARCHITECT RATIFICATION (`FLAGGED-BY: robbed-e2e  DATE: 2026-07-13` · `RATIFICATION-PENDING: robbed-architect`):** the token-detail `SafetyStrip` block is DELETED — live curve reserves, graduation progress, ownerless / fixed-supply / metadata-hash ticks and the fee row are all GONE from `/t/[address]`. The ONLY survivor is the §12.14 hard-rule LP sentence, now a muted footnote inside `TokenInfo` (verbatim, via the shared `LP_DESTINY_COPY` re-export of `LP_COPY`, verified in `views/token-detail/ui/TokenInfo.tsx`). With the live-read surface gone there is no on-chain leg and no indexed leg left ON THIS PAGE — the LP line is a fixed shared constant, not a chain read and not an indexed record — so TD-7 re-scopes to a **UI-ONLY** assertion of the surviving LP floor. **LAYER CHANGE: on-chain · indexed · UI → UI** (on-chain + indexed waived; see waivers). Graduation-progress render is NOT lost to the suite: the compact `GraduationProgress` is exercised on the Discover carousel + token cards (DISC / TD-13 surfaces). Mirrors the TD-13 flagging pattern; awaiting robbed-architect §12.57 amendment — NOT self-ratified._
 - **Actors:** Visitor.
@@ -115,7 +122,7 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 
 ### `@flow:TD-9` — Live trade feed: tier upgrades (soft-confirmed chip removed)
 > _**AMENDED 2026-07-12 (USER-DIRECTED §12.56):** the visible "Soft-confirmed" chip + its L2-finality tooltip are REMOVED from the feed. The tier MACHINERY is unchanged (reconcile + §12.20 watermark); only posted-to-L1 / finalized SURFACE. Layers (on-chain · indexed · UI) unchanged._
-> _`AMENDED-BY: robbed-frontend  DATE: 2026-07-12` · `RATIFIED-BY: robbed-architect  DATE: 2026-07-12` — verified against the SHIPPED `entities/trade/ui/ConfirmationBadge.tsx`: the soft-confirmed display states (`optimistic:soft-confirmed`, `indexed:soft-confirmed`) return `null` (no chip/tooltip); `posted-to-l1` (blue) and `finalized` (green) still render with their single-sequencer-dependency tooltips; the never-final-while-soft rule holds trivially (no chip until an indexed higher tier). The §12.56-KEPT machinery — reconcile/txHash-reconciliation + the §12.20 `global:confirmations` watermark + posted/finalized surfacing (incl. §12.47 large-value escalation) — is untouched; only tier-(1)'s VISIBLE badge is dropped. Matches the §12.56 scope-(a) narrow ruling. RATIFIED. (Adjacent, out of THIS row's scope: §12.56 also covers §5.3 launch labeling — the `LAUNCH-1` stepper "Soft-confirmed" stage should be re-checked when that row is routed.)_
+> _`AMENDED-BY: robbed-frontend  DATE: 2026-07-12` · `RATIFIED-BY: robbed-architect  DATE: 2026-07-12` — verified against the SHIPPED `entities/trade/ui/ConfirmationBadge.tsx`: the soft-confirmed display states (`optimistic:soft-confirmed`, `indexed:soft-confirmed`) return `null` (no chip/tooltip); `posted-to-l1` (blue) and `finalized` (green) still render with their single-sequencer-dependency tooltips; the never-final-while-soft rule holds trivially (no chip until an indexed higher tier). The §12.56-KEPT machinery — reconcile/txHash-reconciliation + the §12.20 `global:confirmations` watermark + posted/finalized surfacing (incl. §12.47 large-value escalation) — is untouched; only tier-(1)'s VISIBLE badge is dropped. Matches the §12.56 scope-(a) narrow ruling. RATIFIED. (Adjacent: §12.56 also covers §5.3 launch labeling — the `LAUNCH-1` stepper's receipt-success node was re-labeled "Soft-confirmed" → **"Tradeable"** (`launchStepLabel`, `features/launch-token/model/steps.ts`). **RESOLVED 2026-07-13 (robbed-e2e):** the LAUNCH-1 e2e spec + row now assert the "Tradeable" stepper node (+ the redirect), not the dropped "Soft-confirmed" label; layers unchanged.)_
 - **Actors:** Visitor.
 - **Preconditions:** `GET /v1/tokens/:address/trades` (server-sorted `Paginated<TradeRow>`); WS `token:{address}:trades`; `global:confirmations` watermark.
 - **Steps:** (1) Initial feed loads (common DataTable). (2) WS `trade` prepends into the live head; the user's own optimistic trades merge in (§4). (3) A fresh (soft-confirmed) row shows **no** settlement chip; `ConfirmationBadge` surfaces only **posted to L1 → finalized** as the watermark advances; a row is **never** shown as unqualified-final.
@@ -159,7 +166,7 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 ### `@flow:LAUNCH-1` — Create token, no initial buy  ·  tx type `createToken`
 - **Actors:** Creator (wallet connected).
 - **Preconditions:** `pauseCreates` false (live Router read); form valid per shared zod (name ≤32 B, ticker ≤10 B, description ≤500, image ≤4 MB).
-- **Steps:** (1) Fill form; image uploaded eagerly via `POST /v1/uploads/image` (API MIME-sniffs + re-encodes; no browser presign, §12.19). (2) `POST /v1/metadata` → `{metadataHash, metadataUri, canonicalJson}`. (3) **Client re-verifies** its own `canonicalizeMetadata`+`keccak256` equals the API hash **before signing** (§12.19 normative). (4) Single `Router.createToken{value: deployFee}` — `deployFee` read live from factory config, never a constant; `minTokensOut = 0`. (5) LaunchProgress stepper: Uploading ✓ → Metadata pinned ✓ → Tx sent → **Soft-confirmed** → redirect `/t/[address]` (address from receipt logs or WS `launch`, whichever first). Tradeable <1s soft-confirmed.
+- **Steps:** (1) Fill form; image uploaded eagerly via `POST /v1/uploads/image` (API MIME-sniffs + re-encodes; no browser presign, §12.19). (2) `POST /v1/metadata` → `{metadataHash, metadataUri, canonicalJson}`. (3) **Client re-verifies** its own `canonicalizeMetadata`+`keccak256` equals the API hash **before signing** (§12.19 normative). (4) Single `Router.createToken{value: deployFee}` — `deployFee` read live from factory config, never a constant; `minTokensOut = 0`. (5) LaunchProgress stepper: Uploading ✓ → Metadata pinned ✓ → Tx sent → **Tradeable** → redirect `/t/[address]` (address from receipt logs or WS `launch`, whichever first). Tradeable <1s. _(§12.56: the receipt-success node's visible "Soft-confirmed" label was DROPPED — `launchStepLabel("soft-confirmed")` now reads "Tradeable" (`features/launch-token/model/steps.ts`); the internal step name is unchanged and the shared `ConfirmationBadge` stays absent for the soft-confirmed tier. The e2e asserts the "Tradeable" node + the redirect.)_
 - **assertable-layers:** on-chain · indexed · UI.
 
 ### `@flow:LAUNCH-2` — Create token with atomic initial creator buy  ·  tx type `createToken` (+ initial buy)
@@ -239,6 +246,17 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 - **Preconditions:** graduated token with accrued V3 LP fees; `LPFeeVault.collect(tokenId)` (no owner, no withdraw, sole external fn).
 - **Steps:** (1) `collect(tokenId)` called. (2) Fees route to the Gnosis Safe treasury; LP principal stays permanently locked. **No v1 UI surface** triggers this (treasury-facing; the §12.50 Portfolio page is read-only and exposes no collect surface).
 - **assertable-layers:** on-chain · indexed. _(UI = N/A in v1 — no page surface; see waivers.)_
+
+---
+
+## 4a. Automated graduation — the compose keeper (`apps/keeper`)
+
+### `@flow:GRAD-AUTO` — Compose keeper auto-fires `graduate()` on a ReadyToGraduate curve · tx type `graduate()` (keeper-driven)
+> _**AUTHORED 2026-07-13 (new `apps/keeper` service):** the `apps/keeper` Bun service auto-fires the permissionless `graduate()` on `ReadyToGraduate` curves (detects the on-chain `GraduationReady` event over WS, with a DB-poll fallback; dev signer = anvil account #4 `0x15d3…6A65`, chosen OUTSIDE e2e roles 0–3 so it never contends for nonces). This flow proves the end-to-end keeper path: a UI threshold-crossing buy LOCKS the curve and the KEEPER — not the test — graduates it and earns the §12.34 caller reward. Complements TD-6 (which drives graduate() from the harness). The transient ReadyToGraduate interstitial is asserted at the on-chain layer (phase leaves Trading); the keeper races to clear it by design, so the deterministic graduating-interstitial UI stays owned by ERR-7 (which never graduates). Full three-layer; no waiver. `AUTHORED-BY: robbed-e2e  DATE: 2026-07-13`._
+- **Actors:** Trader (sends the threshold-crossing buy through the UI); the compose keeper (permissionlessly fires `graduate()`); Visitor observes the venue switch.
+- **Preconditions:** a token on the curve bought to just under `GRADUATION_ETH`; the compose keeper running (`/healthz` ok; `GraduationReady` WS watch + DB sweep).
+- **Steps:** (1) The final threshold-crossing buy is sent through the trade widget (mock connector, real tx). (2) The curve LOCKS — on-chain `phase()` leaves `Trading` (`ReadyToGraduate`). (3) The keeper fires `graduate()` within ~1–2 blocks (WS reaction) or its DB-poll fallback interval — **the test never calls graduate()**. (4) On-chain: the `Graduated` event's `caller` is the keeper (anvil #4) and it earned `CALLER_REWARD` (balance delta ≥ reward − gas); the LP NFT is owned by `LPFeeVault`; the curve balance drains to its unswept fee escrow. (5) The indexer flips `status=graduated` + pool set; the widget re-engines to the V3 venue live (WS `graduated`, no reload — the TD-4/TD-5 surface).
+- **assertable-layers:** on-chain · indexed · UI.
 
 ---
 
@@ -349,6 +367,7 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 | Spec bullet | Flow ID(s) |
 |---|---|
 | Live candles 1s→1h, venue-continuous across graduation | TD-1 (continuity also asserted in TD-6) |
+| Graduation venue switch — happy path / donation-resilient (F-1) / keeper-driven | TD-6 / TD-6b / GRAD-AUTO |
 | Buy/Sell widget: curve pre-grad, V3 post-grad invisible switch; slippage 2% + deadline | TD-2, TD-3, TD-3b, TD-4, TD-5 |
 | Token detail: surviving LP-destiny must-render floor (§12.14, verbatim in `TokenInfo`; SafetyStrip removed §12.57) | TD-7 |
 | Advisory §8.5 flags on the Top Holders table (organic range/flow-quality blocks dropped → internal §12.54) | TD-8 |
@@ -388,7 +407,7 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 | `buy` | TD-2 |
 | `sell` | TD-3 |
 | `sellWithPermit` | TD-3b |
-| `graduate()` | TD-6 |
+| `graduate()` | TD-6, TD-6b (donation-resilient, F-1 regression), GRAD-AUTO (compose-keeper-driven) |
 | post-grad V3 buy | TD-4 |
 | post-grad V3 sell | TD-5 |
 | `collect(tokenId)` | COLLECT-1 |
@@ -417,12 +436,13 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 ## 7. Flow inventory
 
 - Discover: DISC-1..4 (4)
-- Token Detail: TD-1, TD-2, TD-3, TD-3b, TD-4, TD-5, TD-6, TD-7, TD-8, TD-9, TD-10, TD-11, TD-12, TD-13 (14)
+- Token Detail: TD-1, TD-2, TD-3, TD-3b, TD-4, TD-5, TD-6, TD-6b, TD-7, TD-8, TD-9, TD-10, TD-11, TD-12, TD-13 (15)
 - Launch: LAUNCH-1, LAUNCH-2, LAUNCH-3 (3)
 - Portfolio (addendum §3b, 2026-07-11 — ratified): PORT-1..8 (8)
 - Transaction-only: COLLECT-1 (1)
+- Automated graduation (compose keeper, §4a): GRAD-AUTO (1)
 - Errors/edges: ERR-1..ERR-14 with ERR-6 split a/b, ERR-13 RETIRED (§12.57) → 14 active flows
-- **Total: 44 active flows** (the prior 45-flow catalog — 36 ratified M3-11 + 8 `PORT-*` addendum + TD-13 — minus the retired `ERR-13`; the `e2e:coverage` gate reports 44/44). The retirement + the `TD-7`/`ERR-6b` layer changes are **FLAGGED for robbed-architect ratification** alongside the §12.57 amendment; once ratified this is the I-5a `e2e:coverage` baseline.
+- **Total: 46 active flows** (the prior 44-flow baseline + `TD-6b` (F-1 donation-freeze regression) + `GRAD-AUTO` (compose-keeper auto-graduation), both authored 2026-07-13 and both full three-layer — no waiver; the `e2e:coverage` gate reports 46/46). The §12.57 retirement + the `TD-7`/`ERR-6b` layer changes remain **FLAGGED for robbed-architect ratification** alongside the §12.57 amendment.
 
 See `user-flows-waivers.md` for every flow declaring fewer than three assertable layers.
 
