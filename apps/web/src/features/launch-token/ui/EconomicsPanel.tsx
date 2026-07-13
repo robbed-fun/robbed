@@ -68,10 +68,21 @@ export function EconomicsPanel({ ticker }: { ticker?: string }) {
         <Row label="Supply">{supply}</Row>
         <Row label="Trade fee">{tradeFee}</Row>
         {split?.hasCreatorShare && (
-          <Row label="You earn">{split.creatorPct} as the creator</Row>
+          <Row label="You earn">
+            {`${split.creatorPct} of every trade — before & after graduation`}
+          </Row>
         )}
         <Row label="Graduation">{ethValue(econ.graduationEthWei)}</Row>
       </dl>
+      {/* Creator-fee disclosure (§12.68 pre-grad + §12.69 post-grad): the creator
+          rate is VENUE-INVARIANT — the same live-read % on the bonding curve and,
+          after graduation, on Uniswap V3 (the 50/50 LP-fee split). Read live from
+          the factory config, never an inlined knob (§2, §12.68). */}
+      {split?.hasCreatorShare && (
+        <MonoText tone="faint" size="xs" className="pt-3 leading-relaxed">
+          {`You keep ${split.creatorPct} of trading volume for the life of the token — on the bonding curve now, and on Uniswap after it graduates.`}
+        </MonoText>
+      )}
       {/* The exact, single-sourced LP sentence — verbatim (§12.14). */}
       <MonoText tone="faint" size="xs" className="pt-3 leading-relaxed">
         {LP_DESTINY_COPY}

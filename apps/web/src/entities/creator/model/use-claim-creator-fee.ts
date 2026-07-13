@@ -101,7 +101,8 @@ export function useClaimCreatorFee(meta: ClaimCreatorFeeTxMeta): {
   return { claim, reset, state: { ...state, confirmationState } };
 }
 
-function humanizeClaimError(e: unknown): string {
+/** Shared with the post-grad `claimERC20` model (`use-claim-creator-token-fee`). */
+export function humanizeClaimError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
   if (/user rejected|denied|rejected the request/i.test(msg)) {
     return "Claim rejected in wallet.";

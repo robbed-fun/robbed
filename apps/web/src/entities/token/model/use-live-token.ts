@@ -2,13 +2,17 @@
 
 import { type TokenDetail, tokenEvents, tokenTrades } from "@robbed/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { getToken } from "@/shared/api";
 import { qk } from "@/shared/lib/query-keys";
 import { useWsChannel } from "@/shared/lib/ws";
 
-import { applyGraduated, tradeImpliesGraduation } from "./live";
+import {
+  applyGraduated,
+  tradeImpliesGraduation,
+  tradeMovesBondingProgress,
+} from "./live";
 
 /**
  * LIVE TokenDetail (TD-6; §5.2/§12.12/§2.1). The SSR token summary is a
@@ -26,6 +30,9 @@ import { applyGraduated, tradeImpliesGraduation } from "./live";
  *   verdict input).
  * - `token:{addr}:trades` carrying `venue: "v3"` while we still render a curve
  *   venue implies graduation (event raced/dropped) → reconcile to indexed truth.
+ * - A NORMAL curve `trade` on that channel moves `real_eth_reserves`, so the
+ *   bonding cell's `graduation.progressPct` + raised-ETH (`reserves.realEth`) go
+ *   stale until refetch → throttled invalidate (≥5s) re-serves indexed truth.
  * - WS reconnect / seq-gap: the WsClient invalidates the whole `token` family
  *   (LIVE_QUERY_PREFIXES) → this active query refetches → the status flip is
  *   never lost across a disconnect (proven by tests/ws-reconnect.test.ts).
@@ -66,11 +73,29 @@ export function useLiveTokenDetail(initial: TokenDetail): TokenDetail {
     }
   });
 
+  // Bonding-progress freshness: a normal buy/sell has no other trigger to
+  // refresh the SSR-seeded `qk.token` query, so `progressPct` + raised-ETH would
+  // sit stale between graduations. `invalidateQueries` refetches an active query
+  // immediately, overriding `staleTime` (TanStack Query v5 — query-invalidation
+  // docs, re-verified 2026-07-13), so an un-throttled invalidate per trade is a
+  // refetch storm on a hot token. Throttle to ≥5s (matches `staleTime`), the
+  // exact pattern the sibling HolderTable trade handler uses (DECISION recorded).
+  const lastProgressRefetch = useRef(0);
   useWsChannel(tokenTrades(address), (msg) => {
     const current = queryClient.getQueryData<TokenDetail>(queryKey);
+    // Venue reconciliation (a v3 trade before the `graduated` event) — critical,
+    // never throttled: reconcile to indexed truth the instant it's implied.
     if (tradeImpliesGraduation(current, msg)) {
       void queryClient.invalidateQueries({ queryKey });
+      return;
     }
+    // Graduation is monotonic: once latched (`gradPool`) the venue is retired and
+    // the bonding cell is terminal — never refetch-regress it (§12.12/§2.1).
+    if (gradPool !== null || !tradeMovesBondingProgress(current, msg)) return;
+    const now = Date.now();
+    if (now - lastProgressRefetch.current < 5_000) return;
+    lastProgressRefetch.current = now;
+    void queryClient.invalidateQueries({ queryKey });
   });
 
   const data = query.data ?? initial;

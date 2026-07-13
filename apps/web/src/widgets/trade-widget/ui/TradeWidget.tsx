@@ -13,6 +13,7 @@ import {
   V3_FEE_TIER,
   applySlippageFloor,
   clampSlippageBps,
+  formatBpsPercent,
   isInEarlyWindow,
   isGraduatingLock,
   priceImpactPct,
@@ -183,6 +184,7 @@ function CurveVenue({
         <InfoRows
           side={side}
           feeLabel={feeLabelFromBps(reads.tradeFeeBps)}
+          creatorFeeBps={reads.creatorFeeBps}
           minOut={minOut}
           impact={impact}
           refund={quote?.refund}
@@ -381,6 +383,7 @@ function ReceiveBox({
 function InfoRows({
   side,
   feeLabel,
+  creatorFeeBps,
   minOut,
   impact,
   refund,
@@ -389,6 +392,9 @@ function InfoRows({
 }: {
   side: TradeSide;
   feeLabel: string;
+  /** Live curve creator-fee bps (§12.68/§12.69) — a faint venue-invariant note
+   *  appears under the Fee row when > 0. Omitted (undefined) on the V3 path. */
+  creatorFeeBps?: number | null;
   minOut: bigint | null;
   impact: number | null;
   refund?: bigint;
@@ -408,6 +414,16 @@ function InfoRows({
       <Row label="Fee">
         <span className="tabular-nums">{feeLabel}</span>
       </Row>
+      {/* Creator-fee disclosure (§12.68/§12.69): the creator earns this live-read
+          % of every trade, VENUE-INVARIANT — the same rate on the curve and, after
+          graduation, on Uniswap V3 (the 50/50 LP-fee split). Read from the curve,
+          never an inlined knob (§2). */}
+      {creatorFeeBps != null && creatorFeeBps > 0 && (
+        <p className="text-2xs leading-relaxed text-faint">
+          incl. {formatBpsPercent(creatorFeeBps)} to the creator — before &amp; after
+          graduation
+        </p>
+      )}
       {/* Review fix (2026-07-11): the merged label+chips+value+deadline row
           overflowed the 320px rail. The mockup's three-row read is preserved —
           "Max slippage" stays a label→value row (value + §5.2 deadline

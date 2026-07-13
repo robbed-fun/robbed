@@ -99,9 +99,12 @@ export function TokenHeader({
 }
 
 /**
- * BONDING stat cell — the mockup's mini progress track + percent (or a
- * "Graduated" verdict post-grad). `progressPct` is the indexer value, clamped for
- * bar geometry only.
+ * BONDING stat cell — the mockup's mini progress track + percent, plus the
+ * raised-vs-target ETH the percent derives from (or a "Graduated" verdict
+ * post-grad). All three values are indexer/on-chain SUPPLIED (§2): `progressPct`
+ * (clamped for bar geometry only), raised ETH = `reserves.realEth`, and the
+ * PER-TOKEN target = `graduation.thresholdEth` — read from the payload, never
+ * hardcoded (the threshold varies per token and is not a constant, §2).
  */
 function BondingCell({ token }: { token: TokenDetail }) {
   const graduated = token.graduated || token.status === "graduated";
@@ -115,14 +118,23 @@ function BondingCell({ token }: { token: TokenDetail }) {
           Graduated
         </MonoText>
       ) : (
-        <div className="flex items-center justify-end gap-2">
-          <span className="h-1 w-14 bg-active" aria-hidden>
-            <span className="block h-1 bg-green" style={{ width: `${pct}%` }} />
-          </span>
-          <MonoText numeric size="sm">
-            {pct.toFixed(0)}%
+        <>
+          <div className="flex items-center justify-end gap-2">
+            <span className="h-1 w-14 bg-active" aria-hidden>
+              <span className="block h-1 bg-green" style={{ width: `${pct}%` }} />
+            </span>
+            <MonoText numeric size="sm">
+              {pct.toFixed(0)}%
+            </MonoText>
+          </div>
+          {/* Raised / target ETH — the two figures progressPct is computed from,
+              same "X / Y ETH" convention as the Trust panel's GraduationProgress. */}
+          <MonoText tone="faint" size="xs" numeric>
+            <EthAmount wei={token.reserves.realEth} unit={null} />
+            {" / "}
+            <EthAmount wei={token.graduation.thresholdEth} />
           </MonoText>
-        </div>
+        </>
       )}
     </div>
   );

@@ -23,7 +23,12 @@ export function CreatedTab({ address, isSelf = false }: { address: string; isSel
   const tokens = data?.pages.flatMap((p) => p.tokens) ?? [];
 
   // Own-earnings claim widget above the grid (self-/vault-gated inside the widget).
-  const earnings = <CreatorEarningsPanel address={address} isSelf={isSelf} />;
+  // `createdTokens` feeds the post-grad §12.69 buckets: the graduated ones seed the
+  // on-chain `tokenBalanceOf` fallback + the live `:events` WS subscriptions, and the
+  // whole list is the ticker/avatar registry for bucket rows.
+  const earnings = (
+    <CreatorEarningsPanel address={address} isSelf={isSelf} createdTokens={tokens} />
+  );
 
   if (isLoading) {
     return (

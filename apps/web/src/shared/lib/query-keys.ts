@@ -41,9 +41,19 @@ export const qk = {
   confirmations: () => ["confirmations"] as const,
   ethUsd: () => ["eth-usd"] as const,
   stats: () => ["stats"] as const,
-  /** Creator-fee claimable roll-up (§7/§12.63) — per creator address. */
+  /** Creator-fee claimable roll-up (§7/§12.63) — per creator address (pre-grad ETH leg). */
   creatorClaimable: (address: string) =>
     ["creator-claimable", address.toLowerCase()] as const,
+  /**
+   * Post-grad creator LP-fee per-`(creator, ERC20)` claimable rows (§12.69) —
+   * served by the indexer `token-claimable` endpoint. Invalidated live by the
+   * `creator_fee_split` / `creator_fee_claimed` WS types.
+   */
+  creatorTokenClaimable: (address: string) =>
+    ["creator-token-claimable", address.toLowerCase()] as const,
+  /** Post-grad creator claimable read live from `CreatorVault.tokenBalanceOf` (§12.69 fallback). */
+  creatorTokenClaimableChain: (address: string) =>
+    ["creator-token-claimable-chain", address.toLowerCase()] as const,
   /** Per-token comments (§12.63b) — bare key = WS-live newest-first list. */
   comments: (address: string) => ["comments", address.toLowerCase()] as const,
 } as const;
