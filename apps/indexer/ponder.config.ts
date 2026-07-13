@@ -15,6 +15,13 @@
  * for child contracts; `event.log.address` in the handler identifies the
  * emitting child (used for the curve→token and pool→token joins).
  *
+ * Creator-fee leg (§12.63, ADDITIVE): `CreatorFeesSwept` folds into the EXISTING
+ * BondingCurve source (ABI merge below), and — ONLY when the optional
+ * `config.creatorVault` resolves (absent on v1 deployments) — a NEW `CreatorVault`
+ * single source is registered for `CreatorFeeDeposited` / `CreatorFeeClaimed`. On
+ * a treasury-only deployment the vault source is simply omitted, so the indexer
+ * runs unchanged (graceful skip — mirrors the §12.55 optional-config gate).
+ *
  * Static startup assertions (WETH, chain 4663, non-zero V3 addrs) run HERE at
  * config load — if they throw, Ponder never starts (fail-closed, indexer.md
  * §2/§11). Curve constants are no longer a startup concern: they are read
@@ -24,7 +31,9 @@
  */
 import { createConfig, factory } from "ponder";
 import {
+  bondingCurveCreatorEventsAbi,
   bondingCurveEventsAbi,
+  creatorVaultEventsAbi,
   curveFactoryEventsAbi,
   graduatedEvent,
   launchTokenEventsAbi,
@@ -38,6 +47,20 @@ import { assertStaticConfig } from "./src/assertions";
 
 const config = loadConfig();
 assertStaticConfig(config);
+
+// CreatorVault (§12.63) — single source at the deployment vault; registered ONLY
+// when the optional address resolves. Spread into `contracts` so an absent vault
+// leaves the source (and its handlers, guarded identically) unregistered.
+const creatorVaultContract = config.creatorVault
+  ? {
+      CreatorVault: {
+        abi: creatorVaultEventsAbi,
+        chain: "robinhood" as const,
+        address: config.creatorVault as `0x${string}`,
+        startBlock: config.startBlock,
+      },
+    }
+  : {};
 
 export default createConfig({
   chains: {
@@ -56,9 +79,11 @@ export default createConfig({
       address: config.curveFactory as `0x${string}`,
       startBlock: config.startBlock,
     },
-    // Trade — one BondingCurve per token, discovered via TokenCreated.curve.
+    // Trade (+ CreatorFeesSwept §12.63) — one BondingCurve per token, discovered
+    // via TokenCreated.curve. ABI merges the ratified Trade slice with the additive
+    // creator-leg event (the shared groupings stay separate; merged only here).
     BondingCurve: {
-      abi: bondingCurveEventsAbi,
+      abi: [...bondingCurveEventsAbi, ...bondingCurveCreatorEventsAbi],
       chain: "robinhood",
       address: factory({
         address: config.curveFactory as `0x${string}`,
@@ -103,5 +128,7 @@ export default createConfig({
       address: config.v3PositionManager as `0x${string}`,
       startBlock: config.startBlock,
     },
+    // CreatorVault (§12.63) — present only on creator-fee deployments (see above).
+    ...creatorVaultContract,
   },
 });

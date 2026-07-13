@@ -24,6 +24,7 @@ const TOUCHED = [
   "INDEXER_RPC_WS",
   "CURVE_FACTORY_ADDRESS",
   "MIGRATOR_ADDRESS",
+  "CREATOR_VAULT_ADDRESS",
   "V3_FACTORY_ADDRESS",
   "V3_NPM_ADDRESS",
   "START_BLOCK",
@@ -77,6 +78,27 @@ describe("loadConfig — no curve-constant env vars (§12.40d)", () => {
   it("ignores curve-constant env vars even when present (no longer read)", () => {
     process.env.CURVE_SUPPLY_WEI = "0"; // would have been rejected by the old interim
     expect(() => assertStaticConfig(loadConfig())).not.toThrow();
+  });
+});
+
+describe("loadConfig — optional creatorVault (§12.63 additive, graceful skip)", () => {
+  it("is undefined when neither env nor the registry provides it (v1 deployment)", () => {
+    delete process.env.CREATOR_VAULT_ADDRESS;
+    // The 4663 registry entry carries no creatorVault → the vault source is not
+    // registered and the indexer runs treasury-only (no crash).
+    expect(loadConfig().creatorVault).toBeUndefined();
+  });
+
+  it("resolves the env override when set (creator-fee deployment)", () => {
+    process.env.CREATOR_VAULT_ADDRESS = "0x" + "77".repeat(20);
+    expect(loadConfig().creatorVault).toBe("0x" + "77".repeat(20));
+  });
+
+  it("rejects a zero / malformed CREATOR_VAULT_ADDRESS (fail-closed when present)", () => {
+    process.env.CREATOR_VAULT_ADDRESS = "0x0000000000000000000000000000000000000000";
+    expect(() => loadConfig()).toThrow(/must be non-zero/);
+    process.env.CREATOR_VAULT_ADDRESS = "not-an-address";
+    expect(() => loadConfig()).toThrow(/not a 20-byte address/);
   });
 });
 

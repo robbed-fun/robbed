@@ -15,6 +15,7 @@ function validConfig(): IndexerConfig {
     curveFactory: "0x" + "11".repeat(20),
     router: undefined,
     migrator: "0x" + "22".repeat(20),
+    creatorVault: undefined, // §12.63 optional — absent on v1 deployments
     v3Factory: "0x" + "33".repeat(20),
     v3PositionManager: "0x" + "44".repeat(20),
     swapRouter02: "0x" + "55".repeat(20),

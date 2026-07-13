@@ -13,7 +13,7 @@
 #     `pnpm deploy --legacy --prod` produces a self-contained folder with a REAL
 #     (non-symlinked) node_modules — the reliable way to move a filtered workspace
 #     package into a slim runtime stage without pnpm's virtual-store symlinks.
-#   - Node 22 base per deploy-komodo-cloudflare.md A.5.
+#   - Node 22 base per prod-images.md.
 #
 # Multi-stage: base (pnpm) → build (install + codegen + deploy bundle) → runtime.
 

@@ -40,7 +40,8 @@ export type CurveImmutableFn =
   | "CURVE_SUPPLY"
   | "LP_TOKEN_TRANCHE"
   | "GRADUATION_ETH"
-  | "TRADE_FEE_BPS";
+  | "TRADE_FEE_BPS"
+  | "CREATOR_FEE_BPS";
 
 /**
  * Minimal shape of the viem-style client the reader needs (Ponder's
@@ -69,6 +70,12 @@ export interface CurveImmutables {
   graduationEth: bigint;
   /** Per-token trade fee (bps) → `tokens.trade_fee_bps` (§12.40d Trust source). */
   tradeFeeBps: number;
+  /**
+   * Per-token creator fee (bps) → `tokens.creator_fee_bps` (§7 / §12.63). Read
+   * DEFENSIVELY (0 on any failure): a v1 curve predates `CREATOR_FEE_BPS` and its
+   * `eth_call` reverts, which must NOT fail token creation — 0 is the v1 value.
+   */
+  creatorFeeBps: number;
 }
 
 /**
@@ -103,7 +110,23 @@ export async function readCurveImmutables(
     // TRADE_FEE_BPS is uint16 → viem decodes to number, but coerce defensively
     // (a bigint would violate the integer column contract).
     tradeFeeBps: Number(tradeFeeBps as number | bigint),
+    // §12.63 creator fee — read SEPARATELY with its own catch so a v1 curve that
+    // lacks `CREATOR_FEE_BPS` (revert) yields 0 rather than failing the whole
+    // read (and thus token creation). This is the only immutable that may be
+    // absent on the deployed bytecode, so it can't ride the atomic Promise.all.
+    creatorFeeBps: await readCreatorFeeBps(read),
   };
+}
+
+/** Defensive `CREATOR_FEE_BPS` read → 0 on any revert/absence (v1 curves, §12.63). */
+async function readCreatorFeeBps(
+  read: (fn: CurveImmutableFn) => Promise<unknown>,
+): Promise<number> {
+  try {
+    return Number((await read("CREATOR_FEE_BPS")) as number | bigint);
+  } catch {
+    return 0; // v1 curve predates the creator-fee leg — 0 is its correct value.
+  }
 }
 
 /**

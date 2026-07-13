@@ -10,6 +10,12 @@ export interface Redis {
   /** SET with optional TTL seconds; `nx` = only-if-absent (nonce burn). */
   set(key: string, value: string, opts?: { exSeconds?: number; nx?: boolean }): Promise<boolean>;
   del(key: string): Promise<void>;
+  /**
+   * Atomic INCR → new value. Used for the per-channel monotonic WS `seq`
+   * (`channel:seq`) when the API publishes a `comment` event, mirroring the
+   * indexer's `firePublish` (one Redis op, no DB — indexer.md §8.2).
+   */
+  incr(key: string): Promise<number>;
   publish(channel: string, message: string): Promise<void>;
   subscribe(channel: string, handler: (message: string) => void): Promise<void>;
   ping(): Promise<boolean>;
@@ -19,6 +25,7 @@ interface BunRedisClient {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, ...args: string[]): Promise<string | null>;
   del(key: string): Promise<number>;
+  incr(key: string): Promise<number>;
   publish(channel: string, message: string): Promise<number>;
   subscribe(channel: string, listener: (message: string, channel: string) => void): Promise<void>;
   send(command: string, args: string[]): Promise<unknown>;
@@ -44,6 +51,9 @@ export function createBunRedis(url: string): Redis {
     async del(key) {
       await client.del(key);
     },
+    async incr(key) {
+      return client.incr(key);
+    },
     async publish(channel, message) {
       await client.publish(channel, message);
     },
@@ -67,6 +77,7 @@ export function createFakeRedis(): Redis & {
 } {
   const kv = new Map<string, { value: string; expiresAt: number | null }>();
   const subs = new Map<string, Array<(m: string) => void>>();
+  const counters = new Map<string, number>();
   const alive = (e: { expiresAt: number | null }) =>
     e.expiresAt == null || e.expiresAt > Date.now();
   return {
@@ -86,6 +97,11 @@ export function createFakeRedis(): Redis & {
     },
     async del(key) {
       kv.delete(key);
+    },
+    async incr(key) {
+      const next = (counters.get(key) ?? 0) + 1;
+      counters.set(key, next);
+      return next;
     },
     async publish(channel, message) {
       for (const h of subs.get(channel) ?? []) h(message);

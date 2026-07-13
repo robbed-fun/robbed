@@ -55,6 +55,25 @@ function envAddressOr(name: string, registryValue: string): string {
   return v;
 }
 
+/**
+ * OPTIONAL deploy address: env override wins, else the (possibly absent)
+ * registry value, else `undefined`. Validates format only when a value is
+ * present. Used for ADDITIVE/optional contracts — the `creatorVault` (§12.63) is
+ * absent on every v1 deployment (no vault exists until a creator-fee factory is
+ * deployed), so the caller registers its Ponder source ONLY when this resolves,
+ * mirroring the §12.55 chain-identity gate's fail-graceful treatment of optional
+ * config (never crash a treasury-only deployment).
+ */
+function optAddressOr(name: string, registryValue: string | undefined): string | undefined {
+  const raw = process.env[name];
+  const chosen = raw && raw !== "" ? raw : registryValue;
+  if (!chosen) return undefined;
+  const v = chosen.toLowerCase();
+  if (!ADDRESS_RE.test(v)) throw new Error(`[indexer config] ${name} is not a 20-byte address: ${v}`);
+  if (v === ZERO_ADDRESS) throw new Error(`[indexer config] ${name} must be non-zero`);
+  return v;
+}
+
 /** Required integer env (no default — §12.55(b)). */
 function reqInt(name: string): number {
   const v = req(name);
@@ -80,6 +99,15 @@ export interface IndexerConfig {
   curveFactory: string;
   router: string | undefined;
   migrator: string;
+  /**
+   * Phase-2 pull-payment CreatorVault (spec §7 / §12.63). OPTIONAL: absent on
+   * every v1 deployment (no vault until a creator-fee factory is deployed). When
+   * present, `ponder.config.ts` registers a NEW `CreatorVault` source for
+   * `CreatorFeeDeposited` / `CreatorFeeClaimed`; when absent, that source is not
+   * registered and the vault handlers do not bind — a treasury-only deployment
+   * indexes normally (graceful skip). Registry-resolved, env-overridable; lowercased.
+   */
+  creatorVault: string | undefined;
   v3Factory: string;
   v3PositionManager: string;
   /** Chain's SwapRouter02 (registry-resolved, §12.55(c)) — own-contract whitelist (§8.5 heuristic 3). */
@@ -154,6 +182,9 @@ export function loadConfig(): IndexerConfig {
     curveFactory: envAddressOr("CURVE_FACTORY_ADDRESS", deployment.robbed.curveFactory),
     router: envAddressOr("ROUTER_ADDRESS", deployment.robbed.router),
     migrator: envAddressOr("MIGRATOR_ADDRESS", deployment.robbed.v3Migrator),
+    // §12.63 optional — undefined on v1 (no vault in the registry entry). Never
+    // crashes when absent; the CreatorVault Ponder source is registered only when set.
+    creatorVault: optAddressOr("CREATOR_VAULT_ADDRESS", deployment.robbed.creatorVault),
     redisUrl: process.env.REDIS_URL || undefined,
     databaseUrl: process.env.DATABASE_URL || undefined,
     databaseSchema: process.env.DATABASE_SCHEMA || undefined,

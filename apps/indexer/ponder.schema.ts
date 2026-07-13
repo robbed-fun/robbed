@@ -203,6 +203,31 @@ export const balances = onchainTable(
   }),
 );
 
+// ── creator_claimable (creator-fee pull-payment roll-up — spec §7 / §12.63) ──
+// Per-creator aggregate maintained by the creator-fee handlers (handlers/
+// creatorFees.ts), mirroring the shared `CreatorClaimableRow` (db-rows.ts).
+// Deliberately a REORG-TRACKED Ponder table (not an offchain rollup): the
+// aggregate is derived from creator-fee events, so Ponder's own reorg revert
+// keeps it correct — an offchain-maintained sum would silently drift on a
+// reorg. Rebuildable from events. `claimable_eth` is the event-derived MIRROR;
+// the API serves the live `CreatorVault.balanceOf(creator)` as authoritative.
+// Additive/Phase-2: stays empty on v1 deployments (creatorFeeBps ≡ 0, no vault).
+export const creatorClaimable = onchainTable(
+  "creator_claimable",
+  (t) => ({
+    creator: t.text("creator").primaryKey(),
+    vault: t.text("vault").notNull(),
+    totalAccruedEth: t.bigint("total_accrued_eth").notNull().default(0n),
+    totalClaimedEth: t.bigint("total_claimed_eth").notNull().default(0n),
+    claimableEth: t.bigint("claimable_eth").notNull().default(0n),
+    lastClaimAt: t.bigint("last_claim_at"), // unix seconds; null until first claim
+    updatedAt: t.text("updated_at").notNull(), // ISO from block timestamp (replay-stable)
+  }),
+  (table) => ({
+    vaultIdx: index().on(table.vault),
+  }),
+);
+
 // ── §3.7 candles (derived, rebuildable; six intervals) ──────────────────────
 export const candles = onchainTable(
   "candles",

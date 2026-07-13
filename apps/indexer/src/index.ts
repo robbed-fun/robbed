@@ -13,3 +13,6 @@ import "./handlers/graduated";
 import "./handlers/swap";
 import "./handlers/collect";
 import "./handlers/transfer";
+// Creator-fee leg (§12.63) — CreatorFeesSwept on the curve source; the CreatorVault
+// bindings inside self-guard on config.creatorVault (absent-vault deployments skip).
+import "./handlers/creatorFees";

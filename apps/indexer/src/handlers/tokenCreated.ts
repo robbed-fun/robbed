@@ -48,7 +48,10 @@ ponder.on("CurveFactory:TokenCreated", async ({ event, context }) => {
     address: tokenAddress,
     curveAddress,
     creator: lower(event.args.creator),
-    creatorFeeBps: 0, // §7: 0 in v1
+    // §7 / §12.63: per-token snapshot of the curve's immutable CREATOR_FEE_BPS
+    // (read defensively → 0 for v1 curves that predate the leg). Populated from
+    // day 1 so the API/UI can show the fee split with no migration.
+    creatorFeeBps: curve.creatorFeeBps,
     tradeFeeBps: curve.tradeFeeBps, // §12.40d: per-token snapshot, Trust-panel source
     name: event.args.name,
     ticker: event.args.symbol,

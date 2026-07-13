@@ -76,6 +76,14 @@ const rawSchema = z.object({
   /** Optional vault/treasury addresses → holder `vault` flag (api.md §3.4). */
   TREASURY_ADDRESS: z.string().optional(),
   LP_FEE_VAULT_ADDRESS: z.string().optional(),
+  /**
+   * Phase-2 CreatorVault (spec §7 / §12.63) — the pull-payment vault the live
+   * `balanceOf(creator)` claimable read targets, and the fallback `vault` for a
+   * creator with no `creator_claimable` row yet. OPTIONAL/additive: absent on v1
+   * deployments (no vault). When unset AND the creator has no row, the claimable
+   * endpoint 404s (no vault to read). Lowercased into `creatorVaultAddress`.
+   */
+  CREATOR_VAULT_ADDRESS: z.string().optional(),
 
   /**
    * Large-value confirmation-disclosure threshold (§2.1, decided §12.47 /
@@ -98,6 +106,8 @@ export interface Config extends RawConfig {
   largeValueEthThresholdWei: bigint;
   /** Lowercased browser origins for the public-/v1 CORS middleware (api.md §6.1). */
   corsAllowedOrigins: Set<string>;
+  /** §12.63 CreatorVault address (lowercased) or undefined on v1 deployments. */
+  creatorVaultAddress: string | undefined;
 }
 
 /** Dev/test fallback: the compose web port (4000) + bare `next dev` (3000). */
@@ -149,6 +159,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ),
     largeValueEthThresholdWei,
     corsAllowedOrigins,
+    creatorVaultAddress: raw.CREATOR_VAULT_ADDRESS?.trim().toLowerCase() || undefined,
   };
 }
 

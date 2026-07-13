@@ -41,6 +41,7 @@ describe("readCurveImmutables (§12.40d per-curve read)", () => {
       LP_TOKEN_TRANCHE: 200_000_000n * 10n ** 18n,
       GRADUATION_ETH: 85n * 10n ** 18n,
       TRADE_FEE_BPS: 100,
+      CREATOR_FEE_BPS: 50, // §12.63 creator-fee split
     });
 
     const c = await readCurveImmutables(client, CURVE);
@@ -51,6 +52,25 @@ describe("readCurveImmutables (§12.40d per-curve read)", () => {
     expect(c.lpTokenTranche).toBe(200_000_000n * 10n ** 18n);
     expect(c.graduationEth).toBe(85n * 10n ** 18n);
     expect(c.tradeFeeBps).toBe(100);
+    expect(c.creatorFeeBps).toBe(50); // §7 / §12.63 per-token creator fee snapshot
+  });
+
+  it("defaults creator_fee_bps to 0 when CREATOR_FEE_BPS reverts (v1 curve, §12.63)", async () => {
+    // A v1 curve predates the creator-fee leg — its CREATOR_FEE_BPS call reverts.
+    // The read must degrade to 0 (v1 value) WITHOUT failing token creation, so the
+    // six core immutables still map. The stub throws on the unknown function.
+    const { client } = stubClient({
+      VIRTUAL_ETH_0: 1n,
+      VIRTUAL_TOKEN_0: 1n,
+      CURVE_SUPPLY: 1n,
+      LP_TOKEN_TRANCHE: 1n,
+      GRADUATION_ETH: 1n,
+      TRADE_FEE_BPS: 100,
+      // CREATOR_FEE_BPS deliberately ABSENT → stub throws → reader returns 0.
+    });
+    const c = await readCurveImmutables(client, CURVE);
+    expect(c.creatorFeeBps).toBe(0);
+    expect(c.tradeFeeBps).toBe(100); // core immutables unaffected by the fee revert
   });
 
   it("yields a non-null NUMBER trade_fee_bps (Trust-panel source)", async () => {
@@ -106,6 +126,7 @@ const ALL_VALUES = {
   LP_TOKEN_TRANCHE: 200_000_000n * 10n ** 18n,
   GRADUATION_ETH: 85n * 10n ** 18n,
   TRADE_FEE_BPS: 100,
+  CREATOR_FEE_BPS: 50,
 } as const;
 
 /** Stub that always throws — a pruned non-archive node ("missing trie node"). */
@@ -138,7 +159,9 @@ describe("readCurveImmutablesWithFallback — pruned-state fallback at latest", 
     // Values come from the fallback and are complete (immutables: value-identical).
     expect(c.virtualEth0).toBe(ALL_VALUES.VIRTUAL_ETH_0);
     expect(c.graduationEth).toBe(ALL_VALUES.GRADUATION_ETH);
-    expect(fallback.calls.length).toBe(6);
+    expect(c.creatorFeeBps).toBe(50);
+    // 6 core immutables (Promise.all) + the defensive CREATOR_FEE_BPS read = 7.
+    expect(fallback.calls.length).toBe(7);
   });
 
   it("propagates the error when BOTH readers fail (fail-closed, never a fabricated row)", async () => {

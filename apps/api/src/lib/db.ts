@@ -19,6 +19,7 @@ import type {
   CandleRow,
   CompetitorSnapshotRow,
   ConfirmationWatermarksRow,
+  CreatorClaimableRow,
   EthUsdSnapshotRow,
   FeeCollectionRow,
   HolderSortField,
@@ -48,6 +49,22 @@ export interface Change24hAnchor {
   firstTradePrice: number | null;
   /** 1h candle(s) at/before the now−24h cutoff (superset ok); `[]` if none. */
   hourCandles: AnchorCandle[];
+}
+
+/**
+ * A persisted `comments` row (API-owned table, migrations/002_comments.sql;
+ * spec §12.63b). INTERNAL query artifact — projected to the shared `Comment`
+ * DTO by `projections/comment.ts` (like `TradeRowDb`→`toTradeRow`); the wire
+ * shape stays single-sourced in @robbed/shared. `created_at` is unix seconds
+ * (integer column), `id` the bigserial as a string (keyset tiebreak).
+ */
+export interface CommentRowDb {
+  id: string;
+  token_address: string;
+  author: string;
+  body: string;
+  moderation_status: ModerationVisibility;
+  created_at: number;
 }
 
 /** Token row joined to moderation flags (list/search/card need these). */
@@ -225,6 +242,16 @@ export interface Db {
    */
   getLpTokenId(token: string): Promise<string | null>;
 
+  // ── creator-fee claimable (RO; Ponder `creator_claimable` — spec §12.63) ──
+  /**
+   * Per-creator claimable roll-up (accrued/claimed/vault) backing GET
+   * /v1/creators/:address/claimable. Null when the creator has never accrued
+   * (no row) — the route then falls back to the config vault (or 404s). The live
+   * `CreatorVault.balanceOf` (CreatorVaultBalanceReader) is the authoritative
+   * claimable value; this row supplies the vault + lifetime accrued/claimed.
+   */
+  getCreatorClaimable(creator: string): Promise<CreatorClaimableRow | null>;
+
   // ── portfolio (spec §5.4; api.md §3) ──────────────────────────────────────
   /** Per-address materialized roll-up backing GET /v1/portfolio/:address; null when the address never appeared. */
   getAddressPnl(address: string): Promise<AddressPnlRow | null>;
@@ -298,6 +325,33 @@ export interface Db {
     cursorId: string | null;
     limit: number;
   }): Promise<Array<TokenListRow & { m: ModerationStatusRow | null }>>;
+
+  // ── comments (RW; API-owned `comments` table — spec §12.63b) ──────────────
+  /**
+   * Insert one off-chain comment and return the persisted row (with its
+   * assigned bigserial `id`). `author` is the SIWE-authenticated poster and
+   * `moderation_status` the pipeline verdict — both server-set, never from the
+   * client body. `created_at` is server unix-seconds. Runs on the RW role.
+   */
+  insertComment(input: {
+    tokenAddress: string;
+    author: string;
+    body: string;
+    moderationStatus: ModerationVisibility;
+    createdAt: number;
+  }): Promise<CommentRowDb>;
+  /**
+   * Public comment list for a token — newest-first (created_at DESC, id DESC
+   * tiebreak) keyset page. EXCLUDES hidden comments (returns visible +
+   * pending_review only — pending_review REMAINS LISTED, §12.21). `cursorKey` /
+   * `cursorId` are the decoded keyset `(created_at, id)`.
+   */
+  listComments(input: {
+    token: string;
+    cursorKey: string | null;
+    cursorId: string | null;
+    limit: number;
+  }): Promise<CommentRowDb[]>;
 
   // ── audit (RW) ────────────────────────────────────────────────────────────
   insertAudit(entry: {
