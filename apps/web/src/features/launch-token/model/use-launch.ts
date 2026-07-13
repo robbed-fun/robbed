@@ -352,11 +352,17 @@ type PublicClientT = ReturnType<typeof usePublicClient>;
 /** 2× the node estimate — mirrors the deploy's `--skip-simulation` 2× posture. */
 const GAS_BUFFER_MULTIPLIER = 2n;
 /**
- * Absolute ceiling so a pathological estimate can't set an absurd limit. Higher
- * than the trade path's 5M: `createToken` is heavy (~7.4M gas incl. the one-time
- * V3 pool init), so the buffered estimate legitimately runs to several million.
+ * Absolute ceiling so a pathological estimate can't set an absurd limit.
+ *
+ * MUST stay well above `2 × estimate` for a real create. `createToken` deploys +
+ * initializes a V3 pool and runs ~7.6M gas; at the old 8M ceiling the 2× buffer
+ * was clipped back to 8M, leaving only ~0.4M of headroom, and the deep V3-pool
+ * sub-call (which sees only 63/64 of remaining gas) ran OUT — an empty `0x`
+ * revert at ~7.59M/8M used (observed on-chain). 30M lets the 2× buffer actually
+ * apply (~15M limit) with ample sub-call headroom. The chain's per-block limit is
+ * effectively unbounded and you only pay for gas USED, so a high ceiling is free.
  */
-const GAS_LIMIT_CEILING = 8_000_000n;
+const GAS_LIMIT_CEILING = 30_000_000n;
 
 interface EstimateGasParams {
   address: Address;
