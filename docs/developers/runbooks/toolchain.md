@@ -111,7 +111,7 @@ Requires `~/.foundry/bin` and `~/.local/bin` on PATH (both are on the interactiv
 `~/.foundry/bin` added to `~/.bashrc` 2026-07-12).
 
 ```sh
-forge --version && slither --version && solhint --version && test -f docs/runbooks/toolchain.md
+forge --version && slither --version && solhint --version && test -f docs/developers/runbooks/toolchain.md
 ```
 
 Expected: `forge` 1.7.1, `slither` 0.11.5, `solhint` 6.2.3, file present; overall exit 0.
@@ -121,7 +121,7 @@ aderyn 0.6.8, `solc-select versions` => `0.8.35 (current)`.
 
 ## O-5 / M1-2 — verification round-trip record
 
-**TESTNET round-trip: DONE 2026-07-12** (Phase-T, per docs/runbooks/testnet.md §6 + this file's pin).
+**TESTNET round-trip: DONE 2026-07-12** (Phase-T, per docs/developers/runbooks/testnet.md §6 + this file's pin).
 A throwaway probe contract (`VerifyProbe085Cancun`, MIT, no constructor args, exercises the
 Cancun-only `mcopy` path) was compiled at the EXACT production pins — solc `0.8.35+commit.47b9dedd`,
 `evm_version = cancun`, optimizer on / 200 runs — deployed to Robinhood Chain **testnet (46630)** and

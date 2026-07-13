@@ -81,7 +81,7 @@ TESTNET_BLOCKSCOUT_URL=https://explorer.testnet.chain.robinhood.com
 #                      # (and cross-checks constants.chainId == chainid, fail-closed)
 ```
 
-Secrets discipline: `DEPLOYER_PRIVATE_KEY` and any Alchemy key are **SECRET** class per `docs/runbooks/env-inventory.md` — env only, never in code, compose defaults, or docs.
+Secrets discipline: `DEPLOYER_PRIVATE_KEY` and any Alchemy key are **SECRET** class per `docs/developers/runbooks/env-inventory.md` — env only, never in code, compose defaults, or docs.
 
 ## 5. Running the stack against testnet
 
@@ -91,7 +91,7 @@ bun run dev:testnet:ps     # status
 bun run dev:testnet:down   # stop (dev:testnet:reset drops volumes)
 ```
 
-What it does (full detail: `docs/runbooks/docker.md` → "Testnet stack"): brings up Postgres/Redis/minio + indexer/API/WS/web against the **remote** testnet — no `anvil`, no `deploychain`. A `chaincheck` one-shot asserts the RPC's `eth_chainId == TESTNET_CHAIN_ID` before anything starts. Separate `robbed-testnet` compose project ⇒ its volumes/state never mix with the local fork stack; same 4XXX host ports, so don't run both simultaneously without overriding `*_PORT`.
+What it does (full detail: `docs/developers/runbooks/docker.md` → "Testnet stack"): brings up Postgres/Redis/minio + indexer/API/WS/web against the **remote** testnet — no `anvil`, no `deploychain`. A `chaincheck` one-shot asserts the RPC's `eth_chainId == TESTNET_CHAIN_ID` before anything starts. Separate `robbed-testnet` compose project ⇒ its volumes/state never mix with the local fork stack; same 4XXX host ports, so don't run both simultaneously without overriding `*_PORT`.
 
 **Fail-closed prerequisites** (the stack refuses to start without them, by design):
 
@@ -161,7 +161,7 @@ bun run safe:create
 
 ## 7. After the deploy — lifecycle exercise (T-4/T-5)
 
-Scripted create → multi-actor buys/sells → clamp-to-threshold → permissionless `graduate()` (arb-back observed) → V3 swaps → `LPFeeVault.collect()`; every tx hash recorded in `docs/runbooks/testnet-lifecycle.md` and checkable on the explorer. Then the staging stack (§5) backfills from the deploy block and `GET /v1/confirmations` must show `safe`/`finalized` watermarks advancing against the real RPC (already probe-confirmed supported on mainnet; testnet re-checked here). These fulfill gates **G-7/G-8**.
+Scripted create → multi-actor buys/sells → clamp-to-threshold → permissionless `graduate()` (arb-back observed) → V3 swaps → `LPFeeVault.collect()`; every tx hash recorded in `docs/developers/runbooks/testnet-lifecycle.md` and checkable on the explorer. Then the staging stack (§5) backfills from the deploy block and `GET /v1/confirmations` must show `safe`/`finalized` watermarks advancing against the real RPC (already probe-confirmed supported on mainnet; testnet re-checked here). These fulfill gates **G-7/G-8**.
 
 ## 8. Quick reference
 

@@ -283,7 +283,7 @@ async function main(): Promise<void> {
   console.log("");
   log(
     `record this address as the treasury (constants file \`treasurySafe\` / env) ` +
-      `per docs/runbooks/testnet.md §6 — the deploy fails closed without it`,
+      `per docs/developers/runbooks/testnet.md §6 — the deploy fails closed without it`,
   );
 }
 

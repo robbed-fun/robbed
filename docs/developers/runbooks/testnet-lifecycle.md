@@ -1,6 +1,6 @@
 # Testnet lifecycle record — Robinhood Chain testnet (chain 46630)
 
-Referenced by `docs/runbooks/testnet.md` §7 (T-4/T-5 lifecycle exercise → gates G-7/G-8). This is
+Referenced by `docs/developers/runbooks/testnet.md` §7 (T-4/T-5 lifecycle exercise → gates G-7/G-8). This is
 the **durable, tx-hash-level record** of the on-chain activity exercised on the live testnet, so the
 verification survives the ephemeral indexer DB (which re-backfills from the deploy block on every
 stack rebuild).

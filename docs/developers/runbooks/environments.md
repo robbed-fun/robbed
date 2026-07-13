@@ -3,7 +3,7 @@
 **Status:** v1.0, 2026-07-10. Authored by robbed-architect. Implements the 3-environment decision ratified in **spec §12.49** (user-directed). This runbook is the **per-env config matrix** — the source of truth for which endpoints, chain ids, addresses, domains, and env-vars each environment uses. It is docs/spec only; no code is authored here. Wiring is routed to owners (§5).
 
 Cross-references:
-- **`docs/runbooks/env-inventory.md`** — the authoritative per-*variable* table (dev/testnet/prod columns). This runbook maps those columns onto the named environments; env-inventory.md owns each variable's secret-class/source/owner.
+- **`docs/developers/runbooks/env-inventory.md`** — the authoritative per-*variable* table (dev/testnet/prod columns). This runbook maps those columns onto the named environments; env-inventory.md owns each variable's secret-class/source/owner.
 - **Hosting (spec §12.45)** — backend on the compose stacks (`docker.md`, `deploy.md` §3) fronted by Cloudflare Tunnels; frontend on Cloudflare Workers via OpenNext. (The former Komodo runbook is retired, 2026-07-12.) This runbook adds the *per-env* layer on top.
 - **spec §12.49** (decision), **§14** (Phase A / Gate G-A / Phase B), **§2** (never hardcode chain facts), **§12.45** (hosting split), **§12.29** (pnpm workspaces).
 
@@ -36,7 +36,7 @@ Cross-references:
 - **Contracts:** **fresh-deployed locally** by the M1 broadcast onto anvil. **V3 + WETH are mock or forked**, NOT the 4663 constants — on pure anvil a local V3 core deploy + `MockWETH9`; on a fork, the real 4663 addresses come through the fork. The §12.28 Uniswap/§CLAUDE WETH constants apply to **4663 mainnet only**.
 - **Endpoints:** RPC `http://localhost:8545`, WS `ws://localhost:8545`; API `http://localhost:3001`, WS fanout `ws://localhost:3002/v1/ws`; Postgres/Redis local (`docker.md` / root compose); R2 → MinIO/localstack (`tools/localstack`). Web via `next dev` or OpenNext `workerd` preview (`opennextjs-cloudflare preview`).
 - **Domain:** none (`localhost`).
-- **Backend host:** the local docker-compose stack (`docs/runbooks/docker.md`), not Komodo.
+- **Backend host:** the local docker-compose stack (`docs/developers/runbooks/docker.md`), not Komodo.
 
 ### TESTNET — Robinhood testnet (Phase T = §14 Phase A)
 

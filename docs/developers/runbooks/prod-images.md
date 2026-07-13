@@ -61,5 +61,5 @@ indexer.md §9.4 series **not yet emitted** (config cannot alert on them; flagge
 ## 6. Cross-references
 
 - Hosting (§12.45): backend on the compose stacks (`docker.md`, `deploy.md` §3) + Cloudflare Tunnels; web on Cloudflare Workers (OpenNext). The former Komodo runbook is retired; its "docker build … DEFERRED" note is superseded by §3 above.
-- Mainnet-prep checklist: `docs/runbooks/deploy.md` §3 (hosting) and §3.2 (monitoring bring-up — now satisfiable with the §4 files).
-- Env vars: `docs/runbooks/env-inventory.md`; dev stack: `docs/runbooks/docker.md`.
+- Mainnet-prep checklist: `docs/developers/runbooks/deploy.md` §3 (hosting) and §3.2 (monitoring bring-up — now satisfiable with the §4 files).
+- Env vars: `docs/developers/runbooks/env-inventory.md`; dev stack: `docs/developers/runbooks/docker.md`.

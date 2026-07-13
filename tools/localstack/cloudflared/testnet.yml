@@ -12,7 +12,7 @@
 #   web:3000  api:3001  ws:3002   — container ports, NOT the 41XX host maps; `localhost`
 # inside this container is the cloudflared container itself and would be wrong.
 #
-# Hostnames are canonical per docs/runbooks/docker.md "Public exposure":
+# Hostnames are canonical per docs/developers/runbooks/docker.md "Public exposure":
 #   https://testnet.robbed.fun          → web   (STANDBY since 2026-07-12: DNS points at the
 #                                                robbed-testnet Worker custom domain; flips
 #                                                back to this tunnel if DNS moves off it)

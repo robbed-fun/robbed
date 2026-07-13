@@ -12,7 +12,7 @@
 #   web:3000  api:3001  ws:3002   — container ports, NOT the 42XX host maps; `localhost`
 # inside this container is the cloudflared container itself and would be wrong.
 #
-# Hostnames are canonical per docs/runbooks/docker.md "Public exposure":
+# Hostnames are canonical per docs/developers/runbooks/docker.md "Public exposure":
 #   https://robbed.fun          → web   (apex flips to this tunnel when the coordinator
 #                                        moves DNS off the Cloudflare Worker)
 #   https://api.robbed.fun      → api   (REST)

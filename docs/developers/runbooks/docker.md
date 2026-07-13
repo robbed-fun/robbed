@@ -209,7 +209,7 @@ Knobs: `DEV_RESET_TIMEOUT_SECS` (default 900). Local stack only — never point 
 
 ## Testnet stack (`docker-compose.testnet.yml`)
 
-> **End-to-end testnet guide (wallet, faucet, env, deploy, lifecycle): `docs/runbooks/testnet.md`.** This section covers only the compose mechanics.
+> **End-to-end testnet guide (wallet, faucet, env, deploy, lifecycle): `docs/developers/runbooks/testnet.md`.** This section covers only the compose mechanics.
 
 **Status (2026-07-11): Phase-T-ready infrastructure, currently blocked on Phase-T outputs.** The file
 is the same off-chain stack (postgres/redis/minio/api/ws/indexer/web + one-shots) pointed at the

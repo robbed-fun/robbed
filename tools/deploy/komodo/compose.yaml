@@ -8,7 +8,7 @@
 # resolved at deploy from the Komodo `.env` (Core/periphery secret store) that the
 # Stack resource's `environment` block writes (tools/deploy/komodo/stack.toml).
 # `${VAR:?...}` = required (compose config errors if unset — fail closed); `${VAR:-x}`
-# = non-secret default. Variable names track docs/runbooks/env-inventory.md.
+# = non-secret default. Variable names track docs/developers/runbooks/env-inventory.md.
 #
 # Build model: build-on-Komodo (A.4) — the periphery host builds both images from
 # their Dockerfiles with build context = repo root (`../../..` relative to THIS

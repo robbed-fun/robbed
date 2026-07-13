@@ -12,7 +12,7 @@
 # and/or the periphery agent's `[secrets]`, marked "secret" so values never appear
 # in logs/API). This file commits ZERO secret values. Non-secret CONFIG (bucket
 # name, public R2 account id per §12.45, ports) is inline. Populate every `[[NAME]]`
-# per env from docs/runbooks/env-inventory.md before deploy.
+# per env from docs/developers/runbooks/env-inventory.md before deploy.
 #
 # ── BUILD MODEL ───────────────────────────────────────────────────────────────
 # build-on-Komodo (A.4): the periphery host clones this repo and builds the indexer
