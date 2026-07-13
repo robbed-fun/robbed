@@ -71,7 +71,22 @@ export async function startSidecars(): Promise<void> {
   }
 
   const schema = config.databaseSchema ?? "public";
-  const pool = new Pool({ connectionString: config.databaseUrl });
+  // Bounded pool + explicit idle reaping + close-on-shutdown. ROOT CAUSE of the 2026-07-13
+  // chart outage: an UNBOUNDED pool re-created on every `ponder dev` hot-reload orphaned its
+  // clients and leaked ~95 idle connections, exhausting Postgres `max_connections=100`
+  // (`sorry, too many clients already` → crash loop). A small `max` caps each pool's footprint,
+  // the 10s idle timeout reaps orphaned-pool clients, and the shutdown hook releases it on a
+  // clean restart. The sidecar is low-throughput (migrations + tracker/verifier/jobs) — 5 is ample.
+  const pool = new Pool({
+    connectionString: config.databaseUrl,
+    max: 5,
+    idleTimeoutMillis: 10_000,
+  });
+  const closeSidecarPool = () => {
+    void pool.end().catch(() => {});
+  };
+  process.once("SIGTERM", closeSidecarPool);
+  process.once("SIGINT", closeSidecarPool);
 
   // Offchain migrations, BOTH phases (first-class home of the post-Ponder
   // re-run — replaces the I-5b compose /ready-polling stopgap; design + ponder

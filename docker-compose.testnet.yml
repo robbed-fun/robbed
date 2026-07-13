@@ -26,7 +26,10 @@
 # No contracts exist on testnet yet (tools/deployments/testnet.json lands at T-3). This stack
 # requires `tools/localstack/out/testnet.env` — same key contract as the local deploychain-emitted
 # local.env (CURVE_FACTORY_ADDRESS, ROUTER_ADDRESS, MIGRATOR_ADDRESS, TREASURY_ADDRESS,
-# LP_FEE_VAULT_ADDRESS, START_BLOCK) — to be emitted/derived from the T-3 artifact. api + indexer
+# LP_FEE_VAULT_ADDRESS, CREATOR_VAULT_ADDRESS, WETH_ADDRESS, START_BLOCK) — to be emitted/derived
+# from the T-3 artifact. CREATOR_VAULT_ADDRESS + WETH_ADDRESS gate the §12.63/§12.69 creator-fee
+# indexing (CreatorVault + LPFeeVault FeesSplit sources) + the api's per-(creator,token) claimable
+# vault/WETH USD leg — omit them and the post-grad 50/50 split never indexes. api + indexer
 # refuse to start without it (clear error pointing at Phase T / T-3); there is no best-effort mode
 # here because no local deploy one-shot can fill the gap.
 #
@@ -54,7 +57,7 @@
 # never mixes with the local fork's. Host ports live on a DISTINCT 41XX block (dev keeps 40XX/44XX)
 # so BOTH stacks can run simultaneously with no *_PORT overrides:
 #   4100 web   4101 api   4102 ws   4132 postgres   4164 indexer metrics
-#   4169 ponder dev UI/GraphQL     4179 redis       4190 minio S3   4191 minio console
+#   4169 ponder GraphQL/HTTP       4179 redis       4190 minio S3   4191 minio console
 # (env-var NAMES stay identical to the dev stack — only the `:-` defaults differ; an exported
 #  *_PORT in your shell/.env therefore applies to BOTH stacks and re-collides them.)
 name: robbed-testnet
@@ -321,7 +324,20 @@ services:
         # Ponder-managed tables) is applied by the indexer sidecar boot
         # (src/offchainMigrations.ts) — never re-run migrate from compose for it.
         pnpm --filter @robbed/indexer migrate
-        exec pnpm --filter @robbed/indexer exec ponder dev --hostname 0.0.0.0
+        # PRODUCTION mode (Ponder 0.16.8): `ponder start` = crash-recovery ON, no
+        # file-watch. A steady-state `docker restart` RESUMES from _ponder_checkpoint in
+        # the same DATABASE_SCHEMA (default `public`); it does NOT wipe+re-index from
+        # START_BLOCK the way `ponder dev` does on every boot (dev drops its app tables on
+        # each restart — that is the re-index-on-boot bug this replaces). Persistent stacks
+        # MUST use `start`; `dev` stays only in docker-compose.yml (fresh anvil deploy each
+        # up). ONE-TIME exception: the first `start` boot after this switch (previous app
+        # was `dev`, so Ponder drops+recreates once) and any boot after a
+        # ponder.schema.ts/handler change (new build_id → Ponder REFUSES to reuse the
+        # schema and you must drop it or set a new DATABASE_SCHEMA) each cost a single
+        # re-index — fast, because the finalized-block RPC cache in the `ponder_sync`
+        # schema survives and is reused (no re-fetch from the rate-limited RPC). Steady
+        # state thereafter = resume. Do NOT revert to `ponder dev`. See indexer.md.
+        exec pnpm --filter @robbed/indexer exec ponder start --hostname 0.0.0.0
     env_file:
       - path: .env
         required: false

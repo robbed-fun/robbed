@@ -197,6 +197,14 @@ services:
           echo "MIGRATOR_ADDRESS=$$(addr v3Migrator)";
           echo "TREASURY_ADDRESS=$$(addr treasury)";
           echo "LP_FEE_VAULT_ADDRESS=$$(addr lpFeeVault)";
+          # §12.63/§12.69 creator-fee generation: the indexer gates its CreatorVault +
+          # LPFeeVault `FeesSplit` sources on CREATOR_VAULT_ADDRESS, and the api resolves
+          # the per-(creator,token) claimable vault + WETH USD leg from these. Without
+          # them the post-grad 50/50 split never indexes and /v1/creators/:a/claimable/:t
+          # 404s (the CFEE-1/CFEE-2 indexed layer). Emitted from the same deploy artifact
+          # as the other five — the ephemeral fork's vault/WETH are not in the codegen registry.
+          echo "CREATOR_VAULT_ADDRESS=$$(addr creatorVault)";
+          echo "WETH_ADDRESS=$$(addr weth)";
           echo "START_BLOCK=$$START_BLOCK";
         } > ../tools/localstack/out/local.env
         echo "── local.env ──"; cat ../tools/localstack/out/local.env

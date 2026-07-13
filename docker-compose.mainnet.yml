@@ -23,8 +23,8 @@
 #   1. Real 4663 deploy lands `contracts/deployments/4663.json` (replacing the fork artifact;
 #      registry re-codegen'd via robbed-shared; Gate G-A governs — spec §14).
 #   2. Emit `tools/localstack/out/mainnet.env` from that artifact (CURVE_FACTORY_ADDRESS,
-#      ROUTER_ADDRESS, MIGRATOR_ADDRESS, TREASURY_ADDRESS, LP_FEE_VAULT_ADDRESS, START_BLOCK),
-#      replacing the INTERIM testnet copy.
+#      ROUTER_ADDRESS, MIGRATOR_ADDRESS, TREASURY_ADDRESS, LP_FEE_VAULT_ADDRESS,
+#      CREATOR_VAULT_ADDRESS, WETH_ADDRESS, START_BLOCK), replacing the INTERIM testnet copy.
 #   3. Root `.env`: MAINNET_RPC_URL=https://rpc.mainnet.chain.robinhood.com,
 #      MAINNET_CHAIN_ID=4663; DELETE MAINNET_INDEXER_CHAIN_ID (compose default 4663 takes over).
 #      Public-URL overrides stay as-is (api.robbed.fun does not change).
@@ -56,7 +56,9 @@
 #
 # ── Contract addresses + START_BLOCK: fail-closed on tools/localstack/out/mainnet.env ──
 # Same key contract as testnet.env / the local deploychain local.env (CURVE_FACTORY_ADDRESS,
-# ROUTER_ADDRESS, MIGRATOR_ADDRESS, TREASURY_ADDRESS, LP_FEE_VAULT_ADDRESS, START_BLOCK).
+# ROUTER_ADDRESS, MIGRATOR_ADDRESS, TREASURY_ADDRESS, LP_FEE_VAULT_ADDRESS, CREATOR_VAULT_ADDRESS,
+# WETH_ADDRESS, START_BLOCK). CREATOR_VAULT_ADDRESS + WETH_ADDRESS gate the §12.63/§12.69 creator-fee
+# indexing + the api claimable vault/WETH USD leg (post-grad 50/50 split); emit them from the artifact.
 # INTERIM: the file exists as a loudly-marked copy of the 46630 testnet artifact set (see
 # STATUS); at Phase B it is regenerated from the real 4663 deploy artifact. api + indexer
 # still refuse to start without it; there is no best-effort mode.
@@ -69,7 +71,7 @@
 #
 # Distinct project name => distinct volumes/network (robbed-mainnet_*). Host ports live on a
 # DISTINCT 42XX block (dev 40XX/44XX, testnet 41XX), so all three stacks can run simultaneously:
-#   4200 web   4201 api   4202 ws   4229 ponder dev UI/GraphQL (4269 is dev-owned — see indexer)
+#   4200 web   4201 api   4202 ws   4229 ponder GraphQL/HTTP (4269 is dev-owned — see indexer)
 #   4232 postgres   4264 indexer metrics   4279 redis   4290 minio S3   4291 minio console
 # (env-var NAMES stay identical across stacks — only the `:-` defaults differ; an exported
 #  *_PORT in your shell/.env applies to ALL stacks and re-collides them.)
@@ -339,7 +341,21 @@ services:
         # MIRROR (anti-drift): phase 2 (GIN indexes + views over Ponder-managed tables) is
         # applied by the indexer sidecar boot (src/offchainMigrations.ts).
         pnpm --filter @robbed/indexer migrate
-        exec pnpm --filter @robbed/indexer exec ponder dev --hostname 0.0.0.0
+        # PRODUCTION mode (Ponder 0.16.8): `ponder start` = crash-recovery ON, no
+        # file-watch. A steady-state `docker restart` RESUMES from _ponder_checkpoint in
+        # the same DATABASE_SCHEMA (default `public`); it does NOT wipe+re-index from
+        # START_BLOCK the way `ponder dev` does on every boot (dev drops its app tables on
+        # each restart — that is the re-index-on-boot bug this replaces, and what took the
+        # :4200 chart down). Persistent stacks MUST use `start`; `dev` stays only in
+        # docker-compose.yml (fresh anvil deploy each up). ONE-TIME exception: the first
+        # `start` boot after this switch (previous app was `dev`, so Ponder drops+recreates
+        # once) and any boot after a ponder.schema.ts/handler change (new build_id → Ponder
+        # REFUSES to reuse the schema; drop it or set a new DATABASE_SCHEMA) each cost a
+        # single re-index — fast, because the finalized-block RPC cache in the `ponder_sync`
+        # schema survives and is reused (no re-fetch from the rate-limited public RPC; this
+        # is exactly how the interim re-sync finished in minutes, not START_BLOCK-to-head).
+        # Steady state thereafter = resume. Do NOT revert to `ponder dev`. See indexer.md.
+        exec pnpm --filter @robbed/indexer exec ponder start --hostname 0.0.0.0
     env_file:
       - path: .env
         required: false
