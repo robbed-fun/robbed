@@ -1,8 +1,10 @@
-# Gate-4 mutation testing (M1-13) — CurveMath + V3Migrator arb-back
+# Gate-4 mutation testing — CurveMath + V3Migrator arb-back (M1-13) + §12.63 creator-fee split & cap
 
-Tool: `universalmutator 1.14.1` (sanctioned Gambit equivalent — gambit not on PATH, recorded in
-`audits/2026-07-10_internal-adversarial-review_M1.md`). Mutants under `mutants/`, campaign logs under `logs/`, kill
-commands `run_curvemath_tests.sh` / `run_migrator_tests.sh`, scores in `scores.tsv`.
+Tool: `universalmutator 1.14.1` (sanctioned Gambit equivalent — gambit not on PATH, recorded in the
+M1 adversarial review, 2026-07-10; history in git). Mutants under `mutants/`, campaign logs under `logs/`, kill
+commands `run_curvemath_tests.sh` / `run_migrator_tests.sh` / `run_bondingcurve_fees_tests.sh` /
+`run_bondingcurve_fees_survivors.sh` / `run_factory_cap_tests.sh`, scores in `scores.tsv`. The §12.63
+creator-fee re-run (robbed-security gate-2 re-open, finding F-3) is documented in its own section below.
 
 ## Status
 
@@ -133,9 +135,65 @@ liveness)** above.
 | L362/L363 `tokenMin`/`wethMin` weakened | 169 170 171 172 173 174 178 181 182 183 184 185 186 190 | DID (local-calibration; fork-confirmed unmutated-min liveness — 2026-07-12) | Weakened amount-mins only bite when the mint would ACCEPT a below-parity deposit that the (pinned) arb-back loop failed to prevent. Discharged by the M1-12 fork run (see "M1-12 fork-run discharge" above): green real-pool lifecycle proves the unmutated mins pass the real NPM at the graduation ratio (liveness); per-mutant fork-slice rerun confirms all 14 survive the clean lifecycle (weakened mins cannot bite on a clean mint — their safety bite is unreachable while the pinned loop + L255 check stand). Kept per spec §6.3.2 amount-mins mandate. **CONTINGENT** on `1.0001^TOLERANCE_TICKS × (1 − MIGRATION_SLIPPAGE_BPS/1e4) ≤ 1` (see "Calibration contingency" above; pinned by `test/unit/GradCalibrationGuard.t.sol` + `Deploy._consistencyChecks`) — a §12.32/§12.33 retune past the bound re-opens gate 4 for this row. |
 | L467 `_toInt256` guard | 192 193 196 197 199 | UG | Guard bites only for `x` near `2^255`; arb budgets are curve inventory (≤ ~1e27) — free insurance, unreachable domain. |
 
+## §12.63 creator-fee re-run (robbed-security gate-2 re-open, finding F-3) — 2026-07-13
+
+Two new campaigns cover the Phase-2 creator-fee surface: the BondingCurve **two-leg fee split**
+(treasury + creator computation + the proportional graduation-clamp residual split in
+`buy`/`sell`/`quoteBuy`/`quoteSell` + the F-1 clamp guard + the two accrual sinks —
+`bondingcurve_fees_lines.txt`) and the CurveFactory **additive ≤2% cap** (constructor +
+`setTradeFeeBps`/`setCreatorFeeBps` — `factory_cap_lines.txt`). Kill scripts:
+`run_bondingcurve_fees_tests.sh` (fast unit tier), `run_bondingcurve_fees_survivors.sh` (fuzz tier),
+`run_factory_cap_tests.sh`.
+
+| Target | Valid | Killed | Survivors | Score | Standing |
+|---|---|---|---|---|---|
+| `BondingCurve.sol` (fee-split) unit tier | 490 | 454 | 36 | 0.926 | tier 1 |
+| `BondingCurve.sol` (fee-split) + fuzz-survivor rerun + 2 kill-tests | 490 | **475** | **15 (all provably equivalent)** | **0.969** | **PASS** (475/475 killable killed) |
+| `CurveFactory.sol` (additive cap) | 96 | **96** | **0** | **1.000** | **PASS** |
+
+Two real survivors were found and killed with deterministic unit tests (added to
+`test/unit/CreatorFee.t.sol`, so future campaigns reproduce the higher score):
+
+- **quoteBuy clamp creator-residual mis-split** (mutant 398: `totBps >= 0 ? 0` on the L400 split,
+  the tiny-residual fuzz clamps left equivalent) → `test_clampSplit_nonZeroCreatorLeg_exact` drives a
+  ~10× graduation overshoot with a LARGE non-zero clamp residual and asserts `quoteBuy`'s returned
+  treasury fee + both accrual legs are the exact proportional split.
+- **quoteBuy creator-leg mis-netting** (mutant 301: `net = gross − fee + creatorFee`, invisible at
+  cBps=0, wrong at cBps>0) → `test_quoteBuy_tokensOutParity_withCreatorLeg` asserts quoted tokensOut
+  equals the tokens an actual buy delivers.
+- **CurveFactory `!= cap`** (mutant 40: `setTradeFeeBps` used `!=` not `>`, passing the boundary
+  test) → a sub-cap success assertion (`setTradeFeeBps(50)` with a 100-bps creator leg must apply,
+  not revert) in `test_cap_setTradeFeeBps_enforcedWithCreatorLeg`.
+
+The fuzz tier (`run_bondingcurve_fees_survivors.sh`: `CreatorFeeInvariants` cBps=50 + `FeeExactness`
+cBps=0, wei-exact both-leg accrual) kills **20 of the 36** unit-survivors deterministically (default
+256 invariant runs — the kill count is stable at ≥256 runs; fewer runs kill fewer, so the kill script
+does NOT lower `FOUNDRY_INVARIANT_RUNS`).
+
+### Remaining 15 fee-split survivors — all E (provably equivalent, 0 undispositioned)
+
+| Line | Mutants | Disp. | Reasoning |
+|---|---|---|---|
+| L221 / L398 F-1 clamp `acceptedEthGross > grossIn` → `>=` | 61 349 | E | At `acceptedEthGross == grossIn` the clamp `acceptedEthGross = grossIn` is a no-op, so `>=` and `>` are behaviorally identical. |
+| L227 / L400 clamp-split div-by-zero guard `totBps == 0` mutated | 110 113 114 115 118 119 397 400 401 402 405 406 | E | The `totBps == 0` branch is defensive — it avoids a `/totBps` div-by-zero when BOTH legs are 0. Under EVERY fee-bearing config `totBps ≥ tradeFeeBps ≥ 100`, so the branch is never taken and the else (`(totalFee·cBps)/totBps`) always runs; the `== 0/1`, `<= 0`, `< 0`, `? 1` variants all agree with the original on the reachable domain. (The degenerate both-fees-0 config yields `totalFee == 0`, so even there no creator fee is lost.) Guard kept as defensive-only. |
+| L399 quoteBuy `totalFee = acceptedEthGross − net` → `%` | 371 | E | `acceptedEthGross % net ≡ acceptedEthGross − net` whenever `net ≤ acceptedEthGross < 2·net`, always true for a fee-clamp (`totalFee` is ≤ ~1.5% of `net` ≪ `net`). |
+
 ## Reproduction
 
 ```bash
+# §12.63 fee-split + cap campaigns (universalmutator 1.14.1; run from contracts/):
+#   mutate src/BondingCurve.sol solidity --lines reports/mutation/bondingcurve_fees_lines.txt \
+#     --mutantDir reports/mutation/mutants/bondingcurve_fees --noCheck
+#   analyze_mutants src/BondingCurve.sol reports/mutation/run_bondingcurve_fees_tests.sh \
+#     --mutantDir reports/mutation/mutants/bondingcurve_fees --seed 1      # unit tier (0.926)
+#   analyze_mutants src/BondingCurve.sol reports/mutation/run_bondingcurve_fees_survivors.sh \
+#     --mutantDir reports/mutation/mutants/bondingcurve_fees --fromFile <unit-survivors> --seed 1
+#   mutate src/CurveFactory.sol solidity --lines reports/mutation/factory_cap_lines.txt \
+#     --mutantDir reports/mutation/mutants/factory_cap --noCheck
+#   analyze_mutants src/CurveFactory.sol reports/mutation/run_factory_cap_tests.sh \
+#     --mutantDir reports/mutation/mutants/factory_cap --seed 1            # 96/96
+
+# ── prior M1-13 campaigns ──
 # full campaign (universalmutator):
 #   mutate src/V3Migrator.sol --lines reports/mutation/migrator_arbback_lines.txt ...
 #   analyze_mutants src/V3Migrator.sol reports/mutation/run_migrator_tests.sh ...

@@ -22,7 +22,8 @@ import {
     GraduationUnfundable,
     CreatesPaused,
     FeeAboveCap,
-    CapExceeded
+    CapExceeded,
+    CreatorVaultUnset
 } from "./errors/Errors.sol";
 
 /// @title CurveFactory — token+curve deployer, global config, hard caps, beta TVL caps
@@ -99,10 +100,14 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
 
     /// @inheritdoc ICurveFactory
     address public override treasury; // Gnosis Safe, owner-settable, read live by curves
-    /// @dev Default trade fee for FUTURE curves (≤ MAX_TRADE_FEE_BPS). Snapshotted per curve.
+    /// @inheritdoc ICurveFactory
+    address public override creatorVault; // pull-payment CreatorVault, one-time-set (spec §12.63)
+    /// @dev Default TREASURY-leg trade fee for FUTURE curves. Snapshotted per curve.
+    ///      `tradeFeeBps + creatorFeeBps ≤ MAX_TRADE_FEE_BPS` (the §6.4 ≤2% cap) — enforced here.
     uint16 public tradeFeeBps;
-    /// @dev Always 0 in v1 — no setter, never read into any fee computation (spec §7).
-    uint16 public constant creatorFeeBps = 0;
+    /// @dev Default CREATOR-leg fee for FUTURE curves (spec §7, §12.63). 0 default; configurable,
+    ///      ADDITIVE under the shared ≤2% cap. Snapshotted per curve; existing curves keep their rate.
+    uint16 public creatorFeeBps;
     /// @inheritdoc ICurveFactory
     uint256 public override creationFee; // collected by the Router (contracts.md §2.4)
     uint256 public graduationFee; // default for future curves
@@ -151,7 +156,8 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
         uint256 lpTranche;
         uint256 graduationEth;
         // fee config + ceilings
-        uint16 tradeFeeBps;
+        uint16 tradeFeeBps; // treasury leg
+        uint16 creatorFeeBps; // creator leg (spec §7, §12.63); tradeFeeBps + creatorFeeBps ≤ 200
         uint256 creationFee;
         uint256 maxCreationFee;
         uint256 graduationFee;
@@ -178,7 +184,10 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
         // Supply split must reconstruct the fixed total (spec §6.4; contracts.md §4). The total is a
         // structural constant (spec §6.4, mirrored by LaunchToken.TOTAL_SUPPLY) — safe to hardcode.
         if (p.curveSupply + p.lpTranche != 1_000_000_000e18) revert ZeroAddress();
-        if (p.tradeFeeBps > MAX_TRADE_FEE_BPS) revert FeeAboveCap();
+        // §6.4 / §12.63 ADDITIVE ≤2% cap: the treasury + creator legs together may never exceed
+        // MAX_TRADE_FEE_BPS (200). Constructor-asserted on this factory generation; re-asserted in
+        // setTradeFeeBps / setCreatorFeeBps. `uint16 + uint16` cannot overflow the widened arithmetic.
+        if (uint256(p.tradeFeeBps) + p.creatorFeeBps > MAX_TRADE_FEE_BPS) revert FeeAboveCap();
         if (
             p.creationFee > p.maxCreationFee || p.graduationFee > p.maxGraduationFee
                 || p.callerReward > p.maxCallerReward
@@ -205,6 +214,7 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
 
         treasury = p.treasury;
         tradeFeeBps = p.tradeFeeBps;
+        creatorFeeBps = p.creatorFeeBps;
         creationFee = p.creationFee;
         graduationFee = p.graduationFee;
         callerReward = p.callerReward;
@@ -246,7 +256,7 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
         token = address(new LaunchToken(name, symbol, metadataHash, _computeCurveAddress(salt)));
 
         // 3. Stage the immutable curve parameters, CREATE2 the curve (reads them back), unstage.
-        curve = _deployCurve(salt, token);
+        curve = _deployCurve(salt, token, creator);
 
         // 4. Pre-initialize the V3 pool at the deterministic graduation price (spec §6.3.2).
         pool = IV3Migrator(migrator).initializePool(token);
@@ -273,6 +283,10 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
     ) internal view {
         if (pauseCreates) revert CreatesPaused();
         if (migrator == address(0)) revert ZeroAddress(); // deploy-order guard (contracts.md §5.7)
+        // §12.63 fail-closed: a launch that would accrue creator fees needs a wired CreatorVault to
+        // sweep them to (else the sweep would push to the zero address and burn them). At
+        // creatorFeeBps == 0 (v1/mainnet) the vault is not required — backward-compatible.
+        if (creatorFeeBps != 0 && creatorVault == address(0)) revert CreatorVaultUnset();
         uint256 len = bytes(name).length;
         if (len == 0 || len > 32) revert InvalidName();
         len = bytes(symbol).length;
@@ -291,12 +305,16 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
     }
 
     /// @dev Stage the immutable snapshot, CREATE2-deploy the curve (which reads it back in its
-    ///      constructor), then unstage. The `assert` proves CREATE2 determinism held.
-    function _deployCurve(bytes32 salt, address token) internal returns (address curve) {
+    ///      constructor), then unstage. The `assert` proves CREATE2 determinism held. `creator` +
+    ///      `creatorVault` are snapshotted so the curve's creator-fee leg (§12.63) is fixed at birth
+    ///      and an owner retune of `creatorFeeBps`/`creatorVault` cannot touch a live curve (§6.4).
+    function _deployCurve(bytes32 salt, address token, address creator) internal returns (address curve) {
         _stagedParams = CurveParameters({
             token: token,
             router: router,
             migrator: migrator,
+            creator: creator,
+            creatorVault: creatorVault,
             virtualEth0: _virtualEth0,
             virtualToken0: _virtualToken0,
             curveSupply: _curveSupply,
@@ -405,9 +423,30 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
 
     /// @inheritdoc ICurveFactory
     function setTradeFeeBps(uint16 newBps) external override onlyOwner {
-        if (newBps > MAX_TRADE_FEE_BPS) revert FeeAboveCap();
+        // ADDITIVE ≤2% cap (§6.4/§12.63): treasury + creator legs together ≤ MAX_TRADE_FEE_BPS.
+        if (uint256(newBps) + creatorFeeBps > MAX_TRADE_FEE_BPS) revert FeeAboveCap();
         tradeFeeBps = newBps;
         emit TradeFeeUpdated(newBps);
+    }
+
+    /// @inheritdoc ICurveFactory
+    /// @dev Creator-leg default for FUTURE curves (spec §7, §12.63). Re-asserts the ADDITIVE cap.
+    ///      Live curves are unaffected — each snapshots its own rate at creation (§6.4).
+    function setCreatorFeeBps(uint16 newBps) external override onlyOwner {
+        if (uint256(tradeFeeBps) + newBps > MAX_TRADE_FEE_BPS) revert FeeAboveCap();
+        creatorFeeBps = newBps;
+        emit CreatorFeeUpdated(newBps);
+    }
+
+    /// @inheritdoc ICurveFactory
+    /// @dev ONE-TIME wiring of the pull-payment CreatorVault (spec §12.63), mirroring
+    ///      {setRouter}/{setMigrator}. Immutable-by-convention: reverts once set, so an owner can
+    ///      never repoint a live system's creator-fee sink. Non-zero required.
+    function setCreatorVault(address vault) external override onlyOwner {
+        if (creatorVault != address(0)) revert AlreadyInitialized();
+        if (vault == address(0)) revert ZeroAddress();
+        creatorVault = vault;
+        emit CreatorVaultSet(vault);
     }
 
     /// @inheritdoc ICurveFactory

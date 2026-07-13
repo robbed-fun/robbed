@@ -60,6 +60,10 @@ type Artifact = {
   router: string;
   v3Migrator: string;
   lpFeeVault: string;
+  // §12.63 pull-payment CreatorVault. OPTIONAL + additive: v1 artifacts predate it, so it is NOT in
+  // the required ADDR_KEYS set (that would break older deployments); validated + emitted only when
+  // a creator-fee deploy artifact carries it.
+  creatorVault?: string;
   treasury: string;
   canaryToken: string;
   canaryCurve: string;
@@ -130,6 +134,11 @@ for (const f of files) {
       process.exit(1);
     }
   }
+  // §12.63 optional creatorVault: absent on v1 artifacts (fine); if present it must be a valid addr.
+  if (a.creatorVault !== undefined && !isAddress(a.creatorVault)) {
+    console.error(`[codegen-addresses] ${f}: creatorVault present but not a valid address: ${String(a.creatorVault)}`);
+    process.exit(1);
+  }
   if (!VALID_MODES.has(a.mode)) {
     console.error(`[codegen-addresses] ${f}: unknown mode ${JSON.stringify(a.mode)} (expected one of ${[...VALID_MODES].join(", ")}).`);
     process.exit(1);
@@ -164,7 +173,7 @@ const entries = artifacts
       router: "${cs(a.router)}",
       v3Migrator: "${cs(a.v3Migrator)}",
       lpFeeVault: "${cs(a.lpFeeVault)}",
-      treasury: "${cs(a.treasury)}",
+      treasury: "${cs(a.treasury)}",${a.creatorVault ? `\n      creatorVault: "${cs(a.creatorVault)}",` : ""}
     },
     external: {
       weth: "${cs(a.weth)}",
@@ -217,6 +226,18 @@ export interface Deployment {
     v3Migrator: Address;
     lpFeeVault: Address;
     treasury: Address;
+    /**
+     * The Phase-2 pull-payment CreatorVault (spec §7 / §12.63). OPTIONAL +
+     * additive: absent on every v1 deployment (no vault exists until a
+     * creator-fee factory is deployed), so the existing entries below stay valid
+     * against this shape. Once a creator-fee deploy artifact carries it, codegen
+     * emits \`robbed.creatorVault\` and consumers (indexer CreatorVault source,
+     * web claim widget) get it typed. CODEGEN-LOCKSTEP (report): the pipeline's
+     * \`contracts/script/codegen-addresses.ts\` — \`Artifact\`/\`ADDR_KEYS\` + the
+     * \`robbed:\` emit block + this interface template — must add \`creatorVault\`
+     * (optional) so a regen doesn't drop this field; robbed-contracts owns that.
+     */
+    creatorVault?: Address;
   };
   /** Canonical externals wired at deploy (§12.28): WETH + the four Uniswap V3 addrs. */
   external: {

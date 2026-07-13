@@ -1,85 +1,87 @@
 {
- "meta": {
-  "gate": "M1-11 / spec \u00a710 gate 1 (static analysis)",
-  "generated": "2026-07-10",
-  "tools": {
-   "slither": "0.11.5",
-   "aderyn": "0.6.8",
-   "solhint": "6.2.3",
-   "forge": "1.7.1 (solc 0.8.35 pinned)"
+  "meta": {
+    "gate": "M1-11 / spec §10 gate 1 (static analysis)",
+    "generated": "2026-07-10",
+    "tools": {
+      "slither": "0.11.5",
+      "aderyn": "0.6.8",
+      "solhint": "6.2.3",
+      "forge": "1.7.1 (solc 0.8.35 pinned)"
+    },
+    "slither_invocation": "slither contracts --config-file contracts/slither.config.json --fail-low  (run from REPO ROOT; matches crytic/slither-action target=contracts, slither-version pinned 0.11.5 in CI for finding-ID parity)",
+    "rebaseline_2026-07-11": "slither.db.json re-keyed: the M1-11 DB was generated against pre-rebrand V3Migrator.sol; the f83967a rebrand's NatSpec edits shifted every V3Migrator function +3 lines, and Slither IDs embed node source-line mappings, so 21 of 40 entries (calls-loop x8, unused-return x4, reentrancy-events x3, reentrancy-balance x2, reentrancy-benign x2, incorrect-equality x2) got new IDs. Each was verified 1:1 identical in substance (same detector/impact/confidence, description byte-identical after stripping line numbers) to its dispositioned predecessor before re-keying; dispositions carried over verbatim, ZERO new-substance findings triaged. Entry count unchanged at 40. The M1-3 Swap/Collect event declarations added to the external interfaces produce no findings and were NOT the cause. scripts/validate.sh was also fixed to the canonical repo-root invocation (it previously ran `cd contracts && slither .`, under which the repo-root-relative triage DB silently failed to load).",
+    "aderyn_invocation": "aderyn -o aderyn.report.json  (run from contracts/, aderyn.toml scopes to src/)",
+    "solhint_invocation": "solhint 'src/**/*.sol'  (from contracts/, .solhint.json)",
+    "principle": "Every finding carries a written disposition. None is an exploitable High+; all are false-positive or acknowledged-by-design. Detectors stay LIVE (per-instance triage in slither.db.json), so any future diff touching a suppressed site re-surfaces the finding and re-fails the gate until re-dispositioned.",
+    "rebaseline_2026-07-13": "slither.db.json re-keyed for the §12.63 creator-fee landing (robbed-security gate-2 re-run F-2). The two-leg fee additions to BondingCurve.buy/sell/quote* + CurveFactory setters shifted source lines, and Slither IDs embed node source-line mappings, so line-shifted entries (reentrancy-benign on BondingCurve.buy — now also lists accruedCreatorFees — and the 2 reentrancy-balance V3Migrator instances) got new IDs; all were re-keyed by (check, location) preserving their prior disposition. TWO genuinely-new findings added for CreatorVault.claim: arbitrary-send-eth [High] + missing-zero-check [Low], both dispositioned FALSE-POSITIVE (creator = fee-earner, not arbitrary; zero creator carries zero balance). DB grew 40 -> 42. Detectors stay LIVE; future code re-triggers."
   },
-  "slither_invocation": "slither contracts --config-file contracts/slither.config.json --fail-low  (run from REPO ROOT; matches crytic/slither-action target=contracts, slither-version pinned 0.11.5 in CI for finding-ID parity)",
-  "rebaseline_2026-07-11": "slither.db.json re-keyed: the M1-11 DB was generated against pre-rebrand V3Migrator.sol; the f83967a rebrand's NatSpec edits shifted every V3Migrator function +3 lines, and Slither IDs embed node source-line mappings, so 21 of 40 entries (calls-loop x8, unused-return x4, reentrancy-events x3, reentrancy-balance x2, reentrancy-benign x2, incorrect-equality x2) got new IDs. Each was verified 1:1 identical in substance (same detector/impact/confidence, description byte-identical after stripping line numbers) to its dispositioned predecessor before re-keying; dispositions carried over verbatim, ZERO new-substance findings triaged. Entry count unchanged at 40. The M1-3 Swap/Collect event declarations added to the external interfaces produce no findings and were NOT the cause. scripts/validate.sh was also fixed to the canonical repo-root invocation (it previously ran `cd contracts && slither .`, under which the repo-root-relative triage DB silently failed to load).",
-  "aderyn_invocation": "aderyn -o aderyn.report.json  (run from contracts/, aderyn.toml scopes to src/)",
-  "solhint_invocation": "solhint 'src/**/*.sol'  (from contracts/, .solhint.json)",
-  "principle": "Every finding carries a written disposition. None is an exploitable High+; all are false-positive or acknowledged-by-design. Detectors stay LIVE (per-instance triage in slither.db.json), so any future diff touching a suppressed site re-surfaces the finding and re-fails the gate until re-dispositioned."
- },
- "slither": {
-  "run_from": "repo root, target=contracts",
-  "config_excluded_informational_classes": {
-   "naming-convention": "40 hits \u2014 deliberate UPPER_SNAKE_CASE public view getters mirroring immutables; canonical ABI names consumed by indexer/frontend (contracts.md \u00a77.4, spec \u00a712.38). Style, no security impact.",
-   "low-level-calls": "2 \u2014 ETH sent via .call{value:}('') with typed reverts (spec \u00a75.4); recipients are treasury/seller/graduation-caller, each nonReentrant+CEI.",
-   "too-many-digits": "1 \u2014 CREATE2 init-code keccak literal in _computeCurveAddress.",
-   "cyclomatic-complexity": "1 \u2014 BondingCurve.buy intentionally linear for auditability.",
-   "unindexed-event-address": "2 \u2014 RouterSet/MigratorSet one-time deploy-wiring admin events; not indexed."
+  "slither": {
+    "run_from": "repo root, target=contracts",
+    "config_excluded_informational_classes": {
+      "naming-convention": "40 hits — deliberate UPPER_SNAKE_CASE public view getters mirroring immutables; canonical ABI names consumed by indexer/frontend (contracts.md §7.4, spec §12.38). Style, no security impact.",
+      "low-level-calls": "2 — ETH sent via .call{value:}('') with typed reverts (spec §5.4); recipients are treasury/seller/graduation-caller, each nonReentrant+CEI.",
+      "too-many-digits": "1 — CREATE2 init-code keccak literal in _computeCurveAddress.",
+      "cyclomatic-complexity": "1 — BondingCurve.buy intentionally linear for auditability.",
+      "unindexed-event-address": "2 — RouterSet/MigratorSet one-time deploy-wiring admin events; not indexed."
+    },
+    "per_instance_triaged_db": "contracts/slither.db.json (40 findings, content-hash keyed)",
+    "dispositions": {
+      "reentrancy-balance [High] x2 V3Migrator._mintAndSettle": "FALSE-POSITIVE. External call is NPM.mint() to trusted immutable Uniswap NPM (§12.28, asserted at deploy). Stale bal feeds only amount*Desired + post-mint m.liquidity==0 guard (defense-in-depth). LaunchToken/WETH have no transfer hooks; swap-callback surface closed by _activePool guard which returns before mint.",
+      "incorrect-equality [Medium] x2 (m.liquidity==0, budget==0)": "FALSE-POSITIVE. Exact zero-guards on integers from trusted returns / in-contract math; strict == is correct, not a balance/timestamp equality.",
+      "reentrancy-no-eth [Medium] x2 (CurveFactory.createToken, BondingCurve.buy)": "FALSE-POSITIVE. Pre-write call is to trusted immutable factory/migrator (initializePool touches only V3; recordEthDelta is a bounded accumulator). Both entrypoints nonReentrant; onlyRouter on createToken. Post-call writes are pre-computed. BondingCurve.buy CEI-ordering nuance (recordEthDelta ahead of effects) acknowledged — safe, trusted callee cannot reenter.",
+      "uninitialized-local [Medium] x4": "FALSE-POSITIVE. Ctx/MintLocals memory structs fully field-populated before read; wethArbSpent/refund are intentional 0-init uint256.",
+      "unused-return [Medium] x11": "INTENTIONAL. Router discards tuple fields re-emitted in events or unneeded by the thin router; V3Migrator slot0() partial-destructure reads only sqrtPrice/tick; pool.swap() deltas unneeded (spend via WETH balance delta, price-capped); graduate discards migrate() returns (migrator emits Graduated).",
+      "calls-loop [Low] x8 V3Migrator arb loop": "INTENTIONAL. Bounded (MAX_ARB_ITERATIONS) iterative price correction (§6.3.2) inherently calls slot0/balance/swap per iteration; trusted V3 pool/WETH; clean revert on budget exhaustion, never a hostile mint.",
+      "reentrancy-benign [Low] x4": "BENIGN (Slither classification). State-after-call to trusted factory/migrator/NPM, no attacker reentry (nonReentrant, no token hooks).",
+      "reentrancy-events [Low] x5": "FALSE-POSITIVE. Events after trusted external calls; ordering affects logs only, never funds/control-flow. Incl. LPFeeVault.collect after NPM.collect.",
+      "timestamp [Low] x1 BondingCurve.buy": "REQUIRED BY SPEC. Anti-sniper window uses block.timestamp because block.number is BANNED on Orbit (spec §2/§6.5). ~100ms blocks vs seconds-scale window → sub-second skew immaterial; acknowledged bypass is multi-wallet, not timestamp gaming.",
+      "arbitrary-send-eth [High] x2 (Router._sendEth, CreatorVault.claim)": "FALSE-POSITIVE. private fn, single caller = createToken creation-fee push to factoryContract.treasury() (factory-configured, never caller-supplied, §4.1); nonReentrant+CEI.  |  CreatorVault.claim(creator): FALSE-POSITIVE (§12.63) — sends the creator's OWN accrued balanceOf[creator] to that SAME creator (fee-earner, never arbitrary/caller-supplied); permissionless in caller, fixed in recipient (LPFeeVault.collect pattern); nonReentrant+CEI; a hostile creator reverts only its own claim (retriable), never a trade.",
+      "missing-zero-check [Low] x1 CreatorVault.claim.creator": "FALSE-POSITIVE (§12.63). Zero `creator` is unreachable-with-value: deposit() reverts ZeroAddress on a zero creator so balanceOf[address(0)]==0, and claim() guards the send with `if (amount!=0)` — a zero-balance claim sends nothing. No ETH reaches address(0); a redundant check only bloats the minimal-surface vault (§6.6)."
+    }
   },
-  "per_instance_triaged_db": "contracts/slither.db.json (40 findings, content-hash keyed)",
-  "dispositions": {
-   "arbitrary-send-eth [High] x1 Router._sendEth": "FALSE-POSITIVE. private fn, single caller = createToken creation-fee push to factoryContract.treasury() (factory-configured, never caller-supplied, \u00a74.1); nonReentrant+CEI.",
-   "reentrancy-balance [High] x2 V3Migrator._mintAndSettle": "FALSE-POSITIVE. External call is NPM.mint() to trusted immutable Uniswap NPM (\u00a712.28, asserted at deploy). Stale bal feeds only amount*Desired + post-mint m.liquidity==0 guard (defense-in-depth). LaunchToken/WETH have no transfer hooks; swap-callback surface closed by _activePool guard which returns before mint.",
-   "incorrect-equality [Medium] x2 (m.liquidity==0, budget==0)": "FALSE-POSITIVE. Exact zero-guards on integers from trusted returns / in-contract math; strict == is correct, not a balance/timestamp equality.",
-   "reentrancy-no-eth [Medium] x2 (CurveFactory.createToken, BondingCurve.buy)": "FALSE-POSITIVE. Pre-write call is to trusted immutable factory/migrator (initializePool touches only V3; recordEthDelta is a bounded accumulator). Both entrypoints nonReentrant; onlyRouter on createToken. Post-call writes are pre-computed. BondingCurve.buy CEI-ordering nuance (recordEthDelta ahead of effects) acknowledged \u2014 safe, trusted callee cannot reenter.",
-   "uninitialized-local [Medium] x4": "FALSE-POSITIVE. Ctx/MintLocals memory structs fully field-populated before read; wethArbSpent/refund are intentional 0-init uint256.",
-   "unused-return [Medium] x11": "INTENTIONAL. Router discards tuple fields re-emitted in events or unneeded by the thin router; V3Migrator slot0() partial-destructure reads only sqrtPrice/tick; pool.swap() deltas unneeded (spend via WETH balance delta, price-capped); graduate discards migrate() returns (migrator emits Graduated).",
-   "calls-loop [Low] x8 V3Migrator arb loop": "INTENTIONAL. Bounded (MAX_ARB_ITERATIONS) iterative price correction (\u00a76.3.2) inherently calls slot0/balance/swap per iteration; trusted V3 pool/WETH; clean revert on budget exhaustion, never a hostile mint.",
-   "reentrancy-benign [Low] x4": "BENIGN (Slither classification). State-after-call to trusted factory/migrator/NPM, no attacker reentry (nonReentrant, no token hooks).",
-   "reentrancy-events [Low] x5": "FALSE-POSITIVE. Events after trusted external calls; ordering affects logs only, never funds/control-flow. Incl. LPFeeVault.collect after NPM.collect.",
-   "timestamp [Low] x1 BondingCurve.buy": "REQUIRED BY SPEC. Anti-sniper window uses block.timestamp because block.number is BANNED on Orbit (spec \u00a72/\u00a76.5). ~100ms blocks vs seconds-scale window \u2192 sub-second skew immaterial; acknowledged bypass is multi-wallet, not timestamp gaming."
-  }
- },
- "aderyn": {
-  "report": "contracts/aderyn.report.json",
-  "note": "Aderyn 'high' = its detector taxonomy, not exploitability; all map to the same Slither dispositions above or are acknowledged-by-design. Aderyn is report-only (exit 0); Slither + greps are the hard gate.",
-  "dispositions": {
-   "Contract locks Ether without a withdraw function [High] V3Migrator:99": "ACKNOWLEDGED-BY-DESIGN. Migrator holds no resting ETH: msg.value is wrapped to WETH up-front and fully deployed into the V3 position + dust settlement in the same call. Ownerless/immutable by design (spec \u00a76, like LPFeeVault) \u2014 a no-withdraw contract is the intended posture; only a griefer's force-sent dust could ever be stuck, never user/curve funds.",
-   "ETH transferred without address checks [High] x3 (BondingCurve.sweepFees/graduate, Router.createToken)": "FALSE-POSITIVE. Recipients are the factory treasury (validated non-zero at factory config) or msg.sender/seller (a live caller, never zero). No caller-supplied destination.",
-   "Reentrancy: State change after external call [High] x4 (BondingCurve ctor/buy, CurveFactory.createToken)": "FALSE-POSITIVE. Same trusted-callee + nonReentrant analysis as Slither reentrancy-no-eth. Constructor is CREATE2 one-shot (no reentry surface).",
-   "Centralization Risk [Low] x12 CurveFactory": "ACKNOWLEDGED-BY-DESIGN. Owner = Gnosis Safe (Ownable2Step); powers strictly bounded (pauseCreates/pauseBuys, fee retune within immutable ceilings for future curves, treasury pointer, beta caps). CANNOT touch live-curve economics, pause sells, upgrade, or extract from vault (contracts.md \u00a77.3, spec \u00a76.6). Spec-mandated admin surface.",
-   "Large Numeric Literal [Low] x3": "STYLE. Constants (BPS denom, sqrtPrice/tick). Same class as too-many-digits.",
-   "Local Variable Shadows State Variable [Low] x18": "FALSE-POSITIVE. Constructor params / CurveParameters staging-struct fields share names with the immutables they initialize; assignment context, no read of the shadowed storage before assignment. Compiler + gate-2 invariants confirm no logic error.",
-   "Modifier Invoked Only Once [Low] x2": "STYLE (onlyRouter/onlyOwner used once at current surface).",
-   "Loop Contains require/revert [Low] x1 V3Migrator:269": "INTENTIONAL. Same as calls-loop; bounded arb loop reverts on budget exhaustion.",
-   "State Change Without Event [Low] x2 (graduate phase, factory unstage)": "ACKNOWLEDGED. graduate emits Graduated via migrator; _stagedParams unstage is transient within the same tx.",
-   "Address State Variable Set Without Checks [Low] x1 V3Migrator._activePool": "FALSE-POSITIVE. _activePool is the transient swap-callback guard set to c.pool (already checked != address(0) at L247).",
-   "Unchecked Return [Low] x1 V3Migrator pool.swap": "INTENTIONAL. Swap deltas unused (spend measured via WETH balance delta, price-capped to targetSqrt).",
-   "Unused Import [Low] x1 V3Migrator:14 IUniswapV3SwapCallback": "ROUTED to hoodpad-contracts \u2014 Informational cleanup. IV3Migrator already inherits IUniswapV3SwapCallback, so the direct import is redundant (only referenced by the @inheritdoc natspec). Non-security, non-blocking; remove only if @inheritdoc still resolves."
-  }
- },
- "solhint": {
-  "result": "0 errors, 285 warnings, exit 0. Load-bearing rules are error-level and PASS: compiler-version==0.8.35 (exact pin \u00a76.7), no-global-import, gas-custom-errors, func-visibility.",
-  "warning_class_dispositions": {
-   "import-path-check": "FALSE-POSITIVE. solhint does not read Foundry remappings, so it cannot resolve @openzeppelin/*; the imports exist and forge build passes.",
-   "immutable-vars-naming / SNAKE_CASE": "Deliberate \u2014 same rationale as Slither naming-convention (canonical ABI getter names).",
-   "use-natspec (missing @author/@notice/@return)": "STYLE. External-interface mirrors of Uniswap/ArbSys; non-blocking.",
-   "gas-strict-inequalities / other GC gas hints": "Advisory gas suggestions, not correctness."
-  }
- },
- "greps": {
-  "result": "clean on src/ (comment-stripped, case-sensitive)",
-  "checks": [
-   "block.number \u2014 none (spec \u00a72/\u00a76.5)",
-   "^0.8 / >=0.8 pragma ranges \u2014 none; single exact pin 0.8.35 (spec \u00a76.7)",
-   "checkFee caller-supplied fee \u2014 none (spec \u00a74.1)",
-   "Pausable/whenNotPaused \u2014 none (spec \u00a76.5)",
-   "pauseSell identifier \u2014 none (only a doc-comment asserting its absence)"
+  "aderyn": {
+    "report": "contracts/aderyn.report.json",
+    "note": "Aderyn 'high' = its detector taxonomy, not exploitability; all map to the same Slither dispositions above or are acknowledged-by-design. Aderyn is report-only (exit 0); Slither + greps are the hard gate.",
+    "dispositions": {
+      "Contract locks Ether without a withdraw function [High] V3Migrator:99": "ACKNOWLEDGED-BY-DESIGN. Migrator holds no resting ETH: msg.value is wrapped to WETH up-front and fully deployed into the V3 position + dust settlement in the same call. Ownerless/immutable by design (spec §6, like LPFeeVault) — a no-withdraw contract is the intended posture; only a griefer's force-sent dust could ever be stuck, never user/curve funds.",
+      "ETH transferred without address checks [High] x3 (BondingCurve.sweepFees/graduate, Router.createToken)": "FALSE-POSITIVE. Recipients are the factory treasury (validated non-zero at factory config) or msg.sender/seller (a live caller, never zero). No caller-supplied destination.",
+      "Reentrancy: State change after external call [High] x4 (BondingCurve ctor/buy, CurveFactory.createToken)": "FALSE-POSITIVE. Same trusted-callee + nonReentrant analysis as Slither reentrancy-no-eth. Constructor is CREATE2 one-shot (no reentry surface).",
+      "Centralization Risk [Low] x12 CurveFactory": "ACKNOWLEDGED-BY-DESIGN. Owner = Gnosis Safe (Ownable2Step); powers strictly bounded (pauseCreates/pauseBuys, fee retune within immutable ceilings for future curves, treasury pointer, beta caps). CANNOT touch live-curve economics, pause sells, upgrade, or extract from vault (contracts.md §7.3, spec §6.6). Spec-mandated admin surface.",
+      "Large Numeric Literal [Low] x3": "STYLE. Constants (BPS denom, sqrtPrice/tick). Same class as too-many-digits.",
+      "Local Variable Shadows State Variable [Low] x18": "FALSE-POSITIVE. Constructor params / CurveParameters staging-struct fields share names with the immutables they initialize; assignment context, no read of the shadowed storage before assignment. Compiler + gate-2 invariants confirm no logic error.",
+      "Modifier Invoked Only Once [Low] x2": "STYLE (onlyRouter/onlyOwner used once at current surface).",
+      "Loop Contains require/revert [Low] x1 V3Migrator:269": "INTENTIONAL. Same as calls-loop; bounded arb loop reverts on budget exhaustion.",
+      "State Change Without Event [Low] x2 (graduate phase, factory unstage)": "ACKNOWLEDGED. graduate emits Graduated via migrator; _stagedParams unstage is transient within the same tx.",
+      "Address State Variable Set Without Checks [Low] x1 V3Migrator._activePool": "FALSE-POSITIVE. _activePool is the transient swap-callback guard set to c.pool (already checked != address(0) at L247).",
+      "Unchecked Return [Low] x1 V3Migrator pool.swap": "INTENTIONAL. Swap deltas unused (spend measured via WETH balance delta, price-capped to targetSqrt).",
+      "Unused Import [Low] x1 V3Migrator:14 IUniswapV3SwapCallback": "ROUTED to hoodpad-contracts — Informational cleanup. IV3Migrator already inherits IUniswapV3SwapCallback, so the direct import is redundant (only referenced by the @inheritdoc natspec). Non-security, non-blocking; remove only if @inheritdoc still resolves."
+    }
+  },
+  "solhint": {
+    "result": "0 errors, 285 warnings, exit 0. Load-bearing rules are error-level and PASS: compiler-version==0.8.35 (exact pin §6.7), no-global-import, gas-custom-errors, func-visibility.",
+    "warning_class_dispositions": {
+      "import-path-check": "FALSE-POSITIVE. solhint does not read Foundry remappings, so it cannot resolve @openzeppelin/*; the imports exist and forge build passes.",
+      "immutable-vars-naming / SNAKE_CASE": "Deliberate — same rationale as Slither naming-convention (canonical ABI getter names).",
+      "use-natspec (missing @author/@notice/@return)": "STYLE. External-interface mirrors of Uniswap/ArbSys; non-blocking.",
+      "gas-strict-inequalities / other GC gas hints": "Advisory gas suggestions, not correctness."
+    }
+  },
+  "greps": {
+    "result": "clean on src/ (comment-stripped, case-sensitive)",
+    "checks": [
+      "block.number — none (spec §2/§6.5)",
+      "^0.8 / >=0.8 pragma ranges — none; single exact pin 0.8.35 (spec §6.7)",
+      "checkFee caller-supplied fee — none (spec §4.1)",
+      "Pausable/whenNotPaused — none (spec §6.5)",
+      "pauseSell identifier — none (only a doc-comment asserting its absence)"
+    ]
+  },
+  "routed_to_contracts": [
+    {
+      "severity": "Informational",
+      "finding": "Unused import IUniswapV3SwapCallback at src/V3Migrator.sol:14 (redundant; IV3Migrator already inherits it)",
+      "action": "optional cleanup, verify @inheritdoc still resolves",
+      "spec": "n/a"
+    }
   ]
- },
- "routed_to_contracts": [
-  {
-   "severity": "Informational",
-   "finding": "Unused import IUniswapV3SwapCallback at src/V3Migrator.sol:14 (redundant; IV3Migrator already inherits it)",
-   "action": "optional cleanup, verify @inheritdoc still resolves",
-   "spec": "n/a"
-  }
- ]
 }

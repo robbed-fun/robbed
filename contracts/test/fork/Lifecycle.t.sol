@@ -13,6 +13,7 @@ import {LaunchToken} from "src/LaunchToken.sol";
 import {Router} from "src/Router.sol";
 import {V3Migrator} from "src/V3Migrator.sol";
 import {LPFeeVault} from "src/LPFeeVault.sol";
+import {CreatorVault} from "src/CreatorVault.sol";
 import {ICurveFactory} from "src/interfaces/ICurveFactory.sol";
 import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
 import {IUniswapV3Factory} from "src/interfaces/external/IUniswapV3Factory.sol";
@@ -148,6 +149,80 @@ contract LifecycleForkTest is Test {
         _stage5_graduate();
         _stage6_generateV3Fees();
         _stage7_collectToTreasury();
+    }
+
+    // ═══════════════ GATE-3 §12.63: HOSTILE CREATOR NEVER FREEZES SELLS ═════════════
+    // Live-chain mirror of _tmT1_sellClearsWhileTreasuryReverts, for the Phase-2 creator leg.
+
+    /// @notice Deploys a creator-fee-enabled stack (creatorFeeBps = 50, the ratified §12.63 testnet
+    ///         placeholder) + a CreatorVault, creates a token whose creator address is then etched
+    ///         with reverting bytecode (the same technique the treasury TM-T1 fork test uses), and
+    ///         proves against the REAL chain that: a buy and a sell both clear (fees accrue
+    ///         in-contract, no creator/vault call on the trade path); `sweepCreatorFees()` always
+    ///         lands the escrow in the vault; and the hostile creator's own `claim` reverts in
+    ///         isolation (retriable) — freezing nothing but its own revenue. Uses the real §12.28 V3
+    ///         pool-init at create and the real ArbSys/timestamp clock.
+    function test_fork_hostileCreatorNeverFreezesSells() public {
+        if (!forked) vm.skip(true);
+        _stage0_configAndRuntimeAsserts();
+
+        // Parallel creator-fee stack (mirrors _stage1 with a live creator leg + CreatorVault).
+        LPFeeVault lpVault = new LPFeeVault(npmAddr, treasury);
+        CurveFactory f = new CurveFactory(TestConstants.factoryInit(treasury, safeOwner, WETH, 50));
+        V3Migrator m =
+            new V3Migrator(TestConstants.migratorInit(address(f), v3FactoryAddr, npmAddr, WETH, address(lpVault)));
+        Router rtr = new Router(ICurveFactory(address(f)));
+        CreatorVault cVault = new CreatorVault(address(f));
+        vm.startPrank(safeOwner);
+        f.setMigrator(address(m));
+        f.setRouter(address(rtr));
+        f.setCreatorVault(address(cVault));
+        vm.stopPrank();
+
+        // Create with a plain creator address, then etch reverting code onto it (TM-T1 technique).
+        address hostile = makeAddr("forkHostileCreator");
+        uint256 creationFee = f.creationFee();
+        vm.deal(hostile, creationFee);
+        vm.prank(hostile);
+        (address t, address c,) =
+            rtr.createToken{value: creationFee}("HostileC", "HC", keccak256("hc-meta"), "ipfs://hc", 0, block.timestamp);
+        LaunchToken tk = LaunchToken(t);
+        BondingCurve cv = BondingCurve(payable(c));
+        assertEq(cv.creator(), hostile, "creator not set to the hostile address");
+        assertEq(cv.CREATOR_FEE_BPS(), 50, "creator leg not live on the fork");
+
+        vm.etch(hostile, hex"60006000fd"); // PUSH1 0x00 PUSH1 0x00 REVERT — reverts on any call
+        vm.warp(uint256(cv.EARLY_WINDOW_END())); // past the anti-sniper window (real-chain clock)
+
+        // A BUY clears; both fee legs accrue in-contract (no creator/vault push on the trade path).
+        vm.deal(alice, 1 ether);
+        vm.prank(alice);
+        uint256 bought = rtr.buy{value: 1 ether}(t, alice, 0, block.timestamp);
+        assertGt(bought, 0, "12.63 fork: buy frozen by a hostile creator");
+        assertGt(cv.accruedCreatorFees(), 0, "12.63 fork: creator leg did not accrue in-contract");
+
+        // A SELL clears — the decisive property.
+        uint256 amt = tk.balanceOf(alice);
+        uint256 aliceBefore = alice.balance;
+        vm.startPrank(alice);
+        tk.approve(address(rtr), amt);
+        uint256 out = rtr.sell(t, amt, alice, 0, block.timestamp);
+        vm.stopPrank();
+        assertGt(out, 0, "12.63 fork: SELL FROZEN by a hostile creator (spec 6.5/12.63 violation)");
+        assertEq(alice.balance - aliceBefore, out, "12.63 fork: seller not paid under a hostile creator");
+
+        // sweepCreatorFees ALWAYS lands the escrow in the vault (the deposit is a non-reverting
+        // accumulate), even though the creator reverts on receive.
+        uint256 escrow = cv.accruedCreatorFees();
+        assertGt(escrow, 0, "no creator escrow to sweep");
+        assertEq(cv.sweepCreatorFees(), escrow, "sweep != escrow");
+        assertEq(cVault.balanceOf(hostile), escrow, "vault not credited the hostile creator");
+        assertEq(cv.accruedCreatorFees(), 0, "escrow not cleared after sweep");
+
+        // The creator's OWN claim reverts (isolated, retriable) — froze nothing but its own revenue.
+        vm.expectRevert();
+        cVault.claim(hostile);
+        assertEq(cVault.balanceOf(hostile), escrow, "claim revert must preserve the vault balance");
     }
 
     // ── Stage 0: config from tools/m0/out/constants.json + §12.28 runtime asserts ──

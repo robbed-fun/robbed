@@ -66,6 +66,12 @@ error FeeAboveCap();
 ///         (contracts.md §2.2). Never raised on ETH-decreasing operations (sells/graduation).
 error CapExceeded();
 
+/// @notice A launch with a non-zero `creatorFeeBps` was attempted while the CreatorVault is unwired
+///         (spec §7, §12.63). Fail-closed so creator-fee ETH can never accrue with nowhere to sweep
+///         it (a call to the zero-address vault would burn it). At `creatorFeeBps == 0` the vault is
+///         not required and this never fires — backward-compatible with the treasury-only v1.
+error CreatorVaultUnset();
+
 // ─────────────────────────────── BondingCurve (§2.3) ───────────────────────────
 
 /// @notice Curve phase != Trading (buy/sell after lock or graduation) (contracts.md §2.3).

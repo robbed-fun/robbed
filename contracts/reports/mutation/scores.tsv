@@ -3,3 +3,6 @@ CurveMath.sol	64	58	6	0.906	universalmutator-1.14.1
 V3Migrator.sol(arb-back)	200	117	83	0.585	universalmutator-1.14.1
 V3Migrator.sol(arb-back)+M113-followup-killtests	200	160	40	0.800	universalmutator-1.14.1+survivor-rerun-2026-07-11
 V3Migrator.sol(arb-back)+M112-fork-discharge	200	160	40	0.800	forkslice-rerun-2026-07-12(14xFORK->DID-local-calibration+fork-confirmed-unmutated-min-liveness;0-env-gated;calibration-pinned:GradCalibrationGuard.t.sol+Deploy-consistencyChecks)
+BondingCurve.sol(fee-split §12.63) unit-tier	490	454	36	0.926	universalmutator-1.14.1(run_bondingcurve_fees_tests.sh; §12.63 F-3 re-run 2026-07-13)
+BondingCurve.sol(fee-split §12.63)+fuzz-survivor-rerun+2-killtests	490	475	15	0.969	universalmutator-1.14.1+survivor-rerun(run_bondingcurve_fees_survivors.sh: fuzz kills 20/36)+deterministic-killtests(test_clampSplit_nonZeroCreatorLeg_exact->398, test_quoteBuy_tokensOutParity_withCreatorLeg->301); 15 survivors ALL provably-equivalent (1.000 excl. equivalents)
+CurveFactory.sol(additive-cap §12.63)	96	96	0	1.000	universalmutator-1.14.1(run_factory_cap_tests.sh; 95 auto + mutant.40 `!=cap` killed by sub-cap success assertion)

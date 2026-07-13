@@ -53,6 +53,11 @@ interface IBondingCurve {
     ///         `treasury` is read live from the factory at sweep time.
     event FeesSwept(address indexed treasury, uint256 amount);
 
+    /// @notice Pull-payment sweep of accrued creator-fee-leg ETH to the CreatorVault, credited to
+    ///         this curve's `creator` (spec §7, §12.63). Permissionless, non-trade-path. Only emitted
+    ///         on curves with a non-zero `CREATOR_FEE_BPS`; at 0 the creator leg is inert.
+    event CreatorFeesSwept(address indexed creator, address indexed vault, uint256 amount);
+
     // ─────────────────────────────── Trading (Router-only) ─────────────────────
 
     /// @notice Buy tokens with ETH (net of in-contract fee). Router-only.
@@ -108,6 +113,17 @@ interface IBondingCurve {
     /// @return swept The amount sent to the treasury.
     function sweepFees() external returns (uint256 swept);
 
+    /// @notice Permissionless, non-phase-gated pull-payment of accrued creator-fee-leg ETH to the
+    ///         CreatorVault, credited to this curve's `creator` (spec §7, §12.63).
+    /// @dev Mirrors {sweepFees}: zeroes `accruedCreatorFees` first (CEI), then pushes to
+    ///      `ICreatorVault(creatorVault).deposit{value}(creator)`. `nonReentrant`. Works in EVERY
+    ///      phase including Graduated. The vault `deposit` is a trusted, non-reverting accumulate, so
+    ///      this ALWAYS clears the escrow regardless of creator behavior — a hostile creator can only
+    ///      ever revert their own downstream {ICreatorVault.claim}, never this sweep and never a
+    ///      trade. Touches NO curve reserve. No-op (sends nothing) when `CREATOR_FEE_BPS == 0`.
+    /// @return swept The amount deposited to the vault for the creator.
+    function sweepCreatorFees() external returns (uint256 swept);
+
     // ─────────────────────────────── Graduation ────────────────────────────────
 
     /// @notice Permissionless graduation once realEthReserves == GRADUATION_ETH
@@ -140,9 +156,15 @@ interface IBondingCurve {
     /// @notice Current lifecycle phase.
     function phase() external view returns (Phase);
 
-    /// @notice Unswept ETH-leg trade fees held in escrow (spec §12.25). Solvency holds
-    ///         `address(this).balance >= realEthReserves + accruedFees` at all times.
+    /// @notice Unswept treasury-leg trade fees held in escrow (spec §12.25). Solvency holds
+    ///         `address(this).balance >= realEthReserves + accruedFees + accruedCreatorFees` at all
+    ///         times (the §12.63-extended form; at `CREATOR_FEE_BPS == 0` the creator term is 0 and
+    ///         this reduces to the §12.25 form).
     function accruedFees() external view returns (uint256);
+
+    /// @notice Unswept creator-leg fees held in escrow (spec §7, §12.63). Always 0 while
+    ///         `CREATOR_FEE_BPS == 0`. Swept to the CreatorVault by {sweepCreatorFees}.
+    function accruedCreatorFees() external view returns (uint256);
 
     /// @notice Deployment timestamp (anti-sniper window anchor).
     function createdAt() external view returns (uint64);
@@ -152,6 +174,18 @@ interface IBondingCurve {
 
     /// @notice The LaunchToken this curve sells.
     function token() external view returns (address);
+
+    /// @notice The token creator — beneficiary of the creator-fee leg (spec §7, §12.63). Snapshotted
+    ///         at creation; event-only authority (carries no admin power over the curve).
+    function creator() external view returns (address);
+
+    /// @notice The CreatorVault this curve sweeps its creator-fee leg to (spec §12.63). Snapshotted
+    ///         at creation; may be address(0) on a curve created with `CREATOR_FEE_BPS == 0`.
+    function creatorVault() external view returns (address);
+
+    /// @notice Creator-fee leg in bps (spec §7, §12.63). Snapshotted; `TRADE_FEE_BPS + CREATOR_FEE_BPS
+    ///         ≤ 200` guaranteed by the factory. 0 on v1/mainnet curves.
+    function CREATOR_FEE_BPS() external view returns (uint16);
 
     /// @notice Initial virtual ETH reserves (M0 constants).
     function VIRTUAL_ETH_0() external view returns (uint256);

@@ -7,6 +7,7 @@ import {CurveFactory} from "src/CurveFactory.sol";
 import {V3Migrator} from "src/V3Migrator.sol";
 import {Router} from "src/Router.sol";
 import {LPFeeVault} from "src/LPFeeVault.sol";
+import {CreatorVault} from "src/CreatorVault.sol";
 import {BondingCurve} from "src/BondingCurve.sol";
 
 import {ICurveFactory} from "src/interfaces/ICurveFactory.sol";
@@ -162,6 +163,7 @@ contract Deploy is Script {
 
     // ── deployed ROBBED_ topology ──
     LPFeeVault internal vault;
+    CreatorVault internal creatorVault;
     CurveFactory internal factory;
     V3Migrator internal migrator;
     Router internal router;
@@ -368,6 +370,10 @@ contract Deploy is Script {
         p.lpTranche = vm.parseJsonUint(cj, ".curve.lpTrancheWei");
         p.graduationEth = vm.parseJsonUint(cj, ".curve.graduationEthWei");
         p.tradeFeeBps = uint16(vm.parseJsonUint(cj, ".fees.tradeFeeBps"));
+        // Creator-fee leg (spec §7, §12.63) — read from constants, NEVER inlined (spec §2/§6.4).
+        // Mainnet `constants.json` = 0 (Phase-2 disabled until a §12.62 re-derivation); testnet
+        // `constants.testnet.json` = the ratified 50 (treasury 100 + creator 50 = 150 ≤ 200 cap).
+        p.creatorFeeBps = uint16(vm.parseJsonUint(cj, ".fees.creatorFeeBps"));
         p.creationFee = vm.parseJsonUint(cj, ".fees.creationFeeWei");
         p.maxCreationFee = vm.parseJsonUint(cj, ".fees.maxCreationFeeWei");
         p.graduationFee = vm.parseJsonUint(cj, ".fees.graduationFeeWei");
@@ -441,15 +447,19 @@ contract Deploy is Script {
 
     // ──────────────────────────── deploy topology ──────────────────────────────
 
-    /// @dev §7.2 order: (1) vault (treasury frozen forever) → (2) factory → (3) migrator →
-    ///      (4) router → (5) one-time setters. Topology is immutable after the setters (spec §6).
+    /// @dev §7.2 order: (1) LP vault (treasury frozen forever) → (2) factory → (3) migrator →
+    ///      (4) router → (4b) CreatorVault (needs the factory address; resolves the factory↔vault
+    ///      cycle via the one-time-setter pattern, spec §12.63) → (5) one-time setters
+    ///      (migrator/router/creatorVault). Topology is immutable after the setters (spec §6).
     function _deployTopology() internal {
         vault = new LPFeeVault(npm, treasury); // 1
         factory = new CurveFactory(_factoryInit()); // 2
         migrator = new V3Migrator(_migratorInit()); // 3
         router = new Router(ICurveFactory(address(factory))); // 4
+        creatorVault = new CreatorVault(address(factory)); // 4b — pull-payment creator-fee sink (§12.63)
         factory.setMigrator(address(migrator)); // 5
         factory.setRouter(address(router));
+        factory.setCreatorVault(address(creatorVault));
     }
 
     // ─────────────────────────────── canary smoke ──────────────────────────────
@@ -502,6 +512,7 @@ contract Deploy is Script {
         vm.serializeAddress(k, "router", address(router));
         vm.serializeAddress(k, "v3Migrator", address(migrator));
         vm.serializeAddress(k, "lpFeeVault", address(vault));
+        vm.serializeAddress(k, "creatorVault", address(creatorVault));
         vm.serializeAddress(k, "treasury", treasury);
         vm.serializeAddress(k, "canaryToken", canaryToken);
         vm.serializeAddress(k, "canaryCurve", canaryCurve);

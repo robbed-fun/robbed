@@ -23,6 +23,15 @@ library TestConstants {
 
     // ── fees (constants.json.fees) ──
     uint16 internal constant TRADE_FEE_BPS = 100;
+    /// @dev Creator-fee leg (spec §7, §12.63). Mirrors MAINNET `constants.json.fees.creatorFeeBps`
+    ///      = 0, so the base fixture is byte-identical to the treasury-only v1 and the existing gate-2
+    ///      suite is unchanged. The Phase-2 creator-leg suites pass a non-zero override
+    ///      ({factoryInit} 4-arg form). Testnet deploys the ratified §12.63 value (50) from
+    ///      `constants.testnet.json` — never inlined into curve logic.
+    uint16 internal constant CREATOR_FEE_BPS = 0;
+    /// @dev The ratified §12.63 testnet placeholder split (treasury 100 + creator 50 = 150 ≤ 200).
+    ///      Used by the Phase-2 creator-fee test suites; the final mainnet value is a §13/§12.62 knob.
+    uint16 internal constant CREATOR_FEE_BPS_TESTNET = 50;
     uint256 internal constant CREATION_FEE = 825_000_000_000_000;
     uint256 internal constant MAX_CREATION_FEE = 16_500_000_000_000_000;
     uint256 internal constant GRADUATION_FEE = 122_085_000_000_000;
@@ -57,8 +66,20 @@ library TestConstants {
 
     /// @notice Factory init with a WETH override — the gate-2 invariant-6 / migrator suites deploy a
     ///         local {MockWETH9} (the canonical address has no code locally) and must bind the whole
-    ///         stack to it.
+    ///         stack to it. Uses the default (mainnet-mirroring) `CREATOR_FEE_BPS == 0`.
     function factoryInit(address treasury, address owner, address weth_)
+        internal
+        pure
+        returns (CurveFactory.FactoryInit memory)
+    {
+        return factoryInit(treasury, owner, weth_, CREATOR_FEE_BPS);
+    }
+
+    /// @notice Factory init with a WETH override AND a creator-fee-leg override (spec §12.63) — the
+    ///         Phase-2 creator-fee suites pass a non-zero `creatorFeeBps_` (e.g. the testnet 50, or
+    ///         the boundary 100 for the `== 200` cap edge). The additive ≤2% cap is enforced by the
+    ///         factory constructor.
+    function factoryInit(address treasury, address owner, address weth_, uint16 creatorFeeBps_)
         internal
         pure
         returns (CurveFactory.FactoryInit memory)
@@ -73,6 +94,7 @@ library TestConstants {
             lpTranche: LP_TRANCHE,
             graduationEth: GRADUATION_ETH,
             tradeFeeBps: TRADE_FEE_BPS,
+            creatorFeeBps: creatorFeeBps_,
             creationFee: CREATION_FEE,
             maxCreationFee: MAX_CREATION_FEE,
             graduationFee: GRADUATION_FEE,

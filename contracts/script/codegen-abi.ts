@@ -59,7 +59,8 @@ import {
   v3SwapEvent,
 } from "../../packages/shared/src/abi/events";
 
-/** The six robbed contracts whose full ABIs cross the service seam (§12.38). */
+/** The robbed contracts whose full ABIs cross the service seam (§12.38). CreatorVault added by the
+ * §12.63 Phase-2 creator-fee landing (pull-payment vault mirrored by robbed-shared). */
 const CONTRACTS = [
   "LaunchToken",
   "CurveFactory",
@@ -67,6 +68,7 @@ const CONTRACTS = [
   "Router",
   "V3Migrator",
   "LPFeeVault",
+  "CreatorVault",
 ] as const;
 type ContractName = (typeof CONTRACTS)[number];
 
@@ -82,6 +84,7 @@ const VAR_NAME: Record<ContractName, string> = {
   Router: "routerAbi",
   V3Migrator: "v3MigratorAbi",
   LPFeeVault: "lpFeeVaultAbi",
+  CreatorVault: "creatorVaultAbi",
 };
 
 const here = dirname(fileURLToPath(import.meta.url)); // contracts/script
@@ -143,6 +146,9 @@ const REQUIRED_FNS: Partial<Record<ContractName, string[]>> = {
   CurveFactory: ["config", "curveDefaults", "createToken"],
   LaunchToken: ["metadataHash", "totalSupply"],
   LPFeeVault: ["collect"],
+  // §12.63 pull-payment creator-fee vault: the creator claim/deposit surface + read paths the
+  // indexer (per-creator accrual) and portfolio "creator fees" read depend on.
+  CreatorVault: ["deposit", "claim", "balanceOf", "factory"],
 };
 for (const [name, fns] of Object.entries(REQUIRED_FNS) as [ContractName, string[]][]) {
   const present = new Set(abis[name].filter((i) => i.type === "function").map((i) => i.name));
@@ -207,10 +213,12 @@ writeFileSync(join(abiDir, "index.ts"), `${parts.join("\n")}`);
 // interface artifacts, so nothing here is hand-written.
 const EVENT_SOURCES: { artifact: string; events: string[] }[] = [
   { artifact: "CurveFactory", events: ["TokenCreated"] },
-  { artifact: "BondingCurve", events: ["Trade", "GraduationReady", "FeesSwept"] },
+  { artifact: "BondingCurve", events: ["Trade", "GraduationReady", "FeesSwept", "CreatorFeesSwept"] },
   { artifact: "V3Migrator", events: ["PoolInitialized", "Graduated"] },
   { artifact: "LaunchToken", events: ["Transfer"] },
   { artifact: "LPFeeVault", events: ["FeesCollected"] },
+  // §12.63 creator-fee accrual + claim (pull-payment CreatorVault) — per-creator indexer feed.
+  { artifact: "CreatorVault", events: ["CreatorFeeDeposited", "CreatorFeeClaimed"] },
   { artifact: "IUniswapV3Pool", events: ["Swap"] },
   { artifact: "INonfungiblePositionManager", events: ["Collect"] },
 ];

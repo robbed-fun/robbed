@@ -5,7 +5,8 @@ pragma solidity 0.8.35;
 /// @notice Thin by design: deadline + pause guards + fund plumbing + permit; all economics live
 ///         in the curve. No owner — all config is read from the factory. No events of its own.
 ///         Fees are NEVER caller-supplied — no fee parameter exists in any signature (spec §4.1).
-///         `creatorFeeBps` has no code path here (spec §7).
+///         BOTH ETH-leg fees (treasury §12.25 + Phase-2 creator §12.63) are computed and accrued
+///         entirely in the {BondingCurve}; the Router supplies no fee and holds no creator state.
 /// @dev FROZEN interface (tests-as-spec phase). Implementation: `nonReentrant` on every external
 ///      state-mutating function, CEI throughout, no `receive()` — the Router never holds ETH
 ///      (contracts.md §2.4). Slippage + deadline on every trade path incl. create's atomic buy

@@ -24,13 +24,15 @@ interface ICurveFactory {
         address token; // LaunchToken deployed one step earlier
         address router; // trade-path gate (onlyRouter)
         address migrator; // graduation executor
+        address creator; // token creator — the creator-fee-leg beneficiary (spec §7, §12.63)
+        address creatorVault; // pull-payment CreatorVault the curve sweeps the creator leg to (§12.63)
         uint256 virtualEth0; // initial virtual ETH reserves (M0 constants.json curve.virtualEthWei)
         uint256 virtualToken0; // initial virtual token reserves (curve.virtualTokenWei)
         uint256 curveSupply; // tokens sellable on the curve, ≈793.1M e18 (curve.curveSupplyWei)
         uint256 lpTranche; // LP tranche, ≈206.9M e18 (curve.lpTrancheWei)
         uint256 graduationEth; // net-of-fee real-reserve threshold (spec §12.11)
-        uint16 tradeFeeBps; // snapshot, ≤ MAX_TRADE_FEE_BPS (spec §6.4)
-        uint16 creatorFeeBps; // ALWAYS 0 in v1 — designed-in, disabled, no fee-path read (spec §7)
+        uint16 tradeFeeBps; // treasury leg, snapshot; tradeFeeBps + creatorFeeBps ≤ MAX (spec §6.4)
+        uint16 creatorFeeBps; // creator leg, snapshot (spec §7, §12.63). 0 in v1/mainnet; testnet 50
         uint256 graduationFee; // flat, → treasury first at migration (spec §6.3 step 1)
         uint256 callerReward; // permissionless graduate() incentive (spec §6.2)
         uint64 earlyWindowSeconds; // anti-sniper timestamp window (spec §12.18)
@@ -60,8 +62,8 @@ interface ICurveFactory {
     ///      tests-as-spec report for architect ratification.
     struct FactoryConfig {
         address treasury; // Gnosis Safe, fee destination (read live)
-        uint16 tradeFeeBps; // default for future curves, ≤200
-        uint16 creatorFeeBps; // always 0 (spec §7)
+        uint16 tradeFeeBps; // treasury leg, default for future curves; tradeFeeBps + creatorFeeBps ≤ 200
+        uint16 creatorFeeBps; // creator leg (spec §7, §12.63): 0 default; configurable, additive under the cap
         uint256 creationFee; // flat, → treasury (spec §6.4)
         uint256 graduationFee; // default for future curves
         uint256 callerReward; // default for future curves
@@ -94,6 +96,10 @@ interface ICurveFactory {
     /// @notice Admin setter events — every owner setter emits (contracts.md §2.2).
     event TreasuryUpdated(address indexed newTreasury);
     event TradeFeeUpdated(uint16 newBps);
+    /// @notice Creator-fee leg (bps) default for future curves updated (spec §7, §12.63).
+    event CreatorFeeUpdated(uint16 newBps);
+    /// @notice One-time CreatorVault wiring (spec §12.63) — the pull-payment sink for the creator leg.
+    event CreatorVaultSet(address vault);
     event CreationFeeUpdated(uint256 newFee);
     event GraduationFeeUpdated(uint256 newFee);
     event CallerRewardUpdated(uint256 newReward);
@@ -178,6 +184,11 @@ interface ICurveFactory {
     /// @notice Fee destination — Gnosis Safe (spec §6.6). Read live by curves.
     function treasury() external view returns (address);
 
+    /// @notice Pull-payment CreatorVault, one-time-set (spec §7, §12.63). address(0) until wired;
+    ///         required to be non-zero only for launches with a non-zero `creatorFeeBps`. Snapshotted
+    ///         into each curve at creation.
+    function creatorVault() external view returns (address);
+
     /// @notice Flat creation fee, collected by the Router (contracts.md §2.4).
     function creationFee() external view returns (uint256);
 
@@ -199,8 +210,14 @@ interface ICurveFactory {
     function setPauseBuys(bool paused) external;
     /// @dev newTreasury != address(0).
     function setTreasury(address newTreasury) external;
-    /// @dev ≤ MAX_TRADE_FEE_BPS (200); applies to FUTURE curves only.
+    /// @dev Treasury leg. Re-asserts `newBps + creatorFeeBps ≤ MAX_TRADE_FEE_BPS` (200, the §6.4
+    ///      ≤2% cap); applies to FUTURE curves only.
     function setTradeFeeBps(uint16 newBps) external;
+    /// @dev Creator leg (spec §7, §12.63). Re-asserts `tradeFeeBps + newBps ≤ MAX_TRADE_FEE_BPS`
+    ///      (200); applies to FUTURE curves only. Existing curves keep their snapshotted rate.
+    function setCreatorFeeBps(uint16 newBps) external;
+    /// @dev ONE-TIME: reverts AlreadyInitialized if already set; non-zero (spec §12.63).
+    function setCreatorVault(address vault) external;
     /// @dev ≤ maxCreationFee (immutable ceiling).
     function setCreationFee(uint256 newFee) external;
     /// @dev ≤ maxGraduationFee (immutable ceiling); future curves only.

@@ -211,9 +211,18 @@ contract FactoryTest is BaseFixture {
         vm.stopPrank();
     }
 
-    function test_creatorFeeBps_isZero() public view {
-        assertEq(factory.creatorFeeBps(), 0, "creatorFeeBps must be hardcoded 0 (spec sec 7)");
-        assertEq(factory.config().creatorFeeBps, 0, "config creatorFeeBps must be 0");
+    /// @dev §12.63: creatorFeeBps is now a configurable factory param (was `constant = 0`), but its
+    ///      DEFAULT — mirroring mainnet `constants.json` — is 0, so the base fixture stays the
+    ///      treasury-only v1 and every legacy assertion holds. The additive-cap + setter + curve
+    ///      threading are covered in test/unit/CreatorFee.t.sol.
+    function test_creatorFeeBps_defaultsZero_andIsConfigurable() public {
+        assertEq(factory.creatorFeeBps(), 0, "creatorFeeBps default (mainnet-mirroring) must be 0");
+        assertEq(factory.config().creatorFeeBps, 0, "config creatorFeeBps must be 0 by default");
+        // Now configurable under the ADDITIVE ≤2% cap (spec §12.63).
+        vm.prank(safeOwner);
+        factory.setCreatorFeeBps(50);
+        assertEq(factory.creatorFeeBps(), 50, "creatorFeeBps not settable");
+        assertEq(factory.config().creatorFeeBps, 50, "config did not reflect the new creator leg");
     }
 
     function test_ownable2Step_transfer() public {

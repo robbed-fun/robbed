@@ -1,402 +1,422 @@
 [
- {
-  "id": "ce84859cf1a48b4d7cde8b9488792a0f4ed7a620c578f89b37d5ca2fd790c21b",
-  "check": "arbitrary-send-eth",
-  "impact": "High",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/Router.sol#L237-L240",
-  "description": "Router._sendEth(address,uint256) (src/Router.sol#237-240) sends eth to arbitrary user\n\tDangerous calls:\n\t- (ok,None) = to.call{value: amount}() (src/Router.sol#238)\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. Router._sendEth is `private` and reached from exactly one site (createToken, the creation-fee push) with `factoryContract.treasury()` \u2014 a factory-configured address, NEVER caller-supplied (spec \u00a74.1). Guarded by nonReentrant + CEI. Not an arbitrary send. contracts.md \u00a72.4/\u00a75.6."
- },
- {
-  "id": "b49465bc20fbc6060e7d7207145a6fcbf9378d1e8f28b06ebe0d9502a79dd327",
-  "check": "reentrancy-balance",
-  "impact": "High",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L345-L387",
-  "description": "Reentrancy in V3Migrator._mintAndSettle(V3Migrator.Ctx) (src/V3Migrator.sol#345-387):\n\tExternal call allowing reentrancy:\n\t- _mint(m) (src/V3Migrator.sol#378)\n\t\t- (m.tokenId,m.liquidity,m.used0,m.used1) = INonfungiblePositionManager(positionManager).mint(INonfungiblePositionManager.MintParams({token0:m.token0,token1:m.token1,fee:FEE_TIER,tickLower:TICK_LOWER,tickUpper:TICK_UPPER,amount0Desired:m.amt0Desired,amount1Desired:m.amt1Desired,amount0Min:m.amt0Min,amount1Min:m.amt1Min,recipient:vault,deadline:block.timestamp})) (src/V3Migrator.sol#392-407)\n\tBalance read before the call:\n\t- wethBal = IERC20(weth_).balanceOf(address(this)) (src/V3Migrator.sol#357)\n\tPossible stale balance used after the call in a condition:\n\t- m.liquidity == 0 (src/V3Migrator.sol#379)\n\t\t- stale variable `REF_439`\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. The flagged external call is NPM.mint() to the real, trusted, immutable Uniswap NonfungiblePositionManager (\u00a712.28 pinned address, asserted at deploy). The 'stale' tokenBal/wethBal feed only amount0/1Desired and the post-mint `m.liquidity==0` guard (InsufficientLiquidityMinted \u2014 defense-in-depth). LaunchToken & WETH have no transfer hooks; the only reentrancy surface (the pool swap callback) is closed by the `_activePool` guard in _arbToTarget, which has fully returned before mint. No attacker-controlled reentry. contracts.md \u00a72.5/\u00a75.4."
- },
- {
-  "id": "d8f8723040807248d1a4aaf8c48311288a67bb5b3d9db91d9c2d8246f6ed60d1",
-  "check": "reentrancy-balance",
-  "impact": "High",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L345-L387",
-  "description": "Reentrancy in V3Migrator._mintAndSettle(V3Migrator.Ctx) (src/V3Migrator.sol#345-387):\n\tExternal call allowing reentrancy:\n\t- _mint(m) (src/V3Migrator.sol#378)\n\t\t- (m.tokenId,m.liquidity,m.used0,m.used1) = INonfungiblePositionManager(positionManager).mint(INonfungiblePositionManager.MintParams({token0:m.token0,token1:m.token1,fee:FEE_TIER,tickLower:TICK_LOWER,tickUpper:TICK_UPPER,amount0Desired:m.amt0Desired,amount1Desired:m.amt1Desired,amount0Min:m.amt0Min,amount1Min:m.amt1Min,recipient:vault,deadline:block.timestamp})) (src/V3Migrator.sol#392-407)\n\tBalance read before the call:\n\t- tokenBal = IERC20(c.token).balanceOf(address(this)) (src/V3Migrator.sol#356)\n\tPossible stale balance used after the call in a condition:\n\t- m.liquidity == 0 (src/V3Migrator.sol#379)\n\t\t- stale variable `REF_439`\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. The flagged external call is NPM.mint() to the real, trusted, immutable Uniswap NonfungiblePositionManager (\u00a712.28 pinned address, asserted at deploy). The 'stale' tokenBal/wethBal feed only amount0/1Desired and the post-mint `m.liquidity==0` guard (InsufficientLiquidityMinted \u2014 defense-in-depth). LaunchToken & WETH have no transfer hooks; the only reentrancy surface (the pool swap callback) is closed by the `_activePool` guard in _arbToTarget, which has fully returned before mint. No attacker-controlled reentry. contracts.md \u00a72.5/\u00a75.4."
- },
- {
-  "id": "eb46775ffe63ebd48ea1538e341ba067ca6a1cb638664a25a80f35bdd100bc03",
-  "check": "incorrect-equality",
-  "impact": "Medium",
-  "confidence": "High",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L345-L387",
-  "description": "V3Migrator._mintAndSettle(V3Migrator.Ctx) (src/V3Migrator.sol#345-387) uses a dangerous strict equality:\n\t- m.liquidity == 0 (src/V3Migrator.sol#379)\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. `m.liquidity==0` (revert InsufficientLiquidityMinted) and `budget==0` (revert ArbBudgetExceeded) are exact zero-guards on integers derived from trusted V3/NPM returns and in-contract math \u2014 strict equality is the correct and intended semantics, not a dangerous balance/timestamp equality."
- },
- {
-  "id": "28aebd40cefe8b804bdcd590717a5d3ec30600b9823786be7fb886fea4e44601",
-  "check": "incorrect-equality",
-  "impact": "Medium",
-  "confidence": "High",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
-  "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) uses a dangerous strict equality:\n\t- budget == 0 (src/V3Migrator.sol#314)\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. `m.liquidity==0` (revert InsufficientLiquidityMinted) and `budget==0` (revert ArbBudgetExceeded) are exact zero-guards on integers derived from trusted V3/NPM returns and in-contract math \u2014 strict equality is the correct and intended semantics, not a dangerous balance/timestamp equality."
- },
- {
-  "id": "31192bd1be4fc646216781e185f16b23bcf6edf2e96330e60e8a10cd2decf28b",
-  "check": "reentrancy-no-eth",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/CurveFactory.sol#L232-L264",
-  "description": "Reentrancy in CurveFactory.createToken(address,string,string,bytes32,string) (src/CurveFactory.sol#232-264):\n\tExternal calls:\n\t- pool = IV3Migrator(migrator).initializePool(token) (src/CurveFactory.sol#252)\n\tState variables written after the call(s):\n\t- ++ tokenCounter (src/CurveFactory.sol#259)\n\tCurveFactory.tokenCounter (src/CurveFactory.sol#134) can be used in cross function reentrancies:\n\t- CurveFactory.createToken(address,string,string,bytes32,string) (src/CurveFactory.sol#232-264)\n\t- CurveFactory.tokenCounter (src/CurveFactory.sol#134)\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. The pre-write external call is to the trusted, immutable factory (CurveFactory.createToken\u2192migrator.initializePool; BondingCurve.buy\u2192factory.recordEthDelta). initializePool only touches the V3 factory/pool and recordEthDelta is a bounded accumulator \u2014 neither calls back into the flagged contract. Both entrypoints are nonReentrant (createToken is onlyRouter behind the nonReentrant Router; buy is nonReentrant) so cross-function reentry is impossible. State written after the call is pre-computed before it. (BondingCurve.buy: recordEthDelta is an interaction slightly ahead of the effects block \u2014 acknowledged CEI-ordering nuance, safe because the callee is trusted and cannot reenter.) contracts.md \u00a75.4."
- },
- {
-  "id": "a8001617bedeb7cdc3da2d91ecbf2fa6ca245fcaa5caf7e2c8d54caf67e15967",
-  "check": "reentrancy-no-eth",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/BondingCurve.sol#L154-L221",
-  "description": "Reentrancy in BondingCurve.buy(address,address,address,uint256) (src/BondingCurve.sol#154-221):\n\tExternal calls:\n\t- ICurveFactory(factory).recordEthDelta(int256(net)) (src/BondingCurve.sol#194)\n\tState variables written after the call(s):\n\t- _realEthReserves = newRealEth (src/BondingCurve.sol#207)\n\tBondingCurve._realEthReserves (src/BondingCurve.sol#108) can be used in cross function reentrancies:\n\t- BondingCurve.quoteBuy(uint256) (src/BondingCurve.sol#308-330)\n\t- BondingCurve.reserves() (src/BondingCurve.sol#341-348)\n\t- phase = Phase.ReadyToGraduate (src/BondingCurve.sol#211)\n\tBondingCurve.phase (src/BondingCurve.sol#114) can be used in cross function reentrancies:\n\t- BondingCurve.constructor() (src/BondingCurve.sol#121-149)\n\t- BondingCurve.phase (src/BondingCurve.sol#114)\n\t- BondingCurve.quoteBuy(uint256) (src/BondingCurve.sol#308-330)\n\t- BondingCurve.quoteSell(uint256) (src/BondingCurve.sol#333-338)\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. The pre-write external call is to the trusted, immutable factory (CurveFactory.createToken\u2192migrator.initializePool; BondingCurve.buy\u2192factory.recordEthDelta). initializePool only touches the V3 factory/pool and recordEthDelta is a bounded accumulator \u2014 neither calls back into the flagged contract. Both entrypoints are nonReentrant (createToken is onlyRouter behind the nonReentrant Router; buy is nonReentrant) so cross-function reentry is impossible. State written after the call is pre-computed before it. (BondingCurve.buy: recordEthDelta is an interaction slightly ahead of the effects block \u2014 acknowledged CEI-ordering nuance, safe because the callee is trusted and cannot reenter.) contracts.md \u00a75.4."
- },
- {
-  "id": "582e1b0c964f022b9db7e2fddef1b631b72a59e558ed3f61feae72e796f9bcc9",
-  "check": "uninitialized-local",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L234",
-  "description": "V3Migrator.migrate(address).c (src/V3Migrator.sol#234) is a local variable never initialized\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. `Ctx memory c` and `MintLocals memory m` are structs whose fields are all populated before first read; `wethArbSpent` and `refund` are uint256 intentionally starting at 0 (arb accumulator / no-refund default). Standard Slither memory-struct false positive."
- },
- {
-  "id": "c076498d1e00e38e02439c08aace65eb176ce60dd44b07873d364b39475551f6",
-  "check": "uninitialized-local",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L270",
-  "description": "V3Migrator._arbToTarget(V3Migrator.Ctx).wethArbSpent (src/V3Migrator.sol#270) is a local variable never initialized\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. `Ctx memory c` and `MintLocals memory m` are structs whose fields are all populated before first read; `wethArbSpent` and `refund` are uint256 intentionally starting at 0 (arb accumulator / no-refund default). Standard Slither memory-struct false positive."
- },
- {
-  "id": "d4281e2b54cf993536aec22d96df314236d21b4ec01b6b6044c75b626631472c",
-  "check": "uninitialized-local",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L346",
-  "description": "V3Migrator._mintAndSettle(V3Migrator.Ctx).m (src/V3Migrator.sol#346) is a local variable never initialized\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. `Ctx memory c` and `MintLocals memory m` are structs whose fields are all populated before first read; `wethArbSpent` and `refund` are uint256 intentionally starting at 0 (arb accumulator / no-refund default). Standard Slither memory-struct false positive."
- },
- {
-  "id": "f00e9f510b1f90e41695078266b21c464cf622a29beaecf907c7511367a5238b",
-  "check": "uninitialized-local",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/BondingCurve.sol#L177",
-  "description": "BondingCurve.buy(address,address,address,uint256).refund (src/BondingCurve.sol#177) is a local variable never initialized\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. `Ctx memory c` and `MintLocals memory m` are structs whose fields are all populated before first read; `wethArbSpent` and `refund` are uint256 intentionally starting at 0 (arb accumulator / no-refund default). Standard Slither memory-struct false positive."
- },
- {
-  "id": "1770621a420aedecf92827f508bde620249462e74e2a9bf934eacd228ceff5e0",
-  "check": "unused-return",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/Router.sol#L124-L129",
-  "description": "Router._deploy(string,string,bytes32,string) (src/Router.sol#124-129) ignores return value by (token,curve,None) = factoryContract.createToken(msg.sender,name,symbol,metadataHash,metadataUri) (src/Router.sol#128)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
- },
- {
-  "id": "4f337e35707367d1e0247c776d9111c0b5f086a3110603789d6733c8c15a2bee",
-  "check": "unused-return",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L231-L261",
-  "description": "V3Migrator.migrate(address) (src/V3Migrator.sol#231-261) ignores return value by (None,finalTick,None,None,None,None,None) = IUniswapV3Pool(c.pool).slot0() (src/V3Migrator.sol#254)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
- },
- {
-  "id": "bfb2aa944d107eeee9778f6ae3fa463d0cd1a41fffae7c2bba9748e984f20a3b",
-  "check": "unused-return",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L280-L283",
-  "description": "V3Migrator._withinTolerance(V3Migrator.Ctx) (src/V3Migrator.sol#280-283) ignores return value by (None,curTick,None,None,None,None,None) = IUniswapV3Pool(c.pool).slot0() (src/V3Migrator.sol#281)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
- },
- {
-  "id": "9313fedcf0a4fa7dbb4aa0371132be0ac006588b3340f46779bd5bd6e78a6ebf",
-  "check": "unused-return",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/Router.sol#L143-L156",
-  "description": "Router.buy(address,address,uint256,uint256) (src/Router.sol#143-156) ignores return value by (tokensOut,None,None) = IBondingCurve(curve).buy{value: msg.value}(msg.sender,recipient,msg.sender,minTokensOut) (src/Router.sol#155)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
- },
- {
-  "id": "af37950bfa6a0f0e60695495a53839e15b6c50f6865bc4553cecf7913ec6da80",
-  "check": "unused-return",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/BondingCurve.sol#L276-L303",
-  "description": "BondingCurve.graduate() (src/BondingCurve.sol#276-303) ignores return value by IV3Migrator(migrator).migrate{value: ethForMigrator}(token) (src/BondingCurve.sol#301)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
- },
- {
-  "id": "c665005386af8b19db544481bf92310653a4fac1aa274247b1bc9fcd30f1da42",
-  "check": "unused-return",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/Router.sol#L205-L212",
-  "description": "Router.quoteSell(address,uint256) (src/Router.sol#205-212) ignores return value by IBondingCurve(_curveOf(token)).quoteSell(tokenAmount) (src/Router.sol#211)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
- },
- {
-  "id": "d0dec6ee49ada55c1aa316d8a4db8af5893170a280e7501be16bbe421fe42371",
-  "check": "unused-return",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/Router.sol#L219-L227",
-  "description": "Router._sell(address,uint256,address,uint256) (src/Router.sol#219-227) ignores return value by (ethOut,None) = IBondingCurve(curve).sell(msg.sender,recipient,tokenAmount,minEthOut) (src/Router.sol#226)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
- },
- {
-  "id": "5f2fb314993120461c5de1b29ba9dc7e8d7d65679001e975c2c0fa5774e13636",
-  "check": "unused-return",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
-  "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) ignores return value by IUniswapV3Pool(c.pool).swap(address(this),zeroForOne,_toInt256(budget),c.targetSqrt,) (src/V3Migrator.sol#317)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
- },
- {
-  "id": "e11e3bd11654817239db146847ecd8bba720af070fdda95361ecbc7789d844a9",
-  "check": "unused-return",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/Router.sol#L82-L120",
-  "description": "Router.createToken(string,string,bytes32,string,uint256,uint256) (src/Router.sol#82-120) ignores return value by (tokensOut,None,None) = IBondingCurve(curve).buy{value: initialBuy}(msg.sender,msg.sender,msg.sender,minTokensOut) (src/Router.sol#117-118)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
- },
- {
-  "id": "9c9beb7cfdcc2bc336615fac61ba6bc4ad8b0f17d948f30fa9bf24096da55595",
-  "check": "unused-return",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
-  "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) ignores return value by (curSqrt,None,None,None,None,None,None) = IUniswapV3Pool(c.pool).slot0() (src/V3Migrator.sol#287)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
- },
- {
-  "id": "ffa2790baf99efaf42459882941ce373dd7ad345e174dddf9db6a9f941b66fd8",
-  "check": "unused-return",
-  "impact": "Medium",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/Router.sol#L195-L202",
-  "description": "Router.quoteBuy(address,uint256) (src/Router.sol#195-202) ignores return value by IBondingCurve(_curveOf(token)).quoteBuy(ethInGross) (src/Router.sol#201)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
- },
- {
-  "id": "0c981b00421f0faaccc742efbae6d7750a7ca0e0a1f619f6cb7a4c9694845e1d",
-  "check": "calls-loop",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
-  "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) has external calls inside a loop: IUniswapV3Pool(c.pool).swap(address(this),zeroForOne,_toInt256(budget),c.targetSqrt,) (src/V3Migrator.sol#317)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
- },
- {
-  "id": "d5c17a38b19690587d46140f5ca444889f229b013886a77176ccc465a5ca5ad2",
-  "check": "calls-loop",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
-  "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) has external calls inside a loop: wethBefore = IERC20(weth).balanceOf(address(this)) (src/V3Migrator.sol#316)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
- },
- {
-  "id": "53e9288394bc35bf141c48a21a27cd90a94a71c3938008a08efcc2fbb31587c5",
-  "check": "calls-loop",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L280-L283",
-  "description": "V3Migrator._withinTolerance(V3Migrator.Ctx) (src/V3Migrator.sol#280-283) has external calls inside a loop: (None,curTick,None,None,None,None,None) = IUniswapV3Pool(c.pool).slot0() (src/V3Migrator.sol#281)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
- },
- {
-  "id": "25b70f571791c55691747745198101a545faa1638392d3b779406d85bf42a0ca",
-  "check": "calls-loop",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
-  "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) has external calls inside a loop: wethArbSpent + (wethBefore - IERC20(weth).balanceOf(address(this))) (src/V3Migrator.sol#320)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
- },
- {
-  "id": "d67b619869c3796ecb161070a42d048d721db374b3e5ad18e492a87d820d146d",
-  "check": "calls-loop",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
-  "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) has external calls inside a loop: inputAsset = IUniswapV3Pool(c.pool).token1() (src/V3Migrator.sol#290)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
- },
- {
-  "id": "b42cbe39290b1a5744ab7494c123ce2fd1fc4f85524093ce5e16120c1fd44e54",
-  "check": "calls-loop",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
-  "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) has external calls inside a loop: (curSqrt,None,None,None,None,None,None) = IUniswapV3Pool(c.pool).slot0() (src/V3Migrator.sol#287)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
- },
- {
-  "id": "2f40b75b420c47a0ac61d3616c6c70bce5c9aabdccd5c5ddb3fd622aed89df39",
-  "check": "calls-loop",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
-  "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) has external calls inside a loop: inputAsset = IUniswapV3Pool(c.pool).token0() (src/V3Migrator.sol#290)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
- },
- {
-  "id": "94b0021b41b7eea4282696e0781bb5f4874aae81ae5444d4d754ca36fa10f7c8",
-  "check": "calls-loop",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
-  "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) has external calls inside a loop: bal = IERC20(c.token).balanceOf(address(this)) (src/V3Migrator.sol#309)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
- },
- {
-  "id": "01c1df4f0d1e8ea0b8cfd0cb31305773c9e93d27e3a445416f550235b857c0a2",
-  "check": "reentrancy-benign",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/CurveFactory.sol#L232-L264",
-  "description": "Reentrancy in CurveFactory.createToken(address,string,string,bytes32,string) (src/CurveFactory.sol#232-264):\n\tExternal calls:\n\t- pool = IV3Migrator(migrator).initializePool(token) (src/CurveFactory.sol#252)\n\tState variables written after the call(s):\n\t- curveOf[token] = curve (src/CurveFactory.sol#255)\n\t- isCurve[curve] = true (src/CurveFactory.sol#257)\n\t- tokenOf[curve] = token (src/CurveFactory.sol#256)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "BENIGN (Slither's own classification). State written after a call to a trusted contract (factory/migrator/NPM) with no security relevance and no attacker reentry path (nonReentrant entrypoints; trusted callees; no token hooks). Same trust analysis as reentrancy-no-eth above."
- },
- {
-  "id": "a77830ca7b6d0b0f920cbf4f0e19e2a12cf5b13940f2ddb8b37bbe7d8a60bb1b",
-  "check": "reentrancy-benign",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L231-L261",
-  "description": "Reentrancy in V3Migrator.migrate(address) (src/V3Migrator.sol#231-261):\n\tExternal calls:\n\t- IWETH9(weth).deposit{value: msg.value}() (src/V3Migrator.sol#245)\n\t- _arbToTarget(c) (src/V3Migrator.sol#253)\n\t\t- IUniswapV3Pool(c.pool).swap(address(this),zeroForOne,_toInt256(budget),c.targetSqrt,) (src/V3Migrator.sol#317)\n\tExternal calls sending eth:\n\t- IWETH9(weth).deposit{value: msg.value}() (src/V3Migrator.sol#245)\n\tState variables written after the call(s):\n\t- _arbToTarget(c) (src/V3Migrator.sol#253)\n\t\t- _activePool = c.pool (src/V3Migrator.sol#271)\n\t\t- _activePool = address(0) (src/V3Migrator.sol#276)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "BENIGN (Slither's own classification). State written after a call to a trusted contract (factory/migrator/NPM) with no security relevance and no attacker reentry path (nonReentrant entrypoints; trusted callees; no token hooks). Same trust analysis as reentrancy-no-eth above."
- },
- {
-  "id": "86f61832f738830427662319596728be8def404ad3ea6d6c257f19daec99f795",
-  "check": "reentrancy-benign",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L268-L277",
-  "description": "Reentrancy in V3Migrator._arbToTarget(V3Migrator.Ctx) (src/V3Migrator.sol#268-277):\n\tExternal calls:\n\t- wethArbSpent = _arbStep(c,wethArbBudget,wethArbSpent) (src/V3Migrator.sol#274)\n\t\t- IUniswapV3Pool(c.pool).swap(address(this),zeroForOne,_toInt256(budget),c.targetSqrt,) (src/V3Migrator.sol#317)\n\tState variables written after the call(s):\n\t- _activePool = address(0) (src/V3Migrator.sol#276)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "BENIGN (Slither's own classification). State written after a call to a trusted contract (factory/migrator/NPM) with no security relevance and no attacker reentry path (nonReentrant entrypoints; trusted callees; no token hooks). Same trust analysis as reentrancy-no-eth above."
- },
- {
-  "id": "ea6518366b1d34119ea680ddfcea3b5d4bf17f5a5a7e923dbb2c665d64eb0bf9",
-  "check": "reentrancy-benign",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/BondingCurve.sol#L154-L221",
-  "description": "Reentrancy in BondingCurve.buy(address,address,address,uint256) (src/BondingCurve.sol#154-221):\n\tExternal calls:\n\t- ICurveFactory(factory).recordEthDelta(int256(net)) (src/BondingCurve.sol#194)\n\tState variables written after the call(s):\n\t- _realTokenReserves = realTok - tokensOut (src/BondingCurve.sol#208)\n\t- _virtualEthReserves += net (src/BondingCurve.sol#205)\n\t- _virtualTokenReserves -= tokensOut (src/BondingCurve.sol#206)\n\t- accruedFees += fee (src/BondingCurve.sol#209)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "BENIGN (Slither's own classification). State written after a call to a trusted contract (factory/migrator/NPM) with no security relevance and no attacker reentry path (nonReentrant entrypoints; trusted callees; no token hooks). Same trust analysis as reentrancy-no-eth above."
- },
- {
-  "id": "b9d307f42e99a31c5f1483dc92aadf849601279d250a417a6fd2ab456732e292",
-  "check": "reentrancy-events",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L231-L261",
-  "description": "Reentrancy in V3Migrator.migrate(address) (src/V3Migrator.sol#231-261):\n\tExternal calls:\n\t- IWETH9(weth).deposit{value: msg.value}() (src/V3Migrator.sol#245)\n\t- _arbToTarget(c) (src/V3Migrator.sol#253)\n\t\t- IUniswapV3Pool(c.pool).swap(address(this),zeroForOne,_toInt256(budget),c.targetSqrt,) (src/V3Migrator.sol#317)\n\t- (tokenId,liquidity) = _mintAndSettle(c) (src/V3Migrator.sol#260)\n\t\t- (m.tokenId,m.liquidity,m.used0,m.used1) = INonfungiblePositionManager(positionManager).mint(INonfungiblePositionManager.MintParams({token0:m.token0,token1:m.token1,fee:FEE_TIER,tickLower:TICK_LOWER,tickUpper:TICK_UPPER,amount0Desired:m.amt0Desired,amount1Desired:m.amt1Desired,amount0Min:m.amt0Min,amount1Min:m.amt1Min,recipient:vault,deadline:block.timestamp})) (src/V3Migrator.sol#392-407)\n\tExternal calls sending eth:\n\t- IWETH9(weth).deposit{value: msg.value}() (src/V3Migrator.sol#245)\n\tEvent emitted after the call(s):\n\t- Graduated(c.token,c.pool,m.tokenId,m.liquidity,m.wethInPosition,m.tokensInPosition,c.gradFee,tx.origin,IBondingCurve(msg.sender).CALLER_REWARD(),m.tokensBurned,m.wethDust) (src/V3Migrator.sol#433-445)\n\t\t- (tokenId,liquidity) = _mintAndSettle(c) (src/V3Migrator.sol#260)\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. Events (Trade/Graduated/PoolInitialized/FeesCollected) are emitted after an external call to a trusted contract; emission ordering affects only log ordering, never funds or control flow. LPFeeVault.collect emits after NPM.collect (NPM trusted, \u00a712.28)."
- },
- {
-  "id": "9e7b8dbe48a58fb1dd91eb90ec823a5d32909d59aa7fe34c2e650d0a11d69535",
-  "check": "reentrancy-events",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/CurveFactory.sol#L232-L264",
-  "description": "Reentrancy in CurveFactory.createToken(address,string,string,bytes32,string) (src/CurveFactory.sol#232-264):\n\tExternal calls:\n\t- pool = IV3Migrator(migrator).initializePool(token) (src/CurveFactory.sol#252)\n\tEvent emitted after the call(s):\n\t- TokenCreated(token,curve,creator,name,symbol,metadataHash,metadataUri,pool) (src/CurveFactory.sol#263)\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. Events (Trade/Graduated/PoolInitialized/FeesCollected) are emitted after an external call to a trusted contract; emission ordering affects only log ordering, never funds or control flow. LPFeeVault.collect emits after NPM.collect (NPM trusted, \u00a712.28)."
- },
- {
-  "id": "a8d10b76d529a6eccf01a1c0f0497dc861d42156a7c47386c1ef6bd2ffce3094",
-  "check": "reentrancy-events",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/LPFeeVault.sol#L51-L58",
-  "description": "Reentrancy in LPFeeVault.collect(uint256) (src/LPFeeVault.sol#51-58):\n\tExternal calls:\n\t- (amount0,amount1) = positionManager.collect(INonfungiblePositionManager.CollectParams({tokenId:tokenId,recipient:treasury,amount0Max:type()(uint128).max,amount1Max:type()(uint128).max})) (src/LPFeeVault.sol#52-56)\n\tEvent emitted after the call(s):\n\t- FeesCollected(tokenId,amount0,amount1) (src/LPFeeVault.sol#57)\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. Events (Trade/Graduated/PoolInitialized/FeesCollected) are emitted after an external call to a trusted contract; emission ordering affects only log ordering, never funds or control flow. LPFeeVault.collect emits after NPM.collect (NPM trusted, \u00a712.28)."
- },
- {
-  "id": "ed3d82e2e6efff4d8b157743aa73aa50c0780ed889ff816cd46db95ded6f15cd",
-  "check": "reentrancy-events",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L199-L208",
-  "description": "Reentrancy in V3Migrator.initializePool(address) (src/V3Migrator.sol#199-208):\n\tExternal calls:\n\t- pool = INonfungiblePositionManager(positionManager).createAndInitializePoolIfNecessary(token0,token1,FEE_TIER,sqrtP) (src/V3Migrator.sol#205-206)\n\tEvent emitted after the call(s):\n\t- PoolInitialized(token,pool,sqrtP,preExisting) (src/V3Migrator.sol#207)\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. Events (Trade/Graduated/PoolInitialized/FeesCollected) are emitted after an external call to a trusted contract; emission ordering affects only log ordering, never funds or control flow. LPFeeVault.collect emits after NPM.collect (NPM trusted, \u00a712.28)."
- },
- {
-  "id": "0cb1b36e33d9e780afce6ac1ded1e5cec17d6e84e4eebd165d83a4aea3b959cb",
-  "check": "reentrancy-events",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/V3Migrator.sol#L345-L387",
-  "description": "Reentrancy in V3Migrator._mintAndSettle(V3Migrator.Ctx) (src/V3Migrator.sol#345-387):\n\tExternal calls:\n\t- _mint(m) (src/V3Migrator.sol#378)\n\t\t- (m.tokenId,m.liquidity,m.used0,m.used1) = INonfungiblePositionManager(positionManager).mint(INonfungiblePositionManager.MintParams({token0:m.token0,token1:m.token1,fee:FEE_TIER,tickLower:TICK_LOWER,tickUpper:TICK_UPPER,amount0Desired:m.amt0Desired,amount1Desired:m.amt1Desired,amount0Min:m.amt0Min,amount1Min:m.amt1Min,recipient:vault,deadline:block.timestamp})) (src/V3Migrator.sol#392-407)\n\tEvent emitted after the call(s):\n\t- Graduated(c.token,c.pool,m.tokenId,m.liquidity,m.wethInPosition,m.tokensInPosition,c.gradFee,tx.origin,IBondingCurve(msg.sender).CALLER_REWARD(),m.tokensBurned,m.wethDust) (src/V3Migrator.sol#433-445)\n\t\t- _settleDust(c,m) (src/V3Migrator.sol#385)\n",
-  "disposition_class": "false-positive",
-  "disposition": "FALSE-POSITIVE. Events (Trade/Graduated/PoolInitialized/FeesCollected) are emitted after an external call to a trusted contract; emission ordering affects only log ordering, never funds or control flow. LPFeeVault.collect emits after NPM.collect (NPM trusted, \u00a712.28)."
- },
- {
-  "id": "269eb0644da45f319b2a705e4925bab7395f4e980b6af8b352b221d403c9538a",
-  "check": "timestamp",
-  "impact": "Low",
-  "confidence": "Medium",
-  "first_markdown_element": "contracts/src/BondingCurve.sol#L154-L221",
-  "description": "BondingCurve.buy(address,address,address,uint256) (src/BondingCurve.sol#154-221) uses timestamp for comparisons\n\tDangerous comparisons:\n\t- block.timestamp < EARLY_WINDOW_END && grossIn > MAX_EARLY_BUY (src/BondingCurve.sol#167)\n",
-  "disposition_class": "acknowledged-by-design",
-  "disposition": "REQUIRED BY SPEC \u2014 NOT A VULN. BondingCurve.buy compares `block.timestamp < EARLY_WINDOW_END` for the anti-sniper window. Using block.timestamp is MANDATED: block.number is banned on Orbit (spec \u00a72/\u00a76.5, CLAUDE.md hard rule). ~100ms blocks vs a seconds-scale window make sub-second sequencer skew immaterial; the acknowledged bypass is multi-wallet, not timestamp gaming (contracts.md \u00a75.2)."
- }
+  {
+    "id": "8cd8c192717a416a82120f37d95b13eb9dc32a935f62530f00e1025730e94631",
+    "check": "arbitrary-send-eth",
+    "impact": "High",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/CreatorVault.sol#L82-L90",
+    "description": "CreatorVault.claim(address) (src/CreatorVault.sol#82-90) sends eth to arbitrary user\n\tDangerous calls:\n\t- (ok,None) = creator.call{value: amount}() (src/CreatorVault.sol#86)\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE (\u00a712.63). CreatorVault.claim(creator) sends the creator's OWN accrued balance (balanceOf[creator]) to that SAME `creator` address \u2014 the destination is the fee-earner, never caller-supplied or arbitrary. Permissionless in WHO calls (pays gas), FIXED in WHERE funds go (mirrors LPFeeVault.collect \u2192 fixed treasury, an accepted pattern). nonReentrant + CEI (balance zeroed before the send). A hostile creator only reverts its own claim (retriable), never a trade."
+  },
+  {
+    "id": "ce84859cf1a48b4d7cde8b9488792a0f4ed7a620c578f89b37d5ca2fd790c21b",
+    "check": "arbitrary-send-eth",
+    "impact": "High",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/Router.sol#L237-L240",
+    "description": "Router._sendEth(address,uint256) (src/Router.sol#237-240) sends eth to arbitrary user\n\tDangerous calls:\n\t- (ok,None) = to.call{value: amount}() (src/Router.sol#238)\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. Router._sendEth is `private` and reached from exactly one site (createToken, the creation-fee push) with `factoryContract.treasury()` \u2014 a factory-configured address, NEVER caller-supplied (spec \u00a74.1). Guarded by nonReentrant + CEI. Not an arbitrary send. contracts.md \u00a72.4/\u00a75.6."
+  },
+  {
+    "id": "53e9288394bc35bf141c48a21a27cd90a94a71c3938008a08efcc2fbb31587c5",
+    "check": "calls-loop",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L280-L283",
+    "description": "V3Migrator._withinTolerance(V3Migrator.Ctx) (src/V3Migrator.sol#280-283) has external calls inside a loop: (None,curTick,None,None,None,None,None) = IUniswapV3Pool(c.pool).slot0() (src/V3Migrator.sol#281)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
+  },
+  {
+    "id": "0c981b00421f0faaccc742efbae6d7750a7ca0e0a1f619f6cb7a4c9694845e1d",
+    "check": "calls-loop",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
+    "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) has external calls inside a loop: IUniswapV3Pool(c.pool).swap(address(this),zeroForOne,_toInt256(budget),c.targetSqrt,) (src/V3Migrator.sol#317)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
+  },
+  {
+    "id": "25b70f571791c55691747745198101a545faa1638392d3b779406d85bf42a0ca",
+    "check": "calls-loop",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
+    "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) has external calls inside a loop: wethArbSpent + (wethBefore - IERC20(weth).balanceOf(address(this))) (src/V3Migrator.sol#320)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
+  },
+  {
+    "id": "2f40b75b420c47a0ac61d3616c6c70bce5c9aabdccd5c5ddb3fd622aed89df39",
+    "check": "calls-loop",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
+    "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) has external calls inside a loop: inputAsset = IUniswapV3Pool(c.pool).token0() (src/V3Migrator.sol#290)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
+  },
+  {
+    "id": "94b0021b41b7eea4282696e0781bb5f4874aae81ae5444d4d754ca36fa10f7c8",
+    "check": "calls-loop",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
+    "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) has external calls inside a loop: bal = IERC20(c.token).balanceOf(address(this)) (src/V3Migrator.sol#309)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
+  },
+  {
+    "id": "b42cbe39290b1a5744ab7494c123ce2fd1fc4f85524093ce5e16120c1fd44e54",
+    "check": "calls-loop",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
+    "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) has external calls inside a loop: (curSqrt,None,None,None,None,None,None) = IUniswapV3Pool(c.pool).slot0() (src/V3Migrator.sol#287)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
+  },
+  {
+    "id": "d5c17a38b19690587d46140f5ca444889f229b013886a77176ccc465a5ca5ad2",
+    "check": "calls-loop",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
+    "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) has external calls inside a loop: wethBefore = IERC20(weth).balanceOf(address(this)) (src/V3Migrator.sol#316)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
+  },
+  {
+    "id": "d67b619869c3796ecb161070a42d048d721db374b3e5ad18e492a87d820d146d",
+    "check": "calls-loop",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
+    "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) has external calls inside a loop: inputAsset = IUniswapV3Pool(c.pool).token1() (src/V3Migrator.sol#290)\n\tCalls stack containing the loop:\n\t\tV3Migrator.migrate(address)\n\t\tV3Migrator._arbToTarget(V3Migrator.Ctx)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "INTENTIONAL / ACKNOWLEDGED. The bounded arb-back loop (MAX_ARB_ITERATIONS) inherently queries slot0()/balances and calls swap() per iteration \u2014 iterative price correction of a pre-seeded pool (spec \u00a76.3.2). Bounded iteration count \u2192 no unbounded-gas griefing; every call targets the trusted V3 pool / WETH. Budget exhaustion reverts cleanly (curve stays ReadyToGraduate, retriable) \u2014 never a hostile mint."
+  },
+  {
+    "id": "28aebd40cefe8b804bdcd590717a5d3ec30600b9823786be7fb886fea4e44601",
+    "check": "incorrect-equality",
+    "impact": "Medium",
+    "confidence": "High",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
+    "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) uses a dangerous strict equality:\n\t- budget == 0 (src/V3Migrator.sol#314)\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. `m.liquidity==0` (revert InsufficientLiquidityMinted) and `budget==0` (revert ArbBudgetExceeded) are exact zero-guards on integers derived from trusted V3/NPM returns and in-contract math \u2014 strict equality is the correct and intended semantics, not a dangerous balance/timestamp equality."
+  },
+  {
+    "id": "eb46775ffe63ebd48ea1538e341ba067ca6a1cb638664a25a80f35bdd100bc03",
+    "check": "incorrect-equality",
+    "impact": "Medium",
+    "confidence": "High",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L345-L387",
+    "description": "V3Migrator._mintAndSettle(V3Migrator.Ctx) (src/V3Migrator.sol#345-387) uses a dangerous strict equality:\n\t- m.liquidity == 0 (src/V3Migrator.sol#379)\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. `m.liquidity==0` (revert InsufficientLiquidityMinted) and `budget==0` (revert ArbBudgetExceeded) are exact zero-guards on integers derived from trusted V3/NPM returns and in-contract math \u2014 strict equality is the correct and intended semantics, not a dangerous balance/timestamp equality."
+  },
+  {
+    "id": "c41165234b8afa01b8badb9effdd36b7346a5c6a5b01c2ea1e2690842d1f6e14",
+    "check": "missing-zero-check",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/CreatorVault.sol#L82",
+    "description": "CreatorVault.claim(address).creator (src/CreatorVault.sol#82) lacks a zero-check on :\n\t\t- (ok,None) = creator.call{value: amount}() (src/CreatorVault.sol#86)\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE (\u00a712.63). A zero `creator` is unreachable-with-value: deposit(creator) reverts ZeroAddress on a zero creator, so balanceOf[address(0)] is always 0, and claim() guards the send with `if (amount != 0)` \u2014 a zero-balance claim sends nothing. No ETH can reach address(0). A redundant zero-check would only add bytecode to the minimal-surface vault (spec \u00a76.6)."
+  },
+  {
+    "id": "84b6dc23d52a94680b1623230e12983af6fa68c0f41659eaaeaff22a5a4b558e",
+    "check": "reentrancy-balance",
+    "impact": "High",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L345-L387",
+    "description": "Reentrancy in V3Migrator._mintAndSettle(V3Migrator.Ctx) (src/V3Migrator.sol#345-387):\n\tExternal call allowing reentrancy:\n\t- _mint(m) (src/V3Migrator.sol#378)\n\t\t- (m.tokenId,m.liquidity,m.used0,m.used1) = INonfungiblePositionManager(positionManager).mint(INonfungiblePositionManager.MintParams({token0:m.token0,token1:m.token1,fee:FEE_TIER,tickLower:TICK_LOWER,tickUpper:TICK_UPPER,amount0Desired:m.amt0Desired,amount1Desired:m.amt1Desired,amount0Min:m.amt0Min,amount1Min:m.amt1Min,recipient:vault,deadline:block.timestamp})) (src/V3Migrator.sol#392-407)\n\tBalance read before the call:\n\t- wethBal = IERC20(weth_).balanceOf(address(this)) (src/V3Migrator.sol#357)\n\tPossible stale balance used after the call in a condition:\n\t- m.liquidity == 0 (src/V3Migrator.sol#379)\n\t\t- stale variable `REF_458`\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. The flagged external call is NPM.mint() to the real, trusted, immutable Uniswap NonfungiblePositionManager (\u00a712.28 pinned address, asserted at deploy). The 'stale' tokenBal/wethBal feed only amount0/1Desired and the post-mint `m.liquidity==0` guard (InsufficientLiquidityMinted \u2014 defense-in-depth). LaunchToken & WETH have no transfer hooks; the only reentrancy surface (the pool swap callback) is closed by the `_activePool` guard in _arbToTarget, which has fully returned before mint. No attacker-controlled reentry. contracts.md \u00a72.5/\u00a75.4."
+  },
+  {
+    "id": "bf165f9520b8bc0d3e35f032d191c74ac38e5e1c8107c693196ea57c8e97ab89",
+    "check": "reentrancy-balance",
+    "impact": "High",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L345-L387",
+    "description": "Reentrancy in V3Migrator._mintAndSettle(V3Migrator.Ctx) (src/V3Migrator.sol#345-387):\n\tExternal call allowing reentrancy:\n\t- _mint(m) (src/V3Migrator.sol#378)\n\t\t- (m.tokenId,m.liquidity,m.used0,m.used1) = INonfungiblePositionManager(positionManager).mint(INonfungiblePositionManager.MintParams({token0:m.token0,token1:m.token1,fee:FEE_TIER,tickLower:TICK_LOWER,tickUpper:TICK_UPPER,amount0Desired:m.amt0Desired,amount1Desired:m.amt1Desired,amount0Min:m.amt0Min,amount1Min:m.amt1Min,recipient:vault,deadline:block.timestamp})) (src/V3Migrator.sol#392-407)\n\tBalance read before the call:\n\t- tokenBal = IERC20(c.token).balanceOf(address(this)) (src/V3Migrator.sol#356)\n\tPossible stale balance used after the call in a condition:\n\t- m.liquidity == 0 (src/V3Migrator.sol#379)\n\t\t- stale variable `REF_458`\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. The flagged external call is NPM.mint() to the real, trusted, immutable Uniswap NonfungiblePositionManager (\u00a712.28 pinned address, asserted at deploy). The 'stale' tokenBal/wethBal feed only amount0/1Desired and the post-mint `m.liquidity==0` guard (InsufficientLiquidityMinted \u2014 defense-in-depth). LaunchToken & WETH have no transfer hooks; the only reentrancy surface (the pool swap callback) is closed by the `_activePool` guard in _arbToTarget, which has fully returned before mint. No attacker-controlled reentry. contracts.md \u00a72.5/\u00a75.4."
+  },
+  {
+    "id": "449b90720dcd293ee4b93c221a51dabf1b4bfed0f61fb02e2a3296a61954ecfd",
+    "check": "reentrancy-benign",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/BondingCurve.sol#L174-L267",
+    "description": "Reentrancy in BondingCurve.buy(address,address,address,uint256) (src/BondingCurve.sol#174-267):\n\tExternal calls:\n\t- ICurveFactory(factory).recordEthDelta(int256(net)) (src/BondingCurve.sol#239)\n\tState variables written after the call(s):\n\t- _realTokenReserves = realTok - tokensOut (src/BondingCurve.sol#253)\n\t- _virtualEthReserves += net (src/BondingCurve.sol#250)\n\t- _virtualTokenReserves -= tokensOut (src/BondingCurve.sol#251)\n\t- accruedCreatorFees += creatorFee (src/BondingCurve.sol#255)\n\t- accruedFees += fee (src/BondingCurve.sol#254)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "BENIGN (Slither's own classification). State written after a call to a trusted contract (factory/migrator/NPM) with no security relevance and no attacker reentry path (nonReentrant entrypoints; trusted callees; no token hooks). Same trust analysis as reentrancy-no-eth above."
+  },
+  {
+    "id": "60535ebbce7914b7804f71524523a6156ae520984b7ee52c030136aaee06396e",
+    "check": "reentrancy-benign",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/CurveFactory.sol#L242-L274",
+    "description": "Reentrancy in CurveFactory.createToken(address,string,string,bytes32,string) (src/CurveFactory.sol#242-274):\n\tExternal calls:\n\t- pool = IV3Migrator(migrator).initializePool(token) (src/CurveFactory.sol#262)\n\tState variables written after the call(s):\n\t- curveOf[token] = curve (src/CurveFactory.sol#265)\n\t- isCurve[curve] = true (src/CurveFactory.sol#267)\n\t- tokenOf[curve] = token (src/CurveFactory.sol#266)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "BENIGN (Slither's own classification). State written after a call to a trusted contract (factory/migrator/NPM) with no security relevance and no attacker reentry path (nonReentrant entrypoints; trusted callees; no token hooks). Same trust analysis as reentrancy-no-eth above."
+  },
+  {
+    "id": "a77830ca7b6d0b0f920cbf4f0e19e2a12cf5b13940f2ddb8b37bbe7d8a60bb1b",
+    "check": "reentrancy-benign",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L231-L261",
+    "description": "Reentrancy in V3Migrator.migrate(address) (src/V3Migrator.sol#231-261):\n\tExternal calls:\n\t- IWETH9(weth).deposit{value: msg.value}() (src/V3Migrator.sol#245)\n\t- _arbToTarget(c) (src/V3Migrator.sol#253)\n\t\t- IUniswapV3Pool(c.pool).swap(address(this),zeroForOne,_toInt256(budget),c.targetSqrt,) (src/V3Migrator.sol#317)\n\tExternal calls sending eth:\n\t- IWETH9(weth).deposit{value: msg.value}() (src/V3Migrator.sol#245)\n\tState variables written after the call(s):\n\t- _arbToTarget(c) (src/V3Migrator.sol#253)\n\t\t- _activePool = c.pool (src/V3Migrator.sol#271)\n\t\t- _activePool = address(0) (src/V3Migrator.sol#276)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "BENIGN (Slither's own classification). State written after a call to a trusted contract (factory/migrator/NPM) with no security relevance and no attacker reentry path (nonReentrant entrypoints; trusted callees; no token hooks). Same trust analysis as reentrancy-no-eth above."
+  },
+  {
+    "id": "86f61832f738830427662319596728be8def404ad3ea6d6c257f19daec99f795",
+    "check": "reentrancy-benign",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L268-L277",
+    "description": "Reentrancy in V3Migrator._arbToTarget(V3Migrator.Ctx) (src/V3Migrator.sol#268-277):\n\tExternal calls:\n\t- wethArbSpent = _arbStep(c,wethArbBudget,wethArbSpent) (src/V3Migrator.sol#274)\n\t\t- IUniswapV3Pool(c.pool).swap(address(this),zeroForOne,_toInt256(budget),c.targetSqrt,) (src/V3Migrator.sol#317)\n\tState variables written after the call(s):\n\t- _activePool = address(0) (src/V3Migrator.sol#276)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "BENIGN (Slither's own classification). State written after a call to a trusted contract (factory/migrator/NPM) with no security relevance and no attacker reentry path (nonReentrant entrypoints; trusted callees; no token hooks). Same trust analysis as reentrancy-no-eth above."
+  },
+  {
+    "id": "400503cf7095fe4b959bd85ac68becb1d99dcff8e9a8ed393ada3329a9cfb183",
+    "check": "reentrancy-events",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/CurveFactory.sol#L242-L274",
+    "description": "Reentrancy in CurveFactory.createToken(address,string,string,bytes32,string) (src/CurveFactory.sol#242-274):\n\tExternal calls:\n\t- pool = IV3Migrator(migrator).initializePool(token) (src/CurveFactory.sol#262)\n\tEvent emitted after the call(s):\n\t- TokenCreated(token,curve,creator,name,symbol,metadataHash,metadataUri,pool) (src/CurveFactory.sol#273)\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. Events (Trade/Graduated/PoolInitialized/FeesCollected) are emitted after an external call to a trusted contract; emission ordering affects only log ordering, never funds or control flow. LPFeeVault.collect emits after NPM.collect (NPM trusted, \u00a712.28)."
+  },
+  {
+    "id": "a8d10b76d529a6eccf01a1c0f0497dc861d42156a7c47386c1ef6bd2ffce3094",
+    "check": "reentrancy-events",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/LPFeeVault.sol#L51-L58",
+    "description": "Reentrancy in LPFeeVault.collect(uint256) (src/LPFeeVault.sol#51-58):\n\tExternal calls:\n\t- (amount0,amount1) = positionManager.collect(INonfungiblePositionManager.CollectParams({tokenId:tokenId,recipient:treasury,amount0Max:type()(uint128).max,amount1Max:type()(uint128).max})) (src/LPFeeVault.sol#52-56)\n\tEvent emitted after the call(s):\n\t- FeesCollected(tokenId,amount0,amount1) (src/LPFeeVault.sol#57)\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. Events (Trade/Graduated/PoolInitialized/FeesCollected) are emitted after an external call to a trusted contract; emission ordering affects only log ordering, never funds or control flow. LPFeeVault.collect emits after NPM.collect (NPM trusted, \u00a712.28)."
+  },
+  {
+    "id": "ed3d82e2e6efff4d8b157743aa73aa50c0780ed889ff816cd46db95ded6f15cd",
+    "check": "reentrancy-events",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L199-L208",
+    "description": "Reentrancy in V3Migrator.initializePool(address) (src/V3Migrator.sol#199-208):\n\tExternal calls:\n\t- pool = INonfungiblePositionManager(positionManager).createAndInitializePoolIfNecessary(token0,token1,FEE_TIER,sqrtP) (src/V3Migrator.sol#205-206)\n\tEvent emitted after the call(s):\n\t- PoolInitialized(token,pool,sqrtP,preExisting) (src/V3Migrator.sol#207)\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. Events (Trade/Graduated/PoolInitialized/FeesCollected) are emitted after an external call to a trusted contract; emission ordering affects only log ordering, never funds or control flow. LPFeeVault.collect emits after NPM.collect (NPM trusted, \u00a712.28)."
+  },
+  {
+    "id": "b9d307f42e99a31c5f1483dc92aadf849601279d250a417a6fd2ab456732e292",
+    "check": "reentrancy-events",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L231-L261",
+    "description": "Reentrancy in V3Migrator.migrate(address) (src/V3Migrator.sol#231-261):\n\tExternal calls:\n\t- IWETH9(weth).deposit{value: msg.value}() (src/V3Migrator.sol#245)\n\t- _arbToTarget(c) (src/V3Migrator.sol#253)\n\t\t- IUniswapV3Pool(c.pool).swap(address(this),zeroForOne,_toInt256(budget),c.targetSqrt,) (src/V3Migrator.sol#317)\n\t- (tokenId,liquidity) = _mintAndSettle(c) (src/V3Migrator.sol#260)\n\t\t- (m.tokenId,m.liquidity,m.used0,m.used1) = INonfungiblePositionManager(positionManager).mint(INonfungiblePositionManager.MintParams({token0:m.token0,token1:m.token1,fee:FEE_TIER,tickLower:TICK_LOWER,tickUpper:TICK_UPPER,amount0Desired:m.amt0Desired,amount1Desired:m.amt1Desired,amount0Min:m.amt0Min,amount1Min:m.amt1Min,recipient:vault,deadline:block.timestamp})) (src/V3Migrator.sol#392-407)\n\tExternal calls sending eth:\n\t- IWETH9(weth).deposit{value: msg.value}() (src/V3Migrator.sol#245)\n\tEvent emitted after the call(s):\n\t- Graduated(c.token,c.pool,m.tokenId,m.liquidity,m.wethInPosition,m.tokensInPosition,c.gradFee,tx.origin,IBondingCurve(msg.sender).CALLER_REWARD(),m.tokensBurned,m.wethDust) (src/V3Migrator.sol#433-445)\n\t\t- (tokenId,liquidity) = _mintAndSettle(c) (src/V3Migrator.sol#260)\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. Events (Trade/Graduated/PoolInitialized/FeesCollected) are emitted after an external call to a trusted contract; emission ordering affects only log ordering, never funds or control flow. LPFeeVault.collect emits after NPM.collect (NPM trusted, \u00a712.28)."
+  },
+  {
+    "id": "0cb1b36e33d9e780afce6ac1ded1e5cec17d6e84e4eebd165d83a4aea3b959cb",
+    "check": "reentrancy-events",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L345-L387",
+    "description": "Reentrancy in V3Migrator._mintAndSettle(V3Migrator.Ctx) (src/V3Migrator.sol#345-387):\n\tExternal calls:\n\t- _mint(m) (src/V3Migrator.sol#378)\n\t\t- (m.tokenId,m.liquidity,m.used0,m.used1) = INonfungiblePositionManager(positionManager).mint(INonfungiblePositionManager.MintParams({token0:m.token0,token1:m.token1,fee:FEE_TIER,tickLower:TICK_LOWER,tickUpper:TICK_UPPER,amount0Desired:m.amt0Desired,amount1Desired:m.amt1Desired,amount0Min:m.amt0Min,amount1Min:m.amt1Min,recipient:vault,deadline:block.timestamp})) (src/V3Migrator.sol#392-407)\n\tEvent emitted after the call(s):\n\t- Graduated(c.token,c.pool,m.tokenId,m.liquidity,m.wethInPosition,m.tokensInPosition,c.gradFee,tx.origin,IBondingCurve(msg.sender).CALLER_REWARD(),m.tokensBurned,m.wethDust) (src/V3Migrator.sol#433-445)\n\t\t- _settleDust(c,m) (src/V3Migrator.sol#385)\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. Events (Trade/Graduated/PoolInitialized/FeesCollected) are emitted after an external call to a trusted contract; emission ordering affects only log ordering, never funds or control flow. LPFeeVault.collect emits after NPM.collect (NPM trusted, \u00a712.28)."
+  },
+  {
+    "id": "a8d231524d045abd94e91236e44281c1e2872e1a9181287e18038e1a419686d1",
+    "check": "reentrancy-no-eth",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/BondingCurve.sol#L174-L267",
+    "description": "Reentrancy in BondingCurve.buy(address,address,address,uint256) (src/BondingCurve.sol#174-267):\n\tExternal calls:\n\t- ICurveFactory(factory).recordEthDelta(int256(net)) (src/BondingCurve.sol#239)\n\tState variables written after the call(s):\n\t- _realEthReserves = newRealEth (src/BondingCurve.sol#252)\n\tBondingCurve._realEthReserves (src/BondingCurve.sol#123) can be used in cross function reentrancies:\n\t- BondingCurve.quoteBuy(uint256) (src/BondingCurve.sol#377-409)\n\t- BondingCurve.reserves() (src/BondingCurve.sol#422-429)\n\t- phase = Phase.ReadyToGraduate (src/BondingCurve.sol#257)\n\tBondingCurve.phase (src/BondingCurve.sol#131) can be used in cross function reentrancies:\n\t- BondingCurve.constructor() (src/BondingCurve.sol#138-169)\n\t- BondingCurve.phase (src/BondingCurve.sol#131)\n\t- BondingCurve.quoteBuy(uint256) (src/BondingCurve.sol#377-409)\n\t- BondingCurve.quoteSell(uint256) (src/BondingCurve.sol#412-419)\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. The pre-write external call is to the trusted, immutable factory (CurveFactory.createToken\u2192migrator.initializePool; BondingCurve.buy\u2192factory.recordEthDelta). initializePool only touches the V3 factory/pool and recordEthDelta is a bounded accumulator \u2014 neither calls back into the flagged contract. Both entrypoints are nonReentrant (createToken is onlyRouter behind the nonReentrant Router; buy is nonReentrant) so cross-function reentry is impossible. State written after the call is pre-computed before it. (BondingCurve.buy: recordEthDelta is an interaction slightly ahead of the effects block \u2014 acknowledged CEI-ordering nuance, safe because the callee is trusted and cannot reenter.) contracts.md \u00a75.4."
+  },
+  {
+    "id": "305fd8148e523fac508eb2949498ce0d131f68c3e5f066a62bf966168a53fd05",
+    "check": "reentrancy-no-eth",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/CurveFactory.sol#L242-L274",
+    "description": "Reentrancy in CurveFactory.createToken(address,string,string,bytes32,string) (src/CurveFactory.sol#242-274):\n\tExternal calls:\n\t- pool = IV3Migrator(migrator).initializePool(token) (src/CurveFactory.sol#262)\n\tState variables written after the call(s):\n\t- ++ tokenCounter (src/CurveFactory.sol#269)\n\tCurveFactory.tokenCounter (src/CurveFactory.sol#139) can be used in cross function reentrancies:\n\t- CurveFactory.createToken(address,string,string,bytes32,string) (src/CurveFactory.sol#242-274)\n\t- CurveFactory.tokenCounter (src/CurveFactory.sol#139)\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. The pre-write external call is to the trusted, immutable factory (CurveFactory.createToken\u2192migrator.initializePool; BondingCurve.buy\u2192factory.recordEthDelta). initializePool only touches the V3 factory/pool and recordEthDelta is a bounded accumulator \u2014 neither calls back into the flagged contract. Both entrypoints are nonReentrant (createToken is onlyRouter behind the nonReentrant Router; buy is nonReentrant) so cross-function reentry is impossible. State written after the call is pre-computed before it. (BondingCurve.buy: recordEthDelta is an interaction slightly ahead of the effects block \u2014 acknowledged CEI-ordering nuance, safe because the callee is trusted and cannot reenter.) contracts.md \u00a75.4."
+  },
+  {
+    "id": "b89a7ba4fdf0578da9218753af3c883a4ce9392af6ad534686f7e4f8fdafd883",
+    "check": "timestamp",
+    "impact": "Low",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/BondingCurve.sol#L174-L267",
+    "description": "BondingCurve.buy(address,address,address,uint256) (src/BondingCurve.sol#174-267) uses timestamp for comparisons\n\tDangerous comparisons:\n\t- block.timestamp < EARLY_WINDOW_END && grossIn > MAX_EARLY_BUY (src/BondingCurve.sol#187)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "REQUIRED BY SPEC \u2014 NOT A VULN. BondingCurve.buy compares `block.timestamp < EARLY_WINDOW_END` for the anti-sniper window. Using block.timestamp is MANDATED: block.number is banned on Orbit (spec \u00a72/\u00a76.5, CLAUDE.md hard rule). ~100ms blocks vs a seconds-scale window make sub-second sequencer skew immaterial; the acknowledged bypass is multi-wallet, not timestamp gaming (contracts.md \u00a75.2)."
+  },
+  {
+    "id": "f00e9f510b1f90e41695078266b21c464cf622a29beaecf907c7511367a5238b",
+    "check": "uninitialized-local",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/BondingCurve.sol#L199",
+    "description": "BondingCurve.buy(address,address,address,uint256).refund (src/BondingCurve.sol#199) is a local variable never initialized\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. `Ctx memory c` and `MintLocals memory m` are structs whose fields are all populated before first read; `wethArbSpent` and `refund` are uint256 intentionally starting at 0 (arb accumulator / no-refund default). Standard Slither memory-struct false positive."
+  },
+  {
+    "id": "582e1b0c964f022b9db7e2fddef1b631b72a59e558ed3f61feae72e796f9bcc9",
+    "check": "uninitialized-local",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L234",
+    "description": "V3Migrator.migrate(address).c (src/V3Migrator.sol#234) is a local variable never initialized\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. `Ctx memory c` and `MintLocals memory m` are structs whose fields are all populated before first read; `wethArbSpent` and `refund` are uint256 intentionally starting at 0 (arb accumulator / no-refund default). Standard Slither memory-struct false positive."
+  },
+  {
+    "id": "c076498d1e00e38e02439c08aace65eb176ce60dd44b07873d364b39475551f6",
+    "check": "uninitialized-local",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L270",
+    "description": "V3Migrator._arbToTarget(V3Migrator.Ctx).wethArbSpent (src/V3Migrator.sol#270) is a local variable never initialized\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. `Ctx memory c` and `MintLocals memory m` are structs whose fields are all populated before first read; `wethArbSpent` and `refund` are uint256 intentionally starting at 0 (arb accumulator / no-refund default). Standard Slither memory-struct false positive."
+  },
+  {
+    "id": "d4281e2b54cf993536aec22d96df314236d21b4ec01b6b6044c75b626631472c",
+    "check": "uninitialized-local",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L346",
+    "description": "V3Migrator._mintAndSettle(V3Migrator.Ctx).m (src/V3Migrator.sol#346) is a local variable never initialized\n",
+    "disposition_class": "false-positive",
+    "disposition": "FALSE-POSITIVE. `Ctx memory c` and `MintLocals memory m` are structs whose fields are all populated before first read; `wethArbSpent` and `refund` are uint256 intentionally starting at 0 (arb accumulator / no-refund default). Standard Slither memory-struct false positive."
+  },
+  {
+    "id": "2486b3f9231043a0f2742a651b6cb8d9a6835a22f1e9bbfee1d1448bf9d533fd",
+    "check": "unused-return",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/BondingCurve.sol#L343-L372",
+    "description": "BondingCurve.graduate() (src/BondingCurve.sol#343-372) ignores return value by IV3Migrator(migrator).migrate{value: ethForMigrator}(token) (src/BondingCurve.sol#370)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
+  },
+  {
+    "id": "1770621a420aedecf92827f508bde620249462e74e2a9bf934eacd228ceff5e0",
+    "check": "unused-return",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/Router.sol#L124-L129",
+    "description": "Router._deploy(string,string,bytes32,string) (src/Router.sol#124-129) ignores return value by (token,curve,None) = factoryContract.createToken(msg.sender,name,symbol,metadataHash,metadataUri) (src/Router.sol#128)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
+  },
+  {
+    "id": "9313fedcf0a4fa7dbb4aa0371132be0ac006588b3340f46779bd5bd6e78a6ebf",
+    "check": "unused-return",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/Router.sol#L143-L156",
+    "description": "Router.buy(address,address,uint256,uint256) (src/Router.sol#143-156) ignores return value by (tokensOut,None,None) = IBondingCurve(curve).buy{value: msg.value}(msg.sender,recipient,msg.sender,minTokensOut) (src/Router.sol#155)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
+  },
+  {
+    "id": "ffa2790baf99efaf42459882941ce373dd7ad345e174dddf9db6a9f941b66fd8",
+    "check": "unused-return",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/Router.sol#L195-L202",
+    "description": "Router.quoteBuy(address,uint256) (src/Router.sol#195-202) ignores return value by IBondingCurve(_curveOf(token)).quoteBuy(ethInGross) (src/Router.sol#201)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
+  },
+  {
+    "id": "c665005386af8b19db544481bf92310653a4fac1aa274247b1bc9fcd30f1da42",
+    "check": "unused-return",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/Router.sol#L205-L212",
+    "description": "Router.quoteSell(address,uint256) (src/Router.sol#205-212) ignores return value by IBondingCurve(_curveOf(token)).quoteSell(tokenAmount) (src/Router.sol#211)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
+  },
+  {
+    "id": "d0dec6ee49ada55c1aa316d8a4db8af5893170a280e7501be16bbe421fe42371",
+    "check": "unused-return",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/Router.sol#L219-L227",
+    "description": "Router._sell(address,uint256,address,uint256) (src/Router.sol#219-227) ignores return value by (ethOut,None) = IBondingCurve(curve).sell(msg.sender,recipient,tokenAmount,minEthOut) (src/Router.sol#226)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
+  },
+  {
+    "id": "e11e3bd11654817239db146847ecd8bba720af070fdda95361ecbc7789d844a9",
+    "check": "unused-return",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/Router.sol#L82-L120",
+    "description": "Router.createToken(string,string,bytes32,string,uint256,uint256) (src/Router.sol#82-120) ignores return value by (tokensOut,None,None) = IBondingCurve(curve).buy{value: initialBuy}(msg.sender,msg.sender,msg.sender,minTokensOut) (src/Router.sol#117-118)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
+  },
+  {
+    "id": "4f337e35707367d1e0247c776d9111c0b5f086a3110603789d6733c8c15a2bee",
+    "check": "unused-return",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L231-L261",
+    "description": "V3Migrator.migrate(address) (src/V3Migrator.sol#231-261) ignores return value by (None,finalTick,None,None,None,None,None) = IUniswapV3Pool(c.pool).slot0() (src/V3Migrator.sol#254)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
+  },
+  {
+    "id": "bfb2aa944d107eeee9778f6ae3fa463d0cd1a41fffae7c2bba9748e984f20a3b",
+    "check": "unused-return",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L280-L283",
+    "description": "V3Migrator._withinTolerance(V3Migrator.Ctx) (src/V3Migrator.sol#280-283) ignores return value by (None,curTick,None,None,None,None,None) = IUniswapV3Pool(c.pool).slot0() (src/V3Migrator.sol#281)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
+  },
+  {
+    "id": "5f2fb314993120461c5de1b29ba9dc7e8d7d65679001e975c2c0fa5774e13636",
+    "check": "unused-return",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
+    "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) ignores return value by IUniswapV3Pool(c.pool).swap(address(this),zeroForOne,_toInt256(budget),c.targetSqrt,) (src/V3Migrator.sol#317)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
+  },
+  {
+    "id": "9c9beb7cfdcc2bc336615fac61ba6bc4ad8b0f17d948f30fa9bf24096da55595",
+    "check": "unused-return",
+    "impact": "Medium",
+    "confidence": "Medium",
+    "first_markdown_element": "contracts/src/V3Migrator.sol#L286-L323",
+    "description": "V3Migrator._arbStep(V3Migrator.Ctx,uint256,uint256) (src/V3Migrator.sol#286-323) ignores return value by (curSqrt,None,None,None,None,None,None) = IUniswapV3Pool(c.pool).slot0() (src/V3Migrator.sol#287)\n",
+    "disposition_class": "acknowledged-by-design",
+    "disposition": "REVIEWED \u2014 INTENTIONAL. Router create/buy/sell/quote + _deploy discard tuple fields that are either re-emitted elsewhere (pool addr in factory TokenCreated; acceptedEthGross/fee in curve Trade) or not needed by the deliberately-thin Router; no security decision depends on a dropped value. V3Migrator slot0() partial-destructures to read only sqrtPriceX96/tick (rest of slot0 genuinely unused). V3Migrator pool.swap() return is unneeded \u2014 spend is measured via WETH balance delta and the swap is price-capped to targetSqrt. BondingCurve.graduate discards migrate()'s (tokenId,liquidity); the migrator emits Graduated. contracts.md \u00a72.4/\u00a72.5."
+  }
 ]
