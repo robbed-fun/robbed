@@ -107,3 +107,49 @@ export interface CreatorFeeClaimedEvent {
   caller: Address;
   amount: bigint;
 }
+
+// ── Post-graduation 50/50 LP-fee-split decoded structs (spec §12.69 — LANDED) ─
+// Mirror the §12.69 fragments in `./abi/events.ts` (transcribed byte-for-byte from
+// the regenerated Phase-2 artifacts). Custody is Option B: the creator share is a
+// per-`(creator, token)` ERC20 balance in the CreatorVault (`token` ∈ {launch token,
+// WETH}, NOT unwrapped to ETH); claimed per ERC20 via `claimERC20(creator, token)`,
+// read live via `tokenBalanceOf(creator, token)`. The pre-grad native-ETH family
+// (`CreatorFeeDeposited`/`CreatorFeeClaimed`) stays separate. The indexer's post-grad
+// handlers type their decoded args with these.
+
+/**
+ * LPFeeVault (§12.69) — the 50/50 split emitted at `collect()`. Per-beneficiary
+ * per-leg amounts in RAW pool ordering (`treasury0`/`creator0` = leg0, etc.); the
+ * indexer resolves 0/1 → token/weth via `graduations.token_is_token0`. Invariant
+ * (§12.69(F)(i)): `creator0 + treasury0` and `creator1 + treasury1` each sum to the
+ * corresponding `FeesCollected` leg total — no leakage.
+ */
+export interface FeesSplitEvent {
+  tokenId: bigint;
+  creator: Address;
+  treasury0: bigint;
+  creator0: bigint;
+  treasury1: bigint;
+  creator1: bigint;
+}
+
+/**
+ * CreatorVault (§12.69) — post-grad ERC20 leg credited per `(creator, token)`.
+ * `token` is the ERC20 (a graduated launch token OR canonical WETH); `source` is the
+ * depositor (the LPFeeVault). Distinct from the pre-grad `CreatorFeeDeposited`
+ * (per-creator native ETH from a curve).
+ */
+export interface CreatorTokenDepositedEvent {
+  creator: Address;
+  token: Address;
+  source: Address;
+  amount: bigint;
+}
+
+/** CreatorVault (§12.69) — `caller` paid out `creator`'s ERC20 `token` balance (`claimERC20`). */
+export interface CreatorTokenClaimedEvent {
+  creator: Address;
+  token: Address;
+  caller: Address;
+  amount: bigint;
+}

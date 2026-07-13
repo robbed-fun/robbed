@@ -62,6 +62,18 @@ export function tokenEvents(address: string): string {
 }
 
 /**
+ * §12.69 post-grad creator-fee fan-out (LANDED — default taxonomy):
+ * `creator_fee_split` / `creator_fee_claimed` (ws-messages.ts) publish on
+ * `token:{address}:events` above — the split is per launch `token`, so it fits the
+ * per-token taxonomy with zero new channel. Post-grad claims are per-ERC20
+ * (`claimERC20(creator, token)`); a WETH claim is a creator-level event (aggregates
+ * across the creator's graduated tokens), so the indexer MAY additionally add a
+ * per-creator channel (`creator:{address}:events`) for the Portfolio CreatedTab live
+ * claim surface. That remains an indexer-OWNED taxonomy decision (indexer.md §8.1) —
+ * intentionally NOT invented here; the WS message shapes are channel-agnostic.
+ */
+
+/**
  * Per-channel monotonic sequence key (indexer.md §8.2: `seq` via Redis
  * `INCR channel:seq` at publish — one Redis op, no DB).
  */

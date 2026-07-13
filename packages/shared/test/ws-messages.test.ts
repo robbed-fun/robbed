@@ -157,9 +157,46 @@ describe("per-type payloads (indexer.md §8.2)", () => {
     ).toBe(false);
   });
 
-  it("union stays exhaustive — 'fee_collected' is a member of WsMessageType", () => {
-    const t: WsMessage["type"] = "fee_collected";
-    expect(t).toBe("fee_collected");
+  it("creator_fee_split parses (§12.69 post-grad 50/50) — both beneficiaries, both legs", () => {
+    const msg = {
+      ...base, type: "creator_fee_split", channel: `token:${ADDR}:events`,
+      data: {
+        token: ADDR, creator: ADDR,
+        creatorAmountToken: "50000000000000000000", creatorAmountWeth: "2250000000000000",
+        treasuryAmountToken: "50000000000000000000", treasuryAmountWeth: "2250000000000000",
+        blockNumber: 12345, blockTimestamp: 1767950000,
+        txHash: TX, logIndex: 4, confirmationState: "soft_confirmed",
+      },
+    };
+    expect(wsMessageSchema.safeParse(msg).success).toBe(true);
+    // uint256 legs are decimal strings — numbers rejected
+    expect(
+      wsMessageSchema.safeParse({ ...msg, data: { ...msg.data, creatorAmountWeth: 2250 } }).success,
+    ).toBe(false);
+  });
+
+  it("creator_fee_claimed parses (§12.69 post-grad claim) — single ERC20 payout", () => {
+    const msg = {
+      ...base, type: "creator_fee_claimed", channel: `token:${ADDR}:events`,
+      data: {
+        creator: ADDR, token: ADDR, // token = the ERC20 claimed (launchToken or WETH)
+        amount: "100000000000000000000",
+        blockNumber: 12346, blockTimestamp: 1767950001,
+        txHash: TX, logIndex: 5, confirmationState: "soft_confirmed",
+      },
+    };
+    expect(wsMessageSchema.safeParse(msg).success).toBe(true);
+    // single-asset — the two-leg (amountToken/amountWeth) shape is rejected
+    expect(
+      wsMessageSchema.safeParse({ ...msg, data: { ...msg.data, amount: 100 } }).success,
+    ).toBe(false);
+  });
+
+  it("union stays exhaustive — fee-family members are all WsMessageType", () => {
+    const types: WsMessage["type"][] = ["fee_collected", "creator_fee_split", "creator_fee_claimed"];
+    expect(types).toContain("fee_collected");
+    expect(types).toContain("creator_fee_split");
+    expect(types).toContain("creator_fee_claimed");
   });
 });
 

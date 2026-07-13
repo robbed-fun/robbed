@@ -4,14 +4,17 @@ import {
   apiEnvelopeSchema,
   candleSchema,
   claimCreatorFeeTxMetaSchema,
+  claimCreatorTokenFeeTxMetaSchema,
   clampListLimit,
   confirmationsResponseSchema,
   creatorClaimableSchema,
+  creatorTokenClaimableSchema,
   ERROR_CODE_VALUES,
   ERROR_CODES,
   errorCodeSchema,
   ethPnlRangeSchema,
   ethUsdResponseSchema,
+  feePolicySchema,
   holderListQuerySchema,
   holderRowSchema,
   holderSortFieldSchema,
@@ -425,6 +428,64 @@ describe("creator-fee claim surface (spec §7 / §12.63)", () => {
     // amount is a uint256 decimal string, not a float / number
     expect(claimCreatorFeeTxMetaSchema.safeParse({ ...meta, amountEth: "0.0075" }).success).toBe(false);
     expect(claimCreatorFeeTxMetaSchema.safeParse({ ...meta, creator: "not-an-address" }).success).toBe(false);
+  });
+});
+
+describe("feePolicy additive cap (spec §6.4/§12.68 — un-frozen creator leg)", () => {
+  it("accepts the §12.68 mainnet default: tradeFeeBps 100 + creatorFeeBps 50 (=150 ≤ 200)", () => {
+    expect(feePolicySchema.safeParse({ tradeFeeBps: 100, creatorFeeBps: 50 }).success).toBe(true);
+    // legacy/testnet-only v1 curve reads 0 — still valid (backward-compatible)
+    expect(feePolicySchema.safeParse({ tradeFeeBps: 100, creatorFeeBps: 0 }).success).toBe(true);
+    // exactly the cap is allowed (gate-2 boundary)
+    expect(feePolicySchema.safeParse({ tradeFeeBps: 100, creatorFeeBps: 100 }).success).toBe(true);
+  });
+
+  it("rejects a combined fee over the 200-bps hard cap (drift-proof vs contract)", () => {
+    expect(feePolicySchema.safeParse({ tradeFeeBps: 150, creatorFeeBps: 100 }).success).toBe(false);
+    expect(feePolicySchema.safeParse({ tradeFeeBps: 200, creatorFeeBps: 1 }).success).toBe(false);
+    // non-integer / negative bps still rejected by the field schema
+    expect(feePolicySchema.safeParse({ tradeFeeBps: 100, creatorFeeBps: -1 }).success).toBe(false);
+    expect(feePolicySchema.safeParse({ tradeFeeBps: 100, creatorFeeBps: 1.5 }).success).toBe(false);
+  });
+});
+
+describe("post-grad creator LP-fee split surface (spec §12.69 — 50/50, Option-B custody)", () => {
+  // per-(creator, ERC20-token) SINGLE-asset — matches claimERC20(creator, token) 1:1.
+  const tokenClaimable = {
+    creator: ADDR,
+    token: ADDR, // the ERC20: a graduated launch token OR WETH
+    vault: ADDR,
+    claimable: "100000000000000000000",
+    claimableUsd: usd,
+    totalAccrued: "123000000000000000000",
+    totalClaimed: "23000000000000000000",
+    asOf: "2026-07-13T00:00:00Z",
+  };
+
+  it("per-(creator,ERC20) single-asset claimable DTO: wei decimal strings, no confirmationState", () => {
+    expect(creatorTokenClaimableSchema.safeParse(tokenClaimable).success).toBe(true);
+    // uint256-as-decimal convention — hex/number rejected
+    expect(creatorTokenClaimableSchema.safeParse({ ...tokenClaimable, claimable: "0xabc" }).success).toBe(false);
+    expect(creatorTokenClaimableSchema.safeParse({ ...tokenClaimable, claimable: 7500 }).success).toBe(false);
+    // the ERC20 token dimension is required (distinguishes from the per-creator native-ETH roll-up)
+    const { token: _t, ...noToken } = tokenClaimable;
+    expect(creatorTokenClaimableSchema.safeParse(noToken).success).toBe(false);
+    // usd mirror is nullable (only WETH legs are ETH-priced; launch-token legs are null)
+    expect(creatorTokenClaimableSchema.safeParse({ ...tokenClaimable, claimableUsd: null }).success).toBe(true);
+  });
+
+  it("CLAIM_CREATOR_TOKEN_FEE tx metadata: literal-tagged, single-asset expected payout", () => {
+    const meta = {
+      type: "CLAIM_CREATOR_TOKEN_FEE",
+      creator: ADDR,
+      token: ADDR,
+      vault: ADDR,
+      amount: "100000000000000000000",
+    };
+    expect(claimCreatorTokenFeeTxMetaSchema.safeParse(meta).success).toBe(true);
+    // distinct literal tag from the pre-grad native-ETH claim
+    expect(claimCreatorTokenFeeTxMetaSchema.safeParse({ ...meta, type: "CLAIM_CREATOR_FEE" }).success).toBe(false);
+    expect(claimCreatorTokenFeeTxMetaSchema.safeParse({ ...meta, amount: "0.0075" }).success).toBe(false);
   });
 });
 

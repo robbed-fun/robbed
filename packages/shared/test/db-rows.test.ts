@@ -10,6 +10,7 @@ import type {
   BalanceRow,
   CompetitorSnapshotRow,
   CreatorClaimableRow,
+  CreatorTokenClaimableRow,
   TokenFlowStatsRow,
   TransferRow,
 } from "../src/db-rows";
@@ -92,6 +93,31 @@ describe("creator-fee claim projection (spec §7 / §12.63 — CreatorClaimableR
       ...row,
       total_claimed_eth: "0",
       claimable_eth: row.total_accrued_eth,
+      last_claim_at: null,
+    };
+    expect(neverClaimed.last_claim_at).toBeNull();
+  });
+});
+
+describe("post-grad creator split projection (spec §12.69 — CreatorTokenClaimableRow)", () => {
+  it("is the per-(creator,ERC20) single-asset roll-up (token ∈ {launchToken, WETH})", () => {
+    const row: CreatorTokenClaimableRow = {
+      creator: ADDR,
+      token: ADDR, // the ERC20 — a graduated launch token OR canonical WETH
+      vault: ADDR,
+      total_accrued: "123000000000000000000",
+      total_claimed: "23000000000000000000",
+      claimable: "100000000000000000000",
+      last_claim_at: 1767960000,
+      updated_at: "2026-07-13T00:00:00Z",
+    };
+    // claimable == accrued − claimed (event-derived mirror; live tokenBalanceOf authoritative)
+    expect(BigInt(row.claimable)).toBe(BigInt(row.total_accrued) - BigInt(row.total_claimed));
+    // never-claimed: last_claim_at null, claimable == accrued
+    const neverClaimed: CreatorTokenClaimableRow = {
+      ...row,
+      total_claimed: "0",
+      claimable: row.total_accrued,
       last_claim_at: null,
     };
     expect(neverClaimed.last_claim_at).toBeNull();

@@ -34,14 +34,17 @@ export interface TokenRow {
   /** §7: tracked from day 1, even though creator fees are Phase 2. */
   creator: string;
   /**
-   * Per-curve snapshot of the creator-fee leg, basis points (§7, §12.63). The
-   * indexer writes this from the curve's immutable `CREATOR_FEE_BPS` at
-   * TokenCreated. UN-FROZEN 2026-07-13 (robbed-shared, §12.63 creator-fee fold-in):
-   * this was pinned to 0 in v1 ("no fee-path reader") but the landed creator-fee
-   * factory makes it configurable and nonzero (testnet default 50). Constraint is
-   * the SAME combined cap as `trade_fee_bps`: `trade_fee_bps + creator_fee_bps ≤
-   * MAX_TRADE_FEE_BPS` (200) — the factory re-asserts it on every setter. Reading
-   * 0 stays valid (mainnet v1 curves), so this is additive/backward-compatible.
+   * Per-curve snapshot of the creator-fee leg, basis points (§7, §12.63, §12.68).
+   * The indexer writes this from the curve's immutable `CREATOR_FEE_BPS` at
+   * TokenCreated. UN-FROZEN 2026-07-13 (robbed-shared): originally pinned to 0 in v1
+   * ("no fee-path reader"); §12.68 turns it ON as a first-class NONZERO mainnet value
+   * — the creator-fee generation ships `creator_fee_bps = 50` (0.5%), additive with
+   * `trade_fee_bps = 100` (1%) ⇒ 150. The old §7 "hardcoded 0 on mainnet" framing is
+   * superseded. Constraint is the SAME combined cap as `trade_fee_bps`:
+   * `trade_fee_bps + creator_fee_bps ≤ MAX_TRADE_FEE_BPS` (200) — the factory
+   * re-asserts it on every setter (validated on the wire by `feePolicySchema`,
+   * api-types.ts). Reading 0 stays valid (legacy/testnet-only v1 curves), so this is
+   * additive/backward-compatible.
    */
   creator_fee_bps: number;
   /**
@@ -205,6 +208,42 @@ export interface CreatorClaimableRow {
   /** accrued − claimed, wei decimal string (event-derived mirror; live `balanceOf` is authoritative). */
   claimable_eth: string;
   /** Unix seconds of the most recent `CreatorFeeClaimed`; null if never claimed. */
+  last_claim_at: number | null;
+  updated_at: string;
+}
+
+/**
+ * `creator_token_claimable` — per-`(creator, ERC20-token)` post-graduation roll-up
+ * backing the §12.69 50/50 V3-fee-split claim surface (Portfolio CreatedTab). The
+ * projection TYPE for `creatorTokenClaimableSchema` (api-types.ts). Custody is Option B
+ * (§12.69(C), LANDED): the creator share lands as a per-`(creator, token)` ERC20 balance
+ * in the CreatorVault, `token` ∈ {graduated launch token, canonical WETH} — SINGLE-asset
+ * per row, matching `claimERC20(creator, token)`. ONE row per `(creator, token)`,
+ * rebuildable from the on-chain events:
+ *  - `total_accrued` = Σ `CreatorTokenDeposited.amount` credited to `(creator, token)`
+ *  - `total_claimed` = Σ `CreatorTokenClaimed.amount` paid out for `(creator, token)`
+ * The materialized `claimable` (accrued − claimed) is an event-derived MIRROR; the
+ * AUTHORITATIVE value the API serves is the live `CreatorVault.tokenBalanceOf(creator,
+ * token)` read (asOf), exactly like `CreatorClaimableRow` uses live `balanceOf`. Like it,
+ * an [offchain] roll-up (no `confirmation_state`). A WETH row aggregates the creator's
+ * WETH share across ALL their graduated tokens. Additive — absent for every
+ * pre-creator-fee (v1) deployment and every not-yet-graduated token. The pre-grad
+ * native-ETH balance stays in `CreatorClaimableRow` (separate).
+ *
+ * OWNER NOTE (doc-lockstep): the exact table + any per-event claim-history table are
+ * robbed-indexer's to define in indexer.md §3 — this is the single-source projection
+ * TYPE both services build against, not a ratified schema decision.
+ */
+export interface CreatorTokenClaimableRow {
+  creator: string;
+  /** ERC20 address — a graduated launch token OR canonical WETH. */
+  token: string;
+  vault: string;
+  total_accrued: string;
+  total_claimed: string;
+  /** accrued − claimed, wei of `token` (event-derived mirror; live `tokenBalanceOf` authoritative). */
+  claimable: string;
+  /** Unix seconds of the most recent `CreatorTokenClaimed` for this `(creator, token)`; null if never claimed. */
   last_claim_at: number | null;
   updated_at: string;
 }

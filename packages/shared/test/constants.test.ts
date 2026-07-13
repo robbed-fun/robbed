@@ -1,9 +1,14 @@
 /** Frozen constants (spec §12.14/§12.28/§12.30; CLAUDE.md chain facts). */
 import { describe, expect, it } from "bun:test";
 import {
+  BPS_DENOMINATOR,
+  combinedTradeFeeBps,
+  CREATOR_LP_SHARE_BPS,
+  isCombinedTradeFeeWithinCap,
   LP_COPY,
   MAX_IMAGE_BYTES,
   MAX_METADATA_JSON_BYTES,
+  MAX_TRADE_FEE_BPS,
   METADATA_NAME_MAX,
   METADATA_TICKER_MAX,
   UNISWAP_V3,
@@ -35,6 +40,9 @@ describe("byte-limit maxes + LP copy + size caps (§12.14/§12.30)", () => {
   });
 
   it("LP_COPY is the exact canonical sentence WITH trailing period", () => {
+    // NOT yet flipped to the §12.69(E) wording — that lands WITH the creator-fee
+    // generation deploy (§12.69(G)(1)); flipping early mislabels the live treasury-only
+    // mainnet copy. Kept as the treasury-only string until Phase-2 relays the deploy.
     expect(LP_COPY).toBe("LP principal permanently locked; trading fees claimable by treasury.");
     expect(LP_COPY.endsWith(".")).toBe(true);
   });
@@ -49,5 +57,25 @@ describe("byte-limit maxes + LP copy + size caps (§12.14/§12.30)", () => {
     expect(utf8ByteLen("x".repeat(33))).toBe(33);
     expect(utf8ByteLen("Ü".repeat(5))).toBe(10); // 10-byte ticker boundary (multibyte)
     expect(utf8ByteLen("Ü".repeat(6))).toBe(12);
+  });
+});
+
+describe("creator-fee split constants + additive cap (spec §6.4/§12.68/§12.69)", () => {
+  it("CREATOR_LP_SHARE_BPS is the 50/50 post-grad split (§12.69(A))", () => {
+    expect(CREATOR_LP_SHARE_BPS).toBe(5000);
+    expect(BPS_DENOMINATOR).toBe(10_000);
+    // treasury share is the remaining half — an exact 50/50 split, no rounding gap
+    expect(BPS_DENOMINATOR - CREATOR_LP_SHARE_BPS).toBe(CREATOR_LP_SHARE_BPS);
+  });
+
+  it("additive cap holds for the §12.68 mainnet default (100 + 50 = 150 ≤ 200)", () => {
+    expect(combinedTradeFeeBps(100, 50)).toBe(150);
+    expect(isCombinedTradeFeeWithinCap(100, 50)).toBe(true);
+    // boundary: exactly the cap is allowed (exercised by gate-2, never the deploy default)
+    expect(isCombinedTradeFeeWithinCap(100, 100)).toBe(true);
+    expect(combinedTradeFeeBps(100, 100)).toBe(MAX_TRADE_FEE_BPS);
+    // over the cap is rejected by the ONE shared predicate the factory mirrors
+    expect(isCombinedTradeFeeWithinCap(150, 100)).toBe(false);
+    expect(isCombinedTradeFeeWithinCap(200, 1)).toBe(false);
   });
 });

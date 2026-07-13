@@ -118,6 +118,59 @@ export const wsFeeCollectedDataSchema = z.object({
   confirmationState: confirmationStateSchema,
 });
 
+/**
+ * `creator_fee_split` on `token:{address}:events` (spec §12.69 — LANDED). The post-grad
+ * half of the creator leg: `LPFeeVault.collect(tokenId)` emits `FeesSplit` (events.ts
+ * `FeesSplitEvent`) — splitting the graduated V3 pool's 1% fees 50/50 creator/treasury
+ * on BOTH legs. This projects the split (per launch `token`, keyed via `creatorOf`) so
+ * the token page / a creator's claim surface can live-update accrual. Both beneficiaries'
+ * per-leg amounts are carried; scalars reuse the token/weth naming of
+ * `wsFeeCollectedDataSchema` (indexer resolves raw pool ordering `treasury{0,1}`/
+ * `creator{0,1}` → token/weth via `graduations.token_is_token0`). Block coords + a
+ * `confirmationState` follow the `fee_collected` convention (dedup + confirmation upgrade).
+ * `fee_collected` stays unchanged — it projects the unchanged `FeesCollected` total.
+ */
+export const wsCreatorFeeSplitDataSchema = z.object({
+  token: addressSchema,
+  creator: addressSchema,
+  /** Creator's 50% share (§12.69), resolved to token/weth legs. */
+  creatorAmountToken: decimalStringSchema,
+  creatorAmountWeth: decimalStringSchema,
+  /** Treasury's 50% share, resolved to token/weth legs. */
+  treasuryAmountToken: decimalStringSchema,
+  treasuryAmountWeth: decimalStringSchema,
+  blockNumber: z.number().int().nonnegative(),
+  blockTimestamp: z.number().int().nonnegative(),
+  txHash: hex32Schema,
+  logIndex: z.number().int().nonnegative(),
+  confirmationState: confirmationStateSchema,
+});
+
+/**
+ * `creator_fee_claimed` on `token:{address}:events` (spec §12.69 — LANDED). A creator
+ * pulled an accrued post-grad ERC20 balance from the CreatorVault (`claimERC20(creator,
+ * token)`); projects the on-chain `CreatorTokenClaimed` so the Portfolio CreatedTab claim
+ * widget reconciles optimistic state against the confirmed payout. SINGLE-asset: `token`
+ * is the ERC20 claimed (a graduated launch token OR canonical WETH), `amount` its wei —
+ * matching the per-ERC20 claim entrypoint 1:1.
+ *
+ * NOTE (channel): published on `token:{address}:events` as the default. A WETH claim is
+ * a creator-level event (aggregates across the creator's tokens), so the indexer MAY
+ * additionally fan claims out on a per-creator channel (`creator:{address}:events`) —
+ * an indexer-owned taxonomy call (see channels.ts). The message shape is channel-agnostic.
+ */
+export const wsCreatorFeeClaimedDataSchema = z.object({
+  creator: addressSchema,
+  /** The ERC20 claimed — a graduated launch token OR canonical WETH (§12.69 Option-B). */
+  token: addressSchema,
+  amount: decimalStringSchema,
+  blockNumber: z.number().int().nonnegative(),
+  blockTimestamp: z.number().int().nonnegative(),
+  txHash: hex32Schema,
+  logIndex: z.number().int().nonnegative(),
+  confirmationState: confirmationStateSchema,
+});
+
 // ── Envelope + discriminated union ──────────────────────────────────────────
 
 const envelopeBase = {
@@ -136,6 +189,9 @@ export const wsMessageSchema = z.discriminatedUnion("type", [
   z.object({ ...envelopeBase, type: z.literal("reorg"), data: wsReorgDataSchema }),
   z.object({ ...envelopeBase, type: z.literal("metadata_verified"), data: wsMetadataVerifiedDataSchema }),
   z.object({ ...envelopeBase, type: z.literal("fee_collected"), data: wsFeeCollectedDataSchema }),
+  // §12.69 post-grad creator-fee split (DRAFT, parallel with Phase-2) — additive members.
+  z.object({ ...envelopeBase, type: z.literal("creator_fee_split"), data: wsCreatorFeeSplitDataSchema }),
+  z.object({ ...envelopeBase, type: z.literal("creator_fee_claimed"), data: wsCreatorFeeClaimedDataSchema }),
 ]);
 
 export type WsMessage = z.infer<typeof wsMessageSchema>;
@@ -148,6 +204,8 @@ export type WsConfirmationsData = z.infer<typeof wsConfirmationsDataSchema>;
 export type WsReorgData = z.infer<typeof wsReorgDataSchema>;
 export type WsMetadataVerifiedData = z.infer<typeof wsMetadataVerifiedDataSchema>;
 export type WsFeeCollectedData = z.infer<typeof wsFeeCollectedDataSchema>;
+export type WsCreatorFeeSplitData = z.infer<typeof wsCreatorFeeSplitDataSchema>;
+export type WsCreatorFeeClaimedData = z.infer<typeof wsCreatorFeeClaimedDataSchema>;
 
 // ── Client → server ops (indexer.md §8.1; api.md §6.5: sub/unsub/ping only) ─
 

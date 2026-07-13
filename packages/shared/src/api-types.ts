@@ -16,7 +16,9 @@ import { z } from "zod";
 import { confirmationStateSchema } from "./confirmation";
 import {
   CANDLE_INTERVALS,
+  isCombinedTradeFeeWithinCap,
   LP_COPY,
+  MAX_TRADE_FEE_BPS,
   METADATA_DESCRIPTION_MAX,
   METADATA_NAME_MAX,
   METADATA_TICKER_MAX,
@@ -172,6 +174,31 @@ export const organicFlowSchema = z.object({
 });
 export type OrganicFlow = z.infer<typeof organicFlowSchema>;
 
+/**
+ * Per-token fee split surfaced on the Trust panel / `/create` (spec §6.4, §12.68).
+ * `tradeFeeBps` is the treasury curve fee; `creatorFeeBps` is the ADDITIVE creator
+ * leg. Both are per-token snapshots read from `tokens.{trade,creator}_fee_bps`
+ * (db-rows.ts) — never the factory-current config (which misreports older curves).
+ *
+ * UN-FROZEN 2026-07-13 (§12.68): `creatorFeeBps` is now a first-class NONZERO value
+ * on mainnet — the creator-fee generation ships `creatorFeeBps = 50` (0.5%),
+ * additive with `tradeFeeBps = 100` (1%) ⇒ 150. The old §7 "hardcoded 0 on mainnet"
+ * framing is superseded; reading 0 stays valid (legacy/testnet-only v1 curves), so
+ * this is additive/backward-compatible. The refinement enforces the SAME additive
+ * hard cap the factory asserts on-chain — `tradeFeeBps + creatorFeeBps ≤
+ * MAX_TRADE_FEE_BPS` (200, §6.4) — via the single shared predicate
+ * (`isCombinedTradeFeeWithinCap`, constants.ts), so validator/contract can't drift.
+ */
+export const feePolicySchema = z
+  .object({
+    tradeFeeBps: z.number().int().nonnegative(),
+    creatorFeeBps: z.number().int().nonnegative(),
+  })
+  .refine((f) => isCombinedTradeFeeWithinCap(f.tradeFeeBps, f.creatorFeeBps), {
+    message: `feePolicy: tradeFeeBps + creatorFeeBps must be ≤ ${MAX_TRADE_FEE_BPS} (spec §6.4 hard cap / §12.68 additive split)`,
+  });
+export type FeePolicy = z.infer<typeof feePolicySchema>;
+
 export const trustPanelSchema = z.object({
   metadataVerification: z.object({
     status: metadataVerificationStatusSchema,
@@ -181,17 +208,8 @@ export const trustPanelSchema = z.object({
   }),
   /** Exact canonical string (spec §12.14; CLAUDE.md hard rule). */
   lpCopy: z.literal(LP_COPY),
-  feePolicy: z.object({
-    tradeFeeBps: z.number().int().nonnegative(),
-    /**
-     * Present from day 1 (§7). 0 for v1/mainnet curves; NONZERO under the landed
-     * creator-fee factory (§12.63; testnet default 50). Combined cap holds:
-     * `tradeFeeBps + creatorFeeBps ≤ MAX_TRADE_FEE_BPS` (200). The schema already
-     * admitted any nonnegative int, so surfacing a nonzero value is non-breaking —
-     * the per-token snapshot comes from `tokens.creator_fee_bps` (db-rows.ts).
-     */
-    creatorFeeBps: z.number().int().nonnegative(),
-  }),
+  /** Additive treasury + creator fee split, cap-refined (spec §6.4/§12.68). */
+  feePolicy: feePolicySchema,
   /** v1.2 organic-flow metrics (§5.2/§8.5); null until stats computed. */
   organic: organicFlowSchema.nullable(),
 });
@@ -576,6 +594,60 @@ export const claimCreatorFeeTxMetaSchema = z.object({
   amountEth: decimalStringSchema,
 });
 export type ClaimCreatorFeeTxMeta = z.infer<typeof claimCreatorFeeTxMetaSchema>;
+
+// ── Post-graduation creator LP-fee split surface (spec §12.69 — 50/50 split) ─
+// The §12.68 pre-grad creator leg (curve native-ETH fee, above) has a POST-GRAD half:
+// the graduated V3 pool's 1% fees are split 50/50 creator/treasury at
+// `LPFeeVault.collect(tokenId)` (§12.69(A)), on BOTH legs. Custody is Option B
+// (§12.69(C), LANDED): the creator share is credited in the pull-payment CreatorVault
+// as a per-`(creator, token)` ERC20 balance via `depositERC20(creator, token, share)`,
+// where `token` is the ERC20 — a graduated LAUNCH TOKEN (sell-leg) or canonical WETH
+// (buy-leg), NOT unwrapped to ETH. Claimed per ERC20 via `claimERC20(creator, token)`;
+// read live via `CreatorVault.tokenBalanceOf(creator, token)`. So this surface is
+// per-`(creator, ERC20-token)` and SINGLE-asset, matching the claim entrypoint 1:1 —
+// a WETH row aggregates the creator's WETH share across ALL their graduated tokens.
+// The pre-grad native-ETH balance (`creatorClaimableSchema` above) stays SEPARATE.
+//
+// DOC-LOCKSTEP (report): the endpoint shape (e.g. GET /v1/creators/:address/claimable
+// enumerating the creator's (token) rows) + its openapi.yaml entry are api.md §3
+// additions the API/architect ratifies — this is the single-source DTO both services
+// build against.
+
+export const creatorTokenClaimableSchema = z.object({
+  creator: addressSchema,
+  /** The ERC20 the balance is denominated in — a graduated launch token OR canonical WETH (§12.69(C)). */
+  token: addressSchema,
+  /** The CreatorVault custodying the balance (constant per creator-fee factory version). */
+  vault: addressSchema,
+  /** Live claimable — `CreatorVault.tokenBalanceOf(creator, token)`, wei of `token`. AUTHORITATIVE. */
+  claimable: decimalStringSchema,
+  /** USD mirror — populated only when `token` is WETH (ETH-priced, derived §2); null for launch-token legs (unpriceable ERC20). */
+  claimableUsd: usdValueSchema.nullable(),
+  /** Lifetime accrued (Σ `CreatorTokenDeposited.amount` for this `(creator, token)`), wei. */
+  totalAccrued: decimalStringSchema,
+  /** Lifetime claimed (Σ `CreatorTokenClaimed.amount`), wei. */
+  totalClaimed: decimalStringSchema,
+  /** ISO-8601 timestamp of the live `tokenBalanceOf` read (mirrors feesResponse.uncollected.asOf). */
+  asOf: z.string(),
+});
+export type CreatorTokenClaimable = z.infer<typeof creatorTokenClaimableSchema>;
+
+/**
+ * `CLAIM_CREATOR_TOKEN_FEE` transaction metadata (spec §12.69) — the post-grad ERC20
+ * analog of `claimCreatorFeeTxMetaSchema`, matching `CreatorVault.claimERC20(creator,
+ * token) → amount` 1:1 (single ERC20 per claim). Attached to a pending claim tx so the
+ * confirmation-tier tracker (§2.1) can label + reconcile it; `amount` is the expected
+ * payout (from `creatorTokenClaimableSchema.claimable`), shown optimistically until the
+ * receipt confirms the actual `CreatorTokenClaimed.amount`.
+ */
+export const claimCreatorTokenFeeTxMetaSchema = z.object({
+  type: z.literal("CLAIM_CREATOR_TOKEN_FEE"),
+  creator: addressSchema,
+  token: addressSchema,
+  vault: addressSchema,
+  amount: decimalStringSchema,
+});
+export type ClaimCreatorTokenFeeTxMeta = z.infer<typeof claimCreatorTokenFeeTxMetaSchema>;
 
 /** GET /v1/stats (api.md §3.4 — "tokens launched, graduations, 24h volume, treasury fees collected"). */
 export const statsResponseSchema = z.object({

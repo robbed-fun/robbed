@@ -12,9 +12,15 @@ import {
   creatorFeeDepositedEvent,
   creatorFeeEventsAbi,
   creatorFeesSweptEvent,
+  creatorTokenClaimedEvent,
+  creatorTokenDepositedEvent,
   creatorVaultEventsAbi,
+  creatorVaultTokenEventsAbi,
   curveFactoryEventsAbi,
+  feesSplitEvent,
   graduatedEvent,
+  lpFeeVaultSplitEventsAbi,
+  postGradCreatorFeeEventsAbi,
   robbedEventsAbi,
   launchTokenEventsAbi,
   tokenCreatedEvent,
@@ -142,5 +148,57 @@ describe("creator-fee event family (spec §7 / §12.63 — ADDITIVE, kept off th
     expect(new Set(creatorSelectors).size).toBe(3);
     const ratified = robbedEventsAbi.map((e) => toEventSelector(e as AbiEvent));
     expect(creatorSelectors.some((s) => ratified.includes(s))).toBe(false);
+  });
+});
+
+describe("post-grad 50/50 LP-fee-split family (spec §12.69 — LANDED, additive)", () => {
+  it("signatures + indexed topics are transcribed byte-for-byte from the regenerated artifacts", () => {
+    // FeesSplit(uint256 indexed tokenId, address indexed creator, uint256 treasury0,
+    //           uint256 creator0, uint256 treasury1, uint256 creator1)
+    expect(signatureOf(feesSplitEvent)).toBe(
+      "FeesSplit(uint256,address,uint256,uint256,uint256,uint256)",
+    );
+    expect(feesSplitEvent.inputs.filter((i) => i.indexed).map((i) => i.name)).toEqual([
+      "tokenId", "creator",
+    ]);
+    expect(feesSplitEvent.inputs.map((i) => i.name)).toEqual([
+      "tokenId", "creator", "treasury0", "creator0", "treasury1", "creator1",
+    ]);
+    // CreatorTokenDeposited(address indexed creator, address indexed token, address indexed source, uint256 amount)
+    expect(signatureOf(creatorTokenDepositedEvent)).toBe(
+      "CreatorTokenDeposited(address,address,address,uint256)",
+    );
+    expect(creatorTokenDepositedEvent.inputs.filter((i) => i.indexed).map((i) => i.name)).toEqual([
+      "creator", "token", "source",
+    ]);
+    // CreatorTokenClaimed(address indexed creator, address indexed token, address indexed caller, uint256 amount)
+    expect(signatureOf(creatorTokenClaimedEvent)).toBe(
+      "CreatorTokenClaimed(address,address,address,uint256)",
+    );
+    expect(creatorTokenClaimedEvent.inputs.map((i) => i.name)).toEqual([
+      "creator", "token", "caller", "amount",
+    ]);
+  });
+
+  it("Ponder groupings: LPFeeVault split source + CreatorVault ERC20 leg + combined manifest", () => {
+    expect(lpFeeVaultSplitEventsAbi).toEqual([feesSplitEvent]);
+    expect(creatorVaultTokenEventsAbi).toEqual([creatorTokenDepositedEvent, creatorTokenClaimedEvent]);
+    expect(postGradCreatorFeeEventsAbi).toEqual([
+      feesSplitEvent,
+      creatorTokenDepositedEvent,
+      creatorTokenClaimedEvent,
+    ]);
+    for (const ev of postGradCreatorFeeEventsAbi) expect(ev.type).toBe("event");
+  });
+
+  it("selectors are distinct from the six ratified families AND the §12.63 pre-grad set", () => {
+    const postGrad = postGradCreatorFeeEventsAbi.map((e) => toEventSelector(e as AbiEvent));
+    expect(new Set(postGrad).size).toBe(3);
+    const ratified = robbedEventsAbi.map((e) => toEventSelector(e as AbiEvent));
+    const preGrad = creatorFeeEventsAbi.map((e) => toEventSelector(e as AbiEvent));
+    expect(postGrad.some((s) => ratified.includes(s) || preGrad.includes(s))).toBe(false);
+    // frozen six stay six; pre-grad set stays three (post-grad lives in its own groupings)
+    expect(robbedEventsAbi.length).toBe(6);
+    expect(creatorFeeEventsAbi.length).toBe(3);
   });
 });

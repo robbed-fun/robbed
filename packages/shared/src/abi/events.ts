@@ -223,3 +223,82 @@ export const creatorFeeEventsAbi = [
   creatorFeeDepositedEvent,
   creatorFeeClaimedEvent,
 ] as const;
+
+// ── Post-graduation 50/50 LP-fee-split event family (spec §12.69 — LANDED) ───
+//
+// The POST-GRAD half of the creator leg (§12.68 is the pre-grad half). TRANSCRIBED
+// byte-for-byte from the regenerated Phase-2 artifacts (contracts/out/{LPFeeVault,
+// CreatorVault}.sol → packages/shared/src/abi/{LPFeeVault,CreatorVault}.json) after
+// `bun contracts/script/codegen-abi.ts` — never invented. Custody is Option B
+// (§12.69(C)): the creator-aware `LPFeeVault.collect(tokenId)` splits the V3 pool's
+// 1% fees 50/50 (`creatorLpShareBps() == 5000`), treasury share PUSHED to the fixed
+// treasury, creator share routed to the pull-payment CreatorVault as a per-`(creator,
+// token)` ERC20 balance via `depositERC20(creator, token, share)` — token ∈ {launch
+// token, WETH}, NOT unwrapped to ETH. Claimed per ERC20 via `claimERC20(creator,
+// token)`; the pre-grad native-ETH leg (`CreatorFeeDeposited`/`Claimed`) stays SEPARATE.
+//
+// Kept OFF the frozen six-family groupings AND off the §12.63 pre-grad groupings so
+// each set stays independently assertable (abi.test.ts). robbed-indexer registers
+// `FeesSplit` on the LPFeeVault source and the two `CreatorToken*` events on the
+// existing CreatorVault source (merge with `creatorVaultEventsAbi`).
+
+/**
+ * LPFeeVault (§12.69) — the 50/50 split emitted at `collect()`. Per-beneficiary
+ * per-leg amounts (`treasury{0,1}`/`creator{0,1}` in RAW pool ordering; the indexer
+ * resolves 0/1 → token/weth via `graduations.token_is_token0`). `FeesCollected`
+ * (tokenId, amount0, amount1) ALSO still emits — the pre-split harvest total.
+ */
+export const feesSplitEvent = {
+  type: "event",
+  name: "FeesSplit",
+  inputs: [
+    { name: "tokenId", type: "uint256", indexed: true },
+    { name: "creator", type: "address", indexed: true },
+    { name: "treasury0", type: "uint256", indexed: false },
+    { name: "creator0", type: "uint256", indexed: false },
+    { name: "treasury1", type: "uint256", indexed: false },
+    { name: "creator1", type: "uint256", indexed: false },
+  ],
+} as const;
+
+/**
+ * CreatorVault (§12.69) — post-grad ERC20 leg credited per `(creator, token)`.
+ * `token` is the ERC20 (a graduated launch token OR canonical WETH); `source` is the
+ * depositor (the LPFeeVault). Distinct from the pre-grad `CreatorFeeDeposited`
+ * (per-creator native ETH from a curve).
+ */
+export const creatorTokenDepositedEvent = {
+  type: "event",
+  name: "CreatorTokenDeposited",
+  inputs: [
+    { name: "creator", type: "address", indexed: true },
+    { name: "token", type: "address", indexed: true },
+    { name: "source", type: "address", indexed: true },
+    { name: "amount", type: "uint256", indexed: false },
+  ],
+} as const;
+
+/** CreatorVault (§12.69) — `caller` paid out `creator`'s ERC20 `token` balance (`claimERC20`). */
+export const creatorTokenClaimedEvent = {
+  type: "event",
+  name: "CreatorTokenClaimed",
+  inputs: [
+    { name: "creator", type: "address", indexed: true },
+    { name: "token", type: "address", indexed: true },
+    { name: "caller", type: "address", indexed: true },
+    { name: "amount", type: "uint256", indexed: false },
+  ],
+} as const;
+
+/** LPFeeVault post-grad split slice (§12.69) — registered on the LPFeeVault source. */
+export const lpFeeVaultSplitEventsAbi = [feesSplitEvent] as const;
+
+/** CreatorVault post-grad ERC20 leg (§12.69) — merge with `creatorVaultEventsAbi` on the vault source. */
+export const creatorVaultTokenEventsAbi = [creatorTokenDepositedEvent, creatorTokenClaimedEvent] as const;
+
+/** The full additive §12.69 post-grad creator-split manifest (parallels `creatorFeeEventsAbi`). */
+export const postGradCreatorFeeEventsAbi = [
+  feesSplitEvent,
+  creatorTokenDepositedEvent,
+  creatorTokenClaimedEvent,
+] as const;

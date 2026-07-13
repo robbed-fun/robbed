@@ -59,6 +59,16 @@ export const CHAINLINK_ETH_USD_PROXY_4663 =
 /**
  * The canonical LP sentence — single string constant everywhere, including the
  * §5.2 Trust panel (spec §12.14; CLAUDE.md hard rule). Never "burned".
+ *
+ * PENDING AMENDMENT (§12.69(E) — DO NOT flip yet): when the §12.63(a)/§12.69
+ * creator-fee factory generation deploys, this becomes
+ *   "LP principal permanently locked; trading fees split between treasury and creator."
+ * §12.69(G)(1) is explicit that robbed-shared updates this constant + the
+ * copy-lint fixture WITH the generation deploy — NOT before (flipping early would
+ * mislabel the still-live treasury-only mainnet copy and break copy-lint). Kept
+ * as-is here on purpose; the flip lands when Phase-2 relays the deploy.
+ * // TODO(phase2-reconcile): flip LP_COPY + constants.test + web copy-lint fixture
+ * // to the §12.69(E) wording in lockstep with the creator-fee generation deploy.
  */
 export const LP_COPY =
   "LP principal permanently locked; trading fees claimable by treasury." as const;
@@ -129,3 +139,38 @@ export const TOTAL_SUPPLY_WEI = 1_000_000_000n * 10n ** 18n;
 
 /** Hard cap on trade fee, basis points (spec §6.4 "≤2%"; contracts.md §2.2 MAX_TRADE_FEE_BPS). */
 export const MAX_TRADE_FEE_BPS = 200;
+
+/** Basis-point denominator: 10_000 bps == 100.00%. */
+export const BPS_DENOMINATOR = 10_000;
+
+/**
+ * Post-graduation V3 fee split — the CREATOR's share, basis points (spec §12.69(A)).
+ * The graduated position is a full-range V3 **1%-fee** LP; the creator-aware
+ * `LPFeeVault.collect(tokenId)` splits the accrued fees 50/50 creator/treasury on
+ * BOTH legs (launch-token leg on sells, WETH leg on buys) ⇒ creator 0.5% of volume,
+ * treasury 0.5% of volume — venue-invariant with the §12.68 pre-grad 50-bps creator
+ * leg. `5000` (50.00%) is an IMMUTABLE of the §12.63(a)/§12.69 vault generation; the
+ * treasury share is the remaining `BPS_DENOMINATOR - CREATOR_LP_SHARE_BPS`.
+ *
+ * // TODO(phase2-reconcile): confirm the exact on-chain immutable name (assumed
+ * // `creatorLpShareBps`) and that the split is applied PER LEG
+ * // (creator = 50% of amount0 + 50% of amount1; treasury = the remaining 50% of
+ * // each) against the final creator-aware LPFeeVault ABI.
+ */
+export const CREATOR_LP_SHARE_BPS = 5000;
+
+/**
+ * Additive trade-fee cap invariant (spec §6.4 hard cap / §12.68 additive split):
+ * the curve's treasury trade fee and the creator leg SUM under the hard cap —
+ * `tradeFeeBps + creatorFeeBps ≤ MAX_TRADE_FEE_BPS` (200). Mainnet ships
+ * `treasuryFeeBps = 100` + `creatorFeeBps = 50` = 150 ≤ 200 (§12.68). The factory
+ * constructor/setter re-asserts this on-chain (never caller-supplied, §4.1); this is
+ * the ONE shared predicate every service validates the pair with (anti-drift:
+ * computed once, imported — used by the `feePolicySchema` refine in api-types.ts).
+ */
+export function combinedTradeFeeBps(tradeFeeBps: number, creatorFeeBps: number): number {
+  return tradeFeeBps + creatorFeeBps;
+}
+export function isCombinedTradeFeeWithinCap(tradeFeeBps: number, creatorFeeBps: number): boolean {
+  return combinedTradeFeeBps(tradeFeeBps, creatorFeeBps) <= MAX_TRADE_FEE_BPS;
+}
