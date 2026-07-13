@@ -99,13 +99,23 @@ export async function computeChainDeadline(
   client: ChainTimeClient | null | undefined,
   minutes = DEFAULT_DEADLINE_MINUTES,
 ): Promise<bigint> {
+  const windowSec = BigInt(minutes * 60);
   if (!client) return computeDeadline(undefined, minutes);
-  try {
-    const block = await client.getBlock();
-    return block.timestamp + BigInt(minutes * 60);
-  } catch {
-    return computeDeadline(undefined, minutes);
+  // RETRY the chain read: a transient connection drop (`ERR_NETWORK_CHANGED` on a
+  // flaky network) must NOT silently fall back to the browser clock, which may be
+  // skewed and would ship an already-expired deadline. Only after every retry
+  // fails do we fall back to the (possibly-skewed) local clock as a last resort.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const block = await client.getBlock();
+      return block.timestamp + windowSec;
+    } catch {
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+      }
+    }
   }
+  return computeDeadline(undefined, minutes);
 }
 
 /**

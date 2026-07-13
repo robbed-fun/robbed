@@ -164,9 +164,45 @@ describe("readCurveImmutablesWithFallback — pruned-state fallback at latest", 
     expect(fallback.calls.length).toBe(7);
   });
 
-  it("propagates the error when BOTH readers fail (fail-closed, never a fabricated row)", async () => {
-    await expect(
-      readCurveImmutablesWithFallback(prunedClient(), prunedClient(), CURVE),
-    ).rejects.toThrow(/missing trie node/);
+  it("degrades to safe defaults (NEVER throws) when BOTH event-block and latest are pruned", async () => {
+    // A single failed read must never stall the backfill (Ponder retries-9×-and-
+    // wedges on a throw). When the event block AND `latest` are both pruned, each
+    // read degrades to its per-immutable default so the handler proceeds — a
+    // reindex on an archive RPC later restores the true (immutable) values.
+    const c = await readCurveImmutablesWithFallback(prunedClient(), prunedClient(), CURVE);
+    expect(c.virtualEth0).toBe(0n);
+    expect(c.virtualToken0).toBe(0n);
+    expect(c.curveSupply).toBe(0n);
+    expect(c.lpTokenTranche).toBe(0n);
+    expect(c.graduationEth).toBe(0n);
+    expect(c.tradeFeeBps).toBe(0);
+    expect(c.creatorFeeBps).toBe(0);
+  });
+
+  it("degrades ONLY the pruned reads to latest, leaving the healthy reads on the event block", async () => {
+    // Mirrors the observed live failure: CURVE_SUPPLY (0x1e4c7292), GRADUATION_ETH
+    // (0xa6f5302b) and TRADE_FEE_BPS (0x9185f598) throw "missing trie node" at the
+    // event block while the rest read fine. The three degrade to `latest`; the
+    // others never touch the fallback.
+    const pruned = new Set(["CURVE_SUPPLY", "GRADUATION_ETH", "TRADE_FEE_BPS"]);
+    const primary: ContractReader = {
+      async readContract({ functionName }) {
+        if (pruned.has(functionName)) {
+          throw new Error(`missing trie node … (path 0x7cd37…) state … is not available, not found`);
+        }
+        return (ALL_VALUES as Record<string, bigint | number>)[functionName];
+      },
+    };
+    const fallback = stubClient(ALL_VALUES);
+    const c = await readCurveImmutablesWithFallback(primary, fallback.client, CURVE);
+    // Correct values regardless of which reader served them (immutables are equal).
+    expect(c.curveSupply).toBe(ALL_VALUES.CURVE_SUPPLY);
+    expect(c.graduationEth).toBe(ALL_VALUES.GRADUATION_ETH);
+    expect(c.tradeFeeBps).toBe(ALL_VALUES.TRADE_FEE_BPS);
+    expect(c.virtualEth0).toBe(ALL_VALUES.VIRTUAL_ETH_0);
+    // Only the three pruned selectors were re-read at latest.
+    expect(fallback.calls.map((x) => x.functionName).sort()).toEqual(
+      ["CURVE_SUPPLY", "GRADUATION_ETH", "TRADE_FEE_BPS"].sort(),
+    );
   });
 });
