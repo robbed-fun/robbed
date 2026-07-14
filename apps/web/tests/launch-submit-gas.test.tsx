@@ -12,7 +12,7 @@ import { curveFactoryAbi } from "@robbed/shared/abi";
  * the wallet's OWN client gas estimation trips over the ArbOS L1-data-fee gas
  * component and shows "Network fee unavailable" (the same quirk fixed for trades).
  * The fix pre-estimates gas node-side via `publicClient.estimateContractGas` and
- * passes an explicit `gas` limit (`estimate * 2`, capped at a create-sized 8M
+ * passes an explicit `gas` limit (`estimate * 2`, capped at a create-sized 30M
  * ceiling) to `writeContractAsync`; per viem, passing a gas limit SKIPS the
  * wallet's estimation. A genuine revert during estimation must NOT be swallowed —
  * it surfaces through `humanizeError` (decoded reason).
@@ -151,10 +151,10 @@ describe("createToken carries an explicit pre-estimated gas limit (launch fix)",
     expect(write.gas).toBe(7_400_000n);
   });
 
-  it("caps a pathological estimate at the 8M create ceiling", async () => {
-    m.estimateContractGas.mockResolvedValue(5_000_000n); // 2× = 10M > 8M ceiling
+  it("caps a pathological estimate at the 30M create ceiling", async () => {
+    m.estimateContractGas.mockResolvedValue(20_000_000n); // 2× = 40M > 30M ceiling
     await runLaunch(launchOpts());
-    expect(calls(m.writeContractAsync)[0].gas).toBe(8_000_000n);
+    expect(calls(m.writeContractAsync)[0].gas).toBe(30_000_000n);
   });
 });
 
