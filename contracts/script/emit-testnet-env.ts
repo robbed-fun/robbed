@@ -24,8 +24,9 @@
  *     step 8; Blockscout v2 verifier on the testnet explorer needs no API key, spec §12.52)
  *   tools/localstack/out/testnet.env      — SAME keys as the deploychain-emitted local.env
  *     (CURVE_FACTORY_ADDRESS, ROUTER_ADDRESS, MIGRATOR_ADDRESS, TREASURY_ADDRESS,
- *     LP_FEE_VAULT_ADDRESS, START_BLOCK) — the fail-closed prerequisite of
- *     docker-compose.testnet.yml's api/indexer services.
+ *     LP_FEE_VAULT_ADDRESS, CREATOR_VAULT_ADDRESS, WETH_ADDRESS, START_BLOCK) — the
+ *     fail-closed prerequisite of docker-compose.testnet.yml's api/indexer services
+ *     (the last two gate the §12.63/§12.69 creator-fee indexing + USD pricing).
  *
  * Fail-closed by design: any missing file, wrong mode/chainId, malformed address, or absent
  * receipts exits 1 — a partial/ambiguous emit is worse than none (the compose stack refuses
@@ -70,6 +71,7 @@ type Artifact = {
   router: string;
   v3Migrator: string;
   lpFeeVault: string;
+  creatorVault: string;
   treasury: string;
   canaryToken: string;
   canaryCurve: string;
@@ -87,6 +89,7 @@ const ADDR_KEYS = [
   "router",
   "v3Migrator",
   "lpFeeVault",
+  "creatorVault",
   "treasury",
   "canaryToken",
   "canaryCurve",
@@ -130,6 +133,7 @@ const record = {
     router: artifact.router,
     v3Migrator: artifact.v3Migrator,
     lpFeeVault: artifact.lpFeeVault,
+    creatorVault: artifact.creatorVault,
     treasury: artifact.treasury,
   },
   external: {
@@ -170,6 +174,11 @@ const env = [
   `MIGRATOR_ADDRESS=${artifact.v3Migrator}`,
   `TREASURY_ADDRESS=${artifact.treasury}`,
   `LP_FEE_VAULT_ADDRESS=${artifact.lpFeeVault}`,
+  // §12.63/§12.69 creator-fee generation: the indexer/api register the CreatorVault
+  // source + price the WETH claim leg off these. Absent ⇒ post-grad creator claims
+  // go unindexed and claimableUsd reads null (fail-safe, spec §2).
+  `CREATOR_VAULT_ADDRESS=${artifact.creatorVault}`,
+  `WETH_ADDRESS=${artifact.weth}`,
   `START_BLOCK=${startBlock}`,
   "",
 ].join("\n");

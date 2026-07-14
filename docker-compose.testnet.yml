@@ -326,7 +326,8 @@ services:
         pnpm --filter @robbed/indexer migrate
         # PRODUCTION mode (Ponder 0.16.8): `ponder start` = crash-recovery ON, no
         # file-watch. A steady-state `docker restart` RESUMES from _ponder_checkpoint in
-        # the same DATABASE_SCHEMA (default `public`); it does NOT wipe+re-index from
+        # the same DATABASE_SCHEMA (the explicit `--schema public` on the start line — Ponder
+        # 0.16.8 has NO default schema for `start`, unlike `dev`); it does NOT wipe+re-index from
         # START_BLOCK the way `ponder dev` does on every boot (dev drops its app tables on
         # each restart — that is the re-index-on-boot bug this replaces). Persistent stacks
         # MUST use `start`; `dev` stays only in docker-compose.yml (fresh anvil deploy each
@@ -337,7 +338,7 @@ services:
         # re-index — fast, because the finalized-block RPC cache in the `ponder_sync`
         # schema survives and is reused (no re-fetch from the rate-limited RPC). Steady
         # state thereafter = resume. Do NOT revert to `ponder dev`. See indexer.md.
-        exec pnpm --filter @robbed/indexer exec ponder start --hostname 0.0.0.0
+        exec pnpm --filter @robbed/indexer exec ponder start --hostname 0.0.0.0 --schema public
     env_file:
       - path: .env
         required: false

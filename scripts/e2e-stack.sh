@@ -59,6 +59,16 @@ fi
 if [[ "${E2E_NO_UP:-}" != "1" ]]; then
   echo "▶ bringing up the dev stack in e2e mode (docker compose up -d)…"
   "${COMPOSE[@]}" up -d
+  # The `deploychain` one-shot re-runs on every `up` and can deploy a NEW factory
+  # (fresh addresses + START_BLOCK written to tools/localstack/out/local.env).
+  # Services that bake those at boot — indexer, keeper, api, web — keep the STALE
+  # factory if `up` left them already-running, so freshly-seeded tokens never index
+  # (seedToken → waitForIndexed timeouts) and UI txs hit a dead factory. Force-recreate
+  # them so they re-read local.env. E2E_FRESH already recreates the whole stack.
+  if [[ "${E2E_FRESH:-}" != "1" ]]; then
+    echo "▶ re-aligning address-dependent services to the fresh deploychain (recreate indexer/keeper/api/web)…"
+    "${COMPOSE[@]}" up -d --force-recreate --no-deps indexer keeper api web
+  fi
 fi
 
 # ── wait for readiness (poll — never a blind sleep) ──────────────────────────

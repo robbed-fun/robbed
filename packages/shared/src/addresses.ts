@@ -64,13 +64,14 @@ export const ROBBED_DEPLOYMENTS = {
   "4663": {
     chainId: 4663,
     mode: "fork",
-    deployedAt: 1783887345,
+    deployedAt: 1783986424,
     robbed: {
-      curveFactory: "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E",
-      router: "0x84eA74d481Ee0A5332c457a4d796187F6Ba67fEB",
-      v3Migrator: "0xc3e53F4d16Ae77Db1c982e75a937B9f60FE63690",
-      lpFeeVault: "0x67d269191c92Caf3cD7723F116c85e6E9bf55933",
+      curveFactory: "0x67d269191c92Caf3cD7723F116c85e6E9bf55933",
+      router: "0x9E545E3C0baAB3E08CdfD552C960A1050f373042",
+      v3Migrator: "0x84eA74d481Ee0A5332c457a4d796187F6Ba67fEB",
+      lpFeeVault: "0xc3e53F4d16Ae77Db1c982e75a937B9f60FE63690",
       treasury: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      creatorVault: "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E",
     },
     external: {
       weth: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
@@ -80,8 +81,8 @@ export const ROBBED_DEPLOYMENTS = {
       quoterV2: "0x33e885eD0Ec9bF04EcfB19341582aADCb4c8A9E7",
     },
     canary: {
-      token: "0x4F57F9239eFCBf43e5920f579D03B3849C588396",
-      curve: "0x0B40C66BD7BA81485527C41B3730a95f113ED89E",
+      token: "0xfBD745797A0fb50429f0a2b04581092798Fdf30B",
+      curve: "0x189E4542919956a8F51F28b7bCc211d483AAa1AA",
     },
   },
   "31337": {
@@ -110,14 +111,14 @@ export const ROBBED_DEPLOYMENTS = {
   "46630": {
     chainId: 46630,
     mode: "testnet",
-    deployedAt: 1783899730,
+    deployedAt: 1783987487,
     robbed: {
-      curveFactory: "0x7355BD34Bc12002F2bDc79A4791463d7d6D2529a",
-      router: "0x6480534B6992419535554451BBDe79B898011BA8",
-      v3Migrator: "0x4Bc86C3fdBABbFEF82094A772bA0194e980A5567",
-      lpFeeVault: "0x3B4dD3B5741EDcE6e08CE2BcbE3106035A3E8e75",
+      curveFactory: "0xC5cD74C1859f36348419AF93B0a07D1d9a3b51A5",
+      router: "0x05A5dCDaf40F8fdf99383FdB5A1B75E389B2034b",
+      v3Migrator: "0xA073942ECc0cc0EF8FD052043F407D27509C4F7B",
+      lpFeeVault: "0xeCeBD131493f7FdFF904C2b05B82820A40B0F708",
       treasury: "0x4ae5b5Ae7D2edd7A2d43054246D6aaAcAAFC1000",
-      creatorVault: "0xE032467128A87e353b69AeDf8e97B0AA9d528eBB",
+      creatorVault: "0xdF305aF83fbF70fe0d99a8553b2e0Da03b4d4c9a",
     },
     external: {
       weth: "0x7943e237c7F95DA44E0301572D358911207852Fa",
@@ -127,8 +128,8 @@ export const ROBBED_DEPLOYMENTS = {
       quoterV2: "0xDDcBe4989C8171F721c5e683C9C6339B59718213",
     },
     canary: {
-      token: "0xFF6e101f6Ddf202F513A8f7255c61c3BAd806AB2",
-      curve: "0x7cd37Dc905C89D970F2E6952D721F49cba284aC7",
+      token: "0x925e104a8c94ae8b9c2A5F914dAF4cb24eab0f22",
+      curve: "0x72405d63A96CeCAb6F7964192d08b717a0D0446A",
     },
   },
 } as const satisfies Record<string, Deployment>;
