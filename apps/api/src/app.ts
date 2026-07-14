@@ -17,6 +17,7 @@ import { ROUTE_LIMITS, rateLimit } from "./mw/ratelimit";
 import { adminRoutes } from "./admin/routes";
 import { candleRoutes } from "./routes/candles";
 import { creatorRoutes } from "./routes/creators";
+import { eventRoutes } from "./routes/events";
 import { feeRoutes } from "./routes/fees";
 import { healthRoutes } from "./routes/health";
 import { holderRoutes } from "./routes/holders";
@@ -66,6 +67,7 @@ export function createApp(deps: AppDeps) {
   const reads = rateLimit(rlDeps, ROUTE_LIMITS.reads);
   app.use("/v1/tokens", reads);
   app.use("/v1/tokens/*", reads);
+  app.use("/v1/events", reads);
   app.use("/v1/trades/*", reads);
   app.use("/v1/portfolio/*", reads);
   app.use("/v1/stats", reads);
@@ -85,6 +87,7 @@ export function createApp(deps: AppDeps) {
   app.route("/", searchRoutes(deps));
   app.route("/", tokenRoutes(deps));
   app.route("/", creatorRoutes(deps));
+  app.route("/", eventRoutes(deps));
   app.route("/", tradeRoutes(deps));
   app.route("/", portfolioRoutes(deps));
   app.route("/", candleRoutes(deps));

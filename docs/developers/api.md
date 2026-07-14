@@ -162,6 +162,27 @@ GET /v1/trades/:txHash
   200 → { trades: TradeRow[] }   -- all Trade rows in that tx (create-with-initial-buy has one)
   404 → not indexed (client keeps "awaiting index" state and re-polls)
 
+GET /v1/events?type=all|launches|trades|graduations&cursor=&limit=      (Discover event tape seed — web.md event-tape widget)
+  Merged, newest-first protocol event feed (launches ∪ trades ∪ graduations) — the SERVER-SIDE
+  historical seed for the Discover tape. WHY THIS EXISTS (root cause, 2026-07-14, robbed-indexer):
+  the tape had NO historical source for GRADUATE/TRADE rows — it seeded LAUNCH rows from /v1/tokens
+  and otherwise relied on live WS (global:trades, global:launches). WS keeps no replay buffer (D-23)
+  and handler publishes are backfill-suppressed, so a graduation indexed during catch-up (or one that
+  fired before a browser connected) never reached the tape even though it is durably persisted in the
+  `graduations` table. This endpoint serves that persisted data — no reindex.
+  - `type` is a CLOSED allowlist (mirrors the tape's TapeFilter); out-of-allowlist ⇒ 400.
+  - Keyset-paginated over the GLOBALLY-UNIQUE (blockNumber, logIndex) — on-chain log_index is unique
+    per block across all contracts, so the composite is a total order with no cross-table ties.
+  - Listing-gated: rows whose token is moderation `hidden` are excluded (matches the /tokens launch seed).
+  - Each row's `data` REUSES the WS payload shape (launch/trade/graduated), so a REST-seeded tape row
+    and a live-WS tape row are shape-identical (the frontend maps both with the same mappers).
+  200 → { events: EventFeedRow[], nextCursor }
+    EventFeedRow = { type:'launch', data: WsLaunchData } | { type:'trade', data: WsTradeData }
+                 | { type:'graduated', data: WsGraduatedData }   -- shapes from @robbed/shared ws-messages
+  Note: response DTO (eventFeedRowSchema / eventsResponseSchema) is a robbed-shared PROPOSAL (composed
+  from the existing ws payload schemas — no new field-level primitive); frontend wiring of the tape seed
+  is a robbed-frontend follow-up (apps/web/src/widgets/event-tape).
+
 GET /v1/tokens/:address/candles?interval=1s|15s|1m|5m|15m|1h&from=<ts>&to=<ts>
   Bucket-aligned range; max 5000 buckets per request; feeds lightweight-charts (section 5.2).
   200 → { candles: Candle[] }   -- venue-continuous by construction (indexer.md section 4.3)

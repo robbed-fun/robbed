@@ -22,6 +22,7 @@ import type {
   CreatorClaimableRow,
   CreatorTokenClaimableRow,
   EthUsdSnapshotRow,
+  EventFeedFilter,
   FeeCollectionRow,
   HolderSortField,
   MetadataVerificationRow,
@@ -139,6 +140,41 @@ export interface PortfolioHoldingRow {
   trade_fee_bps: number;
 }
 
+/**
+ * One raw row of the merged Discover event feed (`GET /v1/events`) — a
+ * discriminated union carrying the globally-unique `(block_number, log_index)`
+ * ordering key plus the per-kind columns. The route projects it into the shared
+ * `EventFeedRow` (deriving `confirmationState` from the watermark for
+ * launch/trade; graduated carries none, matching `wsGraduatedDataSchema`).
+ * NOT a wire shape — the wire DTO is `@robbed/shared` `eventFeedRowSchema`.
+ */
+export type EventFeedDbRow =
+  | {
+      kind: "launch";
+      block_number: number;
+      log_index: number;
+      address: string;
+      name: string;
+      ticker: string;
+      creator: string;
+      image_url: string | null;
+      created_at: number;
+    }
+  | {
+      kind: "trade";
+      block_number: number;
+      log_index: number;
+      trade: TradeRowDb;
+    }
+  | {
+      kind: "graduated";
+      block_number: number;
+      log_index: number;
+      token: string;
+      pool: string;
+      block_timestamp: number;
+    };
+
 /** Result of a pre-built search/list query: rows + whether a sort key exists. */
 export interface ListTokensInput {
   sort: "trending" | "newest" | "mcap" | "volume24h" | "progress";
@@ -198,6 +234,20 @@ export interface Db {
     limit: number;
   }): Promise<TradeRowDb[]>;
   getTradesByTx(txHash: string): Promise<TradeRowDb[]>;
+  /**
+   * Merged Discover event feed (launches ∪ trades ∪ graduations), newest-first,
+   * keyset-paginated over the globally-unique `(block_number, log_index)`
+   * composite. `filter` selects one kind or `all`. Listing-gated: rows whose
+   * token is `moderation_status.visibility = 'hidden'` are excluded (matches the
+   * `/v1/tokens` seed the tape already used for launches). Returns at most
+   * `limit` rows already merge-sorted DESC. Backs `GET /v1/events` (api.md).
+   */
+  listEvents(input: {
+    filter: EventFeedFilter;
+    cursorBlock: number | null;
+    cursorLog: number | null;
+    limit: number;
+  }): Promise<EventFeedDbRow[]>;
   getCandles(input: {
     token: string;
     interval: CandleInterval;

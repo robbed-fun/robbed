@@ -1,5 +1,7 @@
 import {
   type Candle,
+  type EventFeedFilter,
+  type EventsResponse,
   type HolderListQuery,
   type HolderRow,
   type MetadataRequest,
@@ -11,6 +13,7 @@ import {
   candlesResponseSchema,
   confirmationsResponseSchema,
   ethUsdResponseSchema,
+  eventsResponseSchema,
   metadataResponseSchema,
   paginatedHoldersResponseSchema,
   paginatedTradesResponseSchema,
@@ -129,6 +132,25 @@ export function getTokens(
 // NOTE : the king-of-the-hill client leg was removed with the
 // Discover deviation — the endpoint remains an API capability, but no web
 // surface consumes it (the KotH hero is retired).
+
+/**
+ * GET /v1/events — merged, newest-first, keyset-paginated feed of launches ∪
+ * trades ∪ graduations (listing-gated, hidden tokens excluded). `type` filters
+ * (`all` default / `launches` / `trades` / `graduations`); each row's `data` is
+ * shape-identical to the live-WS payload. Seeds the Discover event tape so
+ * HISTORICAL graduations/trades paint on first load, not just launch rows.
+ */
+export function getEvents(
+  query: { type?: EventFeedFilter; cursor?: string; limit?: number } = {},
+  opts?: FetchOpts,
+): Promise<EventsResponse> {
+  const qs = new URLSearchParams();
+  if (query.type) qs.set("type", query.type);
+  if (query.cursor) qs.set("cursor", query.cursor);
+  if (query.limit) qs.set("limit", String(query.limit));
+  const q = qs.toString();
+  return apiGet(`/v1/events${q ? `?${q}` : ""}`, eventsResponseSchema, opts);
+}
 
 export function getToken(address: string, opts?: FetchOpts): Promise<TokenDetail> {
   return apiGet(`/v1/tokens/${address.toLowerCase()}`, tokenDetailSchema, opts);

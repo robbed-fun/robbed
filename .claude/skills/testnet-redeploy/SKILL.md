@@ -134,14 +134,18 @@ be sure you mean to (and that you then complete Steps 3–5, or the stacks will 
 
 ## Step 2 — Verify on Blockscout (record addresses + deploy block)
 
-`--verify` handles most contracts inline. Confirm on `$TESTNET_BLOCKSCOUT_URL` that **every deployed
-contract** is verified with **solc `v0.8.35+commit.47b9dedd` + `cancun` target, MIT**: CurveFactory,
-Router, V3Migrator, LPFeeVault, **CreatorVault**, plus the canary LaunchToken + BondingCurve.
-Re-run `forge verify-contract … --verifier blockscout --verifier-url "$TESTNET_BLOCKSCOUT_URL/api"` for
-any that didn't take (idempotent — the v2 verifier needs no API key). This doubles as the
-**M1-2/O-5** pin check on the testnet verifier (the mainnet `robinhoodchain.blockscout.com` round-trip
-is a separate owed item — B4). Record: the six/seven addresses from `contracts/deployments/46630.json`
-and the deploy block (min receipt block = `START_BLOCK`, computed in Step 3).
+The inline `--verify` from Step 1 handles most contracts as they deploy. Confirm on
+`$TESTNET_BLOCKSCOUT_URL` that **every deployed contract** took — CurveFactory, Router, V3Migrator,
+LPFeeVault, **CreatorVault**, plus the canary LaunchToken + BondingCurve — all with **solc
+`v0.8.35+commit.47b9dedd` + `cancun` target, MIT**. For any that didn't take, **use the
+`/verify-contract` skill** — it carries the full Blockscout-v2 (no-API-key) recipe: after-the-fact
+`--guess-constructor-args`, explicit `--constructor-args 0x…` for CurveFactory's 20-field `FactoryInit`,
+the factory-created-instance path for the canary LaunchToken/BondingCurve, and the Code-tab confirm.
+Do not re-document those flags here — that skill is the single source so the two don't diverge. This
+step doubles as the **M1-2/O-5** pin check on the testnet verifier (the mainnet
+`robinhoodchain.blockscout.com` round-trip is a separate owed item — B4). Record: the six/seven
+addresses from `contracts/deployments/46630.json` and the deploy block (min receipt block =
+`START_BLOCK`, computed in Step 3).
 
 ---
 

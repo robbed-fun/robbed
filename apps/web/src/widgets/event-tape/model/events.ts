@@ -1,4 +1,5 @@
 import type {
+  EventFeedRow,
   TokenCard,
   WsGraduatedData,
   WsLaunchData,
@@ -23,12 +24,28 @@ import type {
  *   indexer-supplied `priceEth`, never derived aggregates. Unknown tokens render
  *   mcap/Δ% as "—", never invented.
  *
- * GAP (reported to robbed-indexer via the orchestrator): there is no global
- * recent-activity REST endpoint (only per-token `/v1/tokens/:address/trades`), so
- * the server-side initial snapshot can only seed LAUNCH rows (derivable from the
- * `/v1/tokens` registry); historical BUY/SELL/GRADUATE rows arrive live over WS.
- * A `GET /v1/events` (enriched, mixed, cursor-paginated) would let the tape paint
- * a full mixed snapshot server-side. Until then the tape seeds launches + streams.
+ * SEED SOURCE (gap CLOSED — robbed-indexer shipped `GET /v1/events`): the tape
+ * now seeds its initial rows from the merged, newest-first, keyset-paginated
+ * `GET /v1/events` feed (launches ∪ trades ∪ graduations, listing-gated). Each
+ * feed row is shape-identical to the live-WS payload (`eventFeedRowSchema`
+ * wraps the SAME `wsLaunchData`/`wsTradeData`/`wsGraduatedData`), so `eventFromFeedRow`
+ * reuses the per-type WS mappers verbatim — no second shape is invented
+ * (anti-drift). This means historical BUY/SELL/GRADUATE rows (incl. a graduation
+ * that landed during indexer catch-up, when WS backfill publishes are suppressed
+ * and there is no replay buffer) now paint on first load, not just launches.
+ *
+ * The `seedLaunches(...)` list from `/v1/tokens` is kept as the SYNCHRONOUS
+ * first-paint (SSR-derived, before the async `/v1/events` fetch resolves); the
+ * fetched feed is then folded in via `mergeFeed` and live rows keep streaming
+ * over WS. Every row carries a STABLE identity (below) so a `/v1/tokens` launch,
+ * a `/v1/events` row, and a live-WS row for the same event collapse to ONE row.
+ *
+ * IDENTITY (dedupe key): the `/v1/events` feed keys on the globally-unique
+ * `(blockNumber, logIndex)` composite. We mirror that as each event's `id` so a
+ * REST-seeded row and a live-WS row for the same event share an identity and
+ * de-dupe. Launch/graduate WS payloads omit `logIndex`, but each token is
+ * launched / graduates exactly once, so the token address is its natural
+ * (equivalent) identity — trades use `(blockNumber, logIndex)`.
  */
 
 export type TapeFilter = "all" | "launches" | "trades" | "graduations";
@@ -95,7 +112,9 @@ export function seedLaunches(tokens: readonly TokenCard[], cap = 24): TapeEvent[
     .slice(0, cap)
     .map((t) => ({
       kind: "launch" as const,
-      id: `seed-launch-${norm(t.address)}`,
+      // Same stable identity as `launchToEvent` so a `/v1/tokens` seed launch
+      // and its `/v1/events` (or live-WS) row collapse to one row on dedupe.
+      id: launchId(norm(t.address)),
       token: norm(t.address),
       name: t.name,
       ticker: t.ticker,
@@ -105,20 +124,27 @@ export function seedLaunches(tokens: readonly TokenCard[], cap = 24): TapeEvent[
     }));
 }
 
-export function tradeToEvent(d: WsTradeData, seq: number): TapeEvent {
+// Stable per-event identities (see module note). REST seed, `/v1/events`, and
+// live WS all produce the SAME id for the same event, so dedupe is a set on `id`.
+const tradeId = (blockNumber: number, logIndex: number) =>
+  `trade:${blockNumber}:${logIndex}`;
+const launchId = (token: string) => `launch:${token}`;
+const graduateId = (token: string) => `graduate:${token}`;
+
+export function tradeToEvent(d: WsTradeData): TapeEvent {
   return {
     kind: d.isBuy ? "buy" : "sell",
-    id: `t-${d.txHash}-${d.logIndex}-${seq}`,
+    id: tradeId(d.blockNumber, d.logIndex),
     token: norm(d.token),
     ethAmount: d.ethAmount,
     ts: d.blockTimestamp,
   };
 }
 
-export function launchToEvent(d: WsLaunchData, seq: number): TapeEvent {
+export function launchToEvent(d: WsLaunchData): TapeEvent {
   return {
     kind: "launch",
-    id: `l-${norm(d.address)}-${seq}`,
+    id: launchId(norm(d.address)),
     token: norm(d.address),
     name: d.name,
     ticker: d.ticker,
@@ -128,13 +154,29 @@ export function launchToEvent(d: WsLaunchData, seq: number): TapeEvent {
   };
 }
 
-export function graduateToEvent(d: WsGraduatedData, seq: number): TapeEvent {
+export function graduateToEvent(d: WsGraduatedData): TapeEvent {
   return {
     kind: "graduate",
-    id: `g-${norm(d.token)}-${seq}`,
+    id: graduateId(norm(d.token)),
     token: norm(d.token),
     ts: d.ts,
   };
+}
+
+/**
+ * Map one `GET /v1/events` row → a `TapeEvent`. The feed row `data` IS the live
+ * WS payload (`eventFeedRowSchema` reuses the ws schemas), so we dispatch to the
+ * exact same per-type mappers the WS path uses — one shape, one mapper set.
+ */
+export function eventFromFeedRow(row: EventFeedRow): TapeEvent {
+  switch (row.type) {
+    case "launch":
+      return launchToEvent(row.data);
+    case "trade":
+      return tradeToEvent(row.data);
+    case "graduated":
+      return graduateToEvent(row.data);
+  }
 }
 
 export function matchesFilter(kind: TapeKind, filter: TapeFilter): boolean {
@@ -154,13 +196,41 @@ export function filterEvents(events: readonly TapeEvent[], filter: TapeFilter): 
   return events.filter((e) => matchesFilter(e.kind, filter));
 }
 
-/** Prepend a new event and cap the in-memory buffer (newest first). */
+/**
+ * Prepend a new (live-WS) event and cap the in-memory buffer (newest first).
+ * De-dupes by stable `id`: a live-WS event that the REST seed already painted
+ * (the boundary overlap between the `/v1/events` snapshot and the live stream)
+ * is dropped rather than added twice — it is the same indexed event, so no row
+ * is lost and none is duplicated.
+ */
 export function prependCapped(
-  events: readonly TapeEvent[],
+  events: TapeEvent[],
   next: TapeEvent,
   cap = 60,
 ): TapeEvent[] {
+  // Same-reference bail-out on a dropped duplicate → React skips the re-render.
+  if (events.some((e) => e.id === next.id)) return events;
   return [next, ...events].slice(0, cap);
+}
+
+/**
+ * Fold a `/v1/events` seed into the current buffer (newest first, capped).
+ * `incoming` (the REST feed) wins on `id` collision — identical content, but its
+ * canonical `(blockNumber, logIndex)` order is authoritative — while any live-WS
+ * rows already in `existing` (that arrived before the fetch resolved, or are
+ * newer than the fetched window) are preserved, never dropped. Ordering is by
+ * `ts` desc (the visible age signal); the sort is stable so equal-`ts` rows keep
+ * the incoming-before-existing order.
+ */
+export function mergeFeed(
+  existing: readonly TapeEvent[],
+  incoming: readonly TapeEvent[],
+  cap = 60,
+): TapeEvent[] {
+  const byId = new Map<string, TapeEvent>();
+  for (const e of incoming) if (!byId.has(e.id)) byId.set(e.id, e);
+  for (const e of existing) if (!byId.has(e.id)) byId.set(e.id, e);
+  return [...byId.values()].sort((a, b) => b.ts - a.ts).slice(0, cap);
 }
 
 export const TAPE_FILTER_ORDER: readonly TapeFilter[] = [

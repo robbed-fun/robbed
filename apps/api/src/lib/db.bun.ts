@@ -29,6 +29,7 @@ import type { Config } from "../config";
 import type {
   Change24hAnchor,
   Db,
+  EventFeedDbRow,
   HolderJoinedRow,
   ListTokensInput,
   PortfolioHoldingRow,
@@ -402,6 +403,111 @@ export function createBunDb(config: Config): Db {
         [txHash],
       )) as Record<string, unknown>[];
       return rows.map(mapTrade);
+    },
+
+    async listEvents(input) {
+      // Merged Discover feed. Keyset is the GLOBALLY-UNIQUE (block_number,
+      // log_index) — on-chain log_index is unique per block across all contracts,
+      // so the composite is a total order with no cross-table ties. Each kind's
+      // sub-query filters `(block_number, log_index) < cursor`, orders DESC and
+      // takes `limit`; merging the (≤3×limit) rows and slicing `limit` yields the
+      // exact global page (the global top-N under the cursor ⊆ ∪ each table's
+      // top-N under the cursor). Listing-gated: hidden tokens excluded, matching
+      // the `/v1/tokens` launch seed the tape used before.
+      const { filter, cursorBlock, cursorLog, limit } = input;
+      const wants = (k: "launches" | "trades" | "graduations") => filter === "all" || filter === k;
+      // Build the `(bn, li) < ($k,$i)` keyset clause + LIMIT for one sub-query.
+      const build = (bnCol: string, liCol: string) => {
+        const params: unknown[] = [];
+        let cur = "";
+        if (cursorBlock != null && cursorLog != null) {
+          params.push(cursorBlock, cursorLog);
+          cur = ` AND (${bnCol}, ${liCol}) < ($${params.length - 1}, $${params.length})`;
+        }
+        params.push(limit);
+        return { params, cur, limitP: `$${params.length}` };
+      };
+      const notHidden = "(m.visibility IS DISTINCT FROM 'hidden')";
+      const out: EventFeedDbRow[] = [];
+
+      if (wants("launches")) {
+        const { params, cur, limitP } = build("t.block_number", "t.log_index");
+        const rows = (await ro.unsafe(
+          `SELECT t.block_number, t.log_index, t.address, t.name, t.ticker, t.creator,
+                  COALESCE(mv.image_url, t.image_url) AS image_url, t.created_at
+             FROM tokens t
+             LEFT JOIN metadata_verifications mv ON mv.token_address = t.address
+             LEFT JOIN moderation_status m ON m.token_address = t.address
+            WHERE ${notHidden}${cur}
+            ORDER BY t.block_number DESC, t.log_index DESC
+            LIMIT ${limitP}`,
+          params,
+        )) as Record<string, unknown>[];
+        for (const r of rows)
+          out.push({
+            kind: "launch",
+            block_number: num(r.block_number),
+            log_index: num(r.log_index),
+            address: String(r.address),
+            name: String(r.name),
+            ticker: String(r.ticker),
+            creator: String(r.creator),
+            image_url: nstr(r.image_url),
+            created_at: num(r.created_at),
+          });
+      }
+
+      if (wants("trades")) {
+        const { params, cur, limitP } = build("trades.block_number", "trades.log_index");
+        const rows = (await ro.unsafe(
+          `SELECT ${TRADE_SELECT}
+             FROM trades
+             LEFT JOIN moderation_status m ON m.token_address = trades.token_address
+            WHERE ${notHidden}${cur}
+            ORDER BY trades.block_number DESC, trades.log_index DESC
+            LIMIT ${limitP}`,
+          params,
+        )) as Record<string, unknown>[];
+        for (const r of rows) {
+          const trade = mapTrade(r);
+          out.push({
+            kind: "trade",
+            block_number: trade.block_number,
+            log_index: trade.log_index,
+            trade,
+          });
+        }
+      }
+
+      if (wants("graduations")) {
+        const { params, cur, limitP } = build("g.block_number", "g.log_index");
+        const rows = (await ro.unsafe(
+          `SELECT g.token_address, g.pool_address, g.block_number, g.log_index, g.block_timestamp
+             FROM graduations g
+             LEFT JOIN moderation_status m ON m.token_address = g.token_address
+            WHERE ${notHidden}${cur}
+            ORDER BY g.block_number DESC, g.log_index DESC
+            LIMIT ${limitP}`,
+          params,
+        )) as Record<string, unknown>[];
+        for (const r of rows)
+          out.push({
+            kind: "graduated",
+            block_number: num(r.block_number),
+            log_index: num(r.log_index),
+            token: String(r.token_address),
+            pool: String(r.pool_address),
+            block_timestamp: num(r.block_timestamp),
+          });
+      }
+
+      // Merge-sort DESC by the composite key, slice to the page size.
+      out.sort((a, b) =>
+        a.block_number !== b.block_number
+          ? b.block_number - a.block_number
+          : b.log_index - a.log_index,
+      );
+      return out.slice(0, limit);
     },
 
     async getCandles(input) {

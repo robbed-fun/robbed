@@ -8,6 +8,7 @@ import type { Config } from "../src/config";
 import type {
   Change24hAnchor,
   Db,
+  EventFeedDbRow,
   HolderJoinedRow,
   ListTokensInput,
   PortfolioHoldingRow,
@@ -30,6 +31,7 @@ import type {
   CreatorClaimableRow,
   CreatorTokenClaimableRow,
   EthUsdSnapshotRow,
+  EventFeedFilter,
   HolderSortField,
   ModerationStatusRow,
   SortDir,
@@ -313,6 +315,67 @@ export class FakeDb implements Db {
   }
   async getTradesByTx() {
     return [];
+  }
+  /** Graduation feed fixtures (seed per test) for the merged event feed. */
+  graduationEvents: Array<{
+    token: string;
+    pool: string;
+    block_number: number;
+    log_index: number;
+    block_timestamp: number;
+  }> = [];
+  async listEvents(input: {
+    filter: EventFeedFilter;
+    cursorBlock: number | null;
+    cursorLog: number | null;
+    limit: number;
+  }): Promise<EventFeedDbRow[]> {
+    const wants = (k: "launches" | "trades" | "graduations") =>
+      input.filter === "all" || input.filter === k;
+    const rows: EventFeedDbRow[] = [];
+    if (wants("launches"))
+      for (const t of this.tokens.values())
+        if (t.m_visibility !== "hidden")
+          rows.push({
+            kind: "launch",
+            block_number: t.block_number,
+            log_index: t.log_index,
+            address: t.address,
+            name: t.name,
+            ticker: t.ticker,
+            creator: t.creator,
+            image_url: t.image_url,
+            created_at: t.created_at,
+          });
+    if (wants("trades"))
+      for (const tr of this.tokenTrades)
+        rows.push({ kind: "trade", block_number: tr.block_number, log_index: tr.log_index, trade: tr });
+    if (wants("graduations"))
+      for (const g of this.graduationEvents)
+        rows.push({
+          kind: "graduated",
+          block_number: g.block_number,
+          log_index: g.log_index,
+          token: g.token,
+          pool: g.pool,
+          block_timestamp: g.block_timestamp,
+        });
+    // Mirror the real merge: DESC by the globally-unique (block_number, log_index),
+    // strictly-less cursor filter, slice.
+    rows.sort((a, b) =>
+      a.block_number !== b.block_number
+        ? b.block_number - a.block_number
+        : b.log_index - a.log_index,
+    );
+    const filtered =
+      input.cursorBlock != null && input.cursorLog != null
+        ? rows.filter(
+            (r) =>
+              r.block_number < input.cursorBlock! ||
+              (r.block_number === input.cursorBlock! && r.log_index < input.cursorLog!),
+          )
+        : rows;
+    return filtered.slice(0, input.limit);
   }
   /** Overridable candle fixture (OG sparkline + candles route tests). */
   candles: CandleRow[] = [];

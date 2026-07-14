@@ -32,6 +32,9 @@ import {
   hex32Schema,
   signedDecimalStringSchema,
   venueSchema,
+  wsGraduatedDataSchema,
+  wsLaunchDataSchema,
+  wsTradeDataSchema,
 } from "./ws-messages";
 
 // ── Envelope & errors (api.md) ───────────────────────────────────────────
@@ -494,6 +497,45 @@ export const tradesResponseSchema = z.object({
 export const txTradesResponseSchema = z.object({
   trades: z.array(tradeRowSchema),
 });
+
+// ── Discover event feed / tape (GET /v1/events) ──────────────────────────────
+//
+// PROPOSAL (routed to robbed-shared for ratification) — added by robbed-indexer
+// to close the "graduation never appears on the Discover tape" gap: the tape
+// (`apps/web/src/widgets/event-tape`) had NO server-side historical seed for
+// GRADUATE/TRADE rows — it seeded LAUNCH rows from `/v1/tokens` and otherwise
+// relied on live WS (no replay; backfill-suppressed for already-indexed events).
+// The tape's own model note asked for exactly this endpoint. Shapes REUSE the
+// existing WS payloads verbatim (`wsLaunchDataSchema` / `wsTradeDataSchema` /
+// `wsGraduatedDataSchema`) so a REST-seeded row and a live-WS row are the SAME
+// shape — the frontend maps both with its existing launchToEvent/tradeToEvent/
+// graduateToEvent, no second shape invented (anti-drift). No new field-level
+// primitive is introduced here.
+export const eventFeedFilterSchema = z.enum(["all", "launches", "trades", "graduations"]);
+export type EventFeedFilter = z.infer<typeof eventFeedFilterSchema>;
+
+/**
+ * One row of the merged Discover feed. `type` discriminates; `data` is the
+ * matching existing WS payload (launch/trade/graduated), so REST seed and WS
+ * stream carry identical row shapes.
+ */
+export const eventFeedRowSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("launch"), data: wsLaunchDataSchema }),
+  z.object({ type: z.literal("trade"), data: wsTradeDataSchema }),
+  z.object({ type: z.literal("graduated"), data: wsGraduatedDataSchema }),
+]);
+export type EventFeedRow = z.infer<typeof eventFeedRowSchema>;
+
+/**
+ * GET /v1/events?type=all|launches|trades|graduations — newest-first, keyset
+ * cursor over the globally-unique `(blockNumber, logIndex)` composite. Powers
+ * the Discover tape's server-side seed across ALL tabs incl. GRADUATIONS.
+ */
+export const eventsResponseSchema = z.object({
+  events: z.array(eventFeedRowSchema),
+  nextCursor: nextCursorSchema,
+});
+export type EventsResponse = z.infer<typeof eventsResponseSchema>;
 export const candlesResponseSchema = z.object({
   candles: z.array(candleSchema),
 });

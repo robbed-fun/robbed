@@ -4,7 +4,7 @@ import type { TokenCard, WsMessage } from "@robbed/shared";
 import { GLOBAL_LAUNCHES, GLOBAL_TRADES } from "@robbed/shared";
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   type TapeEvent,
@@ -13,13 +13,16 @@ import {
   TAPE_FILTER_LABELS,
   TAPE_FILTER_ORDER,
   buildRegistry,
+  eventFromFeedRow,
   filterEvents,
   graduateToEvent,
   launchToEvent,
+  mergeFeed,
   prependCapped,
   seedLaunches,
   tradeToEvent,
 } from "../model/events";
+import { getEvents } from "@/shared/api";
 import {
   DataTable,
   Delta,
@@ -42,10 +45,13 @@ import { useWsChannel } from "@/shared/lib/ws";
  * Live event tape (Discover, ROBBED_ redesign —, panel "2d").
  *
  * Filter tabs (ALL/LAUNCHES/TRADES/GRADUATIONS) + a LIVE dot, then rows:
- * age · colored SIDE · token · amount ETH · mcap · Δ%. It merges a real
- * server-seeded LAUNCH snapshot with the live WS streams (`global:trades`,
- * `global:launches`) — see model/events.ts for the protocol-discipline notes
- * (mcap/Δ% resolve from the registry, never fabricated from a trade).
+ * age · colored SIDE · token · amount ETH · mcap · Δ%. Rows are seeded from the
+ * merged `GET /v1/events` feed (launches ∪ trades ∪ graduations — so historical
+ * graduations paint on first load) folded over the synchronous launch-only
+ * `/v1/tokens` snapshot, then kept live by the WS streams (`global:trades`,
+ * `global:launches`). Stable per-event ids de-dupe the REST seed against live
+ * rows. See model/events.ts for the protocol-discipline notes (mcap/Δ% resolve
+ * from the registry, never fabricated from a trade).
  *
  * Rows are driven by the shared headless `DataTable` (TanStack Table v8): typed
  * `ColumnDef<TapeEvent>[]` supply the cell renderers, and `renderRow` wraps each
@@ -55,6 +61,9 @@ import { useWsChannel } from "@/shared/lib/ws";
  * silent CPU loop with no console error). The tape has no visible column header
  * (the filter tabs sit where a header would).
  */
+/** `/v1/events` seed page size — fills the ~60-row buffer (prependCapped cap). */
+const EVENT_SEED_LIMIT = 60;
+
 export function EventTape({ tokens }: { tokens: TokenCard[] }) {
   const registry = useMemo<Map<string, TokenInfo>>(() => buildRegistry(tokens), [tokens]);
   const [events, setEvents] = useState<TapeEvent[]>(() => seedLaunches(tokens));
@@ -65,16 +74,44 @@ export function EventTape({ tokens }: { tokens: TokenCard[] }) {
   // tick keeps "4s → 1m" honest without a per-row timer.
   const now = useNowTick(10_000);
 
+  // Seed the initial mixed snapshot from `GET /v1/events` at mount (gap CLOSED —
+  // model/events.ts note): the launch-only `seedLaunches(tokens)` above is the
+  // synchronous first paint; this fold-in adds HISTORICAL trades AND graduations
+  // (incl. a graduation that landed during indexer catch-up, which WS — no replay
+  // buffer, backfill publishes suppressed — would never paint for a browser
+  // opening Discover now). One fetch of `type=all`; the tabs filter locally.
+  // React `ignore`-flag + AbortController cleanup (react.dev/reference/react/
+  // useEffect) so a late response can't set state after unmount; `mergeFeed`
+  // de-dupes seed vs any live-WS rows that arrived first. Best-effort: a failed
+  // seed leaves the launch snapshot + live stream intact.
+  useEffect(() => {
+    let ignore = false;
+    const ctrl = new AbortController();
+    getEvents({ type: "all", limit: EVENT_SEED_LIMIT }, { signal: ctrl.signal })
+      .then((res) => {
+        if (ignore) return;
+        const seeded = res.events.map(eventFromFeedRow);
+        setEvents((prev) => mergeFeed(prev, seeded));
+      })
+      .catch(() => {
+        /* seed is best-effort — launch snapshot + WS stream still paint */
+      });
+    return () => {
+      ignore = true;
+      ctrl.abort();
+    };
+  }, []);
+
   const onTrade = useCallback((msg: WsMessage) => {
     if (msg.type !== "trade") return;
-    setEvents((prev) => prependCapped(prev, tradeToEvent(msg.data, msg.seq)));
+    setEvents((prev) => prependCapped(prev, tradeToEvent(msg.data)));
   }, []);
 
   const onLaunches = useCallback((msg: WsMessage) => {
     if (msg.type === "launch") {
-      setEvents((prev) => prependCapped(prev, launchToEvent(msg.data, msg.seq)));
+      setEvents((prev) => prependCapped(prev, launchToEvent(msg.data)));
     } else if (msg.type === "graduated") {
-      setEvents((prev) => prependCapped(prev, graduateToEvent(msg.data, msg.seq)));
+      setEvents((prev) => prependCapped(prev, graduateToEvent(msg.data)));
     }
   }, []);
 

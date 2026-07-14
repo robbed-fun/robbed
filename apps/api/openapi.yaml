@@ -336,6 +336,47 @@ paths:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /v1/events:
+    get:
+      tags: [tokens]
+      operationId: listEvents
+      summary: Discover event feed / tape seed — launches ∪ trades ∪ graduations (api.md)
+      description: |
+        Merged, newest-first protocol event feed powering the Discover tape's
+        server-side seed (incl. the GRADUATIONS tab). Keyset-paginated over the
+        globally-unique (blockNumber, logIndex). Each row's `data` REUSES the WS
+        payload shape (launch/trade/graduated) so a REST-seeded row and a live-WS
+        row are shape-identical. Listing-gated: hidden tokens excluded.
+      parameters:
+        - name: type
+          in: query
+          description: Event filter (closed allowlist; default all). Out-of-allowlist ⇒ 400.
+          schema:
+            type: string
+            enum: [all, launches, trades, graduations]
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Merged events, newest-first (each row carries its WS-shaped data)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: object
+                    required: [events, nextCursor]
+                    properties:
+                      events:
+                        type: array
+                        items: { $ref: "#/components/schemas/EventFeedRow" }
+                      nextCursor: { $ref: "#/components/schemas/NextCursor" }
+                  error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
   /v1/tokens/{address}/candles:
     get:
       tags: [tokens]
@@ -1526,6 +1567,82 @@ components:
         blockTimestamp: { type: integer, minimum: 0 }
         txHash: { $ref: "#/components/schemas/Hex32" }
         logIndex: { type: integer, minimum: 0 }
+        confirmationState: { $ref: "#/components/schemas/ConfirmationState" }
+
+    EventFeedRow:
+      description: |
+        One row of the merged Discover feed (GET /v1/events). `type` discriminates;
+        `data` is the matching WS payload (launch/trade/graduated) — the same shape
+        the live WS stream carries, so REST seed and stream are shape-identical.
+      oneOf:
+        - $ref: "#/components/schemas/EventFeedLaunch"
+        - $ref: "#/components/schemas/EventFeedTrade"
+        - $ref: "#/components/schemas/EventFeedGraduated"
+      discriminator:
+        propertyName: type
+        mapping:
+          launch: "#/components/schemas/EventFeedLaunch"
+          trade: "#/components/schemas/EventFeedTrade"
+          graduated: "#/components/schemas/EventFeedGraduated"
+
+    EventFeedLaunch:
+      type: object
+      required: [type, data]
+      properties:
+        type: { type: string, enum: [launch] }
+        data:
+          type: object
+          required: [address, name, ticker, creator, createdAt, blockNumber, confirmationState]
+          properties:
+            address: { $ref: "#/components/schemas/Address" }
+            name: { type: string }
+            ticker: { type: string }
+            creator: { $ref: "#/components/schemas/Address" }
+            imageUrl: { type: string, description: absent until metadata fetched }
+            createdAt: { type: integer, minimum: 0 }
+            blockNumber: { type: integer, minimum: 0 }
+            confirmationState: { $ref: "#/components/schemas/ConfirmationState" }
+
+    EventFeedTrade:
+      type: object
+      required: [type, data]
+      properties:
+        type: { type: string, enum: [trade] }
+        data: { $ref: "#/components/schemas/WsTradeData" }
+
+    EventFeedGraduated:
+      type: object
+      required: [type, data]
+      properties:
+        type: { type: string, enum: [graduated] }
+        data:
+          type: object
+          required: [token, pool, blockNumber, ts]
+          properties:
+            token: { $ref: "#/components/schemas/Address" }
+            pool: { $ref: "#/components/schemas/Address" }
+            blockNumber: { type: integer, minimum: 0 }
+            ts: { type: integer, minimum: 0 }
+
+    WsTradeData:
+      type: object
+      description: Live-WS/REST trade payload (TradeRow minus the `id` join key)
+      required:
+        [token, trader, venue, isBuy, ethAmount, tokenAmount, feeEth,
+         priceEth, blockNumber, txHash, logIndex, blockTimestamp, confirmationState]
+      properties:
+        token: { $ref: "#/components/schemas/Address" }
+        trader: { $ref: "#/components/schemas/Address" }
+        venue: { $ref: "#/components/schemas/Venue" }
+        isBuy: { type: boolean }
+        ethAmount: { $ref: "#/components/schemas/DecimalString" }
+        tokenAmount: { $ref: "#/components/schemas/DecimalString" }
+        feeEth: { $ref: "#/components/schemas/DecimalString" }
+        priceEth: { type: number }
+        blockNumber: { type: integer, minimum: 0 }
+        txHash: { $ref: "#/components/schemas/Hex32" }
+        logIndex: { type: integer, minimum: 0 }
+        blockTimestamp: { type: integer, minimum: 0 }
         confirmationState: { $ref: "#/components/schemas/ConfirmationState" }
 
     Candle:
