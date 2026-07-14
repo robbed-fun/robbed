@@ -27,7 +27,7 @@ import {
 /// @notice Proves the M1-9 obligations end-to-end: deadline + slippage on every trade path incl.
 ///         atomic create-buy, msg.sender forwarded as `trader`, and — decisively — the pause-matrix:
 ///         sells succeed with `pauseCreates=pauseBuys=true` AND with `treasury` pointed at a
-///         reverting contract (spec §6.5, §12.25 / threat-model UM-1), reinforcing "sells always
+/// reverting contract (/ threat-model UM-1), reinforcing "sells always
 ///         open" through the real Router.
 contract RouterTest is Test {
     // EIP-2612 permit typehash (LaunchToken is ERC20Permit).
@@ -276,7 +276,7 @@ contract RouterTest is Test {
 
     function test_sellWithPermit_frontRunPermitTolerated() public {
         // Griefer submits the permit first; the Router's try/catch swallows the now-used permit and
-        // proceeds on the already-set allowance (spec §5.7).
+        // proceeds on the already-set allowance.
         (LaunchToken token,) = _create();
         (address seller, uint256 pk) = makeAddrAndKey("permitSeller3");
         uint256 got = _buy(token, seller, 0.2 ether);
@@ -291,7 +291,7 @@ contract RouterTest is Test {
         assertGt(ethOut, 0, "front-run permit should not brick the sell");
     }
 
-    // ══════════════════════════ PAUSE MATRIX (§12.25 / UM-1) ══════════════════════════
+    // ══════════════════════════ PAUSE MATRIX (/ UM-1) ══════════════════════════
 
     /// @notice Sells succeed with BOTH pause flags on — the sell path reads no pause flag anywhere.
     function test_pauseMatrix_sellsSucceed_whenCreatesAndBuysPaused() public {
@@ -318,7 +318,7 @@ contract RouterTest is Test {
     }
 
     /// @notice Sells succeed with `treasury` pointed at a contract that reverts on ETH receipt — no
-    ///         trade path calls the treasury (§12.25). `sweepFees()` is the only casualty (retriable).
+    /// trade path calls the treasury. `sweepFees()` is the only casualty (retriable).
     function test_pauseMatrix_sellsSucceed_withRevertingTreasury() public {
         (LaunchToken token, BondingCurve curve) = _create();
         uint256 got = _buy(token, alice, 0.3 ether);

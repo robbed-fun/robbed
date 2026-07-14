@@ -16,7 +16,7 @@
  *
  *   So the keeper subscribes to the AUTHORITATIVE source — the on-chain
  *   `GraduationReady` event itself — over the same Alchemy WS RPC the spec
- *   mandates (§8). This is strictly fewer hops than chain→ponder→redis→keeper,
+ * mandates. This is strictly fewer hops than chain→ponder→redis→keeper,
  *   lower latency, and has zero cross-service coupling. viem
  *   `watchContractEvent({ eventName:'GraduationReady', poll:false })` opens ONE
  *   `eth_subscribe('logs', …)` filtered to the event topic across ALL curves

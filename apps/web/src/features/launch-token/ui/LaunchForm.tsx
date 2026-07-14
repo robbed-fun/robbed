@@ -22,15 +22,15 @@ import { ImageUpload } from "./ImageUpload";
 import { LaunchProgress } from "./LaunchProgress";
 
 /**
- * Launch form (§5.3) — ROBBED_ terminal skin (redesign mockup, spec §12.50 — panel "Create"),
+ * Launch form — ROBBED_ terminal skin (redesign mockup, — panel "Create"),
  * mobile-first single column: dashed 512×512 logo slot beside NAME / TICKER,
  * DESCRIPTION, INITIAL BUY, the live economics summary, and the green LAUNCH
  * TOKEN action.
  *
  * Re-skin only — the data layer is untouched: field state validates with the
- * SHARED zod schemas (byte limits §12.30, never redeclared), the image is
- * eagerly API-uploaded on select (§12.19, re-encode + content-address server
- * side), the client re-verifies the metadata hash before signing (§12.19
+ * SHARED zod schemas (byte limits, never redeclared), the image is
+ * eagerly API-uploaded on select (, re-encode + content-address server
+ * side), the client re-verifies the metadata hash before signing (
  * normative, inside `useLaunch`), and the single atomic `createToken`
  * ({deployFee + initialBuy}) submit + optimistic stepper run unchanged.
  *
@@ -40,7 +40,7 @@ import { LaunchProgress } from "./LaunchProgress";
  * error toast on click, instead of a bare `disabled`. The button is only truly
  * disabled while a launch is mid-flight (double-submit guard). `pauseCreates`
  * (live factory read) blocks the launch but is a granular flag — sells elsewhere
- * are never affected (§6.5).
+ * are never affected.
  *
  * `launchOptions` lets a test inject the network/navigation deps (deterministic).
  */
@@ -99,7 +99,7 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
 
   const createsPaused = econ.pauseCreates === true;
 
-  // Single, prioritized reason the LAUNCH action is blocked (§5.3). `null` ⇒ the
+  // Single, prioritized reason the LAUNCH action is blocked. `null` ⇒ the
   // click proceeds to validate() + launch(). Surfaced as a toast on click AND as
   // a persistent helper line under the button.
   const blockReason = useMemo(
@@ -115,7 +115,7 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
     [isConnected, launcher.image.uploading, launcher.image.error, fieldError, createsPaused, launcher.step],
   );
 
-  // Launch outcome → toast (§2.1 confirmation tiers, never an unqualified
+  // Launch outcome → toast (confirmation tiers, never an unqualified
   // "confirmed"). Fires once per terminal transition; `toast` is a stable module
   // singleton so it needs no dependency entry.
   const toastedStepRef = useRef<LaunchStep | null>(null);
@@ -213,7 +213,7 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
                 className="h-11 pr-14"
               />
-              {/* Counter is n/10, not the mockup's /8 — §12.30 fixes the ticker
+              {/* Counter is n/10, not the mockup's /8 — fixes the ticker
                   limit at 10 BYTES; the spec wins over the mockup. */}
               <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-2xs tabular-nums text-faint">
                 {byteCounter(ticker, METADATA_TICKER_MAX)}
@@ -274,7 +274,7 @@ export function LaunchForm({ launchOptions }: { launchOptions?: UseLaunchOptions
         )}
       </div>
 
-      {/* Deploy cost / starting price / supply + §5.3 economics + LP sentence. */}
+      {/* Deploy cost / starting price / supply + economics + LP sentence. */}
       <EconomicsPanel ticker={ticker} />
 
       {createsPaused && (
@@ -374,7 +374,7 @@ function PreviewRow({ label, children }: { label: string; children: React.ReactN
   );
 }
 
-/** UTF-8 byte counter (matches the §12.30 byte limit the shared schema enforces). */
+/** UTF-8 byte counter (matches the byte limit the shared schema enforces). */
 function byteCounter(value: string, max: number): string {
   const bytes = new TextEncoder().encode(value).length;
   return `${bytes}/${max}`;

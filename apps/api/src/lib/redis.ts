@@ -1,6 +1,6 @@
 /**
  * Redis boundary — pub/sub (worker subscribe to `global:launches` X-10; publish
- * `control:reverify` X-9) + short-TTL key/value (single-use SIWE nonce, §6.2).
+ * `control:reverify` X-9) + short-TTL key/value (single-use SIWE nonce).
  * Behind an INTERFACE so tests inject a fake; the concrete impl uses Bun's
  * native `RedisClient` (no ioredis dependency). Rate limiting has its own store
  * (`mw/ratelimit.ts`) so the hot HTTP path stays dependency-light.

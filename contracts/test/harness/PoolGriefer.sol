@@ -7,12 +7,12 @@ import {IUniswapV3SwapCallback} from "src/interfaces/external/IUniswapV3SwapCall
 import {INonfungiblePositionManager} from "src/interfaces/external/INonfungiblePositionManager.sol";
 import {IWETH9} from "src/interfaces/external/IWETH9.sol";
 
-/// @title PoolGriefer — adversary contract for the pre-seed-defense suites (spec §6.3.2)
+/// @title PoolGriefer — adversary contract for the pre-seed-defense suites
 /// @notice Reused by the migrator unit tests AND the gate-2 invariant-6 handler. A CONTRACT (not an
 ///         EOA) because `pool.swap`/`npm.mint` call `uniswapV3SwapCallback`/pay on `msg.sender`,
 ///         which must have code. Pays every swap/mint debt from its OWN funded balances — so all
 ///         griefing is strictly money-losing for the attacker; whatever it pushes into the pool
-///         becomes migrator inventory at graduation (contracts.md §3.4 step 5).
+/// becomes migrator inventory at graduation (contracts.md step 5).
 contract PoolGriefer is IUniswapV3SwapCallback {
     IUniswapV3Pool public immutable pool;
     address public immutable token;

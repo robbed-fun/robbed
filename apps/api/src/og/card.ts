@@ -1,5 +1,5 @@
 /**
- * The OG card element tree fed to satori (api.md §3 OG endpoint; spec §5.2).
+ * The OG card element tree fed to satori (api.md OG endpoint).
  * PORTED 1:1 from the frontend's `apps/web/src/widgets/token-og/ui/token-og-card.tsx`
  * (JSX → `h()` plain-object nodes; see element.ts for why). The API is now the
  * SINGLE OG renderer; the web card file is being deleted, so this is the sole copy
@@ -7,12 +7,12 @@
  *
  * ROBBED_ terminal design: mono (IBM Plex Mono), dark `#0B0D0B` canvas, green
  * accent, the `ROBBED_` wordmark with its green `_`, square panels, uppercase
- * letter-spaced micro-labels. Content (spec §5.2): chart snapshot (mini candles) +
+ * letter-spaced micro-labels. Content : chart snapshot (mini candles) +
  * MCAP (ETH + USD-with-source) + graduation progress + `rob responsibly_` footer.
  *
  * satori is Flexbox-only: every container with >1 child sets `display: 'flex'`
  * explicitly. Layout flows top→bottom; the mcap/progress block is a fixed
- * bottom section. All metrics are live indexer values (§2) — no market math here.
+ * bottom section. All metrics are live indexer values — no market math here.
  */
 import type { TokenCard } from "@robbed/shared";
 import { h, type OgChild, type OgElement, type Style } from "./element";
@@ -22,7 +22,7 @@ type TokenStatus = TokenCard["status"];
 
 /**
  * Server-side data the card renders — the exact display fields, all live indexer
- * values (NO hardcoded metric, §2). Mirrors the frontend `TokenOgData` shape;
+ * values (NO hardcoded metric). Mirrors the frontend `TokenOgData` shape;
  * built by `og/data.ts` from the DB projections.
  */
 export interface TokenOgData {
@@ -35,9 +35,9 @@ export interface TokenOgData {
   progressPct: number;
   /** Close prices over the OG window → mini candles. Empty = "first trades incoming". */
   sparkline: number[];
-  /** mcap in ETH, pre-formatted (ETH-first, §2). `null` when unpriced. */
+  /** mcap in ETH, pre-formatted (ETH-first). `null` when unpriced. */
   mcapEth: string | null;
-  /** Secondary USD with source timestamp (§2); `null` when no ETH/USD snapshot. */
+  /** Secondary USD with source timestamp; `null` when no ETH/USD snapshot. */
   mcapUsd: { text: string; asOf: string } | null;
 }
 
@@ -265,7 +265,7 @@ function statusTag(data: TokenOgData): OgElement {
 
 /**
  * Mini candle chart. Maps the price series to bar heights [22%..96%]; each bar is
- * coloured up/down vs the previous close. All values are indexer-supplied (§2).
+ * coloured up/down vs the previous close. All values are indexer-supplied.
  */
 function candles(data: TokenOgData): OgElement {
   const bars = candleBars(data.sparkline, CONTENT_W);

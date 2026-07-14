@@ -2,7 +2,7 @@ import { type LaunchStep, isLaunchInFlight } from "./steps";
 
 /**
  * Why the LAUNCH action is blocked — a single human sentence, in strict priority
- * order (§5.3). `null` ⇒ nothing is blocking and the click proceeds to
+ * order. `null` ⇒ nothing is blocking and the click proceeds to
  * `validate()` + `launcher.launch(...)`.
  *
  * This exists because a bare `disabled` submit button hides the reason from the
@@ -12,13 +12,13 @@ import { type LaunchStep, isLaunchInFlight } from "./steps";
  * button truly disabled is a launch already mid-flight (double-submit guard) —
  * see `LaunchForm`.
  *
- * Priority (task/§5.3):
+ * Priority (task):
  *   1. not connected           → prompt to connect
  *   2. wrong network           → handled by the NetworkBanner guard (NOT here)
  *   3. logo still uploading     → wait
  *   4. logo upload errored      → surface the failure
  *   5. missing/invalid field    → the specific field message
- *   6. creates paused (§6.5)    → paused
+ * 6. creates paused → paused
  *   7. launch already in flight → in progress
  */
 export interface BlockReasonInput {
@@ -28,7 +28,7 @@ export interface BlockReasonInput {
   imageError: string | null;
   /** First field-validation message (name/ticker/description/image/initial-buy) or null. */
   fieldError: string | null;
-  /** Live `pauseCreates` from the factory (§6.5) — never affects sells elsewhere. */
+  /** Live `pauseCreates` from the factory — never affects sells elsewhere. */
   createsPaused: boolean;
   step: LaunchStep;
 }

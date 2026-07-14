@@ -1,7 +1,7 @@
-# ROBBED_ backend Stack — Komodo (docker.md — Komodo backend stack; spec §12.45).
+# ROBBED_ backend Stack — Komodo (docker.md — Komodo backend stack).
 # Four services: postgres (+pg_trgm), redis, indexer (Ponder/Node), api (Hono/Bun)
 # + a ws service (Bun WS fanout) from the SAME api image, co-located with Redis for
-# the §8 <500ms budget. NO `web` service — the frontend deploys to Cloudflare
+# the <500ms budget. NO `web` service — the frontend deploys to Cloudflare
 # Workers (Part B). NO top-level `version:` (obsolete under Compose v2+).
 #
 # SECRETS: this file commits ZERO secret values. Every credential is `${VAR}`,
@@ -97,7 +97,7 @@ services:
       CURVE_FACTORY_ADDRESS: ${CURVE_FACTORY_ADDRESS:?CURVE_FACTORY_ADDRESS required}
       ROUTER_ADDRESS: ${ROUTER_ADDRESS:-}
       MIGRATOR_ADDRESS: ${MIGRATOR_ADDRESS:?MIGRATOR_ADDRESS required}
-      # V3 factory / NPM default to the §12.28 registry in @robbed/shared; override per env.
+      # V3 factory / NPM default to the registry in @robbed/shared; override per env.
       V3_FACTORY_ADDRESS: ${V3_FACTORY_ADDRESS:-}
       V3_NPM_ADDRESS: ${V3_NPM_ADDRESS:-}
       START_BLOCK: ${START_BLOCK:-0}
@@ -138,7 +138,7 @@ services:
       API_ENV: ${API_ENV:-production}
       API_PORT: ${API_PORT:-3001}
       DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}@postgres:5432/${POSTGRES_DB:-robbed}
-      # Optional Postgres role split (§7): distinct RO/RW roles in prod. Fall back
+      # Optional Postgres role split : distinct RO/RW roles in prod. Fall back
       # to DATABASE_URL when unset (config.ts handles the fallback).
       DATABASE_URL_RO: ${DATABASE_URL_RO:-}
       DATABASE_URL_RW: ${DATABASE_URL_RW:-}
@@ -147,13 +147,13 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET required (Komodo secret)}
       ADMIN_ALLOWLIST: ${ADMIN_ALLOWLIST:-}
       TRUSTED_PROXY_HEADER: ${TRUSTED_PROXY_HEADER:-}
-      # Moderation (§4.3): prod refuses stubs unless MODERATION_ALLOW_STUBS=true.
+      # Moderation : prod refuses stubs unless MODERATION_ALLOW_STUBS=true.
       MODERATION_ALLOW_STUBS: ${MODERATION_ALLOW_STUBS:-false}
       MODERATION_CSAM_VENDOR_URL: ${MODERATION_CSAM_VENDOR_URL:-}
       MODERATION_CSAM_VENDOR_KEY: ${MODERATION_CSAM_VENDOR_KEY:-}
       MODERATION_CLASSIFIER_VENDOR_URL: ${MODERATION_CLASSIFIER_VENDOR_URL:-}
       MODERATION_CLASSIFIER_VENDOR_KEY: ${MODERATION_CLASSIFIER_VENDOR_KEY:-}
-      # R2 write leg (API-mediated upload, §12.19). Endpoint = R2 S3 API URL.
+      # R2 write leg (API-mediated upload). Endpoint = R2 S3 API URL.
       R2_ENDPOINT: ${R2_ENDPOINT:?R2_ENDPOINT required}
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID required (Komodo secret)}
@@ -173,7 +173,7 @@ services:
       start_period: 30s
 
   # ── ws — Bun WS fanout (src/ws.ts) from the SAME api image, Redis-only, zero DB.
-  # Co-located with Redis + the indexer publisher (spec §8 <500ms). `command`
+  # Co-located with Redis + the indexer publisher (<500ms). `command`
   # overrides the image's default CMD; no rebuild (same image tag).
   ws:
     image: ${API_IMAGE:-robbed-api:latest}

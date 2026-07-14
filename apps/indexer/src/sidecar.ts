@@ -1,16 +1,16 @@
 /**
  * Side-process boot (M2-6 + M2-7) — starts the confirmation tracker and the
  * metadata verifier inside the indexer container, independent of Ponder's sync
- * (indexer.md §5.1/§6.1). Wired from a Ponder `:setup` handler (runs once before
+ * (indexer.md). Wired from a Ponder `:setup` handler (runs once before
  * indexing) so no separate entrypoint is needed; every start is guarded, and any
  * failure is logged, NEVER thrown into the indexing pipeline (these loops label
- * and derive — they never gate chain state, §8.4).
+ * and derive — they never gate chain state).
  *
- * Transport note (RESOLVED — prod-images.md §5 fix, 2026-07-11): the Redis
+ * Transport note (RESOLVED — prod-images.md fix, 2026-07-11) the Redis
  * publisher and the `control:reverify` subscriber are RUNTIME-SELECTED — Bun's
  * native `RedisClient` when `globalThis.Bun` is present (dev/compose, matches
  * the API), node-redis 6.x otherwise (the prod Ponder container runs under
- * Node, spec §8). No-op fallbacks are gone: `startSidecars` preflights the
+ * Node). No-op fallbacks are gone: `startSidecars` preflights the
  * publish transport BEFORE anything else and exits the process if none can be
  * constructed, so a misconfigured container fails loud at startup instead of
  * silently dropping every realtime publish with the error counter stuck at 0.
@@ -50,7 +50,7 @@ export async function startSidecars(): Promise<void> {
   if (started) return;
   started = true;
 
-  // Transport preflight (prod-images.md §5): construct the publish transport
+  // Transport preflight (prod-images.md) construct the publish transport
   // NOW — this hook runs before indexing, so REDIS_URL unset / an
   // unconstructible client kills the process at startup instead of dropping
   // every realtime publish invisibly (`redis_publish_errors_total` stuck at 0,
@@ -108,7 +108,7 @@ export async function startSidecars(): Promise<void> {
 
   try {
     // M2-6 confirmation tracker (watermark sidecar only — no writes into
-    // Ponder-managed tables; tiers derived at read time, OI-11/§12.48c).
+    // Ponder-managed tables; tiers derived at read time, OI-11).
     await startConfirmationTracker({
       store: createPgConfirmationStore(pool),
       fetchTags: createRpcTagFetcher(config.rpcHttp),
@@ -131,7 +131,7 @@ export async function startSidecars(): Promise<void> {
     );
     console.log("[indexer sidecar] metadata verifier started.");
 
-    // M2-13 §8.5 bot/farm flow job (advisory labeling; never gates chain state).
+    // M2-13 bot/farm flow job (advisory labeling; never gates chain state).
     const flowThresholds = loadFlowThresholds();
     const clusterThresholds = loadClusterAlertThresholds();
     const flowIntervalMs = Number(process.env.FLOW_JOB_INTERVAL_MS) || FLOW_JOB_INTERVAL_MS;
@@ -144,18 +144,18 @@ export async function startSidecars(): Promise<void> {
       },
       flowIntervalMs,
     );
-    console.log("[indexer sidecar] §8.5 flow job started.");
+    console.log("[indexer sidecar] flow job started.");
 
-    // Portfolio address_pnl roll-up (spec §5.4). Advisory / read-only derive from
+    // Portfolio address_pnl roll-up. Advisory / read-only derive from
     // trades+transfers+tokens; wallet ETH + unrealized PnL stay live at the API.
     const pnlIntervalMs = Number(process.env.PNL_JOB_INTERVAL_MS) || PNL_JOB_INTERVAL_MS;
     startPnlJob({ store: createPgPnlStore(pool, schema) }, pnlIntervalMs);
     console.log("[indexer sidecar] address_pnl roll-up job started.");
 
-    // §3.9 ETH/USD snapshot poller (spec §2 hard rule; §12.51 Chainlink branch).
-    // Own try/catch: a §12.51 assertion failure is FAIL-CLOSED for the poller —
+    // ETH/USD snapshot poller (hard rule; Chainlink branch).
+    // Own try/catch: a assertion failure is FAIL-CLOSED for the poller —
     // NO poller starts (the HTTP fallback must not mask a misconfigured feed
-    // address) and eth_usd_snapshot_age_seconds pages (>5m alert, §9.4) — but
+    // address) and eth_usd_snapshot_age_seconds pages (>5m alert) — but
     // indexing itself continues (sidecar principle: label, never gate).
     try {
       const ethUsdEnv = loadEthUsdEnv();
@@ -170,7 +170,7 @@ export async function startSidecars(): Promise<void> {
         `[indexer sidecar] eth/usd poller started (branch: ${poller.usingChainlink ? "chainlink:4663" : "http fallback"}, interval ${ethUsdEnv.pollIntervalMs}ms).`,
       );
     } catch (err) {
-      console.error("[indexer sidecar] eth/usd poller FAIL-CLOSED (§12.51) — no snapshots will be written; age alert will page:", err);
+      console.error("[indexer sidecar] eth/usd poller FAIL-CLOSED () — no snapshots will be written; age alert will page:", err);
     }
 
     // M2-14 weekly hood.fun competitor snapshot (source unconfigured → no-op writes).

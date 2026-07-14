@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { tokenDetail } from "./fixtures";
 
 /**
- * Per-token OG + SSR metadata (§5.2/§9). The `og:image` now points at the
+ * Per-token OG + SSR metadata. The `og:image` now points at the
  * API-served, R2-cached PNG (`{API_ORIGIN}/v1/og/{address}.png`) — the web no
  * longer renders OG images itself (dropping `@vercel/og`/resvg-WASM from the
  * Cloudflare Worker bundle to fit the 3 MiB Free limit). Here we prove (a) the

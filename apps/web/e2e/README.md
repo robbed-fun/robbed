@@ -8,7 +8,7 @@ against a **running** stack — one `@flow`-tagged spec per catalog ID, each ass
 declared `assertable-layers` (on-chain → indexed → UI), honouring `user-flows-waivers.md`.
 
 **`CFEE-1..4` are DEPLOYED + running (2026-07-13).** The post-graduation creator-fee generation
-(§12.67/§12.68/§12.69: new CurveFactory + BondingCurve + Router + `CreatorVault` + creator-aware
+(: new CurveFactory + BondingCurve + Router + `CreatorVault` + creator-aware
 `LPFeeVault`; `creatorLpShareBps == 5000`, `CREATOR_FEE_BPS == 50`) is deployed to the fork, so the
 `test.fixme`/`@pending:phase2` guards are removed and all four run green. `CFEE-1`/`CFEE-2` are widened
 to **on-chain · indexed** — the split-Collect/CreatorVault roll-up is served over REST (`GET /v1/creators/
@@ -80,12 +80,12 @@ flake. Playwright drives connect/switch through the in-app bridge `window.__ROBB
 `harness/seed.ts` builds fixtures the product's own way (API image upload → metadata pin + shared
 hash re-verify → `Router.createToken`) and drives curves to/over graduation. `harness/anvil.ts`
 adds time-warp (`increaseTime`/`mine`), snapshot/revert, granular pause setters, and the
-`anvil_setCode` hostile-sink manipulation (`makeTreasuryRevert` for ERR-5 §12.25; the generic
+`anvil_setCode` hostile-sink manipulation (`makeTreasuryRevert` for ERR-5; the generic
 `makeAddressRevert` for CFEE-3's hostile creator) — all harness-side, never a contract edit.
-`harness/creator-fee.ts` (§12.67/§12.68/§12.69) drives the post-grad path: real SwapRouter02
+`harness/creator-fee.ts` drives the post-grad path: real SwapRouter02
 volume generation (both legs), the split `collect()` outcome (`FeesCollected` + `FeesSplit`), the
 pre-grad `sweepCreatorFees`, and the `CreatorVault` `claim`/`claimERC20` + `creatorOf`/registration
-reads. The ENTIRE surface is imported from `@robbed/shared/abi` (the §12.69 additions —
+reads. The ENTIRE surface is imported from `@robbed/shared/abi` (the additions —
 `FeesSplit`/`creatorOf`/`creatorLpShareBps`/`registerCreator`/`tokenBalanceOf`/`claimERC20` — landed
 in the shared codegen 2026-07-13; the harness was authored against local stubs matching
 `contracts/src/interfaces/` and swapped to the shared ABIs the moment they regenerated — no local

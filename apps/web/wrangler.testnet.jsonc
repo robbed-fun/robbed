@@ -28,7 +28,7 @@
   // Preserve dashboard-set vars on deploy (see wrangler.jsonc rationale).
   "keep_vars": true,
   "r2_buckets": [
-    // Same shared assets bucket as mainnet (read path only, §12.19).
+    // Same shared assets bucket as mainnet (read path only).
     { "binding": "ASSETS_BUCKET", "bucket_name": "robbed-assets" },
     // ISR / `use cache` store — same bucket, but see NEXT_INC_CACHE_R2_PREFIX
     // below: testnet cache entries live under their own prefix so the two

@@ -9,7 +9,7 @@ import {
   test,
 } from "../harness";
 
-// @flow:ERR-9 — Wallet rejects the transaction (§5.2/§5.3)
+// @flow:ERR-9 — Wallet rejects the transaction
 // assertable-layers: UI   (N/A on-chain/indexed: nothing broadcast — waiver)
 test(
   "ERR-9 a rejected signature resets the optimistic row and preserves form/quote state",

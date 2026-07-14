@@ -5,7 +5,7 @@ are vendored from the [Fontsource](https://fontsource.org/fonts/ibm-plex-mono)
 distribution of **IBM Plex Mono** (© IBM Corp.), licensed under the
 [SIL Open Font License 1.1](https://github.com/IBM/plex/blob/master/LICENSE.txt).
 
-Why vendored (decision, hoodpad-frontend, ROBBED_ redesign Phase F):
+Why vendored (decision, robbed-frontend, ROBBED_ redesign Phase F):
 
 - The `ROBBED_` terminal design (`docs/Robbed.html`) renders everything in
   IBM Plex Mono — sampled from the mockup's computed styles, not assumed.

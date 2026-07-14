@@ -11,7 +11,7 @@ import { formatUnits } from "viem";
  * mockup; sub-1 values keep 4 significant digits (the mockup shows no sub-1
  * sample — 1 decimal would collapse e.g. 0.0421 to "0.0", silently destroying
  * the only precision the quote has, which the format contract forbids).
- * Pure display formatting over an on-chain quote — never market math (§2).
+ * Pure display formatting over an on-chain quote — never market math.
  */
 export function formatReceiveTokenAmount(wei: bigint, decimals = 18): string {
   const n = Number(formatUnits(wei, decimals));

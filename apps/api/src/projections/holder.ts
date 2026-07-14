@@ -1,6 +1,6 @@
 /**
  * HolderJoinedRow → `HolderRow` (frozen shared DTO). Flags are computed at query
- * time (indexer.md §3.6 — not stored) by comparing the holder against the
+ * time (indexer.md — not stored) by comparing the holder against the
  * token's creator / curve / pool addresses and configured vault addresses.
  * `botFlags`/`clusterId` are the v1.2 advisory labels from `address_flags`.
  */
@@ -34,7 +34,7 @@ export function toHolderRow(
     address: row.holder,
     balance: row.balance,
     pct: ratio(row.balance, totalSupply) * 100,
-    // True balance-desc rank over the whole token (§12.59) — stable even when
+    // True balance-desc rank over the whole token — stable even when
     // this page is sorted by address/label (position ≠ rank there).
     rank: row.rank,
     flags,

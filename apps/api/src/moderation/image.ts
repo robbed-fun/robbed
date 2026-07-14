@@ -1,5 +1,5 @@
 /**
- * Image auto-moderation scoring + hash-keyed cache (§4.3). Runs the vendor
+ * Image auto-moderation scoring + hash-keyed cache. Runs the vendor
  * interfaces over the RE-ENCODED bytes and records the result keyed by image
  * hash so the launch worker (X-10) can LINK the pre-scanned verdict to the token
  * at `TokenCreated` without re-fetching the image. With real vendors this scoring

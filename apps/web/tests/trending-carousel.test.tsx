@@ -6,8 +6,8 @@ import { TrendingCarousel } from "@/widgets/trending-carousel";
 import { tokenCard } from "./fixtures";
 
 /**
- * TrendingCarousel is the real Discover (`/`) token list (§5.1 as amended by
- * §12.50(f)). This proves the compact GraduationProgress now adds the raise
+ * TrendingCarousel is the real Discover (`/`) token list (as amended by
+ * ). This proves the compact GraduationProgress now adds the raise
  * progress bar + graduated/on-curve status to each card, WITHOUT disturbing the
  * DISC-1 accessibility contract (the "Trending tokens" region + the per-card
  * `— rank N` link name).
@@ -15,7 +15,7 @@ import { tokenCard } from "./fixtures";
 
 afterEach(cleanup);
 
-describe("TrendingCarousel — Discover token list (§5.1)", () => {
+describe("TrendingCarousel — Discover token list ", () => {
   it("adds the graduation progress bar + status to each card, DISC-1 contract intact", () => {
     const { container } = render(
       <TrendingCarousel

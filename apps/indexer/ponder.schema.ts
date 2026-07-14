@@ -1,22 +1,22 @@
 /**
- * Ponder DB schema (indexer.md §3) — the seven reorg-tracked, Ponder-managed
- * tables (§7.3): tokens, trades, transfers, graduations, fee_collections,
+ * Ponder DB schema (indexer.md) — the seven reorg-tracked, Ponder-managed
+ * tables : tokens, trades, transfers, graduations, fee_collections,
  * balances, candles.
  *
  * The relational shapes (snake_case column names + types) are the NORMATIVE
- * §3 shapes and MUST match `@robbed/shared` db-rows (TokenRow, TradeRowDb,
+ * shapes and MUST match `@robbed/shared` db-rows (TokenRow, TradeRowDb,
  * TransferRow, GraduationRow, FeeCollectionRow, BalanceRow, CandleRow) — the
  * shared types are the source of truth and the API reads these tables by those
  * snake_case names. Ponder/Drizzle would otherwise name columns after the JS
  * property (camelCase), so EVERY column passes an explicit snake_case DB name;
  * handlers still use the camelCase JS keys.
  *
- * ONE deliberate exception (OI-11 / spec §12.48c): the shared db-row types'
+ * ONE deliberate exception (OI-11 /) the shared db-row types'
  * `confirmation_state` field is NOT a stored column here. Per-row storage on
  * Ponder tables cannot be maintained (the indexing-store cache silently
- * reverts external UPDATEs on handler-mutated rows — spec §12.48c), so the
+ * reverts external UPDATEs on handler-mutated rows —), so the
  * tier is DERIVED at read time from `block_number` vs the offchain
- * `confirmation_watermarks` sidecar singleton (§3.8): the API's SELECTs emit a
+ * `confirmation_watermarks` sidecar singleton : the API's SELECTs emit a
  * derived `confirmation_state` column (`apps/api/src/lib/confirmation.ts`),
  * satisfying the shared row shapes without any write-back.
  *
@@ -28,35 +28,35 @@
  * - log_index / small ints → t.integer()         (int4)
  * - display-only prices    → t.doublePrecision() (float8; float4 `real()` would
  *                                                  lose precision on ETH prices)
- * - addresses/hashes/enums → t.text()            (stored lowercase, §3 convention;
+ * - addresses/hashes/enums → t.text() (stored lowercase, convention;
  *                                                  confirmation_state/venue CHECK
  *                                                  enforced app-side by shared zod)
  * - links jsonb            → t.json()
  *
- * The §3.8-§3.11 [offchain] tables and the §8.5 flow tables are NOT here — they
+ * The - [offchain] tables and the flow tables are NOT here — they
  * live in `migrations/` (plain SQL, schema `public`) because side processes
- * write them and they must not be rolled back by Ponder reorg handling (§7.3).
+ * write them and they must not be rolled back by Ponder reorg handling.
  * pg_trgm GIN search indexes are applied by `migrations/0003_trgm_gin_indexes.sql`.
  */
 import { index, onchainTable, primaryKey } from "ponder";
 
-// ── §3.1 tokens ─────────────────────────────────────────────────────────────
+// ── tokens ─────────────────────────────────────────────────────────────
 export const tokens = onchainTable(
   "tokens",
   (t) => ({
     address: t.text("address").primaryKey(),
     curveAddress: t.text("curve_address").notNull(),
-    creator: t.text("creator").notNull(), // §7: from day 1
-    creatorFeeBps: t.integer("creator_fee_bps").notNull().default(0), // §7: 0 in v1
-    // §12.40d: per-token immutable snapshot of the curve's TRADE_FEE_BPS, read
+    creator: t.text("creator").notNull(), // : from day 1
+    creatorFeeBps: t.integer("creator_fee_bps").notNull().default(0), // : 0 in v1
+    // : per-token immutable snapshot of the curve's TRADE_FEE_BPS, read
     // from the BondingCurve at TokenCreated (NOT factory config — setTradeFeeBps
     // only affects future curves). Trust-panel `feePolicy.tradeFeeBps` source.
     // NOTE: @robbed/shared `TokenRow` must gain `trade_fee_bps: number` to
-    // mirror this column (reported as a shared gap — hoodpad-shared ratifies).
+    // mirror this column (reported as a shared gap — robbed-shared ratifies).
     tradeFeeBps: t.integer("trade_fee_bps").notNull(),
     name: t.text("name").notNull(),
     ticker: t.text("ticker").notNull(),
-    metadataHash: t.text("metadata_hash").notNull(), // bytes32 hex, verbatim (§8.3)
+    metadataHash: t.text("metadata_hash").notNull(), // bytes32 hex, verbatim
     metadataUri: t.text("metadata_uri"),
     imageUrl: t.text("image_url"), // from verified metadata JSON (null until fetch)
     description: t.text("description"),
@@ -92,7 +92,7 @@ export const tokens = onchainTable(
   }),
 );
 
-// ── §3.2 trades (unified curve `Trade` + V3 `Swap`, venue discriminator) ─────
+// ── trades (unified curve `Trade` + V3 `Swap`, venue discriminator) ─────
 export const trades = onchainTable(
   "trades",
   (t) => ({
@@ -117,7 +117,7 @@ export const trades = onchainTable(
   }),
 );
 
-// ── §3.6 transfers (sixth event family, sole balance-truth anchor, X-5) ──────
+// ── transfers (sixth event family, sole balance-truth anchor, X-5) ──────
 export const transfers = onchainTable(
   "transfers",
   (t) => ({
@@ -137,7 +137,7 @@ export const transfers = onchainTable(
   }),
 );
 
-// ── §3.3 graduations (single-fire per token) ────────────────────────────────
+// ── graduations (single-fire per token) ────────────────────────────────
 export const graduations = onchainTable(
   "graduations",
   (t) => ({
@@ -160,7 +160,7 @@ export const graduations = onchainTable(
   }),
 );
 
-// ── §3.5 fee_collections (V3 Collect on the LPFeeVault position) ─────────────
+// ── fee_collections (V3 Collect on the LPFeeVault position) ─────────────
 export const feeCollections = onchainTable(
   "fee_collections",
   (t) => ({
@@ -182,7 +182,7 @@ export const feeCollections = onchainTable(
   }),
 );
 
-// ── §3.6 balances (Transfer-driven; cost-basis columns from Trade/Swap) ──────
+// ── balances (Transfer-driven; cost-basis columns from Trade/Swap) ──────
 export const balances = onchainTable(
   "balances",
   (t) => ({
@@ -203,7 +203,7 @@ export const balances = onchainTable(
   }),
 );
 
-// ── creator_claimable (creator-fee pull-payment roll-up — spec §7 / §12.63) ──
+// ── creator_claimable (creator-fee pull-payment roll-up) ──
 // Per-creator aggregate maintained by the creator-fee handlers (handlers/
 // creatorFees.ts), mirroring the shared `CreatorClaimableRow` (db-rows.ts).
 // Deliberately a REORG-TRACKED Ponder table (not an offchain rollup): the
@@ -228,13 +228,13 @@ export const creatorClaimable = onchainTable(
   }),
 );
 
-// ── creator_token_claimable (post-grad 50/50 split roll-up — spec §12.69) ────
-// Per-`(creator, ERC20-token)` aggregate maintained by the §12.69 handlers
+// ── creator_token_claimable (post-grad 50/50 split roll-up) ────
+// Per-`(creator, ERC20-token)` aggregate maintained by the handlers
 // (handlers/creatorFeeSplit.ts), mirroring the shared `CreatorTokenClaimableRow`
 // (db-rows.ts). The POST-GRAD half of the creator leg: the graduated V3 pool's 1%
 // fees are split 50/50 at `LPFeeVault.collect()`, the creator share credited in the
 // CreatorVault per `(creator, token)` where `token` ∈ {graduated launch token,
-// canonical WETH} (Option B, §12.69(C)). A REORG-TRACKED Ponder table (not an
+// canonical WETH} (Option B). A REORG-TRACKED Ponder table (not an
 // offchain rollup): the aggregate is event-derived, so Ponder's own reorg revert
 // keeps it correct. Rebuildable from events. `claimable` is the event-derived MIRROR;
 // the API serves the live `CreatorVault.tokenBalanceOf(creator, token)` as
@@ -260,7 +260,7 @@ export const creatorTokenClaimable = onchainTable(
   }),
 );
 
-// ── §3.7 candles (derived, rebuildable; six intervals) ──────────────────────
+// ── candles (derived, rebuildable; six intervals) ──────────────────────
 export const candles = onchainTable(
   "candles",
   (t) => ({

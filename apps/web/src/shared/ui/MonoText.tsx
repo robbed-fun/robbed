@@ -1,7 +1,7 @@
 import { cn } from "@/shared/lib/utils";
 
 /**
- * ROBBED_ terminal text atoms (redesign Phase F; ratified redesign, spec §12.50).
+ * ROBBED_ terminal text atoms (redesign Phase F; ratified redesign).
  *
  * `MonoText` — tone/size-tokenized inline text (everything is mono already via
  * the body font; these map the mockup's exact text ramp + accent hues).
@@ -41,7 +41,7 @@ export function MonoText({
 }: React.ComponentProps<"span"> & {
   tone?: MonoTone;
   size?: MonoSize;
-  /** Tabular numerals — set on every numeric value (web.md §7). */
+  /** Tabular numerals — set on every numeric value (web.md). */
   numeric?: boolean;
 }) {
   return (

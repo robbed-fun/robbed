@@ -1,5 +1,5 @@
 /**
- * loadConfig — the curve-constant env interim is gone (§12.40d, M2-4b).
+ * loadConfig — the curve-constant env interim is gone (M2-4b).
  *
  * The four curve-constant env vars (CURVE_SUPPLY_WEI &c.) are no longer read;
  * curve immutables are read per-curve at TokenCreated. This asserts the indexer
@@ -37,7 +37,7 @@ const saved = new Map<string, string | undefined>();
 
 beforeEach(() => {
   for (const k of TOUCHED) saved.set(k, process.env[k]);
-  // Minimal REQUIRED non-curve env for a successful boot. §12.55: explicit chain
+  // Minimal REQUIRED non-curve env for a successful boot. explicit chain
   // selection; 4663 needs the LOCAL-fork opt-in (registry entry is a fork artifact).
   process.env.INDEXER_CHAIN_ID = "4663";
   process.env.INDEXER_ALLOW_FORK_4663 = "1";
@@ -56,7 +56,7 @@ afterEach(() => {
   saved.clear();
 });
 
-describe("loadConfig — no curve-constant env vars (§12.40d)", () => {
+describe("loadConfig — no curve-constant env vars ", () => {
   it("boots (loads + passes the static gate) with all curve env vars unset", () => {
     let config!: ReturnType<typeof loadConfig>;
     expect(() => {
@@ -69,7 +69,7 @@ describe("loadConfig — no curve-constant env vars (§12.40d)", () => {
     const config = loadConfig();
     expect((config as unknown as Record<string, unknown>).curve).toBeUndefined();
     // Sanity: the non-curve required fields still resolve. WETH comes from the
-    // 4663 registry entry (§12.55(c)) — which equals the canonical constant.
+    // 4663 registry entry — which equals the canonical constant.
     expect(config.chainId).toBe(4663);
     expect(config.weth).toBe(WETH_ADDRESS.toLowerCase());
     expect(config.curveFactory).toBe("0x" + "11".repeat(20));
@@ -81,7 +81,7 @@ describe("loadConfig — no curve-constant env vars (§12.40d)", () => {
   });
 });
 
-describe("loadConfig — optional creatorVault (§12.63 additive, graceful skip)", () => {
+describe("loadConfig — optional creatorVault (additive, graceful skip)", () => {
   it("is undefined when neither env nor the registry provides it (v1 deployment)", () => {
     delete process.env.CREATOR_VAULT_ADDRESS;
     // The 4663 registry entry carries no creatorVault → the vault source is not

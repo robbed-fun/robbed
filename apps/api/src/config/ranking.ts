@@ -1,16 +1,16 @@
 /**
- * Ranking / search tuning — the §12.22 ratified DEFAULTS as TUNABLE CONFIG, not
- * inline magic numbers (api.md §3.3/§3.4, decide-it-yourself). Overridable via
- * env for beta tuning; never market metrics (spec §2) — these are ranking knobs.
+ * Ranking / search tuning — the ratified DEFAULTS as TUNABLE CONFIG, not
+ * inline magic numbers (api.md, decide-it-yourself). Overridable via
+ * env for beta tuning; never market metrics — these are ranking knobs.
  */
 export interface RankingConfig {
-  /** Ticker similarity boost (§12.22: ×1.2). */
+  /** Ticker similarity boost (×1.2). */
   tickerBoost: number;
-  /** Trigram similarity floor for similarity-mode search (§12.22: 0.25). */
+  /** Trigram similarity floor for similarity-mode search (0.25). */
   similarityFloor: number;
-  /** Search statement timeout, ms (api.md §6.4 search DoS). */
+  /** Search statement timeout, ms (api.md search DoS). */
   searchStatementTimeoutMs: number;
-  /** trending = vol24h × e^(−ageHours / trendingHalfLifeHours) (§12.22: 24h). */
+  /** trending = vol24h × e^(−ageHours / trendingHalfLifeHours) (24h). */
   trendingHalfLifeHours: number;
 }
 

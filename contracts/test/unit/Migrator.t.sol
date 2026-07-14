@@ -17,7 +17,7 @@ import {PoolPriceUnrecoverable} from "src/errors/Errors.sol";
 import {PoolGriefer} from "test/harness/PoolGriefer.sol";
 import {Reverter} from "test/harness/Harness.sol";
 
-/// @title Migrator lifecycle + pre-seed-defense unit tests (M1-10; spec §6.3, §6.3.2, §12.11–13)
+/// @title Migrator lifecycle + pre-seed-defense unit tests (M1-10)
 /// @notice Exercises the REAL Uniswap V3 stack (V3Fixture): clean graduation, arb-back after swap
 ///         griefing, hostile-mint rejection, dust routing, and the TM-T1 reverting-treasury proof.
 contract MigratorTest is Test, V3Fixture {
@@ -169,7 +169,7 @@ contract MigratorTest is Test, V3Fixture {
         assertGt(IUniswapV3Pool(pool).liquidity(), 0, "no liquidity minted");
     }
 
-    // ── pre-seed defense (spec §6.3.2) ──────────────────────────────────────────
+    // ── pre-seed defense ──────────────────────────────────────────
 
     /// @notice Griefer swaps the empty pre-grad pool's price far ABOVE target; the arb-back must
     ///         restore it to within tolerance before minting.
@@ -227,7 +227,7 @@ contract MigratorTest is Test, V3Fixture {
 
     /// @notice Adversary mints deep hostile liquidity AND swaps price off-target. Outcome MUST be
     ///         one of: graduated with tick in tolerance, OR a clean revert leaving the curve
-    ///         ReadyToGraduate (retriable). NEVER a mint outside tolerance (spec §6.3.2).
+    /// ReadyToGraduate (retriable). NEVER a mint outside tolerance.
     function test_preseed_hostileMint_neverMintsOutsideTolerance() public {
         (LaunchToken token, BondingCurve curve, address pool) = _createSubject(makeAddr("creator9"));
         PoolGriefer g = _newGriefer(token, curve, pool, 2 ether);
@@ -279,7 +279,7 @@ contract MigratorTest is Test, V3Fixture {
     /// @notice TM-T2 Property B (parity floor). The WETH-leg mint requirement is the FULL
     ///         `wethForMint`; the mint's `amount1Min` = `wethForMint · (1 − slippage)` makes every
     ///         successful graduation deposit at least that WETH into the position — so the $69k
-    ///         parity (§12.11) can skew by at most `MIGRATION_SLIPPAGE_BPS`. Proven here after a
+    /// parity can skew by at most `MIGRATION_SLIPPAGE_BPS`. Proven here after a
     ///         WETH-leg arb (price griefed below target).
     function test_TMT2_wethLegParityFloor_holds() public {
         (LaunchToken token, BondingCurve curve, address pool) = _createSubject(makeAddr("creator10"));
@@ -340,7 +340,7 @@ contract MigratorTest is Test, V3Fixture {
     ///         sell tokens to restore target). Pre-fix, the token-leg budget was
     ///         `balanceOf(token) − LP_TOKEN_TRANCHE` ≈ dust (the curve forwards ≈ exactly the tranche),
     ///         so the arb had ~0 token to spend, reverted `ArbBudgetExceeded`, and FROZE the curve in
-    ///         `ReadyToGraduate` (both directions locked, §12.12) while the attacker kept a withdrawable
+    /// `ReadyToGraduate` (both directions locked) while the attacker kept a withdrawable
     ///         LP position — a money-neutral freeze grief. Post-fix the token leg has the SYMMETRIC
     ///         slippage-bounded budget (`LP_TOKEN_TRANCHE · MIGRATION_SLIPPAGE_BPS`), so a grief inside
     ///         the recoverable range self-corrects and `graduate()` SUCCEEDS within tolerance — a

@@ -1,5 +1,5 @@
 /**
- * GET /v1/search (§5.1, api.md §3.3). One endpoint over name/ticker/contract/
+ * GET /v1/search (api.md). One endpoint over name/ticker/contract
  * creator via pg_trgm; address-mode + similarity-mode both handled by the pure
  * builder. Hidden listings excluded there. Results use the same TokenCard
  * projection as /v1/tokens.

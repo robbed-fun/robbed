@@ -1,5 +1,5 @@
 /**
- * ROBBED_ auto-graduation keeper entrypoint (Bun runtime, spec §8/§9).
+ * ROBBED_ auto-graduation keeper entrypoint (Bun runtime).
  *
  * Wiring:
  *   1. on-chain GraduationReady watch (primary detection — see chain.ts) → onReady
@@ -40,7 +40,7 @@ async function main(): Promise<void> {
     },
   });
 
-  // Fail-closed chain-identity gate (mirrors the indexer discipline, §12.55).
+  // Fail-closed chain-identity gate (mirrors the indexer discipline).
   const liveChainId = await chain.getChainId();
   if (liveChainId !== cfg.CHAIN_ID) {
     throw new Error(`[keeper] chain-id mismatch: RPC reports ${liveChainId}, CHAIN_ID=${cfg.CHAIN_ID}`);

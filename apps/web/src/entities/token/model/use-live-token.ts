@@ -15,7 +15,7 @@ import {
 } from "./live";
 
 /**
- * LIVE TokenDetail (TD-6; §5.2/§12.12/§2.1). The SSR token summary is a
+ * LIVE TokenDetail (TD-6). The SSR token summary is a
  * snapshot — nothing re-engined the venue after a permissionless `graduate()`
  * until reload. This hook makes `status` (and everything derived from it: the
  * TradeWidget engine, the header status pill, the bonding cell, the V3 pool
@@ -43,12 +43,12 @@ export function useLiveTokenDetail(initial: TokenDetail): TokenDetail {
   const queryKey = qk.token(address);
 
   // Monotonic graduation latch (DECISION, recorded): graduation is single-fire
-  // and irreversible (§12.12), so once the WS says `graduated` the UI must NEVER
+  // and irreversible, so once the WS says `graduated` the UI must NEVER
   // regress to a curve venue — even if the immediate REST refetch races the
   // indexer's projection and briefly returns a pre-graduation row. The latch
   // overlays `applyGraduated` on any lagging snapshot; once the indexed row
   // catches up it wins verbatim (the overlay becomes a no-op). This mirrors the
-  // trade rule "never render WS-contradicted state" (§2.1).
+  // trade rule "never render WS-contradicted state".
   const [gradPool, setGradPool] = useState<string | null>(null);
 
   const query = useQuery<TokenDetail>({
@@ -90,7 +90,7 @@ export function useLiveTokenDetail(initial: TokenDetail): TokenDetail {
       return;
     }
     // Graduation is monotonic: once latched (`gradPool`) the venue is retired and
-    // the bonding cell is terminal — never refetch-regress it (§12.12/§2.1).
+    // the bonding cell is terminal — never refetch-regress it.
     if (gradPool !== null || !tradeMovesBondingProgress(current, msg)) return;
     const now = Date.now();
     if (now - lastProgressRefetch.current < 5_000) return;

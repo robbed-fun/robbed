@@ -1,10 +1,10 @@
 /**
- * In-memory graduation registry (indexer.md §3.4/§3.5/§7.4) — routes V3 `Swap`
+ * In-memory graduation registry (indexer.md) — routes V3 `Swap`
  * (pool → token + orientation) and filters V3 `Collect` (lp_token_id → our
  * LPFeeVault positions only, since the NonfungiblePositionManager is shared and
  * emits Collect for every position on chain).
  *
- * Steady-state has ZERO per-event DB reads (the §3.5 requirement): the registry
+ * Steady-state has ZERO per-event DB reads (the requirement) the registry
  * is populated by the `Graduated` handler as tokens graduate, and lazily
  * hydrated ONCE from the `graduations` table on the first Swap/Collect after a
  * process restart (Ponder resumes from a checkpoint and does not re-emit old

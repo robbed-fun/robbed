@@ -1,5 +1,5 @@
 /**
- * Holder-balance accounting (indexer.md §3.6, X-4/X-5; spec §12.16).
+ * Holder-balance accounting (indexer.md, X-4/X-5).
  *
  * The ERC-20 `Transfer` event is the SOLE source of balance truth: only the
  * Transfer handler writes `balances.balance` and `tokens.holder_count`. The
@@ -12,8 +12,8 @@
  * the DB (`holderCountDelta` is the shared load-bearing rule both call).
  *
  * The zero address is never tracked as a holder (mint source / standard burn
- * sink). A burn to a dead address (§12.13 graduation dust) IS a real holder;
- * the holder-distribution UI flags known addresses at query time (§3.6).
+ * sink). A burn to a dead address (graduation dust) IS a real holder;
+ * the holder-distribution UI flags known addresses at query time.
  */
 import { ZERO_ADDRESS } from "./config";
 
@@ -144,7 +144,7 @@ export class BalanceLedger {
     return [...this.byToken.keys()];
   }
 
-  /** Top holders by balance (top-20 query shape, §3.6). */
+  /** Top holders by balance (top-20 query shape). */
   topHolders(token: string, limit = 20): Array<{ holder: string; balance: bigint }> {
     const m = this.byToken.get(token);
     if (!m) return [];

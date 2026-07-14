@@ -16,7 +16,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:TD-5 — Post-grad sell (Uniswap V3) · tx `post-grad V3 sell` (§5.2)
+// @flow:TD-5 — Post-grad sell (Uniswap V3) · tx `post-grad V3 sell`
 // assertable-layers: on-chain · indexed · UI
 test(
   "TD-5 post-graduation sell via SwapRouter (user sees ETH out)",
@@ -33,7 +33,7 @@ test(
       await sel.sellTab(page).click();
       await sel.maxButton(page).click();
       await sel.submitTrade(page).click();
-      // §12.56: soft-confirmed chip removed — prove the optimistic row via the feed row.
+      // : soft-confirmed chip removed — prove the optimistic row via the feed row.
       await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 12_000 });
     });
 

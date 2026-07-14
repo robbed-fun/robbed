@@ -46,22 +46,22 @@
   },
   "governance": {
     "organicVolumeFloor": {
-      "basis": "Gate G-A.1 (§14) mainnet market floor: evaluated at Phase-A exit against the OWN INDEXER organic-volume estimate (§8.5), NEVER a headline/chain-wide/Dune metric (§2/§2.2).",
-      "metric": "rolling platform-wide ORGANIC curve volume (buy+sell ETH notional) after excluding §8.5 wash-flagged volume; when only headline data is available, apply the ≤50% organic-flow discount (§2.2) to estimate the organic component.",
+      "basis": "Gate G-A.1 mainnet market floor: evaluated at Phase-A exit against the OWN INDEXER organic-volume estimate, NEVER a headline/chain-wide/Dune metric.",
+      "metric": "rolling platform-wide ORGANIC curve volume (buy+sell ETH notional) after excluding wash-flagged volume; when only headline data is available, apply the ≤50% organic-flow discount to estimate the organic component.",
       "unit": "multiple of GRADUATION_ETH (self-referential to the curve's own economics — no external ETH/USD or chain-volume figure is baked in)",
       "windowDays": 7,
       "floorGraduationsEquiv": 5,
       "floorWei": "25084538935471110",
       "organicFlowDiscountMaxPct": 50,
-      "status": "M0 DEFAULT (tunable) — recalibrate at M2 once the indexer emits real organic-volume series (§8.5); the magnitude of N ('what counts as not-collapsed') is a product/policy call → hoodpad-architect ratifies before Gate G-A (§13/§14)."
+      "status": "M0 DEFAULT (tunable) — recalibrate at M2 once the indexer emits real organic-volume series; the magnitude of N ('what counts as not-collapsed') is a product/policy call → robbed-architect ratifies before Gate G-A."
     },
     "clusterAlertThresholds": {
-      "basis": "Gate 7 capped-beta cluster monitoring (§10 gate 7 amend, §8.5): ALERT (never a chain-state gate — §8.4/§8.5 advisory-only) when one §8.5 funder cluster dominates volume. Early-warning for metric distortion + coordinated dumps.",
+      "basis": "Gate 7 capped-beta cluster monitoring (gate 7 amend) ALERT (never a chain-state gate — advisory-only) when one funder cluster dominates volume. Early-warning for metric distortion + coordinated dumps.",
       "perTokenPct": 25,
       "platformPct": 10,
       "windowHours": 24,
-      "measuredAgainst": "trailing-window curve volume, grouped by §8.5 funder cluster (indexer feed); per-token X% of one token's curve volume, platform Y% of platform-wide curve volume.",
-      "status": "M0 DEFAULT (tunable) — hooks emitted in M2-12; alert delivery + final thresholds tuned with hoodpad-security before beta deploy (gate 7)."
+      "measuredAgainst": "trailing-window curve volume, grouped by funder cluster (indexer feed); per-token X% of one token's curve volume, platform Y% of platform-wide curve volume.",
+      "status": "M0 DEFAULT (tunable) — hooks emitted in M2-12; alert delivery + final thresholds tuned with robbed-security before beta deploy (gate 7)."
     }
   },
   "external": {
@@ -79,21 +79,21 @@
     "ethUsdPrice": "1770.29593304",
     "fetchedAt": "2026-07-13T17:26:32.436Z",
     "specRefs": [
-      "§2.2",
-      "§6.2",
-      "§6.3",
-      "§6.4",
-      "§6.5",
-      "§8.5",
-      "§10",
-      "§11.0",
-      "§12.11",
-      "§12.18",
-      "§12.26",
-      "§13",
-      "§14"
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
     ],
-    "status": "OPEN ITEM §13 — constants not final until reviewed by hoodpad-architect",
+    "status": "OPEN ITEM — constants not final until reviewed by robbed-architect",
     "simulation": {
       "seeds": [
         1,
@@ -129,12 +129,12 @@
   },
   "derivation": {
     "note": "vT0 = S²/(2S−T−f), vE0 = p·(L+f)²/(2S−T−f), G = p·(L+f) with f=(gradFee+callerReward)/p; p = exact price of targetTickToken0. Full algebra in tools/m0/lib/curve.ts.",
-    "graduationTargetBasis": "flat net-of-fee ETH raise (§12.11)",
+    "graduationTargetBasis": "flat net-of-fee ETH raise ",
     "gradMcapTargetUsd": "69000",
     "graduationFeeModel": {
-      "basis": "cost-based (§12.26) — migrationGasEstimate × gasPriceWei × (marginNum/marginDen); NOT %-of-raise, no hardcoded USD",
+      "basis": "cost-based — migrationGasEstimate × gasPriceWei × (marginNum/marginDen); NOT %-of-raise, no hardcoded USD",
       "migrationGasEstimate": "1500000",
-      "migrationGasBasis": "MEASURED on a mainnet-fork of chain 4663 at the latest block via the real §12.28 V3 factory/NPM (contracts/test/fork/Lifecycle.t.sol, 2026-07-12): graduate()+V3 migration = 814729 gas clean / 817845 gas with arb-back. Estimate rounded up to 1500000 (~1.83× measured) to cover the full MAX_ARB_ITERATIONS=8 loop.",
+      "migrationGasBasis": "MEASURED on a mainnet-fork of chain 4663 at the latest block via the real V3 factory/NPM (contracts/test/fork/Lifecycle.t.sol, 2026-07-12) graduate()+V3 migration = 814729 gas clean / 817845 gas with arb-back. Estimate rounded up to 1500000 (~1.83× measured) to cover the full MAX_ARB_ITERATIONS=8 loop.",
       "measuredGraduateGas": "817845",
       "gasPriceWei": "100000000",
       "gasPriceBasis": "placeholder",
@@ -145,7 +145,7 @@
       "graduationFeeWei": "225000000000000",
       "callerRewardGasFloorWei": "122676750000000",
       "callerRewardCoversGasFloor": true,
-      "status": "M1 gas re-validation DONE (2026-07-12) — migrationGasEstimate is fork-measured; graduation fee and the §12.34 ≥10×-graduate()-gas caller-reward floor are validated against live gas. Exact fee still finalized at deploy against live gas per §12.26."
+      "status": "M1 gas re-validation DONE (2026-07-12) — migrationGasEstimate is fork-measured; graduation fee and the ≥10×-graduate()-gas caller-reward floor are validated against live gas. Exact fee still finalized at deploy against live gas per."
     },
     "rawTickToken0BeforeAlignment": -246040,
     "k": "2511546126413298409487307459778019319936790",
@@ -158,11 +158,11 @@
       "policy": {
         "priceTarget": "constraint (c) inverted: raw p = (G − F − R)/L, then tick-aligned (±≤~1%)",
         "callerReward": "10% of target G; ceiling 2× (20% of G)",
-        "graduationFee": "min(cost-based §12.26, 10% of G); ceiling min(10×, 20% of G)",
+        "graduationFee": "min(cost-based, 10% of G); ceiling min(10×, 20% of G)",
         "callerRewardGasFloor": "relaxed 10× → 1.5× of fork-measured graduate() gas (TESTNET-ONLY)",
         "creationFee": "unchanged (independent of G)"
       },
-      "status": "TESTNET-ONLY faucet-scale lifecycle-testing device — derive fails closed if the env var is present in mainnet mode; never a mainnet input (hoodpad-architect re-ratifies the policy)."
+      "status": "TESTNET-ONLY faucet-scale lifecycle-testing device — derive fails closed if the env var is present in mainnet mode; never a mainnet input (robbed-architect re-ratifies the policy)."
     },
     "lpDust": {
       "token0IsToken": {
@@ -180,28 +180,28 @@
   "humanReadable": {
     "virtualEth0": "0.002201 ETH",
     "virtualToken0": "1141.0570e6 tokens",
-    "graduationEth": "0.005016 ETH (net-of-fee, §12.11) ≈ $8.88 @snapshot",
-    "graduationMcap": "0.0207 ETH ≈ $36.72 @snapshot (target 0.005000 ETH flat raise (§12.11))",
+    "graduationEth": "0.005016 ETH (net-of-fee) ≈ $8.88 @snapshot",
+    "graduationMcap": "0.0207 ETH ≈ $36.72 @snapshot (target 0.005000 ETH flat raise ())",
     "initialMcap": "0.0019 ETH ≈ $3.41 @snapshot",
-    "graduationFee": "0.000225 ETH ≈ $0.40 @snapshot — cost-based flat (§12.26), gas placeholder (USD shown is informational only)",
+    "graduationFee": "0.000225 ETH ≈ $0.40 @snapshot — cost-based flat, gas placeholder (USD shown is informational only)",
     "creationFee": "0.000847 ETH ≈ $1.50 @snapshot",
     "callerReward": "0.000500 ETH ≈ $0.89 @snapshot",
     "maxEarlyBuy": "0.000125 ETH ≈ $0.22 @snapshot",
     "ethToLp": "0.004291 ETH"
   },
   "reviewRequired": [
-    "§13 GATE: ALL constants below are open item §13 until hoodpad-architect reviews this output; gate approval closes the item.",
-    "fees.graduationFeeWei: COST-BASED per §12.26 (decision 26) — a small flat fee = migrationGasEstimate × gasPriceWei × margin (see derivation.graduationFeeModel), NOT a %-of-raise and never a hardcoded USD figure. M1 RE-VALIDATION DONE (2026-07-12): migrationGasEstimate is now FORK-MEASURED (real §12.28 V3 factory/NPM, graduate()+V3 = ~817845 gas worst-case), not the old 3,000,000 placeholder. gasPrice is fetched live when ROBINHOOD_RPC_URL is set; the exact fee is still re-confirmed at deploy against live gas per §12.26.",
-    "fees.callerRewardWei: O-9 (§12.34) — sized ≈$5 equivalent at snapshot. M1 RE-VALIDATION DONE (2026-07-12): asserted ≥10× the FORK-MEASURED graduate() gas × live gas price (see derivation.graduationFeeModel.callerRewardCoversGasFloor); passes with margin.",
-    "fees.creatorFeeBps: §7/§12.63 creator-fee leg = 50 bps (0.5%) on BOTH mainnet and testnet (approved product change 2026-07-13). treasury 100 + creator 50 = 150 ≤ the 200/2% additive cap (asserted by fees.additiveCap here AND the factory constructor's FeeAboveCap). The on-chain fee SPLIT/routing (post-graduation LP-fee share) is a SEPARATE new-factory-version phase, being designed by a spec agent — NOT shipped in this M0 re-derivation; here the leg is only priced into the fee schedule.",
-    "antiSniper.*: PROPOSAL (O-7) — 8s timestamp window (§12.18) with per-tx cap = 2.5% of GRADUATION_ETH; multi-wallet bypass documented.",
+    " GATE: ALL constants below are open item until robbed-architect reviews this output; gate approval closes the item.",
+    "fees.graduationFeeWei: COST-BASED per (decision 26) — a small flat fee = migrationGasEstimate × gasPriceWei × margin (see derivation.graduationFeeModel), NOT a %-of-raise and never a hardcoded USD figure. M1 RE-VALIDATION DONE (2026-07-12) migrationGasEstimate is now FORK-MEASURED (real V3 factory/NPM, graduate()+V3 = ~817845 gas worst-case), not the old 3,000,000 placeholder. gasPrice is fetched live when ROBINHOOD_RPC_URL is set; the exact fee is still re-confirmed at deploy against live gas per.",
+    "fees.callerRewardWei: O-9 — sized ≈$5 equivalent at snapshot. M1 RE-VALIDATION DONE (2026-07-12) asserted ≥10× the FORK-MEASURED graduate() gas × live gas price (see derivation.graduationFeeModel.callerRewardCoversGasFloor); passes with margin.",
+    "fees.creatorFeeBps: creator-fee leg = 50 bps (0.5%) on BOTH mainnet and testnet (approved product change 2026-07-13). treasury 100 + creator 50 = 150 ≤ the 200/2% additive cap (asserted by fees.additiveCap here AND the factory constructor's FeeAboveCap). The on-chain fee SPLIT/routing (post-graduation LP-fee share) is a SEPARATE new-factory-version phase, being designed by a spec agent — NOT shipped in this M0 re-derivation; here the leg is only priced into the fee schedule.",
+    "antiSniper.*: PROPOSAL (O-7) — 8s timestamp window with per-tx cap = 2.5% of GRADUATION_ETH; multi-wallet bypass documented.",
     "v3.toleranceTicks / maxArbIterations / migrationSlippageBps: PROPOSAL (O-8) — needed before gate-2 fuzz bounds are final.",
-    "beta.*: PLACEHOLDER (O-10) — mainnet values set with hoodpad-security before beta deploy.",
-    "TESTNET SMALL-G OVERRIDE ACTIVE (M0_TESTNET_GRADUATION_ETH): curve.*, fees.graduationFee/callerReward (+ their ceilings), antiSniper.maxEarlyBuyWei, beta.* and governance.organicVolumeFloor are re-derived around the faucet-scale graduation target — see derivation.testnetGraduationOverride for the policy. The §12.34 caller-reward gas floor is relaxed 10×→1.5× (still strictly profitable) FOR TESTNET ONLY. Derive fails closed if this env var is set in mainnet mode; the mainnet derivation path is untouched. hoodpad-architect re-ratifies the override policy before it is treated as anything but a lifecycle-testing device.",
-    "governance.organicVolumeFloor: M0-4 DEFAULT (§14 Gate G-A.1) — floor = 5 × GRADUATION_ETH / 7d of OWN-INDEXER organic curve volume (§8.5); NOT a headline metric (§2). The magnitude ('what counts as not-collapsed') is a product/policy call → hoodpad-architect ratifies before Gate G-A; recalibrate at M2 with real organic series.",
-    "governance.clusterAlertThresholds: M0-4 DEFAULT (§10 gate 7 amend, §8.5) — per-token X=25% / platform Y=10% of curve volume over 24h; ADVISORY alert only, never gates chain state (§8.4/§8.5). Final tuning with hoodpad-security before beta.",
-    "external.weth / v3Factory / positionManager / swapRouter02 / quoterV2: TESTNET 46630 set — RATIFIED spec §12.52 (2026-07-11), sourced from tools/m0/external.testnet.json (never inlined in source, §12.49). WETH is official (docs.robinhood.com/chain/protocol-contracts); the V3 set is a Blockscout-VERIFIED community deployment, TESTNET-ONLY with the §12.52 trust caveat (deployer EOA owns the factory) — FORBIDDEN on mainnet/local. Deploy script still runtime-asserts feeAmountTickSpacing(10000)==200, NPM.factory(), NPM.WETH9() (contracts.md §7.2) so a wrong address fails closed.",
-    "external.treasurySafe: UNSET (T-2) — zero address on purpose; canonical Safe v1.4.1 contracts are CONFIRMED on 46630 (§12.52) but the dev-signer treasury Safe is not created yet. Create it, fill external.testnet.json, re-run derive; Deploy.s.sol fails closed (TreasurySafeUnset) until then. Never invented.",
-    "Graduation threshold counts NET-of-1%-fee real reserves — resolved §12.11; restated so the deploy reviewer re-confirms."
+    "beta.*: PLACEHOLDER (O-10) — mainnet values set with robbed-security before beta deploy.",
+    "TESTNET SMALL-G OVERRIDE ACTIVE (M0_TESTNET_GRADUATION_ETH) curve.*, fees.graduationFee/callerReward (+ their ceilings), antiSniper.maxEarlyBuyWei, beta.* and governance.organicVolumeFloor are re-derived around the faucet-scale graduation target — see derivation.testnetGraduationOverride for the policy. The caller-reward gas floor is relaxed 10×→1.5× (still strictly profitable) FOR TESTNET ONLY. Derive fails closed if this env var is set in mainnet mode; the mainnet derivation path is untouched. robbed-architect re-ratifies the override policy before it is treated as anything but a lifecycle-testing device.",
+    "governance.organicVolumeFloor: M0-4 DEFAULT (Gate G-A.1) — floor = 5 × GRADUATION_ETH / 7d of OWN-INDEXER organic curve volume; NOT a headline metric. The magnitude ('what counts as not-collapsed') is a product/policy call → robbed-architect ratifies before Gate G-A; recalibrate at M2 with real organic series.",
+    "governance.clusterAlertThresholds: M0-4 DEFAULT (gate 7 amend) — per-token X=25% / platform Y=10% of curve volume over 24h; ADVISORY alert only, never gates chain state. Final tuning with robbed-security before beta.",
+    "external.weth / v3Factory / positionManager / swapRouter02 / quoterV2: TESTNET 46630 set — RATIFIED (2026-07-11), sourced from tools/m0/external.testnet.json (never inlined in source). WETH is official (docs.robinhood.com/chain/protocol-contracts); the V3 set is a Blockscout-VERIFIED community deployment, TESTNET-ONLY with the trust caveat (deployer EOA owns the factory) — FORBIDDEN on mainnet/local. Deploy script still runtime-asserts feeAmountTickSpacing(10000)==200, NPM.factory(), NPM.WETH9() (contracts.md) so a wrong address fails closed.",
+    "external.treasurySafe: UNSET (T-2) — zero address on purpose; canonical Safe v1.4.1 contracts are CONFIRMED on 46630 but the dev-signer treasury Safe is not created yet. Create it, fill external.testnet.json, re-run derive; Deploy.s.sol fails closed (TreasurySafeUnset) until then. Never invented.",
+    "Graduation threshold counts NET-of-1%-fee real reserves — resolved; restated so the deploy reviewer re-confirms."
   ]
 }

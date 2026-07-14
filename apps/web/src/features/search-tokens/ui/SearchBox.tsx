@@ -13,17 +13,17 @@ import { qk } from "@/shared/lib/query-keys";
 import { SEARCH_QUERY_MAX, SEARCH_QUERY_MIN } from "@robbed/shared";
 
 /**
- * Search over name/ticker/contract/creator (§5.1; API pg_trgm, `GET /v1/search`).
+ * Search over name/ticker/contract/creator (API pg_trgm, `GET /v1/search`).
  *
- * DECISIONS (hoodpad-frontend; basis recorded):
- * - Debounce 200ms (web.md §3.1) via a trailing timer on the input value, so we
+ * DECISIONS (robbed-frontend; basis recorded):
+ * - Debounce 200ms (web.md) via a trailing timer on the input value, so we
  *   fire one request per settled query instead of per keystroke.
  * - `placeholderData: keepPreviousData` (TanStack Query v5, verified 2026-07-10)
  *   keeps the previous result list visible while the next query resolves — no
  *   dropdown flicker between keystrokes.
  * - Enter navigates to the best match = the API's first result (server ranks;
  *   the client never re-ranks). Results are the same `TokenCard` projection as
- *   `/tokens` (api.md §3.3), so no metric is recomputed here (§2).
+ * `/tokens` (api.md), so no metric is recomputed here.
  * - `initialQ` seeds the box from the URL `?q=` (creator-click deep links,
  *   shareable); the effect re-syncs when the deep link changes.
  */

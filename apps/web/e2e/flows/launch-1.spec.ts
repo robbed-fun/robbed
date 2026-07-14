@@ -22,7 +22,7 @@ const PNG = Buffer.from(
   "base64",
 );
 
-// @flow:LAUNCH-1 — Create token, no initial buy · tx `createToken` (§5.3)
+// @flow:LAUNCH-1 — Create token, no initial buy · tx `createToken`
 // assertable-layers: on-chain · indexed · UI
 test(
   "LAUNCH-1 create token (no initial buy) → Tradeable confirmation → redirect → tradeable",
@@ -44,10 +44,10 @@ test(
       });
       // Eager upload + metadata pin complete before submit becomes enabled.
       await launch.submit(page).click();
-      // §12.56 dropped the visible "Soft-confirmed" launch label; the receipt-
+      // dropped the visible "Soft-confirmed" launch label; the receipt-
       // success confirmation node now reads "Tradeable" (`launchStepLabel` +
       // LaunchProgress). Assert the launch stepper card surfaces it (the shared
-      // ConfirmationBadge stays absent for the soft-confirmed tier, §12.56), then
+      // ConfirmationBadge stays absent for the soft-confirmed tier), then
       // the flow reaches `live` and redirects to the token.
       await expect(page.getByRole("heading", { name: "Launching" })).toBeVisible({
         timeout: 20_000,

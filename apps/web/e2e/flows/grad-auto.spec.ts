@@ -27,14 +27,14 @@ import {
   waitForKeeperGraduation,
 } from "../harness";
 
-// @flow:GRAD-AUTO — Compose keeper auto-fires graduate() on a ReadyToGraduate curve · tx `graduate()` (§8/§12.12/§12.34)
+// @flow:GRAD-AUTO — Compose keeper auto-fires graduate() on a ReadyToGraduate curve · tx `graduate()`
 // assertable-layers: on-chain · indexed · UI  (full 3-layer)
 //
 // The permissionless graduation is driven by the compose KEEPER (apps/keeper),
 // NOT the test: a threshold-crossing buy sent through the UI (mock connector, real
 // tx) LOCKS the curve in ReadyToGraduate, and the keeper — which watches the
 // on-chain `GraduationReady` event over WS (with a DB-poll fallback) — fires
-// graduate() within ~1-2 blocks and earns the §12.34 caller reward. The test never
+// graduate() within ~1-2 blocks and earns the caller reward. The test never
 // calls graduate() itself.
 //
 // The transient ReadyToGraduate *interstitial* is asserted here at the on-chain
@@ -63,7 +63,7 @@ test(
     // final threshold-crossing buy goes through the UI below and must stay under
     // MAX_EARLY_BUY (the browser's wall-clock early-window cap), so the gap it
     // closes has to be smaller than that cap. Both the gap and the crossing buy are
-    // derived LIVE from the on-chain MAX_EARLY_BUY (= 2.5% × GRADUATION_ETH, §12.32)
+    // derived LIVE from the on-chain MAX_EARLY_BUY (= 2.5% × GRADUATION_ETH)
     // so the math tracks the new flat G≈2.484-ETH target (MAX_EARLY_BUY ≈ 0.062 ETH)
     // — a previously-fixed 0.08-ETH gap is now UNcloseable by one sub-cap buy.
     const maxEarly = await readMaxEarlyBuy(token.curve);
@@ -76,7 +76,7 @@ test(
       // Buy 90% of MAX_EARLY_BUY: comfortably under the widget's wall-clock early-
       // window cap (so the submit stays enabled) yet more than the ≤ maxEarly/2
       // remaining gap, so it crosses — the curve CLAMPS the net to the exact
-      // threshold and refunds the overshoot (§12.11).
+      // threshold and refunds the overshoot.
       const cross = (maxEarly * 90n) / 100n;
 
       await sel.buyTab(page).click();
@@ -84,7 +84,7 @@ test(
       await expect(sel.submitTrade(page)).toBeEnabled({ timeout: 15_000 });
       await sel.submitTrade(page).click();
       // The optimistic row landing proves the real tx went through the mock
-      // connector (§12.56: no soft-confirmed chip — the feed row is the signal).
+      // connector (no soft-confirmed chip — the feed row is the signal).
       await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 20_000 });
     });
 
@@ -100,7 +100,7 @@ test(
       // timeout for the WS reaction + the DB-poll fallback interval.
       graduated = await waitForKeeperGraduation(token.curve, token.token, { timeoutMs: 90_000 });
 
-      // The keeper (anvil #4) is the caller and earned the §12.34 reward.
+      // The keeper (anvil #4) is the caller and earned the reward.
       expect(graduated.args.caller.toLowerCase()).toBe(KEEPER_ADDRESS.toLowerCase());
       const callerReward = await readCallerReward(token.curve);
       expect(graduated.args.callerReward).toBe(callerReward);

@@ -12,7 +12,7 @@ import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
 import {IUniswapV3Pool} from "src/interfaces/external/IUniswapV3Pool.sol";
 import {ArbBudgetExceeded} from "src/errors/Errors.sol";
 
-/// @title V3Migrator arb-back adversarial kill-tests (M1-13 follow-up; spec §6.3.2, §12.12, §12.33)
+/// @title V3Migrator arb-back adversarial kill-tests (M1-13 follow-up)
 /// @notice Closes the LOCAL half of the M1-13 residual: the arb-back mutation campaign ended at
 ///         0.585 adequacy with the per-leg budgets, the budget==0 guard, the cumulative WETH-spend
 ///         accounting, the tolerance boundaries and BOTH address orderings under-pinned by tests.
@@ -54,9 +54,9 @@ abstract contract MigratorArbBackKillBase is Test, V3Fixture {
     }
 
     // ────────────────────── exact tick-boundary sqrt prices ──────────────────────
-    // getSqrtRatioAtTick(t) for the M0 graduation targets ±174000 (TestConstants; the §12.67/§12.68
+    // getSqrtRatioAtTick(t) for the M0 graduation targets ±174000 (TestConstants; the
     // re-derivation, retargeted to a flat 5.7-ETH raise 2026-07-13, moved the target from ±182400 →
-    // ±174000) at the O-8 tolerance boundary ±100 and one tick beyond (spec §12.33: TOLERANCE_TICKS =
+    // ±174000) at the O-8 tolerance boundary ±100 and one tick beyond (: TOLERANCE_TICKS =
     // 100). Pure tick↔sqrt math — NOT market data — computed offline with the bit-exact port of
     // v3-core TickMath.getSqrtRatioAtTick in tools/m0/lib/v3tick.ts (the port reproduces
     // SQRT_PRICE_TOKEN0/1_X96 at ±174000 exactly). Each use is self-validating: the test asserts
@@ -248,7 +248,7 @@ abstract contract MigratorArbBackKillBase is Test, V3Fixture {
         vm.prank(grad);
         curve.graduate();
 
-        // Clean freeze: still permissionlessly retriable (§12.12), never a hostile mint (§6.3.2).
+        // Clean freeze: still permissionlessly retriable, never a hostile mint.
         assertEq(uint8(curve.phase()), uint8(IBondingCurve.Phase.ReadyToGraduate), "curve stranded");
     }
 
@@ -295,7 +295,7 @@ abstract contract MigratorArbBackKillBase is Test, V3Fixture {
     // 104, 107 (`if (true)` leg confusion: WETH-input swap draws the TOKEN budget ≈ 2.07e24 → the
     // price-limited swap spends ≈ 2 ETH, recovers → 'Price slippage check'); 100 in the token0 run
     // and 99 in the token1 run (`==` → `>=`/`<=` on the input-asset compare: WETH input classified
-    // as the token leg → same over-spend as 104). The retry coda pins §12.12 retriability: after a
+    // as the token leg → same over-spend as 104). The retry coda pins retriability: after a
     // third party corrects the price, the SAME curve graduates.
 
     function test_wethLeg_secondIteration_budgetExhausted_revertsExactly_thenRetriable() public {
@@ -313,7 +313,7 @@ abstract contract MigratorArbBackKillBase is Test, V3Fixture {
         curve.graduate();
         assertEq(uint8(curve.phase()), uint8(IBondingCurve.Phase.ReadyToGraduate), "curve stranded");
 
-        // §12.12 retriability: anyone can correct the pool price; the same curve then graduates.
+        // retriability: anyone can correct the pool price; the same curve then graduates.
         _setPoolPriceCorrective(g, token);
         vm.prank(grad);
         curve.graduate();
@@ -329,7 +329,7 @@ abstract contract MigratorArbBackKillBase is Test, V3Fixture {
     }
 
     // ────────────────────────────── kill-test 4 ──────────────────────────────
-    // Exact tolerance-tick boundary (O-8: TOLERANCE_TICKS = 100, spec §12.33). At EXACTLY
+    // Exact tolerance-tick boundary (O-8: TOLERANCE_TICKS = 100). At EXACTLY
     // target ± 100 the boundary is INCLUSIVE: `_withinTolerance` breaks before any swap, the final
     // check passes, and the pool tick after graduation is UNCHANGED (the arb demonstrably did not
     // run). One tick beyond, the arb MUST run — and, being price-limited, lands EXACTLY on the
@@ -451,10 +451,10 @@ contract MigratorArbBackKillToken1Test is MigratorArbBackKillBase {
 ///         curve forwards ≈ exactly the tranche) — and symmetrically zeroes the WETH budget. The
 ///         SAME recoverable token-leg grief that the live config graduates
 ///         (test_M10A_tokenLegGrief_recoverable_graduates and test_ordering_tokenLegRecoverable_*
-///         above) then freezes in `ReadyToGraduate` (§12.12 two-way lock) with EXACTLY
+/// above) then freezes in `ReadyToGraduate` (two-way lock) with EXACTLY
 ///         ArbBudgetExceeded — the M-10-A PoC, now a committed regression. Kills any future mutant
 ///         re-introducing an asymmetric (tranche-anchored) token floor, and pins that
-///         `MIGRATION_SLIPPAGE_BPS > 0` is load-bearing for graduation liveness (spec §12.33).
+/// `MIGRATION_SLIPPAGE_BPS > 0` is load-bearing for graduation liveness.
 contract MigratorM10AFloorRegressionTest is Test, V3Fixture {
     address internal treasury = makeAddr("m10aTreasury");
     address internal owner = makeAddr("m10aOwner");
@@ -499,7 +499,7 @@ contract MigratorM10AFloorRegressionTest is Test, V3Fixture {
         router.buy{value: gross}(address(token), buyer, 0, block.timestamp);
 
         // THE FREEZE: pre-fix floor ⇒ token budget ≈ dust ⇒ exact ArbBudgetExceeded, curve locked
-        // in ReadyToGraduate (both directions, §12.12) while the attacker's LP stays withdrawable.
+        // in ReadyToGraduate (both directions) while the attacker's LP stays withdrawable.
         vm.expectRevert(ArbBudgetExceeded.selector);
         vm.prank(grad);
         curve.graduate();

@@ -6,25 +6,25 @@ import { V3, WETH } from "@/shared/config/addresses";
 import type { TradeSide } from "../model/quote";
 
 /**
- * Pure builders for the post-graduation Uniswap V3 venue (§5.2 invisible venue
+ * Pure builders for the post-graduation Uniswap V3 venue (invisible venue
  * switch, M3-5). Kept side-effect-free so the routing wiring — which contract,
  * which fee tier, how the native-ETH sell leg is composed — is unit-testable
  * without a wallet (tests/v3-swap.test.ts).
  *
  * The ABIs are the SHARED, pinned Uniswap periphery artifacts (`quoterV2Abi` /
- * `swapRouter02Abi` from `@robbed/shared/abi`, §12.28) — never hand-written
+ * `swapRouter02Abi` from `@robbed/shared/abi`) — never hand-written
  * (CLAUDE.md anti-drift rule). Addresses are the PER-TARGET-CHAIN `V3` / `WETH`
- * from `shared/config/addresses` (§12.55: the testnet build resolves the §12.52
- * testnet set, mainnet the §12.28 set); no address literal is inlined here.
+ * from `shared/config/addresses` (: the testnet build resolves the
+ * testnet set, mainnet the set); no address literal is inlined here.
  *
- * DECISIONS (hoodpad-frontend; basis: Uniswap swap-router-contracts docs, verified
+ * DECISIONS (robbed-frontend; basis: Uniswap swap-router-contracts docs, verified
  * 2026-07-10):
  * - The widget is AMOUNT-IN driven ("You pay X") for both legs, so both quote and
  *   execute use the EXACT-INPUT primitives (`quoteExactInputSingle` /
  *   `exactInputSingle`). `quoteExactOutputSingle` / `exactOutputSingle` +
  *   `refundETH` are the exact-output mirror and are unused by this input-driven
  *   UX — no unspent-ETH refund can arise from an exact-input buy.
- * - Fee tier is the graduation pool's 1% tier (`10000`), per §12.28 (deploy
+ * - Fee tier is the graduation pool's 1% tier (`10000`), per (deploy
  *   asserts `feeAmountTickSpacing(10000) == 200`).
  * - Native-ETH sell: `multicall(deadline, [exactInputSingle(recipient=router-self),
  *   unwrapWETH9(minEthOut, user)])`. WETH is swept to the router (ADDRESS_THIS
@@ -32,10 +32,10 @@ import type { TradeSide } from "../model/quote";
  *   ETH to the user, so the inner swap's `amountOutMinimum` is 0.
  * - Native-ETH buy: `multicall(deadline, [exactInputSingle(recipient=user)])` with
  *   `value = ethIn`; SwapRouter02 wraps the sent ETH. The deadline is applied via
- *   the `multicall(uint256 deadline, bytes[])` overload on EVERY trade (§5.2).
+ * the `multicall(uint256 deadline, bytes[])` overload on EVERY trade.
  */
 
-/** Graduation pool fee tier — 1% (§12.28). */
+/** Graduation pool fee tier — 1%. */
 export const V3_FEE_TIER = 10000;
 
 /**
@@ -78,7 +78,7 @@ export interface V3QuoteRequest {
 /**
  * QuoterV2 exact-input request. `quoteExactInputSingle` is a REVERT-QUOTER
  * (nonpayable) — the caller MUST run it via `simulateContract` /
- * `useSimulateContract`, never `readContract` (§12.28). `data.result[0]` is
+ * `useSimulateContract`, never `readContract`. `data.result[0]` is
  * `amountOut`.
  */
 export function buildV3QuoteRequest(args: {
@@ -114,7 +114,7 @@ export interface V3SwapRequest {
 
 /**
  * SwapRouter02 exact-input execution, wrapped in `multicall(deadline, …)` so the
- * deadline is enforced on every trade (§5.2). `token` is the LaunchToken address,
+ * deadline is enforced on every trade. `token` is the LaunchToken address,
  * `account` the recipient, `minOut` the slippage floor (tokens on a buy, ETH on a
  * sell), `amountWei` the ETH-in (buy) / token-in (sell).
  */

@@ -1,15 +1,15 @@
--- API-owned tables + role split (api.md §7, spec §7). The indexer owns and
--- creates every table in indexer.md §3 EXCEPT the two the API writes:
---   * moderation_status  (indexer.md §3.11 declares the shape; written by the
+-- API-owned tables + role split (api.md). The indexer owns and
+-- creates every table in indexer.md EXCEPT the two the API writes:
+-- * moderation_status (indexer.md declares the shape; written by the
 --     API only — created here if the indexer has not, so the RW role can write)
 --   * moderation_audit_log (API-only; NOT in packages/shared db-rows — FLAGGED
---     for hoodpad-shared: if any consumer needs the audit row shape, add it to
+--     for robbed-shared: if any consumer needs the audit row shape, add it to
 --     shared; today only the API reads/writes it)
 --
 -- Run once at deploy. Idempotent. The two Postgres roles referenced by the API
 -- config (RO on indexer tables, RW on the tables below ONLY) are granted here.
 
--- ── moderation_status (offchain; indexer.md §3.11 shape) ─────────────────────
+-- ── moderation_status (offchain; indexer.md shape) ─────────────────────
 CREATE TABLE IF NOT EXISTS moderation_status (
   token_address        text PRIMARY KEY,
   visibility           text NOT NULL DEFAULT 'visible'
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS moderation_audit_log (
 );
 CREATE INDEX IF NOT EXISTS moderation_audit_log_ts_idx ON moderation_audit_log (id DESC);
 
--- ── role grants (adjust role names to deploy; §7 boundary) ───────────────────
+-- ── role grants (adjust role names to deploy; boundary) ───────────────────
 -- The RW role may write ONLY these two tables; it has SELECT on indexer tables
 -- for the queue join. The RO role is SELECT-only everywhere.
 --   GRANT SELECT ON ALL TABLES IN SCHEMA public TO robbed_api_ro;

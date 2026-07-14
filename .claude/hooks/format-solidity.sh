@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Auto-format Solidity files on write (spec §10 gate 1: fmt is CI-enforced —
-# format at write time so CI never fails on style). No-ops if forge is absent
-# or the file isn't .sol. Never blocks.
+# Auto-format Solidity files on write (security-gate 1 of the 10-gate program
+# requires forge fmt in CI — format at write time so CI never fails on style;
+# docs/developers/threat-model.md). No-ops if forge is absent or the file isn't
+# .sol. Never blocks.
 
 set -u
 input=$(cat)

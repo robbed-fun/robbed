@@ -1,5 +1,5 @@
 /**
- * Launch initial-buy preview + non-zero slippage floor (§5.3, M3-6).
+ * Launch initial-buy preview + non-zero slippage floor (M3-6).
  *
  * The optional atomic creator buy targets a NOT-YET-DEPLOYED token, so it cannot
  * be quoted on-chain (`Router.quoteBuy` reverts `UnknownToken`). Instead we PREVIEW
@@ -11,7 +11,7 @@
  * curve math (CLAUDE.md anti-drift) — we import it.
  *
  * The slippage floor reuses the curve entity's `applySlippageFloor` /
- * `DEFAULT_SLIPPAGE_BPS` (2%, §5.2) so the launch and trade paths derive
+ * `DEFAULT_SLIPPAGE_BPS` (2%) so the launch and trade paths derive
  * `minOut` identically.
  */
 import { previewBuy } from "@robbed/shared/curve-quote";
@@ -31,7 +31,7 @@ export interface InitialBuyPreview {
  * Preview the atomic initial creator buy off-chain. Returns `null` when the inputs
  * aren't usable yet (no buy amount, or the factory's seed reserves / fee haven't
  * been read) — the caller then leaves the display blank rather than inventing a
- * number (§2).
+ * number.
  * @param ethInGrossWei The creator's initial-buy ETH (gross, pre-fee), wei.
  */
 export function previewInitialBuy(args: {
@@ -57,7 +57,7 @@ export function previewInitialBuy(args: {
 
 /**
  * The non-zero `minTokensOut` for the atomic initial buy: `tokensOut · (1 −
- * slippageBps/1e4)` (§5.3). `preview` is `null` when there is no initial buy OR the
+ * slippageBps/1e4)`. `preview` is `null` when there is no initial buy OR the
  * seed reserves aren't readable yet — either way `minTokensOut` is 0 (nothing is
  * bought, or the caller can't safely floor). Because the initial buy executes
  * inside the SAME `createToken` tx on a single FCFS sequencer, there is no

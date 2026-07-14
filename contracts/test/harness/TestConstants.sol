@@ -6,18 +6,18 @@ import {V3Migrator} from "src/V3Migrator.sol";
 
 /// @title TestConstants — M0 economics fixture for unit/fuzz/invariant tests
 /// @notice TEST-ONLY. Mirrors `tools/m0/out/constants.json` (generatedAt 2026-07-13T19:57 — the
-///         §12.67/§12.68 re-derivation, retargeted 2026-07-13: MAINNET FLAT graduation target
+/// re-derivation, retargeted 2026-07-13: MAINNET FLAT graduation target
 ///         G = 5.749693 ETH net-of-fee (solver-derived + tick-aligned from a flat 5.7-ETH raise,
-///         §12.11, matching RobinFun's ~5.74 ETH / ~$44k bar; replaces the earlier flat 2.5-ETH /
+///, matching RobinFun's ~5.74 ETH / ~$44k bar; replaces the earlier flat 2.5-ETH /
 ///         G=2.484-ETH default and the retired $69k-mcap ~7.9166-ETH target), ETH/USD snapshot
 ///         $1770.30 (coingecko), $1.50 creation fee, 2.5%-of-G early cap, cost-based graduation
 ///         fee) so the gate-2 suites exercise the curve against the
 ///         SHIPPED launch economics without depending on `vm.readFile` / `fs_permissions`. Production
 ///         deploys read the JSON via `script/Deploy.s.sol` — values are NEVER inlined in `src/`
-///         (spec §2, §6.4). Kept in one place so a re-run of the M0 notebook is a single-file diff
-///         here. Still §13-pending (architect ratifies final values).
+///. Kept in one place so a re-run of the M0 notebook is a single-file diff
+/// here. Still -pending (architect ratifies final values).
 library TestConstants {
-    // ── curve economics (constants.json.curve) — G = 5.749693 ETH flat target (§12.67, retargeted) ──
+    // ── curve economics (constants.json.curve) — G = 5.749693 ETH flat target (retargeted) ──
     uint256 internal constant VIRTUAL_ETH_0 = 2_030_818_236_177_600_249;
     uint256 internal constant VIRTUAL_TOKEN_0 = 1_073_226_583_912_778_964_568_548_738;
     uint256 internal constant CURVE_SUPPLY = 793_100_000_000_000_000_000_000_000;
@@ -26,16 +26,16 @@ library TestConstants {
 
     // ── fees (constants.json.fees) ──
     uint16 internal constant TRADE_FEE_BPS = 100;
-    /// @dev Creator-fee (curve-leg) default for the BASE fixture. MAINNET now ships 50 bps (§12.68;
+    /// @dev Creator-fee (curve-leg) default for the BASE fixture. MAINNET now ships 50 bps (;
     ///      `constants.json.fees.creatorFeeBps == 50`), but the base fixture keeps 0 so the legacy
     ///      treasury-only gate-2 core-curve suites (fee-exactness, solvency, k, graduation) stay a
     ///      clean creator-agnostic regression. The Phase-2 creator-LEG suites pass a non-zero override
     ///      ({factoryInit} 4-arg form, using `CREATOR_FEE_BPS_TESTNET`). Never inlined into curve
-    ///      logic — the deploy reads `.fees.creatorFeeBps` from the constants file (spec §2/§6.4). NB:
-    ///      §12.69's post-GRADUATION 50/50 LP-fee split is INDEPENDENT of this curve-leg bps and is
+    /// logic — the deploy reads `.fees.creatorFeeBps` from the constants file. NB:
+    /// 's post-GRADUATION 50/50 LP-fee split is INDEPENDENT of this curve-leg bps and is
     ///      exercised for every graduation in the creator-aware {LPFeeVault} regardless of its value.
     uint16 internal constant CREATOR_FEE_BPS = 0;
-    /// @dev The ratified §12.68 mainnet + testnet split (treasury 100 + creator 50 = 150 ≤ 200).
+    /// @dev The ratified mainnet + testnet split (treasury 100 + creator 50 = 150 ≤ 200).
     ///      Used by the Phase-2 creator-fee test suites.
     uint16 internal constant CREATOR_FEE_BPS_TESTNET = 50;
     uint256 internal constant CREATION_FEE = 847_000_000_000_000;
@@ -81,7 +81,7 @@ library TestConstants {
         return factoryInit(treasury, owner, weth_, CREATOR_FEE_BPS);
     }
 
-    /// @notice Factory init with a WETH override AND a creator-fee-leg override (spec §12.63) — the
+    /// @notice Factory init with a WETH override AND a creator-fee-leg override — the
     ///         Phase-2 creator-fee suites pass a non-zero `creatorFeeBps_` (e.g. the testnet 50, or
     ///         the boundary 100 for the `== 200` cap edge). The additive ≤2% cap is enforced by the
     ///         factory constructor.
@@ -126,7 +126,7 @@ library TestConstants {
     /// @notice Migrator init with a `migrationSlippageBps` override — used ONLY by the M-10-A
     ///         freeze-regression suite (M1-13 kill-test 5): `slippageBps = 0` makes
     ///         `tokenArbFloor == LP_TOKEN_TRANCHE`, byte-for-byte the PRE-FIX token-leg budget rule,
-    ///         so reverting the symmetric floor demonstrably reproduces the §12.12 freeze.
+    /// so reverting the symmetric floor demonstrably reproduces the freeze.
     function migratorInit(
         address factory_,
         address v3Factory_,

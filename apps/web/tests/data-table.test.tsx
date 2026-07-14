@@ -6,7 +6,7 @@ import { DataTable, SortHeader } from "@/shared/ui";
 import type { TableSortMeta } from "@/shared/lib/table";
 
 /**
- * Common DataTable §12.59/§12.60 upgrades: the `TableLabel` titled wrapper, header
+ * Common DataTable upgrades: the `TableLabel` titled wrapper, header
  * cells that dispatch SERVER-SIDE sort (never client sort) with an asc/desc
  * affordance on the active column, and the integrated `Pagination` over an opaque
  * cursor (the pager never sees/parses it — it only fires callbacks).

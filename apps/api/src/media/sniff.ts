@@ -1,5 +1,5 @@
 /**
- * Magic-byte MIME sniff (§8.4, api.md §3.1 step 1) — NEVER trust the
+ * Magic-byte MIME sniff (api.md step 1) — NEVER trust the
  * Content-Type header. Pure and unit-tested against real + hostile fixtures.
  * Allowlist: png | jpeg | webp | gif. Anything else → null (caller 415s).
  */

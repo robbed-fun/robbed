@@ -26,7 +26,7 @@ import {
   warpTime,
 } from "../harness";
 
-// @flow:CFEE-2 — Venue-invariant 0.5% creator rate end-to-end (curve pre-grad AND V3 post-grad) · §12.68/§12.69
+// @flow:CFEE-2 — Venue-invariant 0.5% creator rate end-to-end (curve pre-grad AND V3 post-grad) ·
 // assertable-layers: on-chain · indexed   (UI waived — see waivers)
 //
 // WIDENED 2026-07-13 (creator-fee generation DEPLOYED to the fork): un-skipped and
@@ -58,11 +58,11 @@ test(
     await assertOnChain(
       "the creator's absolute rate is ~0.5% of volume BOTH pre-grad (curve leg) and post-grad (V3 split) — no discontinuity at graduation",
       async () => {
-        // The curve leg is the §12.68 50-bps creator fee.
+        // The curve leg is the 50-bps creator fee.
         expect(await readCurveCreatorFeeBps(token.curve)).toBe(EXPECTED_CREATOR_FEE_BPS);
 
         // ── PRE-GRAD (curve): buy a KNOWN gross volume; the creator escrow accrues
-        // EXACTLY 0.5% of it (fee computed in-contract, §4.1). The pre-grad leg is
+        // EXACTLY 0.5% of it (fee computed in-contract). The pre-grad leg is
         // NATIVE ETH (swept via sweepCreatorFees → CreatorVault.balanceOf). ────────
         await warpTime(antiSniperWindowSeconds() + 2); // past the anti-sniper cap
         const preVolume = parseEther("0.03") + parseEther("0.04");
@@ -76,7 +76,7 @@ test(
         // EXACT: fee = gross × 50 / 10000 (the pre-grad 0.5% rate).
         expect(preCreatorFee).toBe((preVolume * BigInt(EXPECTED_CREATOR_FEE_BPS)) / 10_000n);
 
-        // Sweep the curve leg to the CreatorVault (pull-payment landing, §12.63(a)).
+        // Sweep the curve leg to the CreatorVault (pull-payment landing).
         const vaultBefore = await readCreatorEthClaimable(creator);
         const sweepHash = await sweepCreatorFeesOnChain(token.curve, ROLES.trader);
         await publicClient.waitForTransactionReceipt({ hash: sweepHash });
@@ -102,7 +102,7 @@ test(
           (await readCreatorTokenClaimable(creator, WETH)) - creatorWethBefore;
 
         // The creator's WETH-leg credit is EXACTLY the FeesSplit creator share
-        // (§12.69 F(i)) — and that WETH-leg ≈ 1% of the buy volume, so the credit ≈
+        // (F(i)) — and that WETH-leg ≈ 1% of the buy volume, so the credit ≈
         // 0.5% of `postVolume`. Assert the venue-invariant absolute rate: the
         // post-grad creator rate lands in a tight band around the pre-grad 0.5%.
         expect(postCreatorWethCredit).toBe(collected.creatorWeth);

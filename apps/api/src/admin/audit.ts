@@ -1,5 +1,5 @@
 /**
- * Admin audit log (§6.2): every mutation records actor/action/target/reason/ts.
+ * Admin audit log : every mutation records actor/action/target/reason/ts.
  * Written to the API-owned audit table via the RW role only (never indexer
  * tables). Thin wrapper so action names stay consistent across routes.
  */

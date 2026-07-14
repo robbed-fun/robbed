@@ -29,7 +29,7 @@
   },
   "verification": {
     "status": "PENDING",
-    "verifier": "blockscout-v2 (no API key — spec §12.52)",
+    "verifier": "blockscout-v2 (no API key)",
     "guids": {
       "curveFactory": null,
       "router": null,

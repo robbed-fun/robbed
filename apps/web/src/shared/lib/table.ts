@@ -4,12 +4,12 @@ import type { SortDir } from "@robbed/shared";
 import { useCallback, useState } from "react";
 
 /**
- * Server-side sortable + keyset-paginated table primitives (§12.59) — the FE half
+ * Server-side sortable + keyset-paginated table primitives — the FE half
  * of the shared `tradeListQuerySchema` / `holderListQuerySchema` contract. PURE +
  * headless: these carry NO business knowledge (which fields, which endpoint) — the
  * widgets supply the field enum. Unit-tested in tests/table-state.test.ts.
  *
- * HARD RULE (§12.22/§12.59): sort is SERVER-SIDE only. A header click dispatches a
+ * HARD RULE : sort is SERVER-SIDE only. A header click dispatches a
  * new `?sort=&dir=` and refetches; the browser NEVER re-ranks. `nextSort` only
  * computes the NEXT (field, dir) request — it never touches row data.
  */
@@ -27,7 +27,7 @@ export interface SortState<F extends string = string> {
  *  - clicking the ACTIVE column flips its direction (desc ⇄ asc);
  *  - clicking a NEW column sorts it in `defaultDir` (desc — "biggest first").
  * Pure: derives only the next request, never re-sorts rows (that is the server's
- * job — §12.59). Proven in tests/table-state.test.ts.
+ * job —). Proven in tests/table-state.test.ts.
  */
 export function nextSort<F extends string>(
   current: SortState<F> | undefined,
@@ -60,9 +60,9 @@ export interface TableSortMeta<F extends string = string> {
 }
 
 /**
- * Opaque forward keyset-cursor page stack (§12.59). Holds the OPAQUE `nextCursor`
+ * Opaque forward keyset-cursor page stack. Holds the OPAQUE `nextCursor`
  * strings the API returns, one per visited page — it NEVER parses or constructs a
- * cursor (the API is the sole signer/decoder, §12.59 note 1). `null` is page 1
+ * cursor (the API is the sole signer/decoder, note 1). `null` is page 1
  * (no cursor). `next(c)` pushes the server's opaque `nextCursor`; `prev()` pops.
  */
 export function useCursorStack() {

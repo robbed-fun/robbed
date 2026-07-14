@@ -25,10 +25,10 @@ import {
   warpTime,
 } from "../harness";
 
-// @flow:CFEE-3 — Un-brickable post-grad: a hostile creator can't freeze collect() or trades; only its own native-ETH claim reverts (retriable) · §12.69(C)/§12.25
+// @flow:CFEE-3 — Un-brickable post-grad: a hostile creator can't freeze collect() or trades; only its own native-ETH claim reverts (retriable) ·
 // assertable-layers: on-chain   (indexed · UI PENDING Phase-2 indexer/frontend — waiver)
 //
-// PENDING PHASE-2 (@pending:phase2): authored against the ratified §12.69(C) +
+// PENDING PHASE-2 (@pending:phase2) authored against the ratified +
 // the LANDED interfaces and `test.fixme`-guarded. The creator's share is PUSHED to
 // our non-reverting CreatorVault (never to the creator EOA), so a hostile /
 // reverting creator can brick NOTHING on the critical path — `collect()` and every
@@ -100,7 +100,7 @@ test(
         const collectReceipt = await publicClient.waitForTransactionReceipt({ hash: collectHash });
         expect(collectReceipt.status).toBe("success");
         const collected = parseCollectSplit(collectReceipt.logs, token.token);
-        // The creator's post-grad share was still credited (accrue-in-contract, §12.25).
+        // The creator's post-grad share was still credited (accrue-in-contract).
         const vaultWethAfter = await readCreatorTokenClaimable(creator, WETH);
         expect(vaultWethAfter - vaultWethBefore).toBe(collected.creatorWeth);
 

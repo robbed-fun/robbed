@@ -1,16 +1,16 @@
 /**
- * Weekly hood.fun traction snapshot (indexer.md §8.5.3, spec §3/§13/§14; M2-14).
+ * Weekly hood.fun traction snapshot (indexer.md, M2-14).
  *
  * Records a SOURCE + TIMESTAMPED snapshot of hood.fun traction (tokens created/
  * day, graduation count, visible volume) into `competitor_snapshots`, feeding
- * Gate G-A.2 (spec §14). NEVER a hardcoded metric (§2 hard rule): every row
+ * Gate G-A.2. NEVER a hardcoded metric (hard rule) every row
  * carries its `source` and `captured_at`, and if no source is configured the job
  * records NOTHING — it never fabricates a number.
  *
  * hood.fun is a competitor (we don't index their contracts), so the traction
- * numbers come from an EXTERNAL source (a Dune query, §8.5.3) injected as a
+ * numbers come from an EXTERNAL source (a Dune query) injected as a
  * `CompetitorSource`. Until a Dune source is wired the job logs "unconfigured"
- * and writes no row (manual/Dune interim, §8.5.3). `visible_volume_eth` is an
+ * and writes no row (manual/Dune interim). `visible_volume_eth` is an
  * ETH-wei decimal string (avoids float precision loss on aggregated volume).
  *
  * Decide-it-yourself: WEEKLY cadence via a wall-clock `setInterval` side-process
@@ -43,15 +43,15 @@ const DECIMAL_RE = /^\d+$/;
 /**
  * Build a validated, timestamped snapshot row. Throws on a malformed volume
  * string (never silently coerces a bad metric). `capturedAt` is the ISO capture
- * instant — the row is meaningless without it (§2).
+ * instant — the row is meaningless without it.
  */
 export function buildCompetitorSnapshot(
   source: string,
   capturedAt: string,
   traction: CompetitorTraction,
 ): CompetitorSnapshotRow {
-  if (!source || source.trim() === "") throw new Error("[competitor] source is required (never a hardcoded metric, §2)");
-  if (!capturedAt) throw new Error("[competitor] capturedAt is required (source+timestamped, §2)");
+  if (!source || source.trim() === "") throw new Error("[competitor] source is required (never a hardcoded metric)");
+  if (!capturedAt) throw new Error("[competitor] capturedAt is required (source+timestamped)");
   if (!DECIMAL_RE.test(traction.visibleVolumeEthWei)) {
     throw new Error(`[competitor] visibleVolumeEthWei must be a wei decimal string, got: ${traction.visibleVolumeEthWei}`);
   }
@@ -93,7 +93,7 @@ export function createPgCompetitorStore(pool: Pool): CompetitorStore {
 
 /**
  * An unconfigured source — the default until a Dune query is wired. Fetches
- * nothing so the job never fabricates a metric (§8.5.3 "Manual/Dune until the
+ * nothing so the job never fabricates a metric ("Manual/Dune until the
  * job lands").
  */
 export function unconfiguredCompetitorSource(): CompetitorSource {
@@ -112,7 +112,7 @@ export interface CompetitorJobDeps {
   logger?: Pick<Console, "log" | "error">;
 }
 
-/** Weekly cadence (ms) — calendar-week traction snapshot (§8.5.3). */
+/** Weekly cadence (ms) — calendar-week traction snapshot. */
 export const COMPETITOR_SNAPSHOT_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface CompetitorJobHandle {
@@ -137,7 +137,7 @@ export async function runCompetitorSnapshotTick(deps: CompetitorJobDeps): Promis
   try {
     const traction = await deps.source.fetch();
     if (!traction) {
-      log.log(`[competitor] source '${deps.source.label}' unconfigured/empty — no snapshot written (never fabricates a metric, §2).`);
+      log.log(`[competitor] source '${deps.source.label}' unconfigured/empty — no snapshot written (never fabricates a metric).`);
       return null;
     }
     const row = buildCompetitorSnapshot(deps.source.label, now().toISOString(), traction);

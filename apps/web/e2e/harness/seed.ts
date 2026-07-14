@@ -93,7 +93,7 @@ export function antiSniperWindowSeconds(): number {
 }
 
 /** Graduated-pool V3 params from the M0 notebook (fee tier / tick spacing) — the
- *  post-grad venue's 1% pool. Read from the notebook, never hardcoded (§2). Used
+ * post-grad venue's 1% pool. Read from the notebook, never hardcoded. Used
  *  by the CFEE-* creator-fee flows' SwapRouter02 volume-generation leg. */
 export function forkV3(): { feeTier: number; tickSpacing: number } {
   const v3 = forkConstants().v3;
@@ -144,7 +144,7 @@ export async function pinMetadata(fields: {
   };
   if (md.error) throw new Error(`metadata pin failed: ${md.error.code}`);
 
-  // 3) SHARED re-verify (spec §12.19 normative): the fixture's own hash must
+  // 3) SHARED re-verify (normative) the fixture's own hash must
   // equal the API's, exactly as the client does before signing.
   const local = metadataHash({
     version: 1,
@@ -446,7 +446,7 @@ export async function crossGraduationThreshold(
     const remaining = target - realEth;
     // Below a quarter-target remaining, buy the gap grossed up 5% (> the 1% fee)
     // so the final buy's net comfortably reaches the threshold; the contract
-    // CLAMPS net to the exact remaining and refunds the overshoot (spec §12.11).
+    // CLAMPS net to the exact remaining and refunds the overshoot.
     const step = remaining < target / 4n ? (remaining * 105n) / 100n + 1n : target / 4n;
     const hash = await buyOnChain({ buyer, token, ethWei: step });
     await publicClient.waitForTransactionReceipt({ hash });

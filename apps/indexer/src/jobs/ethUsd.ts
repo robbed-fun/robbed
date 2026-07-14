@@ -1,25 +1,25 @@
 /**
- * ETH/USD snapshot poller (indexer.md §3.9; spec §2 hard rule, §12.48a, §12.51).
+ * ETH/USD snapshot poller (indexer.md; hard rule).
  *
  * Writes SOURCE + TIMESTAMPED rows into `eth_usd_snapshots` on a config cadence
- * (30–60s per §3.9; default 30s). Every USD figure anywhere in the product is
+ * (30–60s per; default 30s). Every USD figure anywhere in the product is
  * `eth_value × latest snapshot` — this poller is the ONLY producer, the API's
- * `/v1/eth-usd` the single reader (OI-A10). It NEVER fabricates a price (§2):
+ * `/v1/eth-usd` the single reader (OI-A10). It NEVER fabricates a price :
  * on all-source failure it records nothing, and staleness surfaces through the
  * existing gate-7 `eth_usd_snapshot_age_seconds` gauge (metricsStore derives it
- * from `MAX(fetched_at)` — writing rows here is the wiring; alert > 5m, §9.4).
+ * from `MAX(fetched_at)` — writing rows here is the wiring; alert > 5m).
  *
- * Source chain (§12.51, recorded 2026-07-11 — closes §13 OI-6):
+ * Source chain (recorded 2026-07-11 — closes OI-6):
  *   1. Chainlink ETH/USD proxy on 4663 MAINNET ONLY — proxy
  *      {@link CHAINLINK_ETH_USD_PROXY_4663} (aggregator
  *      0x6091E64eb7138EEF066a80FD3A0d7427B91f2721), source label `chainlink:4663`.
  *      MANDATORY fail-closed startup assertions: `description() == "ETH / USD"`
- *      and `decimals() == 8` (mirrors the §12.28 V3 deploy-time assertions).
+ * and `decimals() == 8` (mirrors the V3 deploy-time assertions).
  *      An assertion failure DISABLES the poller entirely (no silent HTTP
  *      masking of a misconfigured feed address — the age alert pages instead).
- *   2. HTTP fallback (`ETH_USD_SOURCE_URL`, env-inventory.md §1): DefiLlama /
+ * 2. HTTP fallback (`ETH_USD_SOURCE_URL`, env-inventory.md) DefiLlama /
  *      Coinbase. Used when (a) the chain is not 4663 (LOCAL fresh chains /
- *      TESTNET 46630 skip the Chainlink branch entirely, §12.51), (b) the
+ * TESTNET 46630 skip the Chainlink branch entirely), (b) the
  *      Chainlink branch is disabled via `CHAINLINK_ETH_USD_FEED=off`, or (c) a
  *      Chainlink answer fails the runtime staleness check.
  *
@@ -31,12 +31,12 @@
  *   automatically; a local anvil FORK of 4663 reports 4663 and the feed exists
  *   in fork state, so assertions pass and the branch genuinely works. A fresh
  *   local chain deliberately launched with id 4663 must set
- *   `CHAINLINK_ETH_USD_FEED=off` (documented in env-inventory.md §1).
+ * `CHAINLINK_ETH_USD_FEED=off` (documented in env-inventory.md).
  * - **Feed address discipline**: single hex location — the shared
  *   {@link CHAINLINK_ETH_USD_PROXY_4663} const (`@robbed/shared` constants,
  *   next to `UNISWAP_V3`; adopted by robbed-shared 2026-07-11) with env
  *   override `CHAINLINK_ETH_USD_FEED` — mirrors the config.ts
- *   `addressWithDefault` pattern used for the §12.28 V3 registry.
+ * `addressWithDefault` pattern used for the V3 registry.
  * - **Staleness window default 3600s** (`ETH_USD_CHAINLINK_STALENESS_SECONDS`):
  *   Chainlink's standard ETH/USD heartbeat is 1h; docs recommend a threshold
  *   ≥ heartbeat. A too-tight window merely shifts to the (fresh, correctly
@@ -54,7 +54,7 @@
  *
  * PURE + injectable (same shape as jobs/competitor.ts): the sidecar passes a
  * viem public client + pg store; tests pass stubs. Failures are advisory —
- * indexing is never affected (§8.4 spirit: this labels, it never gates).
+ * indexing is never affected (spirit: this labels, it never gates).
  */
 import { Pool } from "pg";
 import { createPublicClient, http } from "viem";
@@ -62,7 +62,7 @@ import type { EthUsdSnapshotRow } from "@robbed/shared";
 import { CHAINLINK_ETH_USD_PROXY_4663 } from "@robbed/shared";
 import { aggregatorV3Abi } from "@robbed/shared/abi";
 
-/** Source label for feed-sourced rows (indexer.md §3.9 / shared api-types). */
+/** Source label for feed-sourced rows (indexer.md / shared api-types). */
 export const CHAINLINK_SOURCE_LABEL = "chainlink:4663";
 
 export type AggregatorFn = "decimals" | "description" | "latestRoundData";
@@ -78,16 +78,16 @@ export interface AggregatorReader {
 }
 
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
-const CHAINLINK_DECIMALS = 8; // asserted, never assumed (§12.51)
+const CHAINLINK_DECIMALS = 8; // asserted, never assumed
 
-/** §3.9 cadence default: 30s (spec band 30–60s). */
+/** cadence default: 30s (spec band 30–60s). */
 export const ETH_USD_POLL_INTERVAL_MS = 30_000;
 /** Chainlink answer staleness window default: 1h heartbeat (see header). */
 export const ETH_USD_CHAINLINK_STALENESS_SECONDS = 3_600;
 
 export interface EthUsdEnvConfig {
   /** Feed proxy address or `"off"` — LOCAL/TESTNET disable. Env overrides are
-   *  lowercased; the default keeps the §12.51 casing of the shared const. */
+   * lowercased; the default keeps the casing of the shared const. */
   chainlinkFeed: `0x${string}` | "off";
   /** HTTP fallback URL (DefiLlama/Coinbase) — undefined ⇒ no HTTP source. */
   sourceUrl: string | undefined;
@@ -102,7 +102,7 @@ export function loadEthUsdEnv(env: Record<string, string | undefined> = process.
   if (rawFeed === "off") {
     chainlinkFeed = "off";
   } else if (rawFeed === undefined || rawFeed === "") {
-    chainlinkFeed = CHAINLINK_ETH_USD_PROXY_4663; // §12.51 recorded default for 4663
+    chainlinkFeed = CHAINLINK_ETH_USD_PROXY_4663; // recorded default for 4663
   } else {
     if (!ADDRESS_RE.test(rawFeed)) {
       throw new Error(`[eth-usd] CHAINLINK_ETH_USD_FEED must be a 20-byte address or 'off', got: ${rawFeed}`);
@@ -120,7 +120,7 @@ export function loadEthUsdEnv(env: Record<string, string | undefined> = process.
 }
 
 /**
- * §12.51 MANDATORY startup assertions, fail-closed: `description()` must be
+ * MANDATORY startup assertions, fail-closed: `description()` must be
  * exactly "ETH / USD" and `decimals()` exactly 8. Throws on any mismatch or
  * read failure (e.g. no contract at the address) — the caller must NOT start
  * the Chainlink branch (and must not mask the misconfiguration with HTTP).
@@ -134,15 +134,15 @@ export async function assertChainlinkFeed(client: AggregatorReader, feed: `0x${s
       client.readContract({ abi: aggregatorV3Abi, address: feed, functionName: "decimals" }),
     ]);
   } catch (err) {
-    throw new Error(`[eth-usd] FAIL-CLOSED (§12.51): cannot read Chainlink feed ${feed}: ${String(err)}`);
+    throw new Error(`[eth-usd] FAIL-CLOSED () cannot read Chainlink feed ${feed}: ${String(err)}`);
   }
   if (description !== "ETH / USD") {
     throw new Error(
-      `[eth-usd] FAIL-CLOSED (§12.51): feed ${feed} description() is ${JSON.stringify(description)}, expected "ETH / USD"`,
+      `[eth-usd] FAIL-CLOSED : feed ${feed} description() is ${JSON.stringify(description)}, expected "ETH / USD"`,
     );
   }
   if (Number(decimals) !== CHAINLINK_DECIMALS) {
-    throw new Error(`[eth-usd] FAIL-CLOSED (§12.51): feed ${feed} decimals() is ${String(decimals)}, expected 8`);
+    throw new Error(`[eth-usd] FAIL-CLOSED () feed ${feed} decimals() is ${String(decimals)}, expected 8`);
   }
 }
 
@@ -152,10 +152,10 @@ export interface PriceObservation {
 }
 
 /**
- * Read `latestRoundData()` and apply the §3.9 staleness check. Returns null
+ * Read `latestRoundData()` and apply the staleness check. Returns null
  * (rejecting the answer, logged by the caller) when the round's `updatedAt`
  * exceeds the staleness window, the answer is non-positive, or the round is
- * incomplete (`updatedAt == 0`). Never coerces a bad answer into a price (§2).
+ * incomplete (`updatedAt == 0`). Never coerces a bad answer into a price.
  */
 export async function readChainlinkPrice(
   client: AggregatorReader,
@@ -173,12 +173,12 @@ export async function readChainlinkPrice(
   if (answer <= 0n) return null; // nonsense answer — never a fabricated price
   const ageSeconds = Math.floor(nowMs / 1000) - Number(updatedAt);
   if (ageSeconds > stalenessSeconds) return null; // stale — caller falls back
-  // decimals() == 8 is asserted at startup (§12.51); float precision is ample
+  // decimals() == 8 is asserted at startup; float precision is ample
   // for a USD display price (numeric column, shared row type uses number).
   return { priceUsd: Number(answer) / 10 ** CHAINLINK_DECIMALS, source: CHAINLINK_SOURCE_LABEL };
 }
 
-/** Source label for an HTTP fallback URL — `defillama`/`coinbase` (the §3.9
+/** Source label for an HTTP fallback URL — `defillama`/`coinbase` (the
  *  documented chain) by host, else `http:<host>`; never an unlabeled row. */
 export function httpSourceLabel(url: string): string {
   const host = new URL(url).hostname;
@@ -188,11 +188,11 @@ export function httpSourceLabel(url: string): string {
 }
 
 /**
- * Parse the two documented fallback response shapes (env-inventory.md §1):
+ * Parse the two documented fallback response shapes (env-inventory.md):
  * DefiLlama `coins.llama.fi/prices/current/coingecko:ethereum` →
  * `{coins:{"coingecko:ethereum":{price}}}`; Coinbase `v2/prices/ETH-USD/spot`
  * → `{data:{amount:"1815.64"}}`; plus a plain `{price}` for local stubs.
- * Returns null on anything unrecognized/non-finite (never coerces, §2).
+ * Returns null on anything unrecognized/non-finite (never coerces).
  */
 export function parseHttpPrice(body: unknown): number | null {
   if (typeof body !== "object" || body === null) return null;
@@ -265,7 +265,7 @@ export interface EthUsdTickDeps {
 
 /**
  * One poll iteration: Chainlink (if enabled) → staleness check → else HTTP
- * fallback → else NOTHING (never a fabricated price, §2 — the age gauge is the
+ * fallback → else NOTHING (never a fabricated price, — the age gauge is the
  * staleness surface). Returns the written row or null.
  */
 export async function runEthUsdTick(deps: EthUsdTickDeps): Promise<EthUsdSnapshotRow | null> {
@@ -284,11 +284,11 @@ export async function runEthUsdTick(deps: EthUsdTickDeps): Promise<EthUsdSnapsho
         deps.stalenessSeconds,
       );
       if (observation === null) {
-        log.warn(`[eth-usd] chainlink answer rejected (stale/incomplete/non-positive) — trying HTTP fallback (§3.9).`);
+        log.warn(`[eth-usd] chainlink answer rejected (stale/incomplete/non-positive) — trying HTTP fallback ().`);
       }
     } catch (err) {
       observation = null;
-      log.warn(`[eth-usd] chainlink read failed — trying HTTP fallback (§3.9):`, err);
+      log.warn(`[eth-usd] chainlink read failed — trying HTTP fallback ():`, err);
     }
   }
 
@@ -302,10 +302,10 @@ export async function runEthUsdTick(deps: EthUsdTickDeps): Promise<EthUsdSnapsho
   }
 
   if (observation === null) {
-    // All sources failed: record NOTHING (§2). eth_usd_snapshot_age_seconds
+    // All sources failed: record NOTHING. eth_usd_snapshot_age_seconds
     // (gate-7 registry, metricsStore MAX(fetched_at)) surfaces the gap; alert
     // fires > 5m and USD displays go "dated", never stale-silent.
-    log.error(`[eth-usd] no price source available — no snapshot written (never fabricated, §2).`);
+    log.error(`[eth-usd] no price source available — no snapshot written (never fabricated).`);
     return null;
   }
 
@@ -320,7 +320,7 @@ export async function runEthUsdTick(deps: EthUsdTickDeps): Promise<EthUsdSnapsho
 
 export interface EthUsdPollerDeps {
   store: EthUsdStore;
-  /** RPC chain-id probe (viem `getChainId`) — the 4663-mainnet gate (§12.51). */
+  /** RPC chain-id probe (viem `getChainId`) — the 4663-mainnet gate. */
   getChainId(): Promise<number>;
   /** Aggregator reader for the configured feed (viem public client in prod). */
   chainlinkClient: AggregatorReader;
@@ -337,9 +337,9 @@ export interface EthUsdPollerHandle {
 }
 
 /**
- * Start the §3.9 poller. Chainlink branch engages ONLY when the RPC serves
- * chain 4663 AND the feed is not `off` (§12.51 — LOCAL/TESTNET skip entirely);
- * when it engages, the §12.51 assertions run first and THROW on failure
+ * Start the poller. Chainlink branch engages ONLY when the RPC serves
+ * chain 4663 AND the feed is not `off` (LOCAL/TESTNET skip entirely);
+ * when it engages, the assertions run first and THROW on failure
  * (fail-closed: the poller must not start, and the HTTP fallback must NOT
  * mask the misconfiguration — the caller lets the age alert page instead).
  */
@@ -351,16 +351,16 @@ export async function startEthUsdPoller(
 
   let chainlink: EthUsdTickDeps["chainlink"];
   if (deps.env.chainlinkFeed === "off") {
-    log.log(`[eth-usd] chainlink branch disabled via CHAINLINK_ETH_USD_FEED=off — HTTP fallback only (§12.51 LOCAL/TESTNET).`);
+    log.log(`[eth-usd] chainlink branch disabled via CHAINLINK_ETH_USD_FEED=off — HTTP fallback only (LOCAL/TESTNET).`);
   } else {
     const chainId = await deps.getChainId();
     if (chainId !== 4663) {
-      log.log(`[eth-usd] RPC chain id ${chainId} != 4663 — chainlink branch skipped, HTTP fallback only (§12.51).`);
+      log.log(`[eth-usd] RPC chain id ${chainId} != 4663 — chainlink branch skipped, HTTP fallback only ().`);
     } else {
       // 4663 mainnet + feed configured ⇒ MANDATORY fail-closed assertions.
       await assertChainlinkFeed(deps.chainlinkClient, deps.env.chainlinkFeed);
       chainlink = { client: deps.chainlinkClient, feed: deps.env.chainlinkFeed };
-      log.log(`[eth-usd] chainlink feed ${deps.env.chainlinkFeed} verified (description + decimals, §12.51).`);
+      log.log(`[eth-usd] chainlink feed ${deps.env.chainlinkFeed} verified (description + decimals).`);
     }
   }
 

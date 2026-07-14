@@ -1,6 +1,6 @@
 /**
- * Global stats (api.md §3.4). Tokens launched, graduations, 24h volume, treasury
- * fees — all COMPUTED from indexed data; USD via the §2 convention (from
+ * Global stats (api.md). Tokens launched, graduations, 24h volume, treasury
+ * fees — all COMPUTED from indexed data; USD via the convention (from
  * `eth_usd_snapshots`, never a constant).
  */
 import { Hono } from "hono";

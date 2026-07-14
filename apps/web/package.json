@@ -3,7 +3,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "ROBBED_ frontend — Next.js 16 + React 19 App Router on Bun (spec §9/§12.37): Discover, Token Detail, Launch + Trust panel. M3-2 design system + M3-3 plumbing.",
+  "description": "ROBBED_ frontend — Next.js 16 + React 19 App Router on Bun : Discover, Token Detail, Launch + Trust panel. M3-2 design system + M3-3 plumbing.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

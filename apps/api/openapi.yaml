@@ -4,47 +4,47 @@ info:
   version: 1.0.0
   description: |
     Frozen HTTP contract for `apps/api` (Hono on Bun) — transcribed from
-    `docs/developers/api.md` (Design v1.0) and `docs/spec.md` §2/§2.1/§5/§8/§12.
+    `docs/developers/api.md` (Design v1.0).
     M2 implements this document; M3 (frontend) consumes it. Response DTO shapes
     are the zod schemas in `packages/shared/src/api-types.ts` — the schemas
     below mirror them and MUST NOT drift (shared package is authoritative).
 
-    Conventions (api.md §2):
+    Conventions (api.md):
     - Envelope: `{ data, error: null }` on success, `{ data: null, error: { code, message } }` on failure.
     - All uint256 values are decimal strings.
-    - Every event-derived object carries `confirmationState` (spec §2.1): `soft_confirmed | posted_to_l1 | finalized`.
+    - Every event-derived object carries `confirmationState` : `soft_confirmed | posted_to_l1 | finalized`.
     - Every USD-derived field is `{ usd, ethUsd, asOf }` computed at request time from `eth_usd_snapshots`
-      (never a constant, spec §2); `stale: true` added when the snapshot is older than 5 minutes.
+      (never a constant); `stale: true` added when the snapshot is older than 5 minutes.
     - List endpoints use cursor pagination (`?cursor=&limit=`, limit ≤ 100, default 50).
     - Listing-gated endpoints (`/tokens` list, `/search`) exclude `visibility = 'hidden'`;
-      direct `/tokens/{address}` returns hidden tokens with the moderation flag, never 404 (spec §12.21).
-    - Rate limiting (api.md §6.3): 429 with `Retry-After`. Defaults: uploads 10/h + 3/min per IP,
+      direct `/tokens/{address}` returns hidden tokens with the moderation flag, never 404.
+    - Rate limiting (api.md) 429 with `Retry-After`. Defaults: uploads 10/h + 3/min per IP,
       metadata 20/h per IP, search 60/min per IP, reads 300/min per IP, admin 60/min per session.
-    - No API path may ever mutate or depend on mutating chain state (spec §8.4).
+    - No API path may ever mutate or depend on mutating chain state.
   license:
     name: MIT
 servers:
   - url: /
-# Default: public, no auth (api.md §6.1 — reads + upload/metadata are anonymous by design).
-# Admin operations override with the adminSession scheme (api.md §6.2).
+# Default: public, no auth (api.md — reads + upload/metadata are anonymous by design).
+# Admin operations override with the adminSession scheme (api.md).
 security: []
 tags:
   - name: launch
-    description: Launch flow — image upload + canonical metadata (spec §5.3, §8.3, §12.19)
+    description: Launch flow — image upload + canonical metadata
   - name: tokens
-    description: Read API over indexer tables (spec §5.1, §5.2)
+    description: Read API over indexer tables
   - name: portfolio
-    description: Per-address portfolio — summary + holdings/activity/created (spec §5.4)
+    description: Per-address portfolio — summary + holdings/activity/created
   - name: search
-    description: pg_trgm search over name / ticker / contract / creator (spec §5.1)
+    description: pg_trgm search over name / ticker / contract / creator
   - name: meta
-    description: Confirmations, ETH/USD, health (spec §2, §2.1)
+    description: Confirmations, ETH/USD, health
   - name: admin
-    description: Moderation admin — SIWE session auth, listing visibility only (spec §8.4)
+    description: Moderation admin — SIWE session auth, listing visibility only
   - name: internal
     description: >-
-      Internal ops dashboard — read-only, admin-SIWE-gated (D-4, spec §12.54;
-      api.md §3.7). Feeds Gate G-A.1/G-A.2 (spec §14). Advisory-only (spec §8.4/§8.5):
+      Internal ops dashboard — read-only, admin-SIWE-gated (D-4,
+      api.md). Feeds Gate G-A.1/G-A.2. Advisory-only :
       never gates chain state, listing, or any user path. Not consumed by the public frontend.
 
 paths:
@@ -52,9 +52,9 @@ paths:
     post:
       tags: [launch]
       operationId: uploadImage
-      summary: Upload a token image (API-mediated — spec §12.19; MIME sniff, ≤4MB, re-encode before R2)
+      summary: Upload a token image (API-mediated —; MIME sniff, ≤4MB, re-encode before R2)
       description: |
-        Multipart upload. Pipeline (api.md §3.1): magic-byte MIME sniff (png|jpeg|webp|gif) →
+        Multipart upload. Pipeline (api.md) magic-byte MIME sniff (png|jpeg|webp|gif) →
         decode + re-encode (strips EXIF/polyglots; canonical image is the RE-ENCODED object) →
         keccak256 of re-encoded bytes = `imageHash` → content-addressed PUT to R2
         `images/{keccak256}.webp` → async auto-moderation enqueued. Never a browser-direct presign.
@@ -69,7 +69,7 @@ paths:
                 image:
                   type: string
                   format: binary
-                  description: Image file, ≤ 4MB (spec §5.3)
+                  description: Image file, ≤ 4MB
       responses:
         "200":
           description: Re-encoded and stored
@@ -82,7 +82,7 @@ paths:
                   data: { $ref: "#/components/schemas/UploadImageResponse" }
                   error: { type: "null" }
         "400":
-          description: "`oversized` | `unsupported_type` | `decode_failed` (api.md §3.1)"
+          description: "`oversized` | `unsupported_type` | `decode_failed` (api.md)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
@@ -92,14 +92,14 @@ paths:
     post:
       tags: [launch]
       operationId: createMetadata
-      summary: Canonicalize + hash + publish metadata JSON (spec §8.3, §12.19)
+      summary: Canonicalize + hash + publish metadata JSON
       description: |
         Server builds the fixed field set + version tag, canonicalizes with the shared
         `canonicalizeMetadata` (packages/shared — the single implementation), keccak256-hashes,
         and PUTs to R2 at `metadata/{hash}.json` (content-addressed). Text moderation +
         impersonation checks run but NEVER block the response (moderation gates listing,
-        not creation — spec §8.4). The client MUST re-verify `metadataHash` with the shared
-        canonicalizer before signing the tx (normative for M3 — spec §12.19).
+        not creation —). The client MUST re-verify `metadataHash` with the shared
+        canonicalizer before signing the tx (normative for M3).
       requestBody:
         required: true
         content:
@@ -123,12 +123,12 @@ paths:
     get:
       tags: [search]
       operationId: search
-      summary: Search over name, ticker, contract address, creator address (spec §5.1)
+      summary: Search over name, ticker, contract address, creator address
       description: |
-        Single endpoint, pg_trgm (api.md §3.3). `^0x[0-9a-fA-F]{6,40}$` queries switch to
+        Single endpoint, pg_trgm (api.md). `^0x[0-9a-fA-F]{6,40}$` queries switch to
         address mode (prefix/exact on token + creator address, exact pins first); otherwise
         trigram similarity over name/ticker with ticker boost ×1.2, volume tiebreak,
-        similarity floor 0.25 (ratified defaults, spec §12.22). Hidden listings excluded.
+        similarity floor 0.25 (ratified defaults). Hidden listings excluded.
       parameters:
         - name: q
           in: query
@@ -161,11 +161,11 @@ paths:
     get:
       tags: [tokens]
       operationId: listTokens
-      summary: Token grid — sorts + filters (spec §5.1)
+      summary: Token grid — sorts + filters
       description: |
-        `trending = vol24h × e^(−age/24h)` (ratified default, spec §12.22, tunable config);
+        `trending = vol24h × e^(−age/24h)` (ratified default, tunable config);
         `progress = real_eth_reserves / graduation_eth` (pre-grad only). Hidden listings excluded;
-        `pending_review` remains listed (spec §12.21).
+        `pending_review` remains listed.
       parameters:
         - name: sort
           in: query
@@ -205,10 +205,10 @@ paths:
     get:
       tags: [tokens]
       operationId: kingOfTheHill
-      summary: Discover hero — closest to graduation, volume-weighted (spec §5.1)
+      summary: Discover hero — closest to graduation, volume-weighted
       description: |
         `ORDER BY (real_eth_reserves/graduation_eth) × ln(1+volume_eth_24h) DESC` among
-        pre-grad tokens (ratified default, spec §12.22; tunable config).
+        pre-grad tokens (ratified default, tunable config).
       responses:
         "200":
           description: The current King of the Hill (`token` null when no pre-grad tokens exist)
@@ -233,10 +233,10 @@ paths:
     get:
       tags: [tokens]
       operationId: getToken
-      summary: Token detail + Trust panel payload (spec §5.2)
+      summary: Token detail + Trust panel payload
       description: |
         Hidden tokens are returned WITH `moderation.visibility = 'hidden'`, never 404 —
-        hiding is a listing concern only (ratified, spec §12.21).
+        hiding is a listing concern only (ratified).
       parameters:
         - $ref: "#/components/parameters/TokenAddress"
       responses:
@@ -257,9 +257,9 @@ paths:
     get:
       tags: [tokens]
       operationId: listTokenTrades
-      summary: Trade feed — server-sorted + keyset-paginated (spec §5.2/§12.59; indexer.md §8.4)
+      summary: Trade feed — server-sorted + keyset-paginated (indexer.md)
       description: |
-        Server-authoritative sort + keyset pagination (§12.59) — never client sort. `sort` is a CLOSED
+        Server-authoritative sort + keyset pagination — never client sort. `sort` is a CLOSED
         allowlist mapped API-side to a fixed column (age→block_timestamp, side→is_buy, trader→trader,
         amount→eth_amount, price→price_eth; tiebreak id=`{txHash}-{logIndex}`); anything outside it (or
         a `dir` ≠ asc|desc) is 400 — no caller string reaches ORDER BY. Uniform `{ items, nextCursor }`
@@ -272,7 +272,7 @@ paths:
           schema: { type: integer, minimum: 0 }
         - name: sort
           in: query
-          description: Sort field (closed allowlist §12.59; default age). Out-of-allowlist ⇒ 400.
+          description: Sort field (closed allowlist; default age). Out-of-allowlist ⇒ 400.
           schema: { $ref: "#/components/schemas/TradeSortField" }
         - name: dir
           in: query
@@ -306,7 +306,7 @@ paths:
     get:
       tags: [tokens]
       operationId: getTradesByTx
-      summary: Optimistic-UI reconciliation lookup (api.md §3.4; web.md §4.1)
+      summary: Optimistic-UI reconciliation lookup (api.md; web.md)
       parameters:
         - name: txHash
           in: path
@@ -340,10 +340,10 @@ paths:
     get:
       tags: [tokens]
       operationId: listTokenCandles
-      summary: Venue-continuous candles for lightweight-charts (spec §5.2; §12.17 intervals)
+      summary: Venue-continuous candles for lightweight-charts (intervals)
       description: |
         Bucket-aligned range, max 5000 buckets per request. One unbroken series across
-        graduation (curve trades + V3 swaps — indexer.md §4.3). Empty buckets are absent;
+        graduation (curve trades + V3 swaps — indexer.md). Empty buckets are absent;
         the chart forward-fills (frontend concern).
       parameters:
         - $ref: "#/components/parameters/TokenAddress"
@@ -384,21 +384,21 @@ paths:
     get:
       tags: [tokens]
       operationId: listTokenHolders
-      summary: Top-holders table — server-sorted + keyset-paginated (spec §5.2/§12.58/§12.59)
+      summary: Top-holders table — server-sorted + keyset-paginated
       description: |
-        Server-authoritative sort + keyset pagination (§12.59) — never client sort. First page (default
+        Server-authoritative sort + keyset pagination — never client sort. First page (default
         limit) is the top-N holders view. `sort` is a CLOSED allowlist mapped API-side to a fixed column
         (rank/amount/percent→balance — per-token supply is fixed so all three are one physical key;
-        address→holder; label→a deterministic CASE over creator/curve/lp_pool/vault + §8.5 flags; tiebreak
+        address→holder; label→a deterministic CASE over creator/curve/lp_pool/vault + flags; tiebreak
         holder); out-of-allowlist (or `dir` ≠ asc|desc) ⇒ 400 — no caller string reaches ORDER BY. Each row
         carries `rank` = true balance-desc rank (ROW_NUMBER over the whole token), stable under any sort.
-        BREAKING (§12.59): replaces the pre-redesign `{ holders, holderCount }` with the uniform
+        BREAKING : replaces the pre-redesign `{ holders, holderCount }` with the uniform
         `{ items, nextCursor }` (paginatedHoldersResponseSchema); `holderCount` is no longer returned here.
       parameters:
         - $ref: "#/components/parameters/TokenAddress"
         - name: sort
           in: query
-          description: Sort field (closed allowlist §12.59; default rank ≡ balance). Out-of-allowlist ⇒ 400.
+          description: Sort field (closed allowlist; default rank ≡ balance). Out-of-allowlist ⇒ 400.
           schema: { $ref: "#/components/schemas/HolderSortField" }
         - name: dir
           in: query
@@ -432,7 +432,7 @@ paths:
     get:
       tags: [tokens]
       operationId: getTokenFees
-      summary: Treasury fee dashboard (spec §6.4 post-graduation revenue; indexer.md §3.5)
+      summary: Treasury fee dashboard (post-graduation revenue; indexer.md)
       description: |
         `collected` from indexed `Collect` events; `uncollected` is a live NPM `tokensOwed`
         RPC read, cached 60s (point-in-time, not indexed state).
@@ -456,10 +456,10 @@ paths:
     get:
       tags: [tokens]
       operationId: getStats
-      summary: Global stats (api.md §3.4)
+      summary: Global stats (api.md)
       responses:
         "200":
-          description: Tokens launched, graduations, 24h volume, treasury fees — all computed, USD per §2
+          description: Tokens launched, graduations, 24h volume, treasury fees — all computed, USD per
           content:
             application/json:
               schema:
@@ -474,17 +474,17 @@ paths:
     get:
       tags: [tokens]
       operationId: getCreatorClaimable
-      summary: Creator-fee claimable balance (spec §7 / §12.63)
+      summary: Creator-fee claimable balance
       description: |
         Per-creator pull-payment claim surface. `claimableEth` is the AUTHORITATIVE
         live `CreatorVault.balanceOf(creator)` (falling back to the event-derived
         accrued − claimed mirror when no RPC is configured); `totalAccruedEth` /
         `totalClaimedEth` come from the indexed `creator_claimable` roll-up. USD is
-        computed at request time (§2). Read-only — never touches chain state (§8.4).
+        computed at request time. Read-only — never touches chain state.
         Vault resolves from the creator's roll-up row, else the configured vault; a
         deployment with NO vault (v1/treasury-only) and no accrual is 404.
         NOTE: endpoint shape is a sensible default pending architect ratification
-        (§12.63 doc-lockstep).
+        (doc-lockstep).
       parameters:
         - $ref: "#/components/parameters/TokenAddress"
       responses:
@@ -506,23 +506,23 @@ paths:
     get:
       tags: [tokens]
       operationId: getCreatorTokenClaimable
-      summary: Post-graduation creator-fee split claimable, per ERC20 (spec §12.69)
+      summary: Post-graduation creator-fee split claimable, per ERC20
       description: |
         Post-graduation half of the creator leg: the graduated V3 pool's 1% fees are
         split 50/50 creator/treasury at `LPFeeVault.collect()`, the creator share
-        credited in the `CreatorVault` per `(creator, ERC20-token)` (Option B, §12.69(C))
+        credited in the `CreatorVault` per `(creator, ERC20-token)` (Option B)
         where `token` is a graduated launch token (sell-leg) or canonical WETH (buy-leg,
         aggregated across the creator's graduated tokens). Serves ONE `(creator, token)`
         pair — matching `claimERC20(creator, token)` 1:1. `claimable` is the
         AUTHORITATIVE live `CreatorVault.tokenBalanceOf(creator, token)` (falling back to
         the event-derived accrued − claimed mirror when no RPC is configured);
         `totalAccrued` / `totalClaimed` come from the indexed `creator_token_claimable`
-        roll-up. `claimableUsd` is populated ONLY for the WETH leg (ETH-priced, §2); a
+        roll-up. `claimableUsd` is populated ONLY for the WETH leg (ETH-priced); a
         launch-token leg is an unpriceable ERC20 ⇒ null. Read-only — never touches chain
-        state (§8.4). Vault resolves from the pair's roll-up row, else the configured
+        state. Vault resolves from the pair's roll-up row, else the configured
         vault; a deployment with NO vault (v1/treasury-only) and no accrual is 404.
         NOTE: endpoint shape is a sensible default pending architect ratification
-        (§12.69 doc-lockstep).
+        (doc-lockstep).
       parameters:
         - $ref: "#/components/parameters/TokenAddress"
         - name: token
@@ -545,21 +545,21 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
-  # ── Portfolio (spec §5.4 — was Phase-2; surfaced day 1 by the ROBBED_ redesign
+  # ── Portfolio (— was Phase-2; surfaced day 1 by the ROBBED_ redesign
   #    page 4. Advisory / read-only: no path mutates or depends on mutating chain
-  #    state, §8.4. An unknown address is an EMPTY portfolio, never a 404 — the
+  # state. An unknown address is an EMPTY portfolio, never a 404 — the
   #    wallet ETH balance is a live chain read independent of the indexer.) ──────
   /v1/portfolio/{address}:
     get:
       tags: [portfolio]
       operationId: getPortfolioSummary
-      summary: Per-address portfolio summary (spec §5.4 stat cells)
+      summary: Per-address portfolio summary (stat cells)
       description: |
         Aggregate roll-up: TOTAL VALUE / LOOT ALL-TIME / WALLET ETH + first-seen · trades.
         `walletEthBalance` is a live RPC `eth_getBalance` read (chain truth, exact); the
         roll-up (first-seen, trade/created counts, realized PnL) comes from the indexer's
         materialized `address_pnl`; `totalValueEth` + unrealized PnL are computed at request
-        time from live curve-quote prices. PnL is a nullable RANGE (no false precision, §5.2).
+        time from live curve-quote prices. PnL is a nullable RANGE (no false precision).
         Like other aggregate roll-ups it carries NO `confirmationState`.
       parameters:
         - $ref: "#/components/parameters/TokenAddress"
@@ -581,13 +581,13 @@ paths:
     get:
       tags: [portfolio]
       operationId: getPortfolioHoldings
-      summary: HOLDINGS tab — token · balance · price · value · PNL (spec §5.4)
+      summary: HOLDINGS tab — token · balance · price · value · PNL
       description: |
         Projects `balances ⋈ tokens` (BalanceRow IS the holding — anti-drift, db-rows.ts).
         `balance` is Transfer-truth; `priceEth`/`valueEth`/`value` are computed at read-time
         via `@robbed/shared` curve-quote (liquidation value from live reserves) and are `null`
         when the token has never traded (unpriceable — no false price). `unrealizedPnl` is a
-        nullable range (null when the holding has no cost basis, §5.2). Cursor-paginated
+        nullable range (null when the holding has no cost basis). Cursor-paginated
         (balance DESC).
       parameters:
         - $ref: "#/components/parameters/TokenAddress"
@@ -618,7 +618,7 @@ paths:
     get:
       tags: [portfolio]
       operationId: getPortfolioActivity
-      summary: ACTIVITY tab — per-address slice of the trade feed (spec §5.4)
+      summary: ACTIVITY tab — per-address slice of the trade feed
       description: |
         REUSES the shared `TradeRow` (curve + v3 unified; each row carries venue +
         `confirmationState`) — the per-address slice of the same feed as
@@ -652,11 +652,11 @@ paths:
     get:
       tags: [portfolio]
       operationId: getPortfolioCreated
-      summary: CREATED tab — tokens whose creator == address (spec §5.4, §7)
+      summary: CREATED tab — tokens whose creator == address
       description: |
         REUSES the `TokenCard` projection (same card as `/v1/tokens`), filtered to tokens
-        whose on-chain `creator` == the address (§7 — creator tracked from day 1). Listing-
-        gated like `/tokens` (hidden creations excluded, §8.4). Cursor-paginated (newest first).
+        whose on-chain `creator` == the address (creator tracked from day 1). Listing-
+        gated like `/tokens` (hidden creations excluded). Cursor-paginated (newest first).
       parameters:
         - $ref: "#/components/parameters/TokenAddress"
         - $ref: "#/components/parameters/Cursor"
@@ -686,7 +686,7 @@ paths:
     get:
       tags: [meta]
       operationId: getConfirmations
-      summary: Confirmation watermarks (spec §2.1; SSR initial state)
+      summary: Confirmation watermarks (SSR initial state)
       responses:
         "200":
           description: Current safe/finalized/latest L2 blocks
@@ -704,7 +704,7 @@ paths:
     get:
       tags: [meta]
       operationId: getEthUsd
-      summary: ETH/USD snapshot with source + asOf (spec §2 — never a constant)
+      summary: ETH/USD snapshot with source + asOf (never a constant)
       responses:
         "200":
           description: Latest snapshot from eth_usd_snapshots (indexer poller writes, API reads)
@@ -729,10 +729,10 @@ paths:
         where `version` hashes the display fields so a stats change regenerates).
         This is the SINGLE OG renderer — the web sets `<meta og:image>` to this URL
         (OG generation was moved off the Cloudflare Worker to drop the `@vercel/og`
-        WASM bundle). All metrics are live indexer values (spec §2); USD carries its
+        WASM bundle). All metrics are live indexer values; USD carries its
         `asOf`. The extensionless form `/v1/og/{address}` is also accepted. Cache
         hits serve stored bytes; the content `version` is returned as the `ETag`, so
-        a matching `If-None-Match` short-circuits to 304. Not chain-mutating (§8.4).
+        a matching `If-None-Match` short-circuits to 304. Not chain-mutating.
       parameters:
         - name: address
           in: path
@@ -789,7 +789,7 @@ paths:
       description: >-
         200 carries the structured per-dependency `checks` breakdown; the 503 is
         the STANDARD ErrorEnvelope with the closed-enum code `upstream_unavailable`
-        and the failing dependency names in `message` (NORMATIVE — api.md §3.5,
+        and the failing dependency names in `message` (NORMATIVE — api.md,
         2026-07-12 W3/M2-2 reconcile; supersedes the 2026-07-10 data-carrying-503
         annotation, which contradicted the shared enum's own `upstream_unavailable
         = readyz-503` disposition). Orchestration gates on the HTTP status alone.
@@ -812,7 +812,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminNonce
-      summary: Issue a single-use SIWE nonce (spec §8.4; api.md §6.2)
+      summary: Issue a single-use SIWE nonce (api.md)
       description: >-
         Mints the session that the `adminSession` scheme references. Public (no
         session exists yet). Returns a single-use nonce stored in Redis (10-min
@@ -837,14 +837,14 @@ paths:
     post:
       tags: [admin]
       operationId: adminLogin
-      summary: SIWE (EIP-4361) login → session cookie (spec §8.4; api.md §6.2)
+      summary: SIWE (EIP-4361) login → session cookie (api.md)
       description: >-
         Verifies the signed SIWE message against the config admin allowlist and
         burns the single-use nonce (replay-proof). On success sets the HttpOnly,
         SameSite=strict `adminSession` cookie (12h) via Set-Cookie and returns the
         `csrfToken` the client must send as `X-CSRF-Token` on every admin
         mutation. EOA (ECDSA) signatures only in v1 — EIP-1271 smart-account login
-        is flagged to hoodpad-architect. Public (mints the session).
+        is flagged to robbed-architect. Public (mints the session).
       security: []
       requestBody:
         required: true
@@ -874,7 +874,7 @@ paths:
     post:
       tags: [admin]
       operationId: adminLogout
-      summary: Clear the admin session cookie (api.md §6.2)
+      summary: Clear the admin session cookie (api.md)
       description: Clears the `adminSession` cookie via Set-Cookie. Idempotent; no session required.
       security: []
       responses:
@@ -901,7 +901,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminModerationQueue
-      summary: Moderation review queue (spec §8.4)
+      summary: Moderation review queue
       security:
         - adminSession: []
       parameters:
@@ -937,7 +937,7 @@ paths:
     post:
       tags: [admin]
       operationId: adminSetVisibility
-      summary: Set listing visibility ONLY (spec §8.4 — "admin can hide listings only")
+      summary: Set listing visibility ONLY ("admin can hide listings only")
       description: |
         There is deliberately no endpoint that can pause, block, or otherwise touch chain
         state; sells/buys are untouchable from here. Every action audit-logged.
@@ -970,7 +970,7 @@ paths:
     post:
       tags: [admin]
       operationId: adminSetImpersonation
-      summary: Set/clear impersonation flag (spec §8.4)
+      summary: Set/clear impersonation flag
       security:
         - adminSession: []
       parameters:
@@ -1000,7 +1000,7 @@ paths:
     post:
       tags: [admin]
       operationId: adminReverifyMetadata
-      summary: Nudge the indexer metadata verifier (indexer.md §6.2)
+      summary: Nudge the indexer metadata verifier (indexer.md)
       description: Sets the verification row pending; the indexer poller picks it up.
       security:
         - adminSession: []
@@ -1030,7 +1030,7 @@ paths:
     get:
       tags: [admin]
       operationId: adminAuditLog
-      summary: Admin action audit log (api.md §6.2 — actor, action, target, reason, ts)
+      summary: Admin action audit log (api.md — actor, action, target, reason, ts)
       security:
         - adminSession: []
       parameters:
@@ -1063,12 +1063,12 @@ paths:
       operationId: internalFlow
       summary: Per-token flow quality — organic %, cluster stats, bot-flag counts (M2-13; Gate G-A.1)
       description: >-
-        D-4 (spec §12.54) / api.md §3.7. Read-only §8.5 telemetry over the
+        D-4 / api.md. Read-only telemetry over the
         indexer's `token_flow_stats` + `address_flags` side tables. `organic` is
         EXACTLY the shared organicFlowSchema object the public Trust panel gets
         (same projection) — the holder estimate is a RANGE, never a point value
-        (spec §5.2). Advisory only — never gates chain state or listing
-        (spec §8.4/§8.5). Admin-SIWE-gated; not consumed by the public frontend.
+        . Advisory only — never gates chain state or listing
+        . Admin-SIWE-gated; not consumed by the public frontend.
       security:
         - adminSession: []
       parameters:
@@ -1094,7 +1094,7 @@ paths:
                       flagged:
                         type: object
                         required: [holders, clusters, byFlag]
-                        description: §8.5 advisory summary over the token's current holders
+                        description: advisory summary over the token's current holders
                         properties:
                           holders:
                             type: integer
@@ -1126,11 +1126,11 @@ paths:
       operationId: internalCompetitorSnapshots
       summary: Competitor traction snapshots, paged newest-first (M2-14; Gate G-A.2)
       description: >-
-        D-4 (spec §12.54) / api.md §3.7. Reads the indexer's
-        `competitor_snapshots` table (spec §8.5.3 weekly hood.fun traction).
+        D-4 / api.md. Reads the indexer's
+        `competitor_snapshots` table (weekly hood.fun traction).
         Rows are the shared CompetitorSnapshotRow VERBATIM — `source` +
         `captured_at` are NOT NULL by table constraint and ALWAYS present
-        (spec §2: never a hardcoded/fabricated metric). While the snapshot
+        (never a hardcoded/fabricated metric). While the snapshot
         source is unconfigured the table is empty and this returns an empty
         page. Admin-SIWE-gated; read-only.
       security:
@@ -1169,14 +1169,14 @@ components:
       description: |
         SIWE (EIP-4361) against a config address allowlist → short-lived signed session
         cookie (HttpOnly, SameSite=strict, 12h). Mutations additionally require the
-        `X-CSRF-Token` header (api.md §6.2). Cookie name is implementation-defined.
+        `X-CSRF-Token` header (api.md). Cookie name is implementation-defined.
 
   parameters:
     Cursor:
       name: cursor
       in: query
       schema: { type: string }
-      description: Opaque cursor from a previous response (api.md §2)
+      description: Opaque cursor from a previous response (api.md)
     Limit:
       name: limit
       in: query
@@ -1196,7 +1196,7 @@ components:
       in: header
       required: true
       schema: { type: string }
-      description: CSRF token bound to the admin session (api.md §6.2)
+      description: CSRF token bound to the admin session (api.md)
 
   responses:
     BadRequest:
@@ -1210,12 +1210,12 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }
     Unauthorized:
-      description: Missing/invalid admin session (SIWE, api.md §6.2)
+      description: Missing/invalid admin session (SIWE, api.md)
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }
     RateLimited:
-      description: Rate limit exceeded (api.md §6.3)
+      description: Rate limit exceeded (api.md)
       headers:
         Retry-After:
           description: Seconds until the sliding window admits the client again
@@ -1237,7 +1237,7 @@ components:
     DecimalString:
       type: string
       pattern: "^[0-9]+$"
-      description: uint256 as decimal string (api.md §2 — exceeds JS safe integer)
+      description: uint256 as decimal string (api.md — exceeds JS safe integer)
     NextCursor:
       oneOf:
         - type: string
@@ -1246,11 +1246,11 @@ components:
     ConfirmationState:
       type: string
       enum: [soft_confirmed, posted_to_l1, finalized]
-      description: Spec §2.1 — soft-confirmed → posted-to-L1 → finalized (monotonic)
+      description: — soft-confirmed → posted-to-L1 → finalized (monotonic)
     CandleInterval:
       type: string
       enum: ["1s", "15s", "1m", "5m", "15m", "1h"]
-      description: Ratified interval set (spec §12.17)
+      description: Ratified interval set
     Venue:
       type: string
       enum: [curve, v3]
@@ -1260,26 +1260,26 @@ components:
     TokenStatus:
       type: string
       enum: [curve, graduating, graduated]
-      description: Derived (indexer.md §3.2) — drives the venue pill / trade-widget engine
+      description: Derived (indexer.md) — drives the venue pill / trade-widget engine
     MetadataVerificationStatus:
       type: string
       enum: [match, mismatch, unfetched]
     SortDir:
       type: string
       enum: [asc, desc]
-      description: Sort direction (spec §12.59; mirrors packages/shared sortDirSchema)
+      description: Sort direction (mirrors packages/shared sortDirSchema)
     TradeSortField:
       type: string
       enum: [age, side, trader, amount, price]
       description: >-
-        Closed trades-sort allowlist (§12.59; packages/shared TRADE_SORT_FIELDS). Mapped API-side to a
+        Closed trades-sort allowlist (packages/shared TRADE_SORT_FIELDS). Mapped API-side to a
         fixed column (age→block_timestamp, side→is_buy, trader→trader, amount→eth_amount, price→price_eth);
         a value outside this enum is 400 — the ORDER BY security boundary.
     HolderSortField:
       type: string
       enum: [rank, address, label, amount, percent]
       description: >-
-        Closed holders-sort allowlist (§12.59; packages/shared HOLDER_SORT_FIELDS). Mapped API-side to a
+        Closed holders-sort allowlist (packages/shared HOLDER_SORT_FIELDS). Mapped API-side to a
         fixed column (rank/amount/percent→balance, address→holder, label→role/flag CASE); a value outside
         this enum is 400 — the ORDER BY security boundary.
 
@@ -1315,8 +1315,8 @@ components:
         stale:
           type: boolean
           const: true
-          description: Present iff the ETH/USD snapshot is older than 5 minutes (api.md §2)
-      description: Computed at request time from eth_usd_snapshots — never a constant (spec §2)
+          description: Present iff the ETH/USD snapshot is older than 5 minutes (api.md)
+      description: Computed at request time from eth_usd_snapshots — never a constant
 
     ModerationInfo:
       type: object
@@ -1326,7 +1326,7 @@ components:
         impersonationFlag: { type: boolean }
         impersonationTicker:
           type: string
-          description: Present on TokenDetail when impersonation-flagged (api.md §3.4)
+          description: Present on TokenDetail when impersonation-flagged (api.md)
 
     # ── Core DTOs (mirror packages/shared/src/api-types.ts) ─────────────────
     TokenCard:
@@ -1341,7 +1341,7 @@ components:
         ticker: { type: string }
         imageUrl:
           oneOf: [{ type: string }, { type: "null" }]
-          description: Null until metadata JSON fetched (indexer.md §3.1)
+          description: Null until metadata JSON fetched (indexer.md)
         creator: { $ref: "#/components/schemas/Address" }
         createdAt: { type: integer, description: "block timestamp, unix seconds" }
         priceEth:
@@ -1351,8 +1351,8 @@ components:
         mcapEth:
           allOf: [{ $ref: "#/components/schemas/DecimalString" }]
           description: >-
-            Native ETH market cap, wei decimal string (spec §2 ETH-first; mcapEth refinement ratified 2026-07-10).
-            ETH-first display source (§2) — USD mcap derives from it. Optional /
+            Native ETH market cap, wei decimal string (ETH-first; mcapEth refinement ratified 2026-07-10).
+            ETH-first display source — USD mcap derives from it. Optional /
             additive: absent until the indexer materializes it; not in `required`.
         progressPct: { type: number, description: real_eth_reserves / graduation_eth }
         change24hPct:
@@ -1366,7 +1366,7 @@ components:
     TrustPanel:
       type: object
       required: [metadataVerification, lpCopy, feePolicy, organic]
-      description: Trust panel payload (spec §5.2) — all derived, none hardcoded
+      description: Trust panel payload — all derived, none hardcoded
       properties:
         metadataVerification:
           type: object
@@ -1379,7 +1379,7 @@ components:
         lpCopy:
           type: string
           const: "LP principal permanently locked; trading fees claimable by treasury."
-          description: The exact canonical sentence (spec §12.14; CLAUDE.md hard rule) — from packages/shared constants
+          description: The exact canonical sentence (CLAUDE.md hard rule) — from packages/shared constants
         feePolicy:
           type: object
           required: [tradeFeeBps, creatorFeeBps]
@@ -1388,10 +1388,10 @@ components:
             creatorFeeBps:
               type: integer
               minimum: 0
-              description: Present from day 1, value 0 in v1 (spec §7)
+              description: Present from day 1, value 0 in v1
         organic:
           description: >-
-            v1.2 organic-flow metrics (spec §5.2/§8.5) from indexer
+            v1.2 organic-flow metrics from indexer
             token_flow_stats — advisory/heuristic, never gates chain state.
             null until the stats job first computes.
           oneOf:
@@ -1402,23 +1402,23 @@ components:
       type: object
       required: [holderPctLow, holderPctHigh, volumePct, flaggedClusterVolPct24h, methodology, updatedAt]
       description: >-
-        Shared organicFlowSchema (packages/shared api-types.ts) — the §5.2/§8.5
+        Shared organicFlowSchema (packages/shared api-types.ts) — the
         organic-flow object served both on the public Trust panel
         (TrustPanel.organic) and the internal /internal/flow/{address} endpoint.
-        Organic-holder estimate is a RANGE, never a point value (spec §5.2).
-        Advisory/heuristic — never gates chain state (spec §8.4/§8.5).
+        Organic-holder estimate is a RANGE, never a point value.
+        Advisory/heuristic — never gates chain state.
       properties:
         holderPctLow: { type: number }
         holderPctHigh: { type: number }
         volumePct:
           type: number
-          description: "organic-volume % (wash-flagged volume excluded, §8.5)"
+          description: "organic-volume % (wash-flagged volume excluded)"
         flaggedClusterVolPct24h:
           type: number
           description: "flagged-cluster share of 24h curve volume"
         methodology:
           type: string
-          description: "tooltip source, e.g. heuristic — see §8.5"
+          description: "tooltip source, e.g. heuristic — see "
         updatedAt:
           oneOf: [{ type: string, format: date-time }, { type: "null" }]
 
@@ -1427,9 +1427,9 @@ components:
       required: [source, captured_at, tokens_per_day, graduations, visible_volume_eth]
       description: >-
         Shared CompetitorSnapshotRow VERBATIM (packages/shared db-rows.ts;
-        indexer.md §8.5.3) — snake_case row-as-wire, deliberate for the internal
-        surface (api.md §3.7). Every row carries its source + capture timestamp
-        (spec §2 — never a hardcoded metric).
+        indexer.md) — snake_case row-as-wire, deliberate for the internal
+        surface (api.md). Every row carries its source + capture timestamp
+        (never a hardcoded metric).
       properties:
         source:
           type: string
@@ -1475,7 +1475,7 @@ components:
             reserves:
               type: object
               required: [virtualEth, virtualToken, realEth, realToken]
-              description: Live curve state (Trust panel, spec §5.2)
+              description: Live curve state (Trust panel)
               properties:
                 virtualEth: { $ref: "#/components/schemas/DecimalString" }
                 virtualToken: { $ref: "#/components/schemas/DecimalString" }
@@ -1498,25 +1498,25 @@ components:
             holderCount:
               type: integer
               minimum: 0
-              description: Distinct holder count (tokens.holder_count, indexer.md §3.6) — the TokenHeader "Holders" stat (§5.2). Additive/optional (2026-07-12); restores the aggregate the /holders {items,nextCursor} migration dropped.
+              description: Distinct holder count (tokens.holder_count, indexer.md) — the TokenHeader "Holders" stat. Additive/optional (2026-07-12); restores the aggregate the /holders {items,nextCursor} migration dropped.
 
     TradeRow:
       type: object
       required:
         [id, token, trader, venue, isBuy, ethAmount, tokenAmount, feeEth,
          priceEth, blockNumber, blockTimestamp, txHash, logIndex, confirmationState]
-      description: Unified curve Trade + V3 Swap projection (indexer.md §3.2)
+      description: Unified curve Trade + V3 Swap projection (indexer.md)
       properties:
         id: { type: string, description: "`{txHash}-{logIndex}`" }
         token: { $ref: "#/components/schemas/Address" }
         trader:
           allOf: [{ $ref: "#/components/schemas/Address" }]
-          description: For venue=v3 this is the swap recipient, not necessarily the EOA (spec §12.16)
+          description: For venue=v3 this is the swap recipient, not necessarily the EOA
         venue: { $ref: "#/components/schemas/Venue" }
         isBuy: { type: boolean }
         ethAmount:
           allOf: [{ $ref: "#/components/schemas/DecimalString" }]
-          description: GROSS ETH leg for curve trades (fee included; net = ethAmount − feeEth, spec §12.15)
+          description: GROSS ETH leg for curve trades (fee included; net = ethAmount − feeEth)
         tokenAmount: { $ref: "#/components/schemas/DecimalString" }
         feeEth:
           allOf: [{ $ref: "#/components/schemas/DecimalString" }]
@@ -1563,21 +1563,21 @@ components:
             enum: [creator, curve, lp_pool, vault]
         botFlags:
           type: array
-          description: v1.2 advisory §8.5 labels (indexer address_flags); absent when no bot flag
+          description: v1.2 advisory labels (indexer address_flags); absent when no bot flag
           items:
             type: string
             enum: [farm, sniper, programmatic, wash, arb_exit]
         clusterId:
           type: string
-          description: Shared gas-funder cluster id → grouped on the holder list (spec §5.2)
+          description: Shared gas-funder cluster id → grouped on the holder list
 
-    # ── Portfolio DTOs (spec §5.4; mirror packages/shared api-types.ts) ──────
+    # ── Portfolio DTOs (mirror packages/shared api-types.ts) ──────
     EthPnlRange:
       type: object
       required: [low, high, confidence]
       description: >-
         Best-effort signed ETH-value range (wei) for PnL where the cost basis is
-        imprecise (§5.2 — no false precision). `low`/`high` are SIGNED decimal
+        imprecise (no false precision). `low`/`high` are SIGNED decimal
         strings (may be negative); `low ≤ high` (compared as bigint). A precisely-
         known value sets `low === high` with `confidence: exact`. The whole field
         is nullable at each DTO site (null when NO cost basis exists at all).
@@ -1610,7 +1610,7 @@ components:
         HOLDINGS row — `balances ⋈ tokens` (BalanceRow IS the holding). `balance`
         is Transfer-truth; `priceEth`/`valueEth`/`value` are computed READ-TIME via
         curve-quote and null when the token has never traded; `unrealizedPnl` is
-        null when there is no cost basis (§5.2).
+        null when there is no cost basis.
       properties:
         token: { $ref: "#/components/schemas/TokenRef" }
         balance: { $ref: "#/components/schemas/DecimalString" }
@@ -1622,7 +1622,7 @@ components:
           description: Liquidation value, wei; null when unpriceable
         value:
           oneOf: [{ $ref: "#/components/schemas/UsdValue" }, { type: "null" }]
-          description: USD mirror of valueEth (derived, §2); null when unpriceable
+          description: USD mirror of valueEth (derived); null when unpriceable
         unrealizedPnl:
           oneOf: [{ $ref: "#/components/schemas/EthPnlRange" }, { type: "null" }]
     PortfolioSummary:
@@ -1651,13 +1651,13 @@ components:
         totalValue: { $ref: "#/components/schemas/UsdValue" }
         pnlAllTime:
           oneOf: [{ $ref: "#/components/schemas/EthPnlRange" }, { type: "null" }]
-          description: All-time PnL ("LOOT") = realized + unrealized; null when no cost basis (§5.2)
+          description: All-time PnL ("LOOT") = realized + unrealized; null when no cost basis
 
     CreatorClaimable:
       type: object
       required: [creator, vault, claimableEth, claimable, totalAccruedEth, totalClaimedEth, asOf]
       description: >-
-        Creator-fee claim surface (spec §7 / §12.63; mirrors packages/shared
+        Creator-fee claim surface (; mirrors packages/shared
         creatorClaimableSchema). `claimableEth` = live CreatorVault.balanceOf
         (authoritative), else accrued − claimed mirror. Aggregate roll-up ⇒ no
         confirmationState.
@@ -1683,7 +1683,7 @@ components:
       required: [creator, token, vault, claimable, claimableUsd, totalAccrued, totalClaimed, asOf]
       description: >-
         Post-graduation 50/50 split claim surface, per `(creator, ERC20-token)` (spec
-        §12.69; mirrors packages/shared creatorTokenClaimableSchema). `claimable` = live
+        ; mirrors packages/shared creatorTokenClaimableSchema). `claimable` = live
         CreatorVault.tokenBalanceOf(creator, token) (authoritative), else accrued −
         claimed mirror. `token` is a graduated launch token or canonical WETH. Aggregate
         roll-up ⇒ no confirmationState.
@@ -1700,7 +1700,7 @@ components:
           description: Live tokenBalanceOf(creator, token), wei of token — the authoritative claimable
         claimableUsd:
           oneOf: [{ $ref: "#/components/schemas/UsdValue" }, { type: "null" }]
-          description: USD mirror — populated only when token is WETH (§2); null for launch-token legs
+          description: USD mirror — populated only when token is WETH; null for launch-token legs
         totalAccrued:
           allOf: [{ $ref: "#/components/schemas/DecimalString" }]
           description: Lifetime accrued (Σ CreatorTokenDeposited.amount for this pair), wei
@@ -1767,7 +1767,7 @@ components:
       required: [price, source, asOf]
       properties:
         price: { type: number }
-        source: { type: string, description: "e.g. 'chainlink:4663', 'defillama' — config-driven (spec §13)" }
+        source: { type: string, description: "e.g. 'chainlink:4663', 'defillama' — config-driven " }
         asOf: { type: string, format: date-time }
 
     ReadyzResponse:
@@ -1775,7 +1775,7 @@ components:
       required: [data, error]
       description: >-
         Readiness envelope for the 200 arm of /v1/readyz (`ok: true`, all checks
-        passing). The 503 arm is the standard ErrorEnvelope (api.md §3.5
+        passing). The 503 arm is the standard ErrorEnvelope (api.md
         normative, 2026-07-12) — not this shape.
       properties:
         data:
@@ -1800,7 +1800,7 @@ components:
         imageUrl: { type: string }
         imageHash:
           allOf: [{ $ref: "#/components/schemas/Hex32" }]
-          description: keccak256 of the RE-ENCODED bytes — goes into metadata JSON (spec §8.3)
+          description: keccak256 of the RE-ENCODED bytes — goes into metadata JSON
         width: { type: integer, minimum: 1 }
         height: { type: integer, minimum: 1 }
         bytes: { type: integer, minimum: 1 }
@@ -1809,7 +1809,7 @@ components:
       type: object
       required: [name, ticker, imageUrl, imageHash]
       description: >-
-        name/ticker limits are UTF-8 BYTE limits (spec §12.30) matching the
+        name/ticker limits are UTF-8 BYTE limits matching the
         on-chain gate bytes(x).length — name ≤ 32 bytes, ticker ≤ 10 bytes —
         server-enforced by packages/shared byteBoundedString. JSON-Schema
         maxLength counts Unicode code points, so it CANNOT express a byte bound
@@ -1820,12 +1820,12 @@ components:
           type: string
           minLength: 1
           maxLength: 32
-          description: ≤ 32 UTF-8 BYTES (authoritative), server-enforced (§12.30)
+          description: ≤ 32 UTF-8 BYTES (authoritative), server-enforced
         ticker:
           type: string
           minLength: 1
           maxLength: 10
-          description: ≤ 10 UTF-8 BYTES (authoritative), server-enforced (§12.30)
+          description: ≤ 10 UTF-8 BYTES (authoritative), server-enforced
         description: { type: string, maxLength: 500 }
         links:
           type: object
@@ -1844,7 +1844,7 @@ components:
       properties:
         metadataHash:
           allOf: [{ $ref: "#/components/schemas/Hex32" }]
-          description: keccak256 of the canonical bytes — the client MUST re-verify with the shared canonicalizer before signing (spec §12.19)
+          description: keccak256 of the canonical bytes — the client MUST re-verify with the shared canonicalizer before signing
         metadataUri: { type: string, description: "R2 URL metadata/{hash}.json (content-addressed)" }
         canonicalJson: { type: string, description: the exact canonical JSON text that was hashed and stored }
 
@@ -1856,7 +1856,7 @@ components:
         visibility:
           type: string
           enum: [visible, hidden]
-          description: Listing visibility ONLY — no chain-state capability exists (spec §8.4)
+          description: Listing visibility ONLY — no chain-state capability exists
         reason: { type: string, minLength: 1 }
 
     AdminImpersonationRequest:

@@ -31,7 +31,7 @@ export interface FeedRow {
 }
 
 /**
- * Merge the user's optimistic trades with the indexed WS/REST feed (§5.2/§4).
+ * Merge the user's optimistic trades with the indexed WS/REST feed.
  *
  * De-dup rule: an indexed row whose `txHash` matches an optimistic row is DROPPED
  * from the indexed list — the optimistic row already carries the reconciled

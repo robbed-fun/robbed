@@ -1,5 +1,5 @@
 /**
- * Venue-continuous candles for lightweight-charts (§5.2, api.md §3.4). One
+ * Venue-continuous candles for lightweight-charts (api.md). One
  * unbroken series across graduation (curve trades + V3 swaps — the indexer's
  * unified `trades` table makes this structural). Bucket-aligned range, max 5000
  * buckets/request. Candles are already stored; the API only validates + maps.

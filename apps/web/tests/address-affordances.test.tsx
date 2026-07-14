@@ -9,7 +9,7 @@ import { explorer } from "@/shared/lib/chain";
  * Address affordances:
  *  - TokenAddressLink builds its href from the CHAIN CONFIG explorer builder
  *    (`shared/lib/chain`) — never a hardcoded testnet/mainnet host — so the same
- *    component is correct on 4663 and 46630 (spec §2 chain-facts).
+ * component is correct on 4663 and 46630 (chain-facts).
  *  - CopyAddressButton copies to the clipboard and confirms accessibly.
  */
 

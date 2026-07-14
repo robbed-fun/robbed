@@ -14,13 +14,13 @@ import {
   test,
 } from "../harness";
 
-// @flow:ERR-8 — Launch blocked while creates paused (§6.5)
+// @flow:ERR-8 — Launch blocked while creates paused
 // assertable-layers: on-chain · UI   (N/A indexed: no createToken sent → no record — waiver)
 //
 // UI-mechanism note (2026-07-13): the submit is no longer HARD-disabled while
 // paused. The Create button now stays clickable for every block reason and
 // EXPLAINS why it won't launch (persistent helper + error toast) — a bare
-// `disabled` hid the reason from users. The §6.5 guarantee is unchanged: a paused
+// `disabled` hid the reason from users. The guarantee is unchanged: a paused
 // factory can never broadcast `createToken`, so the launch flow never starts.
 test(
   "ERR-8 pauseCreates blocks the launch (reason surfaced, no createToken tx); sells elsewhere unaffected",
@@ -43,7 +43,7 @@ test(
       await page.goto(routes.create);
       await connectAs(page, "creator");
 
-      // The paused state is disclosed on the form (§6.5).
+      // The paused state is disclosed on the form.
       await expect(page.getByText(copy.createsPaused).first()).toBeVisible();
 
       // The submit carries the accessible blocked state: `aria-disabled="true"`

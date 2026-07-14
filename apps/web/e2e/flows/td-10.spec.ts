@@ -14,7 +14,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:TD-10 — Top Holders table: rank · address · label · amount · % (§12.58/§12.59)
+// @flow:TD-10 — Top Holders table: rank · address · label · amount · %
 // AMENDED 2026-07-12: the holder list is promoted into the right-column Top
 // Holders table (common DataTable) that REPLACES the deleted Trust panel, with
 // SERVER-SIDE sort + keyset pagination. Layers unchanged.

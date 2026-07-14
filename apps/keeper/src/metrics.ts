@@ -1,7 +1,7 @@
 /**
  * In-memory keeper metrics (pure — no I/O). Surfaced in the /healthz body and
  * logged; a persistent-revert increment is the donation-brick early-warning
- * (spec §10 gate 7 monitoring, deploy.md H.5 stuck-graduation alert).
+ * (gate 7 monitoring, deploy.md H.5 stuck-graduation alert).
  */
 export interface MetricsSnapshot {
   graduatedTotal: number;

@@ -9,7 +9,7 @@ import {
 } from "@robbed/shared";
 
 /**
- * Test fixtures for Discover (§5.1). Values mirror the frozen `@robbed/shared`
+ * Test fixtures for Discover. Values mirror the frozen `@robbed/shared`
  * shapes exactly — no field is invented. Metrics are supplied indexer values
  * (mcap carries source+asOf; volume/Δ% are aggregates), never computed here.
  */
@@ -52,7 +52,7 @@ export function organicFlow(over: Partial<OrganicFlow> = {}): OrganicFlow {
     holderPctHigh: 70,
     volumePct: 62,
     flaggedClusterVolPct24h: 18,
-    methodology: "heuristic — see §8.5",
+    methodology: "heuristic — see ",
     updatedAt: "2026-07-10T00:00:00Z",
     ...over,
   };

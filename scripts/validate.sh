@@ -4,7 +4,7 @@
 # commit) and manually via `bun run validate` / `scripts/validate.sh`.
 #
 # Stages skip gracefully when their service or tool doesn't exist yet, and say so —
-# a skip is reported, never silent (spec §10 "no silent caps" spirit).
+# a skip is reported, never silent ("no silent caps" spirit).
 #
 # Usage: validate.sh [--staged] [--full]
 #   --staged  limits the hard-rule scan to staged files (pre-commit mode)
@@ -63,7 +63,7 @@ while IFS= read -r f; do
 done <<< "$files"
 if [ $rule_fail -eq 0 ]; then record PASS "hard-rules" ""; else record FAIL "hard-rules" "see SPEC VIOLATION lines above"; fi
 
-# ── 2. Doc lint: links, § refs, LP copy, fences, m0 numbers, openapi ─────────
+# ── 2. Doc lint: links, refs, LP copy, fences, m0 numbers, openapi ─────────
 if [ -f scripts/doc-check.ts ]; then
   if command -v bun >/dev/null 2>&1; then
     run_stage "doc-check" bun scripts/doc-check.ts
@@ -87,7 +87,7 @@ else
   record SKIP "env-sync" "(no scripts/env-sync-check.ts yet)"
 fi
 
-# ── 3. Contracts: fmt / build / tests (unit+fuzz+invariant) — §10 gates 1–2 ──
+# ── 3. Contracts: fmt / build / tests (unit+fuzz+invariant) — gates 1–2 ──
 if [ -f contracts/foundry.toml ]; then
   if command -v forge >/dev/null 2>&1; then
     ( cd contracts && forge fmt --check >/dev/null 2>&1 )
@@ -101,7 +101,7 @@ else
   record SKIP "contracts" "(no contracts/foundry.toml yet)"
 fi
 
-# ── 4. Slither — §10 gate 1 (zero unexplained findings) ─────────────────────
+# ── 4. Slither — gate 1 (zero unexplained findings) ─────────────────────
 if [ -f contracts/foundry.toml ] && ls contracts/src/*.sol >/dev/null 2>&1; then
   if command -v slither >/dev/null 2>&1; then
     # MUST match CI (crytic/slither-action: target=contracts, fail-on: low) byte-for-byte:
@@ -147,7 +147,7 @@ else
 fi
 
 # ── 5b. Web unit suite (Vitest — tests/*.test.tsx, a different runner by design,
-#        web.md §8; the bun-test glob above cannot discover it) ────────────────
+# web.md; the bun-test glob above cannot discover it) ────────────────
 if [ -f apps/web/vitest.config.ts ]; then
   run_stage "vitest:web" bash -c 'cd apps/web && bun run test'
 else
@@ -173,7 +173,7 @@ else
   record SKIP "build:web" "(--full only — run \`bun run validate:full\`)"
 fi
 
-# ── 6. E2E: Playwright against the local stack — §9 ─────────────────────────
+# ── 6. E2E: Playwright against the local stack — ─────────────────────────
 # The flow matrix needs the running local stack (anvil :4545 via docker compose).
 # Same skip-gracefully-never-silently rule as every other stage: a down stack is
 # the "service doesn't exist" case, and CI's e2e job (I-6) enforces it in full.

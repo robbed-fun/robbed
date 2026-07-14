@@ -1,18 +1,18 @@
--- 0006 — [offchain] address_pnl: per-ADDRESS portfolio roll-up (spec §5.4;
+-- 0006 — [offchain] address_pnl: per-ADDRESS portfolio roll-up (;
 -- ROBBED_ redesign page 4 `/portfolio`). Indexer-owned DERIVED side table,
--- rebuildable from `trades`+`transfers`+`tokens` (indexer.md §4.4). ADVISORY /
--- read-only — never gates chain state or listing (§8.4). Lives in stable `public`
--- (like the §8.5 flow side tables, 0004) so it survives Ponder schema redeploys
+-- rebuildable from `trades`+`transfers`+`tokens` (indexer.md). ADVISORY /
+-- read-only — never gates chain state or listing. Lives in stable `public`
+-- (like the flow side tables, 0004) so it survives Ponder schema redeploys
 -- and never FKs Ponder tables. Column names/types mirror @robbed/shared db-rows
 -- `AddressPnlRow`.
 --
 -- Aggregate across ALL of an address's tokens; per-(token, holder) detail stays
 -- in `balances` (this is its address-level roll-up, NOT a duplicate). Cost-basis
--- fields are best-effort: the V3-leg basis is approximate (spec §12.16 OI-5), so
--- REALIZED PnL is a RANGE (`_low`/`_high`; §5.2 forbids false precision), signed
+-- fields are best-effort: the V3-leg basis is approximate (OI-5), so
+-- REALIZED PnL is a RANGE (`_low`/`_high`; forbids false precision), signed
 -- wei decimal strings. UNREALIZED / all-time PnL is NOT materialized here — it is
 -- computed at request time (live price × balance − remaining basis), since price
--- is live (api.md §3, portfolio). `pnl_confidence` is null when NO cost basis
+-- is live (api.md, portfolio). `pnl_confidence` is null when NO cost basis
 -- exists at all (pure transfer-in holdings). Every input derives from Transfer /
 -- Trade truth (X-4/X-5), never external.
 CREATE TABLE IF NOT EXISTS address_pnl (

@@ -1,5 +1,5 @@
 /**
- * M2-11 admin auth: stateless session cookie lifecycle + CSRF (§6.2) and the
+ * M2-11 admin auth: stateless session cookie lifecycle + CSRF and the
  * SIWE login (allowlist + single-use nonce replay defense) with an injected
  * signature verifier (no real wallet needed).
  */

@@ -1,13 +1,13 @@
 /**
- * Golden fixtures for canonical metadata JSON (api.md §5 "metadata.ts …
- * + golden fixtures"; indexer.md §9.1 "shared fixtures (also used by frontend
+ * Golden fixtures for canonical metadata JSON (api.md "metadata.ts …
+ * + golden fixtures"; indexer.md "shared fixtures (also used by frontend
  * tests)").
  *
  * These values are FROZEN. `canonical` is the exact canonical JSON text and
  * `hash` the keccak256 of its UTF-8 bytes (cross-checked against
  * @noble/hashes keccak_256 and the keccak256("") known vector at freeze time,
  * 2026-07-09). Frontend (pre-sign verify), API (canonicalize+hash), and
- * indexer (§8.3 verification) test suites must all reproduce them byte-for-byte.
+ * indexer (verification) test suites must all reproduce them byte-for-byte.
  */
 import type { JsonValue } from "./metadata";
 
@@ -28,11 +28,11 @@ export const METADATA_GOLDEN_FIXTURES: MetadataGoldenFixture[] = [
       version: 1,
       name: "Cash Cat",
       ticker: "CASHCAT",
-      imageUrl: "https://cdn.hoodpad.example/images/0xabc.webp",
+      imageUrl: "https://cdn.robbed.example/images/0xabc.webp",
       imageHash: `0x${"ab".repeat(32)}`,
     },
     canonical:
-      '{"imageHash":"0xabababababababababababababababababababababababababababababababab","imageUrl":"https://cdn.hoodpad.example/images/0xabc.webp","name":"Cash Cat","ticker":"CASHCAT","version":1}',
+      '{"imageHash":"0xabababababababababababababababababababababababababababababababab","imageUrl":"https://cdn.robbed.example/images/0xabc.webp","name":"Cash Cat","ticker":"CASHCAT","version":1}',
     hash: "0xe17e6c73929cc51359a844b485c56beb562bd3b83df43a710a9424f691bab1c1",
   },
   {
@@ -41,14 +41,14 @@ export const METADATA_GOLDEN_FIXTURES: MetadataGoldenFixture[] = [
       imageHash: `0x${"cd".repeat(32)}`,
       ticker: "HOOD",
       links: {
-        x: "https://x.com/hoodpad",
-        website: "https://hoodpad.example",
-        telegram: "https://t.me/hoodpad",
+        x: "https://x.com/robbed",
+        website: "https://robbed.example",
+        telegram: "https://t.me/robbed",
       },
       name: "Hood Token",
       version: 1,
       description: "A token for the hood.",
-      imageUrl: "https://cdn.hoodpad.example/images/0xdef.webp",
+      imageUrl: "https://cdn.robbed.example/images/0xdef.webp",
     },
     canonical:
       '{"description":"A token for the hood.","imageHash":"0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","imageUrl":"https://cdn.hoodpad.example/images/0xdef.webp","links":{"telegram":"https://t.me/hoodpad","website":"https://hoodpad.example","x":"https://x.com/hoodpad"},"name":"Hood Token","ticker":"HOOD","version":1}',

@@ -1,19 +1,19 @@
 # @robbed/keeper — auto-graduation keeper
 
 Small Bun service that makes graduation **automatic**. `BondingCurve.graduate()` is
-permissionless and pays a caller reward (spec §12.34) that offsets its gas; the keeper
+permissionless and pays a caller reward that offsets its gas; the keeper
 is the standing caller, so a curve does not sit locked in `ReadyToGraduate` waiting for
 an altruist. Zero contract changes.
 
 - **Ops runbook** (funding, alerts, key rotation): [`docs/developers/runbooks/keeper.md`](../../docs/developers/runbooks/keeper.md)
 - **Architecture context**: [`docs/developers/architecture.md`](../../docs/developers/architecture.md)
-- **Spec**: §12.12 (the `ReadyToGraduate` two-way lock — a deterministic, permissionlessly-exitable state, *not* a pause), §12.34 (caller reward ≥10× `graduate()` gas), §12.62 (gas model), §10 gate 7 (stuck-graduation monitoring).
+- **Spec**: (the `ReadyToGraduate` two-way lock — a deterministic, permissionlessly-exitable state, *not* a pause), (caller reward ≥10× `graduate()` gas), (gas model), gate 7 (stuck-graduation monitoring).
 
 ## What it does
 
 1. **Primary detection — on-chain `GraduationReady`.** viem `watchContractEvent({ eventName:'GraduationReady', poll:false })` opens one topic-filtered `eth_subscribe('logs')` over the Alchemy WS RPC across **all** curves (every `BondingCurve` emits it; `log.address` is the curve). Reacts within ~1–2 blocks.
 2. **Fallback sweep — Postgres.** Every `KEEPER_POLL_MS` (default 15s) it queries the indexer's `tokens` table for `graduated = false AND real_eth_reserves >= graduation_eth` (the ReadyToGraduate-not-yet-graduated set, derived from existing indexed columns — no schema change; covered by the `progressIdx` index). Catches WS drops, restarts, and curves locked while the keeper was down.
-3. **Execution.** Re-reads on-chain `phase()` before every send (idempotent); estimates gas node-side and sends with an explicit `gas = estimate × 2` capped at 30M (never a tight cap — `graduate()` mints a V3 position, §12.62); waits for the receipt; retries with backoff (3 attempts).
+3. **Execution.** Re-reads on-chain `phase()` before every send (idempotent); estimates gas node-side and sends with an explicit `gas = estimate × 2` capped at 30M (never a tight cap — `graduate()` mints a V3 position); waits for the receipt; retries with backoff (3 attempts).
 4. **Health.** `GET /healthz` reports last sweep time, in-flight/cooldown curves, and the cached wallet balance.
 
 ### Why on-chain detection (not the indexer's Redis)
@@ -24,7 +24,7 @@ The plan's first choice was to subscribe to a Redis/WS `GraduationReady` signal 
 
 - **Idempotent / no double-send** — an in-flight set keys one attempt per curve at a time; every attempt re-reads `phase()` before sending. A stale DB hint or event can never produce a tx against a curve that is already `Graduated` or still `Trading`.
 - **"Already graduated by someone else" == SUCCESS** — after any revert (send / receipt / estimate) the keeper re-reads `phase()`; if it is now `Graduated`, whoever landed first won the reward — that is expected under a permissionless `graduate()`, not a failure.
-- **Persistent revert == donation-brick alert** — if `graduate()` keeps reverting while the curve stays `ready`, the migrator's arb-back cannot restore the pool tick (§6.3/§12.33). After the retry budget the keeper emits a **distinct loud alert** (`level:"error"`, `event:"graduation_failed_persistent"`, `alert:"donation_brick_suspected"`) and sets a cooldown so it does **not** hot-loop. A corrector swap can restore the tick (§12.62), so the sweep retries after the cooldown.
+- **Persistent revert == donation-brick alert** — if `graduate()` keeps reverting while the curve stays `ready`, the migrator's arb-back cannot restore the pool tick. After the retry budget the keeper emits a **distinct loud alert** (`level:"error"`, `event:"graduation_failed_persistent"`, `alert:"donation_brick_suspected"`) and sets a cooldown so it does **not** hot-loop. A corrector swap can restore the tick, so the sweep retries after the cooldown.
 - **Never touches chain-listing/moderation state** — the keeper only calls the permissionless `graduate()`; its DB use is a read-only query.
 
 ## Configuration

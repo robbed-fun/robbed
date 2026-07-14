@@ -9,9 +9,9 @@ import { ACCEPTED_IMAGE_MIME } from "../model/schema";
 import type { ImageState } from "../model/use-launch";
 
 /**
- * Required token image (§5.3, ≤4 MB) — ROBBED_ terminal skin (ratified redesign, spec §12.50):
+ * Required token image (≤4 MB) — ROBBED_ terminal skin (ratified redesign):
  * a square `logo 512×512` slot with a DASHED hairline frame; the whole square is
- * the tap target (mobile-first). API-MEDIATED upload (spec §12.19): the file is
+ * the tap target (mobile-first). API-MEDIATED upload : the file is
  * handed to `POST /v1/uploads/image` eagerly on select — the API MIME-sniffs +
  * re-encodes + content-addresses it; there is NO browser presign here. This
  * component only picks the file, previews the API-re-encoded result, and reflects
@@ -45,7 +45,7 @@ export function ImageUpload({
           image.error && "border-red",
         )}
         // Mockup 2b (template 452): fixed 96×96 slot with a 45° hairline stripe
-        // fill — tokens only (var(--color-*)), raw hex is forbidden (web.md §7).
+        // fill — tokens only (var(--color-*)), raw hex is forbidden (web.md).
         style={{
           backgroundImage:
             "repeating-linear-gradient(45deg, var(--color-bg), var(--color-bg) 6px, var(--color-surface) 6px, var(--color-surface) 12px)",

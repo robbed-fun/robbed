@@ -1,19 +1,19 @@
 /**
- * ── post-graduation creator-fee harness (§12.67 / §12.68 / §12.69) ───────────
+ * ── post-graduation creator-fee harness ───────────
  * Drivers + readers for the Phase-2 creator-fee factory generation (a FRESH
  * immutable generation: new CurveFactory + BondingCurve + Router + pull-payment
  * CreatorVault + creator-aware LPFeeVault). Used by the CFEE-* flows to:
  *   - generate REAL post-grad V3 pool fees (SwapRouter02 exactInputSingle, BOTH
  *     legs — a WETH-in buy accrues the WETH-leg fee, a token-in sell the token-leg);
  *   - drive the split `collect(tokenId)` and the CreatorVault `claim` (ETH-leg +
- *     token-leg), plus the pre-grad `sweepCreatorFees()` (§12.68 curve leg);
+ * token-leg), plus the pre-grad `sweepCreatorFees()` (curve leg);
  *   - read the set-once `tokenId → creator` registration + the 50/50 immutable.
  *
  * ── ABI PROVENANCE (docs-first, 2026-07-13) ──────────────────────────────────
  * The ENTIRE surface ships in `@robbed/shared/abi` (codegen from the landed
  * Phase-2 contracts) and is imported here — NO ABI is hand-written (anti-drift):
  *   - `lpFeeVaultAbi` — split `collect` (returns `(amount0, amount1)`), the
- *     `FeesCollected(tokenId, amount0, amount1)` total + the §12.69(G)
+ * `FeesCollected(tokenId, amount0, amount1)` total + the
  *     `FeesSplit(tokenId, creator, treasury0, creator0, treasury1, creator1)`
  *     per-leg split, set-once `creatorOf(tokenId)` / migrator-gated
  *     `registerCreator(tokenId, creator)` / `creatorLpShareBps()` (immutable 5000);
@@ -21,7 +21,7 @@
  *     `tokenBalanceOf(creator, token)` / `claimERC20(creator, token)`;
  *   - `bondingCurveAbi` — `sweepCreatorFees`/`accruedCreatorFees`/`CREATOR_FEE_BPS`;
  *   - `curveFactoryAbi.creatorVault`; external V3 addresses from `@robbed/shared`
- *     `UNISWAP_V3` / `WETH_ADDRESS` (§12.28 pin) — no address literal in this harness.
+ * `UNISWAP_V3` / `WETH_ADDRESS` (pin) — no address literal in this harness.
  *
  * RECONCILED 2026-07-13 against the landed Phase-2 surface: authored first against
  * local `*Stub` fragments matching `contracts/src/interfaces/{ILPFeeVault,
@@ -44,14 +44,14 @@ import { ensureFunded, loadDeployedAddresses, publicClient, walletFor } from "./
 import { ROLES, type DevAccount } from "./config";
 import { forkV3 } from "./seed";
 
-/** The 50/50 creator/treasury LP-fee split immutable expected by §12.69(A).
+/** The 50/50 creator/treasury LP-fee split immutable expected by.
  *  Re-exported from the SINGLE shared source of truth (`@robbed/shared`
  *  `CREATOR_LP_SHARE_BPS`) — anti-drift cleanup (robbed-shared, 2026-07-13): the
  *  harness no longer carries its own `5000` literal, so a shared re-tune can never
  *  silently disagree with the CFEE specs. Still cross-checked LIVE on the fork
  *  against `LPFeeVault.creatorLpShareBps()` inside CFEE-1. */
 export const EXPECTED_CREATOR_LP_SHARE_BPS = CREATOR_LP_SHARE_BPS;
-/** The additive pre-grad creator leg (§12.68) — 0.5% of curve volume, in bps. */
+/** The additive pre-grad creator leg — 0.5% of curve volume, in bps. */
 export const EXPECTED_CREATOR_FEE_BPS = 50;
 /** Canonical WETH (checksummed) — the post-grad WETH fee leg's ERC20 address. The
  *  V3 pool's two legs (launch token + WETH) are BOTH credited to the creator as
@@ -61,7 +61,7 @@ export const WETH: Address = getAddress(WETH_ADDRESS);
 // ── vault addresses (live reads — no address literal in the harness) ──────────
 
 /** The pull-payment CreatorVault address — live from `CurveFactory.creatorVault()`
- *  (§12.63(a)). Read live, never local.env, so it tracks whichever generation the
+ *. Read live, never local.env, so it tracks whichever generation the
  *  fork deployed. */
 export async function readCreatorVaultAddress(): Promise<Address> {
   const { curveFactory } = loadDeployedAddresses();
@@ -72,10 +72,10 @@ export async function readCreatorVaultAddress(): Promise<Address> {
   })) as Address;
 }
 
-// ── §12.69(B) set-once creator registration reads (shared lpFeeVaultAbi) ──────
+// ── set-once creator registration reads (shared lpFeeVaultAbi) ──────
 
 /** The set-once `tokenId → creator` the migrator registered at graduation
- *  (§12.69 B), read from the creator-aware LPFeeVault. */
+ * (B), read from the creator-aware LPFeeVault. */
 export async function readCreatorOf(tokenId: bigint): Promise<Address> {
   const { lpFeeVault } = loadDeployedAddresses();
   return (await publicClient.readContract({
@@ -86,7 +86,7 @@ export async function readCreatorOf(tokenId: bigint): Promise<Address> {
   })) as Address;
 }
 
-/** The immutable creator LP share in bps (§12.69 A) — expected 5000 (50/50). */
+/** The immutable creator LP share in bps (A) — expected 5000 (50/50). */
 export async function readCreatorLpShareBps(): Promise<number> {
   const { lpFeeVault } = loadDeployedAddresses();
   return Number(
@@ -122,7 +122,7 @@ export async function registerCreatorAs(
 // ── CreatorVault balances (shared creatorVaultAbi) ────────────────────────────
 
 /** The creator's claimable NATIVE-ETH balance in the CreatorVault — the PRE-GRAD
- *  curve creator leg ONLY (§12.68; swept via `sweepCreatorFees` → `deposit`). The
+ * curve creator leg ONLY (swept via `sweepCreatorFees` → `deposit`). The
  *  post-grad V3 legs are ERC20 (BOTH the launch token AND WETH — `LPFeeVault._route`
  *  routes each via `depositERC20`, never unwrapped), so they land in
  *  `tokenBalanceOf`, not here. `CreatorVault.balanceOf`. */
@@ -164,7 +164,7 @@ export async function readTokenBalance(account: Address, token: Address): Promis
   })) as bigint;
 }
 
-// ── claim drivers (pull-payment, §12.25 / §12.69 C) ───────────────────────────
+// ── claim drivers (pull-payment, C) ───────────────────────────
 
 /** Claim the creator's ETH-leg from the CreatorVault (`claim(creator)`, shared).
  *  Permissionless: `by` may be anyone; the funds always go to `creator`. */
@@ -195,7 +195,7 @@ export async function claimCreatorToken(
   });
 }
 
-// ── pre-grad curve creator leg (§12.68) ───────────────────────────────────────
+// ── pre-grad curve creator leg ───────────────────────────────────────
 
 /** Permissionless `BondingCurve.sweepCreatorFees()` (shared) — pushes the curve's
  *  accrued creator leg to the CreatorVault, credited to `creatorOf`. */
@@ -248,7 +248,7 @@ export interface CollectSplit {
 /**
  * Parse a split `collect(tokenId)` receipt: the per-leg TOTAL harvested (shared
  * `lpFeeVaultAbi` `FeesCollected(tokenId, amount0, amount1)`) AND the per-leg 50/50
- * split (§12.69(G) `FeesSplit(tokenId, creator, treasury0, creator0, treasury1,
+ * split (`FeesSplit(tokenId, creator, treasury0, creator0, treasury1,
  * creator1)`, shared lpFeeVaultAbi). Both amount0/amount1 and treasury0/creator0/… are
  * mapped from V3 token ordering (`token0 = lower address`) to WETH-leg / token-leg
  * semantics so the specs never care which side is token0.
@@ -284,7 +284,7 @@ export function parseCollectSplit(logs: Log[], token: Address): CollectSplit {
   };
 }
 
-// ── post-grad V3 volume generation (SwapRouter02 exactInputSingle, §12.28) ─────
+// ── post-grad V3 volume generation (SwapRouter02 exactInputSingle) ─────
 // SwapRouter02 (@uniswap/swap-router-contracts) DROPS the `deadline` field from
 // ExactInputSingleParams (deadline moves to the `multicall(deadline, bytes[])`
 // wrapper) — pinned in @robbed/shared/abi `swapRouter02Abi`. A WETH-in swap sent

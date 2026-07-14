@@ -5,11 +5,11 @@ import { useReadContracts } from "wagmi";
 import type { Address } from "viem";
 
 /**
- * Live on-chain curve state for the Trust panel (§5.2 rows 2/3/4/6) and the
- * anti-sniper cap surface (§6.5). These are the values the Trust panel promises
- * are read FROM CHAIN, never the API's cached copies (spec §5.2, web.md §3.2).
+ * Live on-chain curve state for the Trust panel (rows 2/3/4/6) and the
+ * anti-sniper cap surface. These are the values the Trust panel promises
+ * are read FROM CHAIN, never the API's cached copies (web.md).
  *
- * DECISION (hoodpad-frontend; basis: viem.sh multicall + M3-1 web-7 finding):
+ * DECISION (robbed-frontend; basis: viem.sh multicall + M3-1 web-7 finding):
  * `useReadContracts` batches via Multicall3 WHEN the chain advertises one
  * (`chain.contracts.multicall3`). Chain 4663's config intentionally omits it
  * pending the M3-1 confirmation, so wagmi core `readContracts` transparently
@@ -31,19 +31,19 @@ export interface CurveReserves {
 }
 
 export interface CurveReads {
-  /** LaunchToken.totalSupply() — must equal 1e27 wei (§6.1). */
+  /** LaunchToken.totalSupply() — must equal 1e27 wei. */
   totalSupply: bigint | null;
-  /** BondingCurve.reserves() — live ETH + token reserves (§5.2 row 3). */
+  /** BondingCurve.reserves() — live ETH + token reserves (row 3). */
   reserves: CurveReserves | null;
-  /** BondingCurve.GRADUATION_ETH() — threshold constant (§6.2, row 4). */
+  /** BondingCurve.GRADUATION_ETH() — threshold constant (row 4). */
   graduationEth: bigint | null;
   /** BondingCurve.TRADE_FEE_BPS() — TREASURY portion of the trade fee, live (row 6). */
   tradeFeeBps: number | null;
-  /** BondingCurve.CREATOR_FEE_BPS() — CREATOR portion of the trade fee, live (§12.63). */
+  /** BondingCurve.CREATOR_FEE_BPS() — CREATOR portion of the trade fee, live. */
   creatorFeeBps: number | null;
-  /** BondingCurve.EARLY_WINDOW_END() — anti-sniper window end (unix, §6.5). */
+  /** BondingCurve.EARLY_WINDOW_END() — anti-sniper window end (unix). */
   earlyWindowEnd: bigint | null;
-  /** BondingCurve.MAX_EARLY_BUY() — per-tx early-buy cap, wei (§6.5). */
+  /** BondingCurve.MAX_EARLY_BUY() — per-tx early-buy cap, wei. */
   maxEarlyBuyWei: bigint | null;
   /** True while at least one read is in flight (initial load). */
   isLoading: boolean;
@@ -57,7 +57,7 @@ const toBig = (v: unknown): bigint | null =>
 
 /**
  * Batched live reads. Polls every ~5s and is refetched by the caller on each WS
- * trade (web.md §3.2 "refresh on each WS trade"). `token` is the LaunchToken
+ * trade (web.md "refresh on each WS trade"). `token` is the LaunchToken
  * address, `curve` the BondingCurve address (both from TokenDetail).
  */
 export function useCurveReads(
@@ -141,7 +141,7 @@ export function parseCurveReads(
   };
 }
 
-/** True while `now` is inside the anti-sniper early window (§6.5). */
+/** True while `now` is inside the anti-sniper early window. */
 export function isInEarlyWindow(
   earlyWindowEnd: bigint | null,
   nowMs = Date.now(),

@@ -1,6 +1,6 @@
 /**
- * Public API for the trade-widget (§5.2). Buy/Sell with the invisible venue
- * switch, sell-never-gated, anti-sniper cap surfaced, §12.12 graduating
+ * Public API for the trade-widget. Buy/Sell with the invisible venue
+ * switch, sell-never-gated, anti-sniper cap surfaced, graduating
  * interstitial. Submits via the curve Router and feeds the shared optimistic
  * store (entities/trade).
  */

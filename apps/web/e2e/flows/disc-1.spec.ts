@@ -11,8 +11,8 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:DISC-1 — TRENDING carousel + event tape: Discover paints (§5.1 as
-// amended by §12.50(f) — the KotH hero / token grid are retired; the shipped
+// @flow:DISC-1 — TRENDING carousel + event tape: Discover paints (as
+// amended by — the KotH hero / token grid are retired; the shipped
 // surface is the TRENDING carousel over the live event tape)
 // assertable-layers: on-chain · indexed · UI
 //
@@ -37,7 +37,7 @@ test(
     });
 
     await assertIndexed(
-      "API serves the volume-weighted TRENDING ranking (API-owned order, §12.22 family)",
+      "API serves the volume-weighted TRENDING ranking (API-owned order, family)",
       async () => {
         const list = await waitForIndexed(
           () => api.tokens("?sort=volume24h&filter=all&limit=8"),

@@ -1,9 +1,9 @@
 /**
- * Portfolio endpoints + projections (spec §5.4; api.md §3). Asserts:
+ * Portfolio endpoints + projections (api.md). Asserts:
  *  - all four routes return the frozen @robbed/shared shapes;
  *  - read-time pricing via curve-quote (previewSell liquidation value);
  *  - unpriceable (never-traded) holdings → null price/value; no-basis → null PnL;
- *  - PnL surfaces as ranges/nullable (no false precision, §5.2);
+ * - PnL surfaces as ranges/nullable (no false precision);
  *  - wallet ETH comes from the injected RPC reader (chain truth), not the indexer;
  *  - an unknown address is an empty portfolio (not 404);
  *  - advisory/read-only (no chain mutation anywhere in the path).

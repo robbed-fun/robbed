@@ -1,7 +1,7 @@
 /**
- * Bun WebSocket fanout (indexer.md §8, api.md §6.5; M2-8) — the relay tier
+ * Bun WebSocket fanout (indexer.md, api.md; M2-8) — the relay tier
  * between Redis pub/sub and browsers, holding the <500ms event-to-browser tail
- * of the latency budget (§8.3).
+ * of the latency budget.
  *
  * Data flow (no polling, no DB, no per-message work beyond a topic publish):
  *   Alchemy WS → Ponder handler → Redis publish → THIS server → browser.
@@ -9,12 +9,12 @@
  * Hard rules enforced here:
  *  - ZERO database access. This module imports no DB client; the structural
  *    `no-DB-import` test (test/ws-inventory.test.ts) fails CI if that ever
- *    changes. Truth is served by REST; WS is freshness only (§8.4).
+ * changes. Truth is served by REST; WS is freshness only.
  *  - Native fanout: each socket `ws.subscribe(channel)`s the Bun pub/sub topic
  *    whose name IS the Redis channel; a Redis message is relayed with one
  *    `server.publish(channel, payload)` — O(subscribers), no per-socket loop in
  *    our code, no re-serialization (the Redis payload is already the wire frame).
- *  - No replay buffer (§12.23): on reconnect / `seq` gap the client REST-heals;
+ * - No replay buffer : on reconnect / `seq` gap the client REST-heals;
  *    the server keeps only channel↔socket membership.
  *
  * Decide-it-yourself (basis recorded):

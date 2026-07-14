@@ -8,10 +8,10 @@ import {LaunchToken} from "src/LaunchToken.sol";
 import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
 import {EthTransferFailed} from "src/errors/Errors.sol";
 
-/// @title CurveSellUnfreezable — THE decisive §12.25 / threat-model UM-1 proof
+/// @title CurveSellUnfreezable — THE decisive / threat-model UM-1 proof
 /// @notice Points the factory `treasury` at a contract that `revert()`s on receive, then proves a
 ///         curve SELL still succeeds and `accruedFees` grows — because no trade path calls the
-///         treasury (pull-payment escrow, spec §12.25). `sweepFees()` reverts (retriable) but can
+/// treasury (pull-payment escrow). `sweepFees()` reverts (retriable) but can
 ///         never touch a buy or sell. This is the single most important assertion in M1-8: it shows
 ///         the "sells always open" guarantee (spec sec 6.5) holds *by construction*, not by policy.
 contract CurveSellUnfreezableTest is BaseFixture {
@@ -88,7 +88,7 @@ contract CurveSellUnfreezableTest is BaseFixture {
     }
 
     /// @notice Solvency holds throughout the hostile-treasury episode:
-    ///         balance >= realEthReserves + accruedFees (spec §12.25 solvency form).
+    /// balance >= realEthReserves + accruedFees (solvency form).
     function test_solvencyHolds_underHostileTreasury() public {
         _buy(curve, token, bob, 0.7 ether, 0);
         _sell(curve, token, alice, token.balanceOf(alice) / 2, 0);

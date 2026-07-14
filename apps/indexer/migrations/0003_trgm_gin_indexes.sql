@@ -1,5 +1,5 @@
--- 0003 — §5.1 search: pg_trgm GIN indexes over name, ticker, contract address,
--- creator address (indexer.md §3.1). The API's single search endpoint consumes
+-- 0003 — search: pg_trgm GIN indexes over name, ticker, contract address,
+-- creator address (indexer.md). The API's single search endpoint consumes
 -- these.
 --
 -- ORDERING (important): these indexes are on the Ponder-managed `tokens` table,

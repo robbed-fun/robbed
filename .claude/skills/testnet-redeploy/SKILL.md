@@ -12,10 +12,10 @@ description: >-
 
 # Testnet (46630) redeploy + reindex
 
-Authoritative source order: `docs/spec.md` (wins) → this skill → the runbooks it cites
-(`docs/developers/runbooks/testnet.md` §6–§7, `deploy.md` §1–§2, `docker.md` "Testnet/Mainnet stack",
-`testnet-lifecycle.md`). If this skill and a runbook disagree, the runbook wins and the drift is
-reported. Everything below is repo-root-relative; run from the repo root.
+Authoritative source order: the runbooks + design docs under `docs/developers/**` win
+(`docs/developers/runbooks/testnet.md`, `deploy.md`, `docker.md` "Testnet/Mainnet stack",
+`testnet-lifecycle.md`) → this skill is derived. If this skill and a runbook disagree, the runbook wins
+and the drift is reported. Everything below is repo-root-relative; run from the repo root.
 
 This skill AUTHORS the sequence and runs the low-risk idempotent legs (emit/codegen/verify/reindex/smoke).
 It does NOT decide to deploy: the `forge script … --broadcast` in Step 1 spends real testnet gas and
@@ -38,14 +38,14 @@ WebFetch of the canonical page. Docs beat assumptions; the spec beats docs (flag
 
 - **Never read the real root `.env`** — it holds `DEPLOYER_PRIVATE_KEY` (SECRET class, `env-inventory.md`).
   Reference vars by NAME only; check presence with `grep -oE '^[A-Z_]+=' .env` (names, never values).
-- **Immutable contracts, no proxies** (spec §6). A redeploy is a *new* deploy: new addresses, new
-  `START_BLOCK`. There is no in-place upgrade — which is exactly why the reindex (Step 4) is mandatory.
-- **Sells always open / no post-grad pause** (§6.5) — nothing in a redeploy changes this; do not add
+- **Immutable contracts, no proxies** (`docs/developers/contracts.md`). A redeploy is a *new* deploy: new
+  addresses, new `START_BLOCK`. There is no in-place upgrade — which is exactly why the reindex (Step 4) is mandatory.
+- **Sells always open / no post-grad pause** — nothing in a redeploy changes this; do not add
   pause plumbing.
-- **No hardcoded market metrics** (§2): constants come only from the M0 derive output; never inline
-  a price/ETH figure into a command.
-- **Testnet V3 addresses are testnet-ONLY** (§12.52): the community V3 deployment used on 46630 must
-  never leak to mainnet 4663 (§12.28) or LOCAL. The deploy script asserts this at deploy time.
+- **No hardcoded market metrics** (the always-on `no-market-metrics` rule): constants come only from the
+  M0 derive output; never inline a price/ETH figure into a command.
+- **Testnet V3 addresses are testnet-ONLY**: the community V3 deployment used on 46630 must
+  never leak to mainnet 4663 or LOCAL. The deploy script asserts this at deploy time.
 
 ---
 
@@ -62,16 +62,16 @@ Report each as present / missing; a missing item blocks the deploy — do not pr
    ```bash
    # derive the address from the key WITHOUT printing the key
    ADDR=$(cast wallet address --private-key "$(grep -oP '^DEPLOYER_PRIVATE_KEY=\K.*' .env)")
-   cast balance "$ADDR" --rpc-url "$TESTNET_RPC_URL"   # ≥ ~0.05 ETH; else use the faucet (testnet.md §3)
+   cast balance "$ADDR" --rpc-url "$TESTNET_RPC_URL"   # ≥ ~0.05 ETH; else use the faucet (testnet.md)
    ```
    Faucet: `https://faucet.testnet.chain.robinhood.com` (0.05 ETH / 24h; Chainlink + QuickNode
-   fallbacks target 46630 — testnet.md §3). A full *graduation* needs more than one drip (`GRADUATION_ETH`
-   on testnet is the faucet-scale value below) — see testnet-lifecycle.md §3 for the funding caveat.
+   fallbacks target 46630 — testnet.md). A full *graduation* needs more than one drip (`GRADUATION_ETH`
+   on testnet is the faucet-scale value below) — see testnet-lifecycle.md for the funding caveat.
 
 2. **Constants present + current.** `tools/m0/out/constants.testnet.json` exists,
    `chainId == 46630`, and it is the current faucet-scale derive: `curve.graduationEthWei ≈
    5.0169e15` (**G ≈ 0.005 ETH**, `M0_TESTNET_GRADUATION_ETH` small-G override active) and
-   `fees.creatorFeeBps == 50` (§12.69 creator-fee leg, 0.5%; treasury 100 + creator 50 = 150 ≤ the
+   `fees.creatorFeeBps == 50` (the creator-fee leg, 0.5%; treasury 100 + creator 50 = 150 ≤ the
    200/2% additive cap). If stale/missing, re-derive (it fails closed if `external.treasurySafe` is
    the zero address):
    ```bash
@@ -83,7 +83,7 @@ Report each as present / missing; a missing item blocks the deploy — do not pr
 
 3. **Treasury Safe exists** (T-2). `constants.testnet.json` → `external.treasurySafe` is a real
    canonical Safe v1.4.1 (dev signers on testnet), not `0x0`. If absent, create it
-   (`OWNERS=… THRESHOLD=… bun run safe:create`, testnet.md §T-2), paste into
+   (`OWNERS=… THRESHOLD=… bun run safe:create`, testnet.md step T-2), paste into
    `tools/m0/external.testnet.json`, re-derive (item 2). Deploy fails closed (`TreasurySafeUnset`)
    otherwise. A *re*-deploy against the same chain normally reuses the existing Safe.
 
@@ -100,9 +100,9 @@ Report each as present / missing; a missing item blocks the deploy — do not pr
 
 `script/Deploy.s.sol` three-way-branches on chain id; on 46630 it runs testnet mode: `DEPLOYER_PRIVATE_KEY`
 REQUIRED (no anvil fallback on a public chain), all externals read from the constants file (zero testnet
-addresses hardcoded in Solidity), the **§12.28 runtime asserts** (`V3Factory.feeAmountTickSpacing(10000)==200`,
+addresses hardcoded in Solidity), the **deploy-time runtime asserts** (`V3Factory.feeAmountTickSpacing(10000)==200`,
 `NPM.factory()`, `NPM.WETH9()`), the **O-6 `TreasurySafeUnset` guard**, and the cap/graduation-fundable
-guards. It deploys the current-tree **§12.69 creator-fee topology** — the script encodes the order
+guards. It deploys the current-tree **creator-fee topology** — the script encodes the order
 (CurveFactory → **CreatorVault** → **LPFeeVault (creator/factory-aware)** → V3Migrator → Router, then
 `factory.setLpFeeVault(...)`) — runs the in-script **canary create + buy**, initiates the Ownable2Step
 ownership handoff, and writes the canonical artifact `contracts/deployments/46630.json`.
@@ -136,9 +136,9 @@ be sure you mean to (and that you then complete Steps 3–5, or the stacks will 
 
 `--verify` handles most contracts inline. Confirm on `$TESTNET_BLOCKSCOUT_URL` that **every deployed
 contract** is verified with **solc `v0.8.35+commit.47b9dedd` + `cancun` target, MIT**: CurveFactory,
-Router, V3Migrator, LPFeeVault, **CreatorVault** (§12.69), plus the canary LaunchToken + BondingCurve.
+Router, V3Migrator, LPFeeVault, **CreatorVault**, plus the canary LaunchToken + BondingCurve.
 Re-run `forge verify-contract … --verifier blockscout --verifier-url "$TESTNET_BLOCKSCOUT_URL/api"` for
-any that didn't take (idempotent — the v2 verifier needs no API key, §12.52). This doubles as the
+any that didn't take (idempotent — the v2 verifier needs no API key). This doubles as the
 **M1-2/O-5** pin check on the testnet verifier (the mainnet `robinhoodchain.blockscout.com` round-trip
 is a separate owed item — B4). Record: the six/seven addresses from `contracts/deployments/46630.json`
 and the deploy block (min receipt block = `START_BLOCK`, computed in Step 3).
@@ -157,10 +157,10 @@ bun contracts/script/codegen-addresses.ts     # regenerates the shared registry 
     INCLUDES the canary's `TokenCreated`/`Trade`) + verification-GUID record (preserved across re-runs).
   - `tools/localstack/out/testnet.env` — the fail-closed prerequisite of the testnet compose stack:
     `CURVE_FACTORY_ADDRESS, ROUTER_ADDRESS, MIGRATOR_ADDRESS, TREASURY_ADDRESS, LP_FEE_VAULT_ADDRESS,
-    CREATOR_VAULT_ADDRESS, WETH_ADDRESS, START_BLOCK` (the last two gate §12.63/§12.69 creator-fee
+    CREATOR_VAULT_ADDRESS, WETH_ADDRESS, START_BLOCK` (the last two gate creator-fee
     indexing + WETH-leg USD pricing — added to the emitter alongside the CreatorVault generation).
 - `codegen-addresses.ts` regenerates `packages/shared/src/addresses.ts` (the single registry consumed by
-  the indexer config + web). It fail-closes on the §12.55 mode invariant (only 4663 may be `live`; no
+  the indexer config + web). It fail-closes on the mode invariant (only 4663 may be `live`; no
   anvil-dev-account `live` treasury) — a testnet redeploy stays `mode:"testnet"`, always fine.
 
 Both are safe to re-run. **Do NOT hand-edit** `packages/shared/src/addresses.ts` (generated) — regenerate.
@@ -224,7 +224,7 @@ docker compose -f docker-compose.mainnet.yml up -d --build                      
 
 No-downtime alternative (rebuild the image so the new baked addresses load, then hand a clean schema
 so `ponder start` re-indexes rather than resumes) — per the ponder-start schema-change procedure
-(`indexer.md` §9.3; the compose header documents the build_id/schema-reuse refusal):
+(`indexer.md`; the compose header documents the build_id/schema-reuse refusal):
 
 ```bash
 docker compose -f docker-compose.testnet.yml up -d --build indexer api ws
@@ -243,7 +243,7 @@ caveat.)
 
 ---
 
-## Step 5 — Accept ownership (Ownable2Step; T-4 / deploy.md §2.2)
+## Step 5 — Accept ownership (Ownable2Step; T-4 / deploy.md)
 
 The deploy only *nominated* the new owner. A redeploy is a NEW `CurveFactory`, so the treasury Safe
 (dev-signer on testnet) must `acceptOwnership()` on the new factory — ownership does not transfer until
@@ -252,13 +252,13 @@ the accept. Use the Safe tx tool (2-step: build hash → collect M-of-N sigs →
 ```bash
 bun run safe:tx hash --safe <TREASURY_SAFE> --preset accept-ownership --target <NEW_CURVE_FACTORY>
 # collect threshold signatures, then exec via safe:tx (see tools/deploy/safe-tx.ts + safe-drill.ts;
-# full choreography in deploy.md §2.2). RPC_URL/DEPLOYER_PRIVATE_KEY via env, never inline.
+# full choreography in deploy.md). RPC_URL/DEPLOYER_PRIVATE_KEY via env, never inline.
 ```
 
 Assert afterward: `cast call <NEW_CURVE_FACTORY> "owner()(address)" --rpc-url "$TESTNET_RPC_URL"` ==
-the Safe, and the deployer EOA has zero remaining authority. (On mainnet, admin ≠ treasury per §6.6;
+the Safe, and the deployer EOA has zero remaining authority. (On mainnet, admin ≠ treasury;
 testnet uses the one dev Safe for both as a simplification.) LPFeeVault/CreatorVault/Migrator are
-unowned/immutable — nothing to accept there; post-graduation there is zero pause authority (§6.5).
+unowned/immutable — nothing to accept there; post-graduation there is zero pause authority.
 
 ---
 
@@ -276,8 +276,8 @@ curl -s https://api-testnet.robbed.fun/v1/tokens | jq '.[0:3]' # public (tunnel)
 ```
 
 Confirm the new token's address (and the on-chain `TokenCreated` tx) appears within ~1–2 min. Also
-sanity-check that trades show the exact **1% fee** (spec §12.25) and a **sell** is accepted with no
-pause gating (sells-always-open, §6.5) — matching the on-chain evidence pattern in
+sanity-check that trades show the exact **1% fee** and a **sell** is accepted with no
+pause gating (sells-always-open) — matching the on-chain evidence pattern in
 `testnet-lifecycle.md`.
 
 ---

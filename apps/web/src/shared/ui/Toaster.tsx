@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Lightweight toaster (§5.3 launch feedback; ROBBED_ terminal skin, spec §12.50).
+ * Lightweight toaster (launch feedback; ROBBED_ terminal skin).
  *
  * A dependency-free notification surface: a module-singleton store + a
  * `useSyncExternalStore` subscription, so the imperative `toast()` API can be
@@ -26,7 +26,7 @@ import { cn } from "@/shared/lib/utils";
  * OpenNext/CF-Workers + RSC safe: no browser API touched during render/SSR
  * (portal + timers run only after mount), no external dependency.
  *
- * Styling routes ONLY through design tokens (no raw color — web.md §7), matching
+ * Styling routes ONLY through design tokens (no raw color — web.md), matching
  * the terminal-mono aesthetic: a hairline card with a colored left accent + an
  * uppercase mono tag.
  */

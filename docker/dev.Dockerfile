@@ -1,6 +1,6 @@
 # ROBBED_ dev-mode runtime image (docker-compose dev services).
 # One image for every workspace app: node 22 (next/ponder CLIs), bun (API + WS
-# runtime, CLAUDE.md §8/§9), pnpm via corepack (workspace package manager —
+# runtime, CLAUDE.md), pnpm via corepack (workspace package manager —
 # version pinned by root package.json `packageManager`, not here).
 # Source is bind-mounted at /workspace; node_modules live in named volumes so
 # linux-native binaries (sharp, resvg) never collide with the macOS host install.

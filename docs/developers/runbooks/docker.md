@@ -1,6 +1,6 @@
 # Runbook — Local Docker dev stack (`docker-compose.yml`)
 
-**Owner:** hoodpad-indexer · **Master item:** M2-0 (infra) + dev-mode app services · **Spec:** §8 (off-chain stack), api.md §8 (minio/R2 in CI)
+**Owner:** hoodpad-indexer · **Master item:** M2-0 (infra) + dev-mode app services · **Spec:** section 8 (off-chain stack), api.md section 8 (minio/R2 in CI)
 
 The root `docker-compose.yml` brings up the full local stack: the three dependency-free infra services
 (**Postgres** (+`pg_trgm`), **Redis**, **minio**), a **local chain** (anvil **fork of Robinhood Chain
@@ -148,7 +148,7 @@ REDIS_URL=redis://localhost:4379
 plus the deploychain-emitted `tools/localstack/out/local.env` (addresses, `START_BLOCK`) — no
 manual `.env` needed. A root `.env` (loaded via `env_file`) can still override anything, e.g.
 `ROBINHOOD_RPC_URL` to fork through a private RPC. The indexer entrypoint also runs the idempotent
-offchain `migrate` (watermarks, eth_usd, metadata_verifications — indexer.md §3) before `ponder dev`.
+offchain `migrate` (watermarks, eth_usd, metadata_verifications — indexer.md section 3) before `ponder dev`.
 
 ## Postgres first-init SQL
 
@@ -239,16 +239,16 @@ distinct **41XX block** (dev keeps 40XX/44XX), so **both stacks run simultaneous
 Env-var **names** are identical to the dev stack (only the `:-` defaults differ) — an exported
 `*_PORT` in your shell/`.env` applies to BOTH stacks and re-collides them.
 
-### Prerequisites (§13 / Phase-T artifacts — the stack fails closed without them)
+### Prerequisites (the open items / Phase-T artifacts — the stack fails closed without them)
 
 | Artifact | Produced by | Consumed as |
 |---|---|---|
-| Official testnet chain ID / RPC URL / WS URL | §13 item, pulled from official Robinhood docs at Phase-T start — **never invented** | `TESTNET_CHAIN_ID`, `TESTNET_RPC_URL`, `TESTNET_RPC_WS_URL` env (no defaults; `${VAR:?}` aborts `config`/`up` when unset or empty) |
-| Official testnet Blockscout URL | same §13 item | **Not consumed by compose** — used by the T-3 `forge` verification step and the T-4 lifecycle runbook |
+| Official testnet chain ID / RPC URL / WS URL | the open items item, pulled from official Robinhood docs at Phase-T start — **never invented** | `TESTNET_CHAIN_ID`, `TESTNET_RPC_URL`, `TESTNET_RPC_WS_URL` env (no defaults; `${VAR:?}` aborts `config`/`up` when unset or empty) |
+| Official testnet Blockscout URL | same the open items item | **Not consumed by compose** — used by the T-3 `forge` verification step and the T-4 lifecycle runbook |
 
-Canonical chain-46630 network params: see `testnet.md` §1.
+Canonical chain-46630 network params: see `testnet.md` section 1.
 | Testnet constants in `@robbed/shared` | **T-1** (via robbed-shared, architect-ratified) | Unblocks the indexer + web chain gates (see limitation below) |
-| Contract addresses + deploy block | **T-3** deploy (`contracts/deployments/46630.json` — canonical `contracts/deployments/<chainId>.json` per **D-2** (2026-07-12; record: spec §12.49 annotation); supersedes the earlier `tools/deployments/testnet.json` wording) | `tools/localstack/out/testnet.env` — same keys as the local `local.env` (`CURVE_FACTORY_ADDRESS`, `ROUTER_ADDRESS`, `MIGRATOR_ADDRESS`, `TREASURY_ADDRESS`, `LP_FEE_VAULT_ADDRESS`, `START_BLOCK`), emitted/derived from the T-3 artifact via `emit-testnet-env.ts`. `api` and `indexer` refuse to start without it, with an error pointing here — there is no best-effort mode (no local deploy one-shot can fill the gap) |
+| Contract addresses + deploy block | **T-3** deploy (`contracts/deployments/46630.json` — canonical `contracts/deployments/<chainId>.json` per **D-2** (2026-07-12; record: D-49 annotation); supersedes the earlier `tools/deployments/testnet.json` wording) | `tools/localstack/out/testnet.env` — same keys as the local `local.env` (`CURVE_FACTORY_ADDRESS`, `ROUTER_ADDRESS`, `MIGRATOR_ADDRESS`, `TREASURY_ADDRESS`, `LP_FEE_VAULT_ADDRESS`, `START_BLOCK`), emitted/derived from the T-3 artifact via `emit-testnet-env.ts`. `api` and `indexer` refuse to start without it, with an error pointing here — there is no best-effort mode (no local deploy one-shot can fill the gap) |
 
 ### Env contract
 
@@ -331,13 +331,13 @@ production shape). Local browsing is unaffected either way.
 ### Bring-up
 
 ```bash
-export TESTNET_RPC_URL=…   TESTNET_CHAIN_ID=…   # from official docs (§13); TESTNET_RPC_WS_URL optional (Alchemy wss, HTTP-polling fallback)
+export TESTNET_RPC_URL=…   TESTNET_CHAIN_ID=…   # from official docs (the open items); TESTNET_RPC_WS_URL optional (Alchemy wss, HTTP-polling fallback)
 # tools/localstack/out/testnet.env must exist (T-3 output — see prerequisites)
 pnpm dev:testnet          # or dev:testnet:d / :down / :reset / :logs / :ps
 docker compose -f docker-compose.testnet.yml config   # static validation (fails loud on missing env)
 ```
 
-### Chain-identity gate (§12.55, implemented 2026-07-12 — replaces the earlier "bypassed gate" limitation)
+### Chain-identity gate (D-55, implemented 2026-07-12 — replaces the earlier "bypassed gate" limitation)
 
 The indexer consumes an explicit **`INDEXER_CHAIN_ID`** (compose-injected: `4663` on the local
 fork stack, `46630` here; **no default exists**). Double fail-closed assertion
@@ -345,12 +345,12 @@ fork stack, `46630` here; **no default exists**). Double fail-closed assertion
 registry (`packages/shared/src/addresses.ts` — env selects a chain, it can never invent one) AND
 the live RPC's `eth_chainId` must equal it (`assertRuntime`, run by `migrate` before
 `ponder dev`). Every chain-dependent address (WETH, V3 factory/NPM/SwapRouter02, the robbed
-contracts, treasury) resolves from that registry entry — the pre-§12.55 mainnet-default fallbacks
+contracts, treasury) resolves from that registry entry — the pre-D-55 mainnet-default fallbacks
 that would have silently missed testnet graduated-pool `Swap`/`Collect` are gone. The deploy
 artifact (`local.env`/`testnet.env`) takes precedence for the robbed contracts (live truth on a
 fork stack; identical to the registry on testnet by construction). **`set -e` is restored in both
-compose files' indexer commands (§12.55(d))** — an assertion failure kills the container instead
-of being swallowed (the pre-ruling defect observed live). §12.55 known limit: the registry's
+compose files' indexer commands (D-55(d))** — an assertion failure kills the container instead
+of being swallowed (the pre-ruling defect observed live). D-55 known limit: the registry's
 `4663` entry is a mainnet-**fork** pipeline artifact, so `INDEXER_CHAIN_ID=4663` is refused unless
 the stack declares `INDEXER_ALLOW_FORK_4663=1` (only `docker-compose.yml` does) — until a real
 Phase-B deploy replaces the entry.
@@ -363,7 +363,7 @@ deploy's concern, not this compose file's.
 Same pattern as the testnet stack (project `robbed-mainnet`, own volumes, `chaincheck` one-shot,
 no anvil/deploychain). Env seams: `MAINNET_RPC_URL` (required, `:?`), `MAINNET_CHAIN_ID`
 (required — asserted live by `chaincheck` **and** advertised as `NEXT_PUBLIC_CHAIN_ID`, one
-source of truth), `MAINNET_INDEXER_CHAIN_ID` (optional — indexer §12.55 selection, default 4663),
+source of truth), `MAINNET_INDEXER_CHAIN_ID` (optional — indexer D-55 selection, default 4663),
 `MAINNET_RPC_WS_URL` (optional, `:-` — Alchemy wss when a key exists; HTTP-polling fallback),
 `MAINNET_PUBLIC_API_BASE_URL` / `MAINNET_PUBLIC_WS_URL` / `MAINNET_PUBLIC_R2_BASE_URL`
 (browser-visible URL overrides, same seam as the testnet stack). Scripts:
@@ -374,7 +374,7 @@ stack currently runs with TESTNET (46630) values** ("later we will replace testn
 root `.env` sets `MAINNET_RPC_URL=https://rpc.testnet.chain.robinhood.com`,
 `MAINNET_CHAIN_ID=46630`, `MAINNET_INDEXER_CHAIN_ID=46630`, and
 `tools/localstack/out/mainnet.env` is a loudly-marked copy of the 46630 artifact set
-(`testnet.env` keys, START_BLOCK 89648621). **§12.55 stays honest — nothing is bypassed:**
+(`testnet.env` keys, START_BLOCK 89648621). **D-55 stays honest — nothing is bypassed:**
 `chaincheck` asserts the live RPC serves the declared 46630, the indexer's chain-identity gate
 resolves 46630 against the registry's real testnet entry, and `INDEXER_ALLOW_FORK_4663` is never
 set (the 4663 default remains refused until a real deploy replaces the fork artifact — that
@@ -394,7 +394,7 @@ not change at the Phase-B swap.
 (registry re-codegen'd; Gate G-A governs), regenerate `mainnet.env` from it, flip root `.env`
 (`MAINNET_RPC_URL` → official mainnet, `MAINNET_CHAIN_ID=4663`, delete
 `MAINNET_INDEXER_CHAIN_ID`), then `down -v` (the DB holds 46630 backfill state) + `up -d`. The
-§12.55 robbed-contracts follow-up still replaces the fork opt-in with a registry-mode assertion.
+D-55 robbed-contracts follow-up still replaces the fork opt-in with a registry-mode assertion.
 This compose file is the local staging shape only — the real production deploy is the P-3 images
 on Komodo (`prod-images.md`).
 
@@ -413,7 +413,7 @@ Host ports — **42XX block** (dev 40XX/44XX, testnet 41XX; all three stacks can
 
 ## Not in this file (deferred)
 
-- **Production images** — these are dev-mode containers (bind mount + watchers). The prod build/deploy landed at **P-3**: `apps/indexer/Dockerfile` + `apps/api/Dockerfile` (multi-stage, non-root, pnpm-workspace-correct) and the backend **compose stacks** (`docker-compose.{testnet,mainnet}.yml`, fronted by Cloudflare Tunnels). Those images reuse this file's `postgres:17` (+`pg_trgm` init) and `redis:7` choices; there is **no prod `web` image** (frontend → Cloudflare Workers, §12.45).
+- **Production images** — these are dev-mode containers (bind mount + watchers). The prod build/deploy landed at **P-3**: `apps/indexer/Dockerfile` + `apps/api/Dockerfile` (multi-stage, non-root, pnpm-workspace-correct) and the backend **compose stacks** (`docker-compose.{testnet,mainnet}.yml`, fronted by Cloudflare Tunnels). Those images reuse this file's `postgres:17` (+`pg_trgm` init) and `redis:7` choices; there is **no prod `web` image** (frontend → Cloudflare Workers, D-45).
 - **Seed data** — deploychain deploys contracts (with the Deploy.s.sol canary create+buy) but no
   richer demo dataset; `NEXT_PUBLIC_MOCK_DATA=true` covers demo needs today. (`dev:stack` /
   `dev:health` wiring landed at I-3 — see "Bring the stack up".)

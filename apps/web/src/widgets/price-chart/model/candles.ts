@@ -3,7 +3,7 @@ import { CANDLE_INTERVAL_SECONDS } from "@robbed/shared";
 import { formatEther } from "viem";
 
 /**
- * Trailing REST backfill window for one interval (§5.2). PURE + server-safe: it
+ * Trailing REST backfill window for one interval. PURE + server-safe: it
  * lives here (not in the `"use client"` feed hook) so the server component
  * TokenDetailView can compute the SSR candle window without importing a client
  * module — invoking a client-marked export from the server is a hard error in
@@ -18,10 +18,10 @@ export function candleWindow(interval: CandleInterval, now = Date.now()) {
 }
 
 /**
- * Pure candle transforms for the venue-continuous chart (§5.2, web.md §3.2).
+ * Pure candle transforms for the venue-continuous chart (web.md).
  *
  * The indexer already MERGES curve `Trade` and V3 `Swap` events into ONE candle
- * series (indexer.md §8), so the frontend renders exactly one `CandlestickSeries`
+ * series (indexer.md), so the frontend renders exactly one `CandlestickSeries`
  * — no venue seam, no second series. These pure helpers (unit-tested in
  * tests/candle-merge.test.ts) guarantee the data fed to lightweight-charts is
  * strictly ascending + de-duplicated by bucket, which the library requires and

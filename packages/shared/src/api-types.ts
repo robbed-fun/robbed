@@ -1,14 +1,14 @@
 /**
- * REST response/request DTO schemas + types (api.md §2, §3, §5) — single
+ * REST response/request DTO schemas + types (api.md) — single
  * source: the API shapes responses with these, the frontend imports them and
  * never redeclares.
  *
- * Conventions (api.md §2):
+ * Conventions (api.md):
  * - envelope `{ data, error: null } | { data: null, error: { code, message } }`;
  * - all uint256 values as decimal strings;
- * - every event-derived object carries `confirmationState` (§2.1);
+ * - every event-derived object carries `confirmationState`;
  * - every USD-derived field is `{ usd, ethUsd, asOf }` computed at request
- *   time from `eth_usd_snapshots` — never a constant (§2); `stale: true` added
+ * time from `eth_usd_snapshots` — never a constant; `stale: true` added
  *   when the snapshot is older than 5 minutes;
  * - cursor pagination: `?cursor=&limit=` (limit ≤ 100, default 50).
  */
@@ -34,19 +34,19 @@ import {
   venueSchema,
 } from "./ws-messages";
 
-// ── Envelope & errors (api.md §2) ───────────────────────────────────────────
+// ── Envelope & errors (api.md) ───────────────────────────────────────────
 
 /**
  * Closed set of `error.code` values the API emits — the enumeration the API
- * flagged as belonging in shared (api.md §5 "error codes"; §3.1 upload 4xx =
- * oversized/unsupported_type/decode_failed; §6.3 rate limiting; plus the generic
+ * flagged as belonging in shared (api.md "error codes"; upload 4xx =
+ * oversized/unsupported_type/decode_failed; rate limiting; plus the generic
  * envelope codes). SINGLE SOURCE: this is the only place the code vocabulary is
  * defined; both `errorCodeSchema` (validation) and `ERROR_CODES` (producer
  * ergonomics) derive from this tuple, and `apiEnvelopeSchema`'s error arm is
  * typed by it — a new code MUST be added here (and in openapi.yaml `Error.code`)
  * so producer/consumer can never drift.
  *
- * RATIFIED additions (2026-07-10; api.md §5 disposition, flagged by the API
+ * RATIFIED additions (2026-07-10; api.md disposition, flagged by the API
  * track in apps/api/src/lib/errors.ts + routes/health.ts):
  * - `upstream_unavailable` — unexpected internal 500 and the `/v1/readyz` 503
  *   path (a dependency — DB/Redis/R2 — is down). The frozen set had no
@@ -97,7 +97,7 @@ export const nextCursorSchema = z.string().nullable();
 
 // ── Shared value objects ────────────────────────────────────────────────────
 
-/** USD-derived field (api.md §2) — computed at request time, never constant. */
+/** USD-derived field (api.md) — computed at request time, never constant. */
 export const usdValueSchema = z.object({
   usd: z.string(),
   ethUsd: z.string(),
@@ -116,24 +116,24 @@ export const metadataVerificationStatusSchema = z.enum([
   "mismatch",
   "unfetched",
 ]);
-/** Derived, not stored (indexer.md §3.2): venue/status pill driver. */
+/** Derived, not stored (indexer.md) venue/status pill driver. */
 export const tokenStatusSchema = z.enum(["curve", "graduating", "graduated"]);
 export const candleIntervalParamSchema = z.enum(CANDLE_INTERVALS);
 
-// ── TokenCard (api.md §3.4 GET /v1/tokens; §5.1 card fields) ────────────────
+// ── TokenCard (api.md GET /v1/tokens; card fields) ────────────────
 
 export const tokenCardSchema = z.object({
   address: addressSchema,
   name: z.string(),
   ticker: z.string(),
-  imageUrl: z.string().nullable(), // null until metadata fetched (indexer.md §3.1)
+  imageUrl: z.string().nullable(), // null until metadata fetched (indexer.md)
   creator: addressSchema,
   createdAt: z.number().int().nonnegative(), // block timestamp, unix seconds
   priceEth: z.number().nullable(), // display-only float; null before first trade
   mcap: usdValueSchema,
   /**
    * Native ETH market cap, wei decimal string (ETH-first refinement ratified
-   * 2026-07-10 — OPTIONAL). ETH-first display source (§2): OG images / cards render
+   * 2026-07-10 — OPTIONAL). ETH-first display source : OG images / cards render
    * mcap in ETH from THIS field with no client-side `usd / ethUsd` division; the
    * USD `mcap` above derives FROM it (`mcapEth × ethUsd`). Additive + `.optional()`
    * so it is non-breaking: absent until the indexer materializes it into the card
@@ -154,39 +154,39 @@ export const tokenCardSchema = z.object({
 });
 export type TokenCard = z.infer<typeof tokenCardSchema>;
 
-// ── TokenDetail (api.md §3.4 GET /v1/tokens/:address — §5.2 + Trust panel) ──
+// ── TokenDetail (api.md GET /v1/tokens/:address — + Trust panel) ──
 
 /**
- * Organic-flow metrics (v1.2 — spec §5.2/§8.5; DATA-GAP-1). Sourced from the
+ * Organic-flow metrics (v1.2 —; DATA-GAP-1). Sourced from the
  * indexer's `token_flow_stats` (db-rows.ts `TokenFlowStatsRow`); advisory /
- * heuristic — NEVER gates chain state (§8.4/§8.5). The organic-holder estimate
+ * heuristic — NEVER gates chain state. The organic-holder estimate
  * is a RANGE (`holderPctLow`..`holderPctHigh`), never a point value — false
- * precision is forbidden (§5.2). `updatedAt` is null until the stats job first
+ * precision is forbidden. `updatedAt` is null until the stats job first
  * runs; the whole block is nullable while `token_flow_stats` has no row yet.
  */
 export const organicFlowSchema = z.object({
   holderPctLow: z.number(),
   holderPctHigh: z.number(),
-  volumePct: z.number(), // organic-volume % (wash-flagged volume excluded, §8.5)
+  volumePct: z.number(), // organic-volume % (wash-flagged volume excluded)
   flaggedClusterVolPct24h: z.number(), // flagged-cluster share of 24h curve volume
-  methodology: z.string(), // tooltip source, e.g. "heuristic — see §8.5"
+  methodology: z.string(), // tooltip source, e.g. "heuristic estimate — organic-flow scoring"
   updatedAt: z.string().nullable(),
 });
 export type OrganicFlow = z.infer<typeof organicFlowSchema>;
 
 /**
- * Per-token fee split surfaced on the Trust panel / `/create` (spec §6.4, §12.68).
+ * Per-token fee split surfaced on the Trust panel / `/create`.
  * `tradeFeeBps` is the treasury curve fee; `creatorFeeBps` is the ADDITIVE creator
  * leg. Both are per-token snapshots read from `tokens.{trade,creator}_fee_bps`
  * (db-rows.ts) — never the factory-current config (which misreports older curves).
  *
- * UN-FROZEN 2026-07-13 (§12.68): `creatorFeeBps` is now a first-class NONZERO value
+ * UN-FROZEN 2026-07-13 : `creatorFeeBps` is now a first-class NONZERO value
  * on mainnet — the creator-fee generation ships `creatorFeeBps = 50` (0.5%),
- * additive with `tradeFeeBps = 100` (1%) ⇒ 150. The old §7 "hardcoded 0 on mainnet"
+ * additive with `tradeFeeBps = 100` (1%) ⇒ 150. The old "hardcoded 0 on mainnet"
  * framing is superseded; reading 0 stays valid (legacy/testnet-only v1 curves), so
  * this is additive/backward-compatible. The refinement enforces the SAME additive
  * hard cap the factory asserts on-chain — `tradeFeeBps + creatorFeeBps ≤
- * MAX_TRADE_FEE_BPS` (200, §6.4) — via the single shared predicate
+ * MAX_TRADE_FEE_BPS` (200) — via the single shared predicate
  * (`isCombinedTradeFeeWithinCap`, constants.ts), so validator/contract can't drift.
  */
 export const feePolicySchema = z
@@ -195,7 +195,7 @@ export const feePolicySchema = z
     creatorFeeBps: z.number().int().nonnegative(),
   })
   .refine((f) => isCombinedTradeFeeWithinCap(f.tradeFeeBps, f.creatorFeeBps), {
-    message: `feePolicy: tradeFeeBps + creatorFeeBps must be ≤ ${MAX_TRADE_FEE_BPS} (spec §6.4 hard cap / §12.68 additive split)`,
+    message: `feePolicy: tradeFeeBps + creatorFeeBps must be ≤ ${MAX_TRADE_FEE_BPS} (hard cap / additive split)`,
   });
 export type FeePolicy = z.infer<typeof feePolicySchema>;
 
@@ -206,11 +206,11 @@ export const trustPanelSchema = z.object({
     computedHash: hex32Schema.optional(),
     verifiedAt: z.string().optional(),
   }),
-  /** Exact canonical string (spec §12.14; CLAUDE.md hard rule). */
+  /** Exact canonical string (CLAUDE.md hard rule). */
   lpCopy: z.literal(LP_COPY),
-  /** Additive treasury + creator fee split, cap-refined (spec §6.4/§12.68). */
+  /** Additive treasury + creator fee split, cap-refined. */
   feePolicy: feePolicySchema,
-  /** v1.2 organic-flow metrics (§5.2/§8.5); null until stats computed. */
+  /** v1.2 organic-flow metrics; null until stats computed. */
   organic: organicFlowSchema.nullable(),
 });
 export type TrustPanel = z.infer<typeof trustPanelSchema>;
@@ -228,7 +228,7 @@ export const tokenDetailSchema = tokenCardSchema.extend({
   v3PoolAddress: addressSchema.optional(),
   graduatedAt: z.number().int().nonnegative().optional(),
   /**
-   * LP NFT tokenId from the `Graduated` event (indexer.md §3.3
+   * LP NFT tokenId from the `Graduated` event (indexer.md
    * `graduations.lp_token_id`) — present iff the token has graduated. Additive
    * optional field (2026-07-12, robbed-indexer; robbed-shared-reviewable): lets
    * the /fees surface and clients call `LPFeeVault.collect(tokenId)` without
@@ -241,7 +241,7 @@ export const tokenDetailSchema = tokenCardSchema.extend({
     curveHeld: decimalStringSchema,
     lpTranche: decimalStringSchema,
   }),
-  /** Live curve state (Trust panel §5.2). */
+  /** Live curve state (Trust panel). */
   reserves: z.object({
     virtualEth: decimalStringSchema,
     virtualToken: decimalStringSchema,
@@ -254,7 +254,7 @@ export const tokenDetailSchema = tokenCardSchema.extend({
   }),
   trust: trustPanelSchema,
   /**
-   * RATIFIED (findings X-13 disposition, 2026-07-09; api.md §3.4): TokenDetail's
+   * RATIFIED (findings X-13 disposition, 2026-07-09; api.md) TokenDetail's
    * `creator` is the `{ address, tokensCreated }` profile object and supersedes
    * the card's plain `creator` address — the address is inside the object, so no
    * information is lost. Not a discrepancy; the shape is settled.
@@ -269,8 +269,8 @@ export const tokenDetailSchema = tokenCardSchema.extend({
     impersonationTicker: z.string().optional(),
   }),
   /**
-   * Distinct holder count for the token (`tokens.holder_count`, indexer.md §3.6)
-   * — the TokenHeader "Holders" stat (§5.2). Additive + `.optional()`
+   * Distinct holder count for the token (`tokens.holder_count`, indexer.md)
+   * — the TokenHeader "Holders" stat. Additive + `.optional()`
    * (2026-07-12, robbed-indexer; robbed-shared-reviewable — same discipline as
    * `mcapEth` / `lpTokenId`): non-breaking restoration of the aggregate the
    * `/holders` `{ items, nextCursor }` migration dropped from the paged list
@@ -281,10 +281,10 @@ export const tokenDetailSchema = tokenCardSchema.extend({
 });
 export type TokenDetail = z.infer<typeof tokenDetailSchema>;
 
-// ── Trades (api.md §3.4) ────────────────────────────────────────────────────
+// ── Trades (api.md) ────────────────────────────────────────────────────
 
 /**
- * Trade feed row. Fields per indexer.md §3.2 `trades` (api.md does not
+ * Trade feed row. Fields per indexer.md `trades` (api.md does not
  * re-enumerate; "Each row includes venue + confirmationState"). camelCase
  * projection of the unified curve+v3 table.
  */
@@ -306,7 +306,7 @@ export const tradeRowSchema = z.object({
 });
 export type TradeRow = z.infer<typeof tradeRowSchema>;
 
-// ── Candles (api.md §3.4; venue-continuous by construction) ─────────────────
+// ── Candles (api.md; venue-continuous by construction) ─────────────────
 
 export const candleSchema = z.object({
   bucketStart: z.number().int().nonnegative(),
@@ -320,16 +320,16 @@ export const candleSchema = z.object({
 });
 export type Candle = z.infer<typeof candleSchema>;
 
-// ── Holders (api.md §3.4 GET /v1/tokens/:address/holders) ───────────────────
+// ── Holders (api.md GET /v1/tokens/:address/holders) ───────────────────
 
 export const holderFlagSchema = z.enum(["creator", "curve", "lp_pool", "vault"]);
 
 /**
- * Advisory bot/farm labels (v1.2 — spec §8.5; DATA-GAP-1). SINGLE SOURCE for
- * the §8.5 flag vocabulary: the indexer's `address_flags.flags` (db-rows.ts
+ * Advisory bot/farm labels (v1.2 —; DATA-GAP-1). SINGLE SOURCE for
+ * the flag vocabulary: the indexer's `address_flags.flags` (db-rows.ts
  * `AddressFlagsRow` imports `BotFlag` from here) and the holder-list projection
  * both use it, so the wire and the table can't diverge. Labeling only — never
- * gates any chain interaction or listing (§8.4/§8.5).
+ * gates any chain interaction or listing.
  */
 export const botFlagSchema = z.enum([
   "farm",
@@ -357,24 +357,24 @@ export const holderRowSchema = z.object({
    */
   rank: z.number().int().positive().optional(),
   flags: z.array(holderFlagSchema),
-  /** v1.2 advisory §8.5 labels; absent when the address carries no bot flag. */
+  /** v1.2 advisory labels; absent when the address carries no bot flag. */
   botFlags: z.array(botFlagSchema).optional(),
-  /** Shared gas-funder cluster id → grouped on the holder list (§5.2). */
+  /** Shared gas-funder cluster id → grouped on the holder list. */
   clusterId: z.string().optional(),
 });
 export type HolderRow = z.infer<typeof holderRowSchema>;
 
-// ── Portfolio (spec §5.4; ROBBED_ redesign page 4 — `/portfolio`) ───────────
-// Phase-2 page whose SCHEMA is ready day 1 (spec §5.4 / redesign-plan page-4
-// inventory). ETH-first (§2): value/PnL are wei decimal strings, USD mirrors
+// ── Portfolio (ROBBED_ redesign page 4 — `/portfolio`) ───────────
+// Phase-2 page whose SCHEMA is ready day 1 (/ redesign-plan page-4
+// inventory). ETH-first : value/PnL are wei decimal strings, USD mirrors
 // derive at request time from `eth_usd_snapshots` (usdValueSchema), never a
-// constant. Balances behind these DTOs are Transfer-derived truth (spec §12
+// constant. Balances behind these DTOs are Transfer-derived truth (
 // disposition 16 / X-4/X-5), never trusted from an external source.
 
 /**
  * Best-effort signed ETH-value range (wei) for PnL where the cost basis is
- * imprecise. NO FALSE PRECISION (spec §5.2): the V3-leg cost basis is
- * best-effort until the Phase-2 portfolio (spec §12 disposition 16), so PnL is
+ * imprecise. NO FALSE PRECISION : the V3-leg cost basis is
+ * best-effort until the Phase-2 portfolio (disposition 16), so PnL is
  * expressed as a `low`..`high` range — mirroring the organic-flow low/high
  * convention (organicFlowSchema) — never a point value it can't justify. A
  * precisely-known value sets `low === high` with `confidence: "exact"`. The
@@ -438,11 +438,11 @@ export const portfolioSummarySchema = z.object({
   walletEthBalance: decimalStringSchema,
   /** Sum of priceable holdings' value, wei; "0" when nothing is priceable. */
   totalValueEth: decimalStringSchema,
-  /** USD mirror of `totalValueEth` (derived at request time, §2). */
+  /** USD mirror of `totalValueEth` (derived at request time). */
   totalValue: usdValueSchema,
   /**
    * All-time PnL ("LOOT") = realized + unrealized, best-effort range; null when
-   * no cost basis exists at all (§5.2 / disposition 16).
+   * no cost basis exists at all (/ disposition 16).
    */
   pnlAllTime: ethPnlRangeSchema.nullable(),
 });
@@ -465,14 +465,14 @@ export const portfolioHoldingSchema = z.object({
   priceEth: z.number().nullable(),
   /** `balance × priceEth`, wei; null when unpriceable (`priceEth` null). */
   valueEth: decimalStringSchema.nullable(),
-  /** USD mirror of `valueEth` (derived, §2); null when unpriceable. */
+  /** USD mirror of `valueEth` (derived); null when unpriceable. */
   value: usdValueSchema.nullable(),
-  /** Unrealized PnL best-effort range, wei; null when no cost basis (§5.2). */
+  /** Unrealized PnL best-effort range, wei; null when no cost basis. */
   unrealizedPnl: ethPnlRangeSchema.nullable(),
 });
 export type PortfolioHolding = z.infer<typeof portfolioHoldingSchema>;
 
-// ── Response payloads (api.md §3.3-§3.5) ────────────────────────────────────
+// ── Response payloads (api.md) ────────────────────────────────────
 
 export const tokensResponseSchema = z.object({
   tokens: z.array(tokenCardSchema),
@@ -482,7 +482,7 @@ export const kingOfTheHillResponseSchema = z.object({
   token: tokenCardSchema.nullable(), // null when no pre-grad tokens exist
 });
 export const searchResponseSchema = z.object({
-  results: z.array(tokenCardSchema), // same card projection as /tokens (api.md §3.3)
+  results: z.array(tokenCardSchema), // same card projection as /tokens (api.md)
 });
 export type SearchResult = TokenCard;
 
@@ -490,7 +490,7 @@ export const tradesResponseSchema = z.object({
   trades: z.array(tradeRowSchema),
   nextCursor: nextCursorSchema,
 });
-/** GET /v1/trades/:txHash — all Trade rows in that tx (api.md §3.4). */
+/** GET /v1/trades/:txHash — all Trade rows in that tx (api.md). */
 export const txTradesResponseSchema = z.object({
   trades: z.array(tradeRowSchema),
 });
@@ -502,7 +502,7 @@ export const holdersResponseSchema = z.object({
   holderCount: z.number().int().nonnegative(),
 });
 
-// ── Portfolio responses (spec §5.4; `/portfolio` HOLDINGS/ACTIVITY/CREATED) ──
+// ── Portfolio responses (`/portfolio` HOLDINGS/ACTIVITY/CREATED) ──
 /** GET /v1/portfolio/:address/holdings — cursor-paginated HOLDINGS tab. */
 export const portfolioHoldingsResponseSchema = z.object({
   holdings: z.array(portfolioHoldingSchema),
@@ -525,7 +525,7 @@ export const portfolioCreatedResponseSchema = z.object({
   nextCursor: nextCursorSchema,
 });
 
-/** GET /v1/tokens/:address/fees (api.md §3.4; per-collection rows from fee_collections). */
+/** GET /v1/tokens/:address/fees (api.md; per-collection rows from fee_collections). */
 export const feeCollectionEntrySchema = z.object({
   id: z.string(),
   amountToken: decimalStringSchema,
@@ -548,7 +548,7 @@ export const feesResponseSchema = z.object({
   }),
 });
 
-// ── Creator-fee claim surface (spec §7 / §12.63 — pull-payment CreatorVault) ─
+// ── Creator-fee claim surface (pull-payment CreatorVault) ─
 // ADDITIVE Phase-2 fold-in mirroring the landed on-chain surface (ICreatorVault /
 // IBondingCurve creator leg). The Portfolio CreatedTab claim widget reads the
 // claimable balance and submits a `CreatorVault.claim(creator)` tx. Anti-drift: every
@@ -557,7 +557,7 @@ export const feesResponseSchema = z.object({
 // this is an aggregate roll-up, so it carries NO `confirmationState`.
 //
 // DOC-LOCKSTEP (report): the endpoint shape (e.g. GET /v1/creators/:address/claimable)
-// + its openapi.yaml entry are api.md §3 additions the API/architect must ratify —
+// + its openapi.yaml entry are api.md additions the API/architect must ratify —
 // this is the single-source DTO both services build against, not a settled endpoint.
 
 export const creatorClaimableSchema = z.object({
@@ -566,7 +566,7 @@ export const creatorClaimableSchema = z.object({
   vault: addressSchema,
   /** Live on-chain `CreatorVault.balanceOf(creator)`, wei — the AUTHORITATIVE claimable value. */
   claimableEth: decimalStringSchema,
-  /** USD mirror of `claimableEth` (derived at request time, §2). */
+  /** USD mirror of `claimableEth` (derived at request time). */
   claimable: usdValueSchema,
   /** Lifetime accrued (Σ `CreatorFeeDeposited`), wei — from the `creator_claimable` roll-up. */
   totalAccruedEth: decimalStringSchema,
@@ -578,9 +578,9 @@ export const creatorClaimableSchema = z.object({
 export type CreatorClaimable = z.infer<typeof creatorClaimableSchema>;
 
 /**
- * `CLAIM_CREATOR_FEE` transaction metadata (spec §12.63). The shared shape the
+ * `CLAIM_CREATOR_FEE` transaction metadata. The shared shape the
  * frontend attaches to a pending `CreatorVault.claim(creator)` tx so the
- * confirmation-tier tracker/toast (§2.1) can label and reconcile it. `type` is a
+ * confirmation-tier tracker/toast can label and reconcile it. `type` is a
  * literal tag deliberately shaped to seed a discriminated union IF a broader shared
  * tx-metadata catalog is later introduced — none exists in packages/shared today
  * (flagged for architect; the web models `SideBadge`/`TapeKind` locally). `amountEth`
@@ -595,11 +595,11 @@ export const claimCreatorFeeTxMetaSchema = z.object({
 });
 export type ClaimCreatorFeeTxMeta = z.infer<typeof claimCreatorFeeTxMetaSchema>;
 
-// ── Post-graduation creator LP-fee split surface (spec §12.69 — 50/50 split) ─
-// The §12.68 pre-grad creator leg (curve native-ETH fee, above) has a POST-GRAD half:
+// ── Post-graduation creator LP-fee split surface (50/50 split) ─
+// The pre-grad creator leg (curve native-ETH fee, above) has a POST-GRAD half:
 // the graduated V3 pool's 1% fees are split 50/50 creator/treasury at
-// `LPFeeVault.collect(tokenId)` (§12.69(A)), on BOTH legs. Custody is Option B
-// (§12.69(C), LANDED): the creator share is credited in the pull-payment CreatorVault
+// `LPFeeVault.collect(tokenId)`, on BOTH legs. Custody is Option B
+// (LANDED) the creator share is credited in the pull-payment CreatorVault
 // as a per-`(creator, token)` ERC20 balance via `depositERC20(creator, token, share)`,
 // where `token` is the ERC20 — a graduated LAUNCH TOKEN (sell-leg) or canonical WETH
 // (buy-leg), NOT unwrapped to ETH. Claimed per ERC20 via `claimERC20(creator, token)`;
@@ -609,19 +609,19 @@ export type ClaimCreatorFeeTxMeta = z.infer<typeof claimCreatorFeeTxMetaSchema>;
 // The pre-grad native-ETH balance (`creatorClaimableSchema` above) stays SEPARATE.
 //
 // DOC-LOCKSTEP (report): the endpoint shape (e.g. GET /v1/creators/:address/claimable
-// enumerating the creator's (token) rows) + its openapi.yaml entry are api.md §3
+// enumerating the creator's (token) rows) + its openapi.yaml entry are api.md
 // additions the API/architect ratifies — this is the single-source DTO both services
 // build against.
 
 export const creatorTokenClaimableSchema = z.object({
   creator: addressSchema,
-  /** The ERC20 the balance is denominated in — a graduated launch token OR canonical WETH (§12.69(C)). */
+  /** The ERC20 the balance is denominated in — a graduated launch token OR canonical WETH. */
   token: addressSchema,
   /** The CreatorVault custodying the balance (constant per creator-fee factory version). */
   vault: addressSchema,
   /** Live claimable — `CreatorVault.tokenBalanceOf(creator, token)`, wei of `token`. AUTHORITATIVE. */
   claimable: decimalStringSchema,
-  /** USD mirror — populated only when `token` is WETH (ETH-priced, derived §2); null for launch-token legs (unpriceable ERC20). */
+  /** USD mirror — populated only when `token` is WETH (ETH-priced, derived); null for launch-token legs (unpriceable ERC20). */
   claimableUsd: usdValueSchema.nullable(),
   /** Lifetime accrued (Σ `CreatorTokenDeposited.amount` for this `(creator, token)`), wei. */
   totalAccrued: decimalStringSchema,
@@ -633,10 +633,10 @@ export const creatorTokenClaimableSchema = z.object({
 export type CreatorTokenClaimable = z.infer<typeof creatorTokenClaimableSchema>;
 
 /**
- * `CLAIM_CREATOR_TOKEN_FEE` transaction metadata (spec §12.69) — the post-grad ERC20
+ * `CLAIM_CREATOR_TOKEN_FEE` transaction metadata — the post-grad ERC20
  * analog of `claimCreatorFeeTxMetaSchema`, matching `CreatorVault.claimERC20(creator,
  * token) → amount` 1:1 (single ERC20 per claim). Attached to a pending claim tx so the
- * confirmation-tier tracker (§2.1) can label + reconcile it; `amount` is the expected
+ * confirmation-tier tracker can label + reconcile it; `amount` is the expected
  * payout (from `creatorTokenClaimableSchema.claimable`), shown optimistically until the
  * receipt confirms the actual `CreatorTokenClaimed.amount`.
  */
@@ -649,7 +649,7 @@ export const claimCreatorTokenFeeTxMetaSchema = z.object({
 });
 export type ClaimCreatorTokenFeeTxMeta = z.infer<typeof claimCreatorTokenFeeTxMetaSchema>;
 
-/** GET /v1/stats (api.md §3.4 — "tokens launched, graduations, 24h volume, treasury fees collected"). */
+/** GET /v1/stats (api.md — "tokens launched, graduations, 24h volume, treasury fees collected"). */
 export const statsResponseSchema = z.object({
   tokensLaunched: z.number().int().nonnegative(),
   graduations: z.number().int().nonnegative(),
@@ -659,7 +659,7 @@ export const statsResponseSchema = z.object({
   treasuryFeesCollected: usdValueSchema,
 });
 
-/** GET /v1/confirmations (api.md §3.5; SSR initial state). */
+/** GET /v1/confirmations (api.md; SSR initial state). */
 export const confirmationsResponseSchema = z.object({
   safeBlock: z.number().int().nonnegative(),
   finalizedBlock: z.number().int().nonnegative(),
@@ -667,14 +667,14 @@ export const confirmationsResponseSchema = z.object({
   updatedAt: z.string(),
 });
 
-/** GET /v1/eth-usd (api.md §3.5) — live-or-dated source, never a constant (§2). */
+/** GET /v1/eth-usd (api.md) — live-or-dated source, never a constant. */
 export const ethUsdResponseSchema = z.object({
   price: z.number(),
   source: z.string(), // e.g. 'chainlink:4663', 'defillama'
   asOf: z.string(),
 });
 
-// ── Launch flow (api.md §3.1, §3.2) ─────────────────────────────────────────
+// ── Launch flow (api.md) ─────────────────────────────────────────
 
 /** 200 of POST /v1/uploads/image. */
 export const uploadImageResponseSchema = z.object({
@@ -685,9 +685,9 @@ export const uploadImageResponseSchema = z.object({
   bytes: z.number().int().positive(),
 });
 
-/** Request body of POST /v1/metadata (api.md §3.2; server adds the version tag). */
+/** Request body of POST /v1/metadata (api.md; server adds the version tag). */
 export const metadataRequestSchema = z.object({
-  // Byte-length limits (§12.30) — same on-chain-mirroring refinement as the
+  // Byte-length limits — same on-chain-mirroring refinement as the
   // metadata document schema, sourced from the same constants (no parallel cap).
   name: byteBoundedString(METADATA_NAME_MAX, "name"),
   ticker: byteBoundedString(METADATA_TICKER_MAX, "ticker"),
@@ -707,7 +707,7 @@ export type MetadataRequest = z.infer<typeof metadataRequestSchema>;
 /**
  * 200 of POST /v1/metadata. The client MUST re-verify `metadataHash` against
  * its own `metadataHash(JSON.parse(canonicalJson))` computation with the
- * shared canonicalizer before signing the tx (spec §12.19 — normative for M3).
+ * shared canonicalizer before signing the tx (normative for M3).
  */
 export const metadataResponseSchema = z.object({
   metadataHash: hex32Schema,
@@ -715,10 +715,10 @@ export const metadataResponseSchema = z.object({
   canonicalJson: z.string(),
 });
 
-// ── Admin (api.md §3.6) ─────────────────────────────────────────────────────
+// ── Admin (api.md) ─────────────────────────────────────────────────────
 
 export const adminVisibilityRequestSchema = z.object({
-  visibility: z.enum(["visible", "hidden"]), // admin can hide listings ONLY (§8.4)
+  visibility: z.enum(["visible", "hidden"]), // admin can hide listings ONLY
   reason: z.string().min(1),
 });
 export const adminImpersonationRequestSchema = z.object({
@@ -728,7 +728,7 @@ export const adminImpersonationRequestSchema = z.object({
 });
 
 /**
- * Moderation queue item (api.md §3.6: "token, image, metadata, vendor scores,
+ * Moderation queue item (api.md : "token, image, metadata, vendor scores,
  * impersonation match, current visibility" — projection of moderation_status
  * joined to tokens; exact enumeration is this schema).
  */
@@ -750,7 +750,7 @@ export const moderationQueueResponseSchema = z.object({
   nextCursor: nextCursorSchema,
 });
 
-/** Audit-log entry (api.md §6.2: actor, action, target, reason, ts). */
+/** Audit-log entry (api.md : actor, action, target, reason, ts). */
 export const auditLogEntrySchema = z.object({
   actor: z.string(),
   action: z.string(),
@@ -763,7 +763,7 @@ export const auditLogResponseSchema = z.object({
   nextCursor: nextCursorSchema,
 });
 
-// ── Query enums (api.md §3.4) ───────────────────────────────────────────────
+// ── Query enums (api.md) ───────────────────────────────────────────────
 
 export const tokenSortSchema = z.enum([
   "trending",
@@ -774,13 +774,13 @@ export const tokenSortSchema = z.enum([
 ]);
 export const tokenFilterSchema = z.enum(["pregrad", "graduated", "all"]);
 
-// ── Sortable + keyset-paginated list tables (api.md §3.4; token-detail redesign) ─
+// ── Sortable + keyset-paginated list tables (api.md; token-detail redesign) ─
 //
 // Contract-first shared shapes for SERVER-SIDE sorted, keyset-paginated tables
 // consumed by BOTH apps/api (which builds a safe ORDER BY + keyset WHERE) and
 // apps/web (the common DataTable + Pagination components). Defined ONCE here so
 // the two services build against identical shapes (anti-drift — CLAUDE.md /
-// CONTRIBUTING §8). The field allowlists + api.md §3 wording are flagged for
+// CONTRIBUTING). The field allowlists + api.md wording are flagged for
 // architect ratification in the change report; nothing shared is redeclared.
 //
 // Decisions owned per robbed-shared "decide-it-yourself" (basis recorded inline):
@@ -792,7 +792,7 @@ export const tokenFilterSchema = z.enum(["pregrad", "graduated", "all"]);
 //     value not in the enum, so no caller-chosen string reaches the ORDER BY (no
 //     arbitrary-column SQL). label→column maps live in comments so the API
 //     transcribes safe column names; the runtime column map stays API-local (one
-//     consumer — the SQL builder — §12.40c single-consumer precedent).
+// consumer — the SQL builder — single-consumer precedent).
 //  3. `limit` CLAMPS (never rejects) to mirror the existing `clampLimit` behaviour
 //     byte-for-byte — the friendlier existing contract, not a stricter fork.
 //     `clampListLimit` is the extracted single source (apps/api `clampLimit`
@@ -808,7 +808,7 @@ export type SortDir = z.infer<typeof sortDirSchema>;
 /**
  * Trade-feed sort allowlist (GET /v1/tokens/:address/trades — token-detail TRADES
  * table). Each label → the indexed `trades` column the API builds ORDER BY over
- * (db-rows.ts `TradeRowDb`; indexer.md §3.2). The API MUST reject anything
+ * (db-rows.ts `TradeRowDb`; indexer.md). The API MUST reject anything
  * outside this enum (no arbitrary-column SQL):
  *   age    → block_timestamp   (DESC = newest; block_number is the correlated fallback)
  *   side   → is_buy            (the DTO's `isBuy`; buy sorts vs sell)
@@ -824,8 +824,8 @@ export type TradeSortField = z.infer<typeof tradeSortFieldSchema>;
 
 /**
  * Holder-list sort allowlist (GET /v1/tokens/:address/holders — token-detail
- * HOLDERS table). Each label → its source (balances, indexer.md §3.6; address_flags,
- * §8.5). The API MUST reject anything outside this enum:
+ * HOLDERS table). Each label → its source (balances, indexer.md; address_flags,
+ * ). The API MUST reject anything outside this enum:
  *   rank    → balance   (rank = ROW_NUMBER() OVER (ORDER BY balance::numeric DESC))
  *   address → holder    (the DTO exposes this column as `address`)
  *   label   → DERIVED    (creator/curve/lp_pool/vault flag-join precedence +
@@ -863,7 +863,7 @@ export type KeysetCursorPayload = z.infer<typeof keysetCursorSchema>;
 
 /**
  * Canonical page-limit clamp — SINGLE SOURCE for the `[1, PAGE_LIMIT_MAX]` bound
- * with `PAGE_LIMIT_DEFAULT` fallback (constants.ts; api.md §2). CLAMPS and never
+ * with `PAGE_LIMIT_DEFAULT` fallback (constants.ts; api.md). CLAMPS and never
  * throws, so an over-large or malformed `?limit=` degrades to a valid page
  * instead of a 400 — byte-identical to the existing apps/api `clampLimit`, which
  * should delegate to this to kill the duplicate (report note).

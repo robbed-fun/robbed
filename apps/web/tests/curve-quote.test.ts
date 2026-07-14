@@ -17,12 +17,12 @@ import {
 } from "@/entities/curve";
 
 /**
- * Curve entity units (§5.2). The QUOTE itself is an on-chain view
+ * Curve entity units. The QUOTE itself is an on-chain view
  * (BondingCurve.quoteBuy/quoteSell); these prove the DISPLAY transforms around it
- * and the invisible-venue-switch selection — no market metric is inlined (§2).
+ * and the invisible-venue-switch selection — no market metric is inlined.
  */
 
-describe("invisible venue switch — status selects the engine (§5.2)", () => {
+describe("invisible venue switch — status selects the engine ", () => {
   it("curve pre-grad, v3 only after graduation, never a user choice", () => {
     expect(venueForStatus("curve")).toBe("curve");
     expect(venueForStatus("graduating")).toBe("curve"); // still the curve engine
@@ -33,7 +33,7 @@ describe("invisible venue switch — status selects the engine (§5.2)", () => {
   });
 });
 
-describe("slippage floor (default 2%) — §5.2", () => {
+describe("slippage floor (default 2%) — ", () => {
   it("floors an amount by the tolerance, defaulting to 2%", () => {
     expect(DEFAULT_SLIPPAGE_BPS).toBe(200);
     // 1000 tokens at 2% → 980
@@ -49,7 +49,7 @@ describe("slippage floor (default 2%) — §5.2", () => {
   });
 });
 
-describe("deadline is recomputed at call time (never a stale quote's) — §5.2", () => {
+describe("deadline is recomputed at call time (never a stale quote's) — ", () => {
   it("returns now + N minutes in unix seconds", () => {
     const now = 1_800_000_000_000; // fixed ms
     expect(computeDeadline(now, 10)).toBe(BigInt(1_800_000_000 + 600));
@@ -104,7 +104,7 @@ describe("computeChainDeadline — derives the deadline from CHAIN time, not the
   });
 });
 
-describe("parseQuote — normalizes the on-chain view tuples (contracts.md §2.3)", () => {
+describe("parseQuote — normalizes the on-chain view tuples (contracts.md)", () => {
   it("buy tuple → [tokensOut, fee, acceptedEthGross, refund]", () => {
     const q = parseQuote("buy", [1234n, 5n, 990n, 10n]);
     expect(q).toEqual({
@@ -190,7 +190,7 @@ describe("parseCurveReads — live Trust-panel reads (never cached API)", () => 
   });
 });
 
-describe("isInEarlyWindow — anti-sniper cap surfacing (§6.5)", () => {
+describe("isInEarlyWindow — anti-sniper cap surfacing ", () => {
   it("is true before the window end, false after", () => {
     const nowMs = 1_800_000_000_000;
     expect(isInEarlyWindow(1_800_000_100n, nowMs)).toBe(true);

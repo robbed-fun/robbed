@@ -6,10 +6,10 @@ import { useReadContracts } from "wagmi";
 import { ROBBED, isPlaceholder } from "@/shared/config/addresses";
 
 /**
- * Live economics read from the CurveFactory (§5.3 "economics displayed plainly").
+ * Live economics read from the CurveFactory ("economics displayed plainly").
  * Every number the EconomicsPanel shows is READ LIVE from chain — the deploy fee,
- * the graduation threshold (ETH), the trade-fee bps — never a constant (§2,
- * CLAUDE.md). `pauseCreates` gates the submit button (granular flag, §6.5 — this
+ * the graduation threshold (ETH), the trade-fee bps — never a constant (,
+ * CLAUDE.md). `pauseCreates` gates the submit button (granular flag, — this
  * NEVER affects sells elsewhere).
  *
  * LAUNCH-2 fix (2026-07-12): the curve seed values come from
@@ -33,13 +33,13 @@ export interface LaunchEconomics {
   graduationEthWei: bigint | null;
   /** FactoryConfig.tradeFeeBps — TREASURY portion of the trade fee, live. */
   tradeFeeBps: number | null;
-  /** FactoryConfig.creatorFeeBps — CREATOR portion (§12.63), live; 0 in v1. */
+  /** FactoryConfig.creatorFeeBps — CREATOR portion, live; 0 in v1. */
   creatorFeeBps: number | null;
   /** CurveDefaults.virtualEth0 — seed virtual ETH reserve; seeds the M3-6 preview. */
   virtualEth0: bigint | null;
   /** CurveDefaults.virtualToken0 — seed virtual token reserve; seeds the M3-6 preview. */
   virtualToken0: bigint | null;
-  /** FactoryConfig.pauseCreates — disables submit when true (§6.5). */
+  /** FactoryConfig.pauseCreates — disables submit when true. */
   pauseCreates: boolean | null;
   /** False while the factory address is still the M3-3 placeholder stub. */
   available: boolean;

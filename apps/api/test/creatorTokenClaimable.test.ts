@@ -1,5 +1,5 @@
 /**
- * Post-graduation split claimable endpoint (spec §12.69). GET
+ * Post-graduation split claimable endpoint. GET
  * /v1/creators/:address/claimable/:token: accrued/claimed from the per-(creator,
  * token) roll-up, live tokenBalanceOf as authoritative claimable (mirror fallback),
  * WETH-leg USD vs launch-token-leg null USD, vault resolution (row → config → 404).
@@ -96,7 +96,7 @@ describe("GET /v1/creators/:address/claimable/:token", () => {
     const body = (await readJson(res)).data;
     expect(() => creatorTokenClaimableSchema.parse(body)).not.toThrow();
     expect(body.token).toBe(WETH);
-    expect(body.claimableUsd).not.toBeNull(); // WETH leg carries USD (§2)
+    expect(body.claimableUsd).not.toBeNull(); // WETH leg carries USD
     expect(body.claimableUsd.ethUsd).toBeTruthy();
   });
 

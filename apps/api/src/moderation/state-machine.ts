@@ -1,5 +1,5 @@
 /**
- * Visibility state machine (§4.3/§4.5, §12.21). PURE — vendor scores + flags →
+ * Visibility state machine. PURE — vendor scores + flags →
  * `{ visibility, reason }`. Precedence (fail-closed on CSAM, fail-OPEN on vendor
  * outage so an outage can't blank the site):
  *   1. csam            → hidden (short-circuit, irreversible-by-UI)
@@ -7,7 +7,7 @@
  *   3. nsfw ≥ HIDE     → hidden
  *   4. nsfw ≥ REVIEW   → pending_review
  *   5. impersonation   → pending_review (flag ≠ hidden; renders as a badge)
- *   6. else            → visible   (`pending_review` REMAINS LISTED, §12.21)
+ * 6. else → visible (`pending_review` REMAINS LISTED)
  */
 import type { ModerationVisibility } from "@robbed/shared";
 

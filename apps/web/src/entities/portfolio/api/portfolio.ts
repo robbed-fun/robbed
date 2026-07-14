@@ -14,18 +14,18 @@ import { ApiError } from "@/shared/api";
 import { env } from "@/shared/lib/env";
 
 /**
- * Portfolio read client (api.md §3.4a) — the four `/v1/portfolio/*` endpoints.
+ * Portfolio read client (api.md) — the four `/v1/portfolio/*` endpoints.
  *
- * PLACEMENT DECISION (hoodpad-frontend; basis recorded): the Portfolio task
+ * PLACEMENT DECISION (robbed-frontend; basis recorded): the Portfolio task
  * scope explicitly fences off `src/shared/api` (the base typed REST client), so
  * these getters live in the portfolio entity's `api` segment instead of being
  * added to that barrel. They reuse the SAME transport contract — the shared
  * `ApiError`, the `env.apiFetchBaseUrl()` origin (split-horizon, web.md
- * §2.3), and the api.md §2 envelope
+ * ), and the api.md envelope
  * (`{ data, error }`) — and validate every response with the FROZEN
  * `@robbed/shared` schemas, so NO response shape is redeclared (anti-drift rule 2
  * holds on types; only the ~12-line envelope transport is repeated). NOTE for
- * hoodpad-shared: exporting a generic `apiGet` primitive from `shared/api` would
+ * robbed-shared: exporting a generic `apiGet` primitive from `shared/api` would
  * let these migrate onto it and drop the duplication entirely.
  */
 
@@ -73,7 +73,7 @@ function pageQs(query: PageQuery): string {
 /**
  * GET /v1/portfolio/:address — stat-cell roll-up. Any address resolves; an
  * unknown/never-traded address is an EMPTY portfolio (never a 404) per api.md
- * §3.4a, so the caller does not special-case not-found.
+ *, so the caller does not special-case not-found.
  */
 export function getPortfolioSummary(
   address: string,

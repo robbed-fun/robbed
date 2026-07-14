@@ -1,7 +1,7 @@
 /**
- * Canonical event ABI artifact freeze tests (spec §12.15-16; contracts.md §2).
+ * Canonical event ABI artifact freeze tests (contracts.md).
  * If any of these fail after an edit, the cross-service contract changed —
- * that requires hoodpad-architect ratification, not a test update.
+ * that requires robbed-architect ratification, not a test update.
  */
 import { describe, expect, it } from "bun:test";
 import { toEventSelector, type AbiEvent } from "viem";
@@ -38,8 +38,8 @@ function signatureOf(ev: AbiEvent): string {
   return `${ev.name}(${ev.inputs.map((i) => i.type).join(",")})`;
 }
 
-describe("ratified signatures (spec §12.15; contracts.md §2)", () => {
-  it("TokenCreated — factory (§12.15)", () => {
+describe("ratified signatures (contracts.md)", () => {
+  it("TokenCreated — factory ", () => {
     expect(signatureOf(tokenCreatedEvent)).toBe(
       "TokenCreated(address,address,address,string,string,bytes32,string,address)",
     );
@@ -52,7 +52,7 @@ describe("ratified signatures (spec §12.15; contracts.md §2)", () => {
     ]);
   });
 
-  it("Trade — curve (§12.15: gross ethAmount, separate fee, post-trade reserves)", () => {
+  it("Trade — curve (gross ethAmount, separate fee, post-trade reserves)", () => {
     expect(signatureOf(tradeEvent)).toBe(
       "Trade(address,bool,uint256,uint256,uint256,uint256,uint256,uint256)",
     );
@@ -65,7 +65,7 @@ describe("ratified signatures (spec §12.15; contracts.md §2)", () => {
     ]);
   });
 
-  it("Graduated — migrator (contracts.md §2.5)", () => {
+  it("Graduated — migrator (contracts.md)", () => {
     expect(signatureOf(graduatedEvent)).toBe(
       "Graduated(address,address,uint256,uint128,uint256,uint256,uint256,address,uint256,uint256,uint256)",
     );
@@ -74,14 +74,14 @@ describe("ratified signatures (spec §12.15; contracts.md §2)", () => {
     ]);
   });
 
-  it("Collect — NPM (indexer.md §3.5)", () => {
+  it("Collect — NPM (indexer.md)", () => {
     expect(signatureOf(v3CollectEvent)).toBe("Collect(uint256,address,uint256,uint256)");
     expect(v3CollectEvent.inputs.filter((i) => i.indexed).map((i) => i.name)).toEqual(["tokenId"]);
   });
 });
 
 describe("canonical upstream topic0 (stable, well-known selectors)", () => {
-  it("ERC-20 Transfer (sixth event family, §12.16)", () => {
+  it("ERC-20 Transfer (sixth event family)", () => {
     expect(toEventSelector(transferEvent)).toBe(
       "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
     );
@@ -104,7 +104,7 @@ describe("artifact groupings (one source for Ponder config + frontend decoding)"
     expect(v3PositionManagerEventsAbi).toEqual([v3CollectEvent]);
   });
 
-  it("combined artifact covers the six ratified event families (§12.15-16), all type:'event'", () => {
+  it("combined artifact covers the six ratified event families, all type:'event'", () => {
     expect(robbedEventsAbi.length).toBe(6);
     for (const ev of robbedEventsAbi) expect(ev.type).toBe("event");
     // selectors are pairwise distinct
@@ -113,7 +113,7 @@ describe("artifact groupings (one source for Ponder config + frontend decoding)"
   });
 });
 
-describe("creator-fee event family (spec §7 / §12.63 — ADDITIVE, kept off the frozen 6)", () => {
+describe("creator-fee event family (ADDITIVE, kept off the frozen 6)", () => {
   it("signatures + indexed topics are transcribed from the landed artifacts", () => {
     expect(signatureOf(creatorFeesSweptEvent)).toBe("CreatorFeesSwept(address,address,uint256)");
     expect(creatorFeesSweptEvent.inputs.filter((i) => i.indexed).map((i) => i.name)).toEqual([
@@ -151,7 +151,7 @@ describe("creator-fee event family (spec §7 / §12.63 — ADDITIVE, kept off th
   });
 });
 
-describe("post-grad 50/50 LP-fee-split family (spec §12.69 — LANDED, additive)", () => {
+describe("post-grad 50/50 LP-fee-split family (LANDED, additive)", () => {
   it("signatures + indexed topics are transcribed byte-for-byte from the regenerated artifacts", () => {
     // FeesSplit(uint256 indexed tokenId, address indexed creator, uint256 treasury0,
     //           uint256 creator0, uint256 treasury1, uint256 creator1)
@@ -191,7 +191,7 @@ describe("post-grad 50/50 LP-fee-split family (spec §12.69 — LANDED, additive
     for (const ev of postGradCreatorFeeEventsAbi) expect(ev.type).toBe("event");
   });
 
-  it("selectors are distinct from the six ratified families AND the §12.63 pre-grad set", () => {
+  it("selectors are distinct from the six ratified families AND the pre-grad set", () => {
     const postGrad = postGradCreatorFeeEventsAbi.map((e) => toEventSelector(e as AbiEvent));
     expect(new Set(postGrad).size).toBe(3);
     const ratified = robbedEventsAbi.map((e) => toEventSelector(e as AbiEvent));

@@ -1,5 +1,5 @@
 /**
- * Wallet native-ETH balance reader (api.md §3 portfolio: `walletEthBalance`).
+ * Wallet native-ETH balance reader (api.md portfolio: `walletEthBalance`).
  *
  * Chain truth, exact: the live native balance is an RPC `eth_getBalance` read, NOT
  * indexer-derived (the indexer tracks ERC-20 token balances via Transfer, never

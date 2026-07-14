@@ -25,7 +25,7 @@ import { formatEthFromWei, formatPriceEth, shortAddress } from "@/shared/lib/for
 import { cn } from "@/shared/lib/utils";
 
 /**
- * ACTIVITY tab (mockup "2c" / §5.4): the per-address slice of the unified trade
+ * ACTIVITY tab (mockup "2c" /) the per-address slice of the unified trade
  * feed — `GET /v1/portfolio/:address/activity` returns the shared `TradeRow`
  * shape (no parallel model), read through the `usePortfolioActivity` TanStack
  * Query hook. Columns adapt the token-detail trades table to a cross-token view:
@@ -34,7 +34,7 @@ import { cn } from "@/shared/lib/utils";
  * 2026-07-10) — the header + body rows iterate the SAME row model, and the cell
  * renderers reproduce the mockup spans verbatim (byte-identical DOM). Each row
  * carries its `ConfirmationBadge` so an as-yet-unposted trade is never shown as
- * final (§2.1). This is a historical read, not the live optimistic feed — rows
+ * final. This is a historical read, not the live optimistic feed — rows
  * arrive already reconciled to indexed truth.
  */
 

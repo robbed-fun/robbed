@@ -1,11 +1,11 @@
 /**
- * ETH/USD poller suite (indexer.md §3.9; spec §2, §12.48a, §12.51).
+ * ETH/USD poller suite (indexer.md).
  *
  * Covers the task-mandated cases: fresh Chainlink answer accepted + labeled
- * `chainlink:4663`; stale answer rejected → HTTP fallback; §12.51 assertion
+ * `chainlink:4663`; stale answer rejected → HTTP fallback; assertion
  * failure fail-closed (throws, poller never starts); non-4663 chain skips the
  * Chainlink branch entirely. Plus: all-source failure writes NOTHING (never a
- * fabricated price, §2), HTTP parser shapes (DefiLlama/Coinbase), env loading.
+ * fabricated price), HTTP parser shapes (DefiLlama/Coinbase), env loading.
  */
 import { describe, expect, it } from "bun:test";
 import {
@@ -78,7 +78,7 @@ const failingFetch: typeof fetch = (async () => {
 }) as unknown as typeof fetch;
 
 describe("loadEthUsdEnv", () => {
-  it("defaults the feed to the §12.51 recorded proxy for 4663", () => {
+  it("defaults the feed to the recorded proxy for 4663", () => {
     const env = loadEthUsdEnv({});
     expect(env.chainlinkFeed).toBe(CHAINLINK_ETH_USD_PROXY_4663);
     expect(env.pollIntervalMs).toBe(30_000);
@@ -94,7 +94,7 @@ describe("loadEthUsdEnv", () => {
   });
 });
 
-describe("assertChainlinkFeed — §12.51 mandatory startup assertions", () => {
+describe("assertChainlinkFeed — mandatory startup assertions", () => {
   it("passes on the verified shape (description 'ETH / USD', decimals 8)", async () => {
     await expect(assertChainlinkFeed(stubAggregator(), FEED)).resolves.toBeUndefined();
   });
@@ -118,7 +118,7 @@ describe("assertChainlinkFeed — §12.51 mandatory startup assertions", () => {
   });
 });
 
-describe("readChainlinkPrice — §3.9 staleness check", () => {
+describe("readChainlinkPrice — staleness check", () => {
   it("accepts a fresh answer at 8 decimals with the chainlink:4663 label", async () => {
     const obs = await readChainlinkPrice(stubAggregator(), FEED, NOW.getTime(), 3600);
     expect(obs).not.toBeNull();
@@ -137,7 +137,7 @@ describe("readChainlinkPrice — §3.9 staleness check", () => {
     expect(obs).toBeNull();
   });
 
-  it("rejects incomplete rounds and non-positive answers (never fabricates, §2)", async () => {
+  it("rejects incomplete rounds and non-positive answers (never fabricates)", async () => {
     const incomplete = await readChainlinkPrice(
       stubAggregator({ round: [1n, 181564468052n, 0n, 0n, 1n] }),
       FEED,
@@ -237,7 +237,7 @@ describe("runEthUsdTick — source chain (Chainlink → HTTP → nothing)", () =
     expect(rows[0]!.source).toBe("coinbase");
   });
 
-  it("all sources failed → writes NOTHING (never a fabricated price, §2)", async () => {
+  it("all sources failed → writes NOTHING (never a fabricated price)", async () => {
     const { store, rows } = captureStore();
     const staleAt = BigInt(NOW_SEC - 7200);
     const row = await runEthUsdTick({
@@ -268,7 +268,7 @@ describe("runEthUsdTick — source chain (Chainlink → HTTP → nothing)", () =
   });
 });
 
-describe("startEthUsdPoller — §12.51 branch selection + fail-closed startup", () => {
+describe("startEthUsdPoller — branch selection + fail-closed startup", () => {
   it("engages the chainlink branch on 4663 with a verified feed", async () => {
     const { store, rows } = captureStore();
     const poller = await startEthUsdPoller(
@@ -290,7 +290,7 @@ describe("startEthUsdPoller — §12.51 branch selection + fail-closed startup",
     expect(rows[0]!.source).toBe("chainlink:4663");
   });
 
-  it("non-4663 chain SKIPS the chainlink branch entirely (LOCAL/TESTNET, §12.51)", async () => {
+  it("non-4663 chain SKIPS the chainlink branch entirely (LOCAL/TESTNET)", async () => {
     const { store, rows } = captureStore();
     // aggregator stub that would explode if touched — proves the branch is skipped
     const untouchable: AggregatorReader = {
@@ -368,7 +368,7 @@ describe("startEthUsdPoller — §12.51 branch selection + fail-closed startup",
 });
 
 describe("aggregatorV3Abi shape (@robbed/shared/abi export — the single repo copy)", () => {
-  it("carries exactly the three §12.51 views the poller wires", () => {
+  it("carries exactly the three views the poller wires", () => {
     const names = aggregatorV3Abi.map((f) => f.name).sort();
     expect(names).toEqual(["decimals", "description", "latestRoundData"]);
   });

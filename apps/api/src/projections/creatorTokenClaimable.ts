@@ -1,10 +1,10 @@
 /**
  * `creator_token_claimable` roll-up + live vault ERC20 balance → the shared
- * `CreatorTokenClaimable` DTO (spec §12.69). The AUTHORITATIVE `claimable` is the live
+ * `CreatorTokenClaimable` DTO. The AUTHORITATIVE `claimable` is the live
  * `CreatorVault.tokenBalanceOf(creator, token)`; when unavailable (no RPC / read
  * failed) it falls back to the event-derived MIRROR (accrued − claimed, floored at 0)
  * so a figure is always served. `claimableUsd` is populated ONLY for the WETH leg
- * (ETH-priced, derived at request time §2) — a launch-token leg is an unpriceable
+ * (ETH-priced, derived at request time) — a launch-token leg is an unpriceable
  * ERC20 ⇒ null (never a constant). Wire shape single-sourced in @robbed/shared
  * (`creatorTokenClaimableSchema`), never redeclared.
  */

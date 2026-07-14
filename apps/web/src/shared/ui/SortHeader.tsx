@@ -5,7 +5,7 @@ import { MonoLabel } from "./MonoText";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Sortable column-header button (§12.59). Clicking dispatches a SERVER-SIDE sort
+ * Sortable column-header button. Clicking dispatches a SERVER-SIDE sort
  * (`meta.onSort(field)` → widget recomputes `nextSort` + refetches with
  * `?sort=&dir=`); the browser never re-ranks. The active column shows an asc/desc
  * glyph; idle columns show a faint neutral glyph as the sortable affordance.

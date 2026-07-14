@@ -1,5 +1,5 @@
 /**
- * Response envelope (api.md §2): `{ data, error: null }` on success,
+ * Response envelope (api.md) `{ data, error: null }` on success,
  * `{ data: null, error: { code, message } }` on failure. Single helper set so
  * no route hand-builds the shape. The success arm's `data` is typed by the
  * caller against a `@robbed/shared` DTO — never redeclared here.
@@ -26,7 +26,7 @@ export function ok<T>(c: Context, data: T, status: ContentfulStatusCode = 200) {
  * Central error → envelope projection (wired via `app.onError`). Known
  * `ApiError`s map to their frozen code + status; anything else is an
  * unexpected bug → 500 with `upstream_unavailable` (planned shared code) and a
- * generic message (never leaks internals — api.md §5).
+ * generic message (never leaks internals — api.md).
  */
 export function toErrorResponse(c: Context, err: unknown) {
   if (err instanceof ApiError) {

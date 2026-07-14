@@ -5,7 +5,7 @@ import * as TabsPrimitive from "@radix-ui/react-tabs";
 
 import { cn } from "@/shared/lib/utils";
 
-/** Vendored shadcn/ui Tabs (new-york, Radix) — code we own (§12.24). */
+/** Vendored shadcn/ui Tabs (new-york, Radix) — code we own. */
 const Tabs = TabsPrimitive.Root;
 
 function TabsList({

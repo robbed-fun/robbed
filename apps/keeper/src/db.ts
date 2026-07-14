@@ -8,7 +8,7 @@
  *   `real_eth_reserves` and the per-token immutable `graduation_eth`. The
  *   BondingCurve flips to Phase.ReadyToGraduate exactly when a buy pushes
  *   net-of-fee real reserves to `GRADUATION_ETH` (contracts/src/BondingCurve.sol,
- *   the final buy is CLAMPED to land on the threshold — spec §12.11), so
+ * the final buy is CLAMPED to land on the threshold —), so
  *   `graduated = false AND real_eth_reserves >= graduation_eth` IS the
  *   ReadyToGraduate-not-yet-graduated set, derived from existing indexed columns
  *   with ZERO schema change. The composite index `progressIdx (graduated,

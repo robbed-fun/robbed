@@ -7,7 +7,7 @@ import { ApiError, apiGet } from "@/shared/api";
 import { qk } from "@/shared/lib/query-keys";
 
 /**
- * Creator-fee claimable read (§7 / §12.63). `GET /v1/creators/:address/claimable`
+ * Creator-fee claimable read. `GET /v1/creators/:address/claimable`
  * → the shared `CreatorClaimable` DTO (live `CreatorVault.balanceOf` +
  * accrued/claimed roll-up + USD mirror). A treasury-only deployment (no vault) or
  * a creator who never accrued 404s — surfaced as `null` (nothing to claim), NEVER

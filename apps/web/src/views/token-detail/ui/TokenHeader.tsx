@@ -15,15 +15,15 @@ import {
 } from "@/shared/ui";
 
 /**
- * Token Detail above-the-fold header (§5.2, web.md §3.2) — ROBBED_ terminal skin
- * (redesign mockup, spec §12.50 — panel "2a Token detail"). Rendered inside the client island (TD-6)
+ * Token Detail above-the-fold header (web.md) — ROBBED_ terminal skin
+ * (redesign mockup, — panel "2a Token detail"). Rendered inside the client island (TD-6)
  * so the status pill + bonding cell track the LIVE token status, but still
  * SERVER-pre-rendered: the identity row (avatar · NAME TICKER ·
  * addr·created·creator) and the stat cells (PRICE / VOL 24H / 24H / MCAP /
  * HOLDERS / BONDING) are meaningful without client JS so crawlers and JS-off
  * users get the pitch (SSR-vs-client decision, web.md).
  *
- * All metrics are indexer/on-chain SUPPLIED values (§2): PRICE = `priceEth`,
+ * All metrics are indexer/on-chain SUPPLIED values : PRICE = `priceEth`,
  * VOL 24H = `volume24h` (ETH wei, ETH-first denomination), 24H = `change24hPct`,
  * MCAP = the live-priced `mcap` (source+asOf disclosed by `UsdAmount`), HOLDERS =
  * the SSR holders page count, BONDING = `graduation.progressPct`. No metric is
@@ -101,10 +101,10 @@ export function TokenHeader({
 /**
  * BONDING stat cell — the mockup's mini progress track + percent, plus the
  * raised-vs-target ETH the percent derives from (or a "Graduated" verdict
- * post-grad). All three values are indexer/on-chain SUPPLIED (§2): `progressPct`
+ * post-grad). All three values are indexer/on-chain SUPPLIED : `progressPct`
  * (clamped for bar geometry only), raised ETH = `reserves.realEth`, and the
  * PER-TOKEN target = `graduation.thresholdEth` — read from the payload, never
- * hardcoded (the threshold varies per token and is not a constant, §2).
+ * hardcoded (the threshold varies per token and is not a constant).
  */
 function BondingCell({ token }: { token: TokenDetail }) {
   const graduated = token.graduated || token.status === "graduated";

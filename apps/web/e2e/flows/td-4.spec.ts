@@ -18,7 +18,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:TD-4 — Post-grad buy (Uniswap V3, invisible venue switch) · tx `post-grad V3 buy` (§5.2)
+// @flow:TD-4 — Post-grad buy (Uniswap V3, invisible venue switch) · tx `post-grad V3 buy`
 // assertable-layers: on-chain · indexed · UI
 test(
   "TD-4 post-graduation buy routes to Uniswap V3 as an invisible venue switch",
@@ -35,7 +35,7 @@ test(
       await sel.amountInput(page).fill("0.03");
       await expect(page.getByText(copy.tradingOnV3).first()).toBeVisible();
       await sel.submitTrade(page).click();
-      // §12.56: soft-confirmed chip removed — prove the optimistic row via the feed row.
+      // : soft-confirmed chip removed — prove the optimistic row via the feed row.
       await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 12_000 });
     });
 

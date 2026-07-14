@@ -1,9 +1,9 @@
-# Gate-4 mutation testing — CurveMath + V3Migrator arb-back (M1-13) + §12.63 creator-fee split & cap
+# Gate-4 mutation testing — CurveMath + V3Migrator arb-back (M1-13) + creator-fee split & cap
 
 Tool: `universalmutator 1.14.1` (sanctioned Gambit equivalent — gambit not on PATH, recorded in the
 M1 adversarial review, 2026-07-10; history in git). Mutants under `mutants/`, campaign logs under `logs/`, kill
 commands `run_curvemath_tests.sh` / `run_migrator_tests.sh` / `run_bondingcurve_fees_tests.sh` /
-`run_bondingcurve_fees_survivors.sh` / `run_factory_cap_tests.sh`, scores in `scores.tsv`. The §12.63
+`run_bondingcurve_fees_survivors.sh` / `run_factory_cap_tests.sh`, scores in `scores.tsv`. The
 creator-fee re-run (robbed-security gate-2 re-open, finding F-3) is documented in its own section below.
 
 ## Status
@@ -38,8 +38,8 @@ reverts `'AS'` in the pool). Mutants therefore surface as `'AS'`, `Panic(0x11)`,
 |---|---|---|---|---|
 | 1 | budget-boundary (per-leg budget exactly at/over the boundary) | `test_budgetBoundary_tokenLeg_overBudget_revertsArbBudgetExceeded` (band > 2× token budget → iter-2 exact revert, curve retriable), `test_budgetBoundary_wethLeg_withinBudget_graduates` (cost ≈ 0.03 ETH: ≫ mutated tiny budgets, < real 1% budget) | token floor `lpTranche·(1−bps)` (L308) + live-balance budget (L310); WETH budget `wethForMint·bps/1e4` (L269) lower side | 110 111 112 113 114 115 119 120 121 129 130 · 27 28 29 34 |
 | 2 | token>WETH address ordering (mirror of every directed cycle) | whole suite instantiated as `MigratorArbBackKillToken0Test` + `MigratorArbBackKillToken1Test` (MockWETH9 runtime `vm.etch`ed at `type(uint160).max` / `0x1001` to force the sort order); `test_ordering_cleanGraduation_mintsExactlyAtTarget`, `test_ordering_tokenLegRecoverable_graduates` | both `TARGET_TICK_TOKEN0/1` + `SQRT_PRICE_TOKEN0/1_X96` selections, final-check lower bound, `inputAsset` leg classification in both orders | 6 7 19 (token0 clean path) · 97 (token0 token-leg) · 99/100 (leg compare, one per ordering, via test 3) |
-| 3 | 2-iteration WETH-leg spend | `test_wethLeg_secondIteration_budgetExhausted_revertsExactly_thenRetriable` (band needs ≈ 2 ETH ≫ 0.0808 budget → iteration 1 consumes the whole budget, iteration 2 provably entered and reverts exactly; then a third-party corrective swap and the SAME curve graduates — §12.12 retriability) | cumulative `wethArbSpent` accounting (L320), TM-T2 remaining-budget recomputation (L312), `budget == 0` guard (L314), loop iteration structure (L272–275), `wethArbBudget` formula upper side (L269) | 31 32 33 55 99 100 104 107 142 143 150 151 152 154 157 158 163 166 |
-| 4 | exact-tolerance-tick boundary | `test_toleranceBoundary_exactUpper/exactLower_graduates_withoutArb` (price set to bit-exact `getSqrtRatioAtTick(target±100)`; graduation succeeds AND the final tick is asserted UNCHANGED — the arb must not run at the inclusive boundary), `test_toleranceBoundary_justBeyondUpper/Lower_arbRunsBackToExactTarget` (at ±101 the arb must run and, being price-limited, land exactly on target) | `_withinTolerance` inclusivity (L282), final-check boundary comparators (L255), O-8 `TOLERANCE_TICKS = 100` (§12.33) | 71 74 · 9 10 14 15 |
+| 3 | 2-iteration WETH-leg spend | `test_wethLeg_secondIteration_budgetExhausted_revertsExactly_thenRetriable` (band needs ≈ 2 ETH ≫ 0.0808 budget → iteration 1 consumes the whole budget, iteration 2 provably entered and reverts exactly; then a third-party corrective swap and the SAME curve graduates — retriability) | cumulative `wethArbSpent` accounting (L320), TM-T2 remaining-budget recomputation (L312), `budget == 0` guard (L314), loop iteration structure (L272–275), `wethArbBudget` formula upper side (L269) | 31 32 33 55 99 100 104 107 142 143 150 151 152 154 157 158 163 166 |
+| 4 | exact-tolerance-tick boundary | `test_toleranceBoundary_exactUpper/exactLower_graduates_withoutArb` (price set to bit-exact `getSqrtRatioAtTick(target±100)`; graduation succeeds AND the final tick is asserted UNCHANGED — the arb must not run at the inclusive boundary), `test_toleranceBoundary_justBeyondUpper/Lower_arbRunsBackToExactTarget` (at ±101 the arb must run and, being price-limited, land exactly on target) | `_withinTolerance` inclusivity (L282), final-check boundary comparators (L255), O-8 `TOLERANCE_TICKS = 100` | 71 74 · 9 10 14 15 |
 | 5 | per-leg budget asymmetry regression (M-10-A) | `MigratorM10AFloorRegressionTest::test_M10A_regression_preFixTokenFloor_freezesGraduation` — migrator deployed with `migrationSlippageBps = 0`, making `tokenArbFloor == LP_TOKEN_TRANCHE` byte-for-byte the PRE-FIX floor; the same recoverable token-leg grief the live config graduates then freezes in `ReadyToGraduate` with exactly `ArbBudgetExceeded` | that `MIGRATION_SLIPPAGE_BPS > 0` in the symmetric floor is load-bearing for graduation liveness; EXTENDS (not duplicates) the M1-10 re-gate liveness: directed `test_M10A_*` units + `ghost_tokenLegLivenessGraduations` afterInvariant in `invariant/PoolGriefingNoHostileMint.t.sol` | (hand-mutant class: any tranche-anchored token floor; no numbered survivor — the numbered floor mutants fall under #1) |
 
 Note on "fails just beyond" (kill-test 4): a genuine graduation *failure* at exactly ±101 ticks is
@@ -55,7 +55,7 @@ The gate-3 fork suite ran GREEN against live Robinhood Chain mainnet (chain ID 4
 `cast chain-id`; RPC `https://rpc.mainnet.chain.robinhood.com` from docs.robinhood.com/chain/connecting;
 pinned fork block 7,210,863):
 `FOUNDRY_PROFILE=fork forge test` → `2 passed, 0 failed, 0 skipped` (`test_fork_arbSysSmoke`,
-`test_fork_fullLifecycle` — full create → trade → graduate → collect against the real §12.28 V3
+`test_fork_fullLifecycle` — full create → trade → graduate → collect against the real V3
 factory/NPM and real WETH `0x0Bd7…AD73`).
 
 The 14 FORK-dispositioned survivors were then re-executed per-mutant against the fork suite
@@ -76,7 +76,7 @@ LOCAL calibration argument, pinned by the contingency guard below:
    the UNMUTATED mins accept the real-NPM mint at the deterministic graduation ratio — the mins
    are not too tight against real v3 pool math.
 2. **Safety (local half, already pinned):** the mins' bite is unreachable while the pinned
-   arb-back loop + final tolerance check stand; they remain the spec-mandated §6.3.2
+   arb-back loop + final tolerance check stand; they remain the spec-mandated
    "amount-mins enforced" last line before mint (hard requirement — presence, not mutation
    adequacy of a redundant net, is what the spec demands).
 
@@ -93,12 +93,12 @@ The DID equivalence of the 14 L362/L363 min-weakening mutants holds ONLY while
 i.e. the amount-min floor `(1 − s)` covers the worst amount skew the ±`TOLERANCE_TICKS`
 final-price band (V3Migrator L255) admits. Past the bound the UNMUTATED mins CAN bite in reachable
 states — weakening them becomes observable (equivalence gone, **gate 4 re-opens for these rows**)
-and, independently, graduation gains a §12.12 liveness hazard (NPM amount-min revert AFTER the
-L255 tolerance check passed). Current §12.33 calibration: `1.0001^100 × 0.99 = 0.99994917 ≤ 1`,
+and, independently, graduation gains a liveness hazard (NPM amount-min revert AFTER the
+L255 tolerance check passed). Current calibration: `1.0001^100 × 0.99 = 0.99994917 ≤ 1`,
 margin ≈ 0.00508% — and the bound is SHARP: `TOLERANCE_TICKS = 101` at 100 bps already violates it
 (zero upward retune headroom).
 
-Both parameters are beta-retunable (§12.32/§12.33), so the relation is PINNED by two fail-closed
+Both parameters are beta-retunable, so the relation is PINNED by two fail-closed
 guards (2026-07-12, robbed-security findings on the mutation-disposition review):
 
 - `test/unit/GradCalibrationGuard.t.sol` — asserts the relation for the `TestConstants` M0 mirror
@@ -117,7 +117,7 @@ re-balance the min formulas / tolerance) before the retune ships.
 
 Legend: **E** = provably equivalent in all reachable states; **DID** = defense-in-depth redundancy
 (the mutated check's bite is unreachable while the code it backs up is unmutated — kept per spec
-§6.3.2 "hard-assert before mint"); **UG** = unreachable guard (input domain orders of magnitude
+ "hard-assert before mint"); **UG** = unreachable guard (input domain orders of magnitude
 below the guarded bound); ~~**FORK**~~ = *(retired 2026-07-12)* was: assigned to the env-gated
 gate-3 fork run (M1-12) — discharged as **DID (local-calibration; fork-confirmed unmutated-min
 liveness)** above.
@@ -132,10 +132,10 @@ liveness)** above.
 | L312 WETH remaining-budget form | 133 139 141 | E | Spend can never exceed the budget (each step's exact input IS the remaining budget), so the only boundary is `spent == budget`, where the `>` gate already yields 0 for every variant (`+`, `>=`, `!=` included). Verified empirically: 133 survives the over-budget scenario because iteration 2 still reverts `ArbBudgetExceeded` identically. |
 | L314 `budget <= 0` | 147 | E | `<= 0 ≡ == 0` on `uint256`. |
 | L320 spend accumulator inflations | 161 162 164 | E | 161/162 make `wethArbSpent` LARGER → iteration-2 budget is 0 exactly as in the original (same revert). 164: `before % after ≡ before − after` while a step spends < half the WETH balance — the budget is 1% of it. (Deflating variants 157/158/163/166 ARE killable and are killed by kill-test 3.) |
-| L362/L363 `tokenMin`/`wethMin` weakened | 169 170 171 172 173 174 178 181 182 183 184 185 186 190 | DID (local-calibration; fork-confirmed unmutated-min liveness — 2026-07-12) | Weakened amount-mins only bite when the mint would ACCEPT a below-parity deposit that the (pinned) arb-back loop failed to prevent. Discharged by the M1-12 fork run (see "M1-12 fork-run discharge" above): green real-pool lifecycle proves the unmutated mins pass the real NPM at the graduation ratio (liveness); per-mutant fork-slice rerun confirms all 14 survive the clean lifecycle (weakened mins cannot bite on a clean mint — their safety bite is unreachable while the pinned loop + L255 check stand). Kept per spec §6.3.2 amount-mins mandate. **CONTINGENT** on `1.0001^TOLERANCE_TICKS × (1 − MIGRATION_SLIPPAGE_BPS/1e4) ≤ 1` (see "Calibration contingency" above; pinned by `test/unit/GradCalibrationGuard.t.sol` + `Deploy._consistencyChecks`) — a §12.32/§12.33 retune past the bound re-opens gate 4 for this row. |
+| L362/L363 `tokenMin`/`wethMin` weakened | 169 170 171 172 173 174 178 181 182 183 184 185 186 190 | DID (local-calibration; fork-confirmed unmutated-min liveness — 2026-07-12) | Weakened amount-mins only bite when the mint would ACCEPT a below-parity deposit that the (pinned) arb-back loop failed to prevent. Discharged by the M1-12 fork run (see "M1-12 fork-run discharge" above) green real-pool lifecycle proves the unmutated mins pass the real NPM at the graduation ratio (liveness); per-mutant fork-slice rerun confirms all 14 survive the clean lifecycle (weakened mins cannot bite on a clean mint — their safety bite is unreachable while the pinned loop + L255 check stand). Kept per amount-mins mandate. **CONTINGENT** on `1.0001^TOLERANCE_TICKS × (1 − MIGRATION_SLIPPAGE_BPS/1e4) ≤ 1` (see "Calibration contingency" above; pinned by `test/unit/GradCalibrationGuard.t.sol` + `Deploy._consistencyChecks`) — a retune past the bound re-opens gate 4 for this row. |
 | L467 `_toInt256` guard | 192 193 196 197 199 | UG | Guard bites only for `x` near `2^255`; arb budgets are curve inventory (≤ ~1e27) — free insurance, unreachable domain. |
 
-## §12.63 creator-fee re-run (robbed-security gate-2 re-open, finding F-3) — 2026-07-13
+## creator-fee re-run (robbed-security gate-2 re-open, finding F-3) — 2026-07-13
 
 Two new campaigns cover the Phase-2 creator-fee surface: the BondingCurve **two-leg fee split**
 (treasury + creator computation + the proportional graduation-clamp residual split in
@@ -181,7 +181,7 @@ does NOT lower `FOUNDRY_INVARIANT_RUNS`).
 ## Reproduction
 
 ```bash
-# §12.63 fee-split + cap campaigns (universalmutator 1.14.1; run from contracts/):
+# fee-split + cap campaigns (universalmutator 1.14.1; run from contracts):
 #   mutate src/BondingCurve.sol solidity --lines reports/mutation/bondingcurve_fees_lines.txt \
 #     --mutantDir reports/mutation/mutants/bondingcurve_fees --noCheck
 #   analyze_mutants src/BondingCurve.sol reports/mutation/run_bondingcurve_fees_tests.sh \

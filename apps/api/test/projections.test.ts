@@ -45,7 +45,7 @@ describe("toTokenCard", () => {
     expect(toTokenCard(fixtureToken({ last_price_eth: null }), WM, SNAP).mcapEth).toBe("0");
   });
   it("computes a real (non-null) change24hPct from the shared 24h anchor", () => {
-    // §12.40e: (last − anchor)/anchor × 100. Old token, anchor candle close 2.0.
+    // : (last − anchor)/anchor × 100. Old token, anchor candle close 2.0.
     const now = 1_700_000_300_000;
     const nowSec = Math.floor(now / 1000);
     const card = toTokenCard(
@@ -73,7 +73,7 @@ describe("toTokenDetail Trust panel", () => {
     expect(detail.creator).toEqual({ address: fixtureToken().creator, tokensCreated: 3 });
   });
   it("sources feePolicy.tradeFeeBps from the per-token column, not global config", () => {
-    // An older curve reports ITS own fee (§12.40d), not the factory-current one.
+    // An older curve reports ITS own fee, not the factory-current one.
     const legacy = fixtureToken({ trade_fee_bps: 42 });
     expect(toTokenDetail(legacy, WM, SNAP).trust.feePolicy.tradeFeeBps).toBe(42);
   });
@@ -92,7 +92,7 @@ describe("toTokenDetail Trust panel", () => {
     const organic = toTokenDetail(withFlow, WM, SNAP).trust.organic;
     expect(organic?.holderPctLow).toBe(40);
     expect(organic?.holderPctHigh).toBe(60);
-    expect(organic?.methodology).toContain("§8.5");
+    expect(organic?.methodology).toContain("heuristic");
   });
   it("returns hidden tokens WITH the visibility flag (never a 404 concern here)", () => {
     const hidden = fixtureToken({ m_visibility: "hidden", m_impersonation_flag: true, m_impersonation_ticker: "BTC" });

@@ -11,7 +11,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:PORT-3 — Tab switch: CREATED (tokens created by this address) (§12.50a / catalog §3b)
+// @flow:PORT-3 — Tab switch: CREATED (tokens created by this address) (/ catalog)
 // assertable-layers: indexed · UI   (creation's on-chain leg lives in the LAUNCH flows — waiver)
 test(
   "PORT-3 CREATED tab lists the subject's created tokens as TokenCards",

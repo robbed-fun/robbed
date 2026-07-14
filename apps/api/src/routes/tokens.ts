@@ -1,7 +1,7 @@
 /**
- * Token reads (§5.1, §5.2, api.md §3.4): list (5 sorts / 3 filters), King of the
+ * Token reads (api.md) list (5 sorts / 3 filters), King of the
  * Hill, and detail with the full Trust-panel payload. Hidden tokens are returned
- * on direct fetch WITH `moderation.visibility = 'hidden'` — never 404 (§12.21).
+ * on direct fetch WITH `moderation.visibility = 'hidden'` — never 404.
  */
 import { Hono } from "hono";
 import {

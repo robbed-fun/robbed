@@ -1,12 +1,12 @@
 /**
- * Portfolio reads (spec §5.4; api.md §3) — the `/portfolio` page surface:
+ * Portfolio reads (api.md) — the `/portfolio` page surface:
  *  - GET /v1/portfolio/:address                     → PortfolioSummary
  *  - GET /v1/portfolio/:address/holdings            → HOLDINGS tab (paginated)
  *  - GET /v1/portfolio/:address/activity            → ACTIVITY tab (trade slice)
  *  - GET /v1/portfolio/:address/created             → CREATED tab (token cards)
  *
  * Advisory / read-only: nothing here mutates or depends on mutating chain state
- * (§8.4). Any address resolves (an unknown address is an empty portfolio, not a
+ *. Any address resolves (an unknown address is an empty portfolio, not a
  * 404) — the wallet ETH balance is a live chain read that can be non-zero even
  * for an address the indexer has never seen.
  */
@@ -49,7 +49,7 @@ export function portfolioRoutes(deps: AppDeps) {
     // read from the advisory address_pnl roll-up — the job ticks every ~60s, so
     // the materialized count lags fresh trades and is 0 on a fresh DB before
     // the first tick (PORT-1). firstSeenAt / tokensCreated / realized PnL stay
-    // roll-up-sourced (≤ one job interval stale, documented in api.md §3.4a).
+    // roll-up-sourced (≤ one job interval stale, documented in api.md).
     const [ctx, pnl, holdings, walletEthBalance, tradeCount] = await Promise.all([
       loadProjectionContext(deps),
       deps.db.getAddressPnl(address),

@@ -11,7 +11,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:DISC-2 — Live launch ticker (WebSocket) (§5.1)
+// @flow:DISC-2 — Live launch ticker (WebSocket)
 // assertable-layers: on-chain · indexed · UI
 test(
   "DISC-2 live launch ticker slides in a new launch",

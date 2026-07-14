@@ -1,6 +1,6 @@
 /**
- * M2-11 moderation: visibility state machine (§4.3/§4.5, §12.21) + homoglyph
- * impersonation matcher (§4.4) + vendor boot guard (§4.3).
+ * M2-11 moderation: visibility state machine + homoglyph
+ * impersonation matcher + vendor boot guard.
  */
 import { describe, expect, it } from "bun:test";
 import { evaluateVisibility } from "../src/moderation/state-machine";

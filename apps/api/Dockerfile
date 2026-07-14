@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 #
-# ROBBED_ API image — Hono on Bun (spec §8/§9: "Bun stays the runtime"). ONE image
+# ROBBED_ API image — Hono on Bun ("Bun stays the runtime"). ONE image
 # serves BOTH entrypoints so the WS fanout is co-located with the HTTP API + Redis
-# (spec §8 <500ms budget): the compose runs two services from this image — the
+# (<500ms budget) the compose runs two services from this image — the
 # default CMD is the HTTP API (src/index.ts); the `ws` service overrides `command`
 # to run the fanout (src/ws.ts). (Alternatively build a dedicated WS image with
 # `--build-arg APP_ENTRY=src/ws.ts`.)
@@ -50,7 +50,7 @@ COPY apps/api          apps/api
 # sharp/@resvg for OG rendering; src/, migrations/, openapi.yaml preserved).
 RUN pnpm --filter @robbed/api --prod --legacy deploy /out
 
-# ── runtime: Bun (the API + WS runtime, spec §8/§9) ───────────────────────────
+# ── runtime: Bun (the API + WS runtime) ───────────────────────────
 FROM oven/bun:1.3.14 AS runtime
 # curl for the compose healthchecks; ca-certificates for TLS (R2 uploads, RPC).
 USER root

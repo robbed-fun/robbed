@@ -1,5 +1,5 @@
 /**
- * 24h change anchor selection (spec §12.40e; indexer.md §4.5).
+ * 24h change anchor selection (indexer.md).
  *
  * anchorPrice = close of the most-recent 1h candle at/before now−24h;
  * token age < 24h → first-trade price; no trades → change 0.
@@ -17,7 +17,7 @@ function candle(bucketStart: number, close: number): AnchorCandle {
   return { bucket_start: bucketStart, close };
 }
 
-describe("selectAnchorPrice (§12.40e)", () => {
+describe("selectAnchorPrice ", () => {
   it("picks the CLOSE of the most-recent 1h candle at or before now−24h", () => {
     const candles = [
       candle(CUTOFF - 2 * HOUR, 1.0),
@@ -80,7 +80,7 @@ describe("selectAnchorPrice (§12.40e)", () => {
   });
 });
 
-describe("computeChange24hPct (§12.40e, display percent)", () => {
+describe("computeChange24hPct (display percent)", () => {
   it("computes (last − anchor)/anchor × 100 against the 24h candle close", () => {
     const pct = computeChange24hPct({
       nowSec: NOW,
@@ -117,7 +117,7 @@ describe("computeChange24hPct (§12.40e, display percent)", () => {
     expect(pct).toBeCloseTo(100, 9);
   });
 
-  it("returns 0 when the token has never traded (§12.40e no-trades rule)", () => {
+  it("returns 0 when the token has never traded (no-trades rule)", () => {
     const pct = computeChange24hPct({
       nowSec: NOW,
       lastPrice: null,

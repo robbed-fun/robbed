@@ -5,7 +5,7 @@ import { getDeployment } from "@robbed/shared/addresses";
 import { explorer, robinhoodChain } from "@/shared/lib/chain";
 
 /**
- * Chain config invariants (spec §2/§9/§12.55; CLAUDE.md). Default build target
+ * Chain config invariants (CLAUDE.md). Default build target
  * = mainnet 4663 (ETH gas / Blockscout / WETH from the shared registry); a
  * per-target build env-selects ONE other registered chain (46630 testnet) and
  * the whole chain object flips to the OFFICIAL testnet params — this is what
@@ -47,14 +47,14 @@ describe("robinhoodChain (default target = mainnet 4663)", () => {
 });
 
 /**
- * §12.55 env-selected target: NEXT_PUBLIC_CHAIN_ID SELECTS a chain, the shared
+ * env-selected target: NEXT_PUBLIC_CHAIN_ID SELECTS a chain, the shared
  * registry DEFINES it. The 46630 (testnet) selection must flip id, name,
  * explorer, WETH and every robbed/V3 address to the 46630 registry entry —
  * this is the fix for the :4100 testnet stack advertising 4663 to wallets.
  * Modules capture the target at import scope, so each case re-imports after
  * `vi.resetModules()` with the env stubbed.
  */
-describe("env-selected chain target (§12.55)", () => {
+describe("env-selected chain target ", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.resetModules();
@@ -66,13 +66,13 @@ describe("env-selected chain target (§12.55)", () => {
     const { robinhoodChain: testnet } = await import("@/shared/lib/chain");
     const dep = getDeployment(46630);
     expect(testnet.id).toBe(46630);
-    // Official params — docs/developers/runbooks/testnet.md §1 (docs.robinhood.com).
+    // Official params — docs/developers/runbooks/testnet.md (docs.robinhood.com).
     expect(testnet.name).toBe("Robinhood Chain Testnet");
     expect(testnet.blockExplorers?.default.url).toBe(
       "https://explorer.testnet.chain.robinhood.com",
     );
     expect(testnet.nativeCurrency.symbol).toBe("ETH");
-    // WETH = the 46630 registry entry (§12.52), NOT mainnet's.
+    // WETH = the 46630 registry entry, NOT mainnet's.
     expect(testnet.contracts?.weth9?.address).toBe(dep?.external.weth);
     expect(testnet.contracts?.weth9?.address).not.toBe(WETH_ADDRESS);
     // RPC still env-driven (the compose injects the official testnet RPC).

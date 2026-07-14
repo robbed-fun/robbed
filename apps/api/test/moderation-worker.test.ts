@@ -1,5 +1,5 @@
 /**
- * X-10 launch worker (§4.4): on `global:launches` it runs impersonation on the
+ * X-10 launch worker : on `global:launches` it runs impersonation on the
  * on-chain name/ticker, links the pre-scanned image verdict, and writes ONLY the
  * API-owned `moderation_status` — no chain read, no indexer-table write.
  */

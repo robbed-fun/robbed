@@ -3,7 +3,7 @@ import { formatPercent } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Graduation progress (§5.1 card / §5.2 Trust panel). `pct` is the indexer's
+ * Graduation progress (card / Trust panel). `pct` is the indexer's
  * `progressPct` (real_eth_reserves / graduation_eth) — a supplied value, never
  * computed here. Clamped to [0,100] for the bar geometry only.
  */

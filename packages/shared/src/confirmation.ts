@@ -1,9 +1,9 @@
 /**
- * Confirmation-state enum + helpers (spec §2.1, §12.20; indexer.md §3.8, §5).
+ * Confirmation-state enum + helpers (indexer.md).
  *
  * Wire values are snake_case and are the same strings sent in WS/REST
  * payloads and surfaced as the `confirmation_state` field on DB row shapes.
- * NOTE (OI-11 rework, 2026-07-11 — spec §12.48c; indexer.md §3.8/§5): these
+ * NOTE (OI-11 rework, 2026-07-11 —; indexer.md) these
  * are NOT physical columns on Ponder tables; the API derives the value at
  * read time from the `confirmation_watermarks` sidecar via
  * `confirmationStateSql(blockCol)` (apps/api/src/lib/confirmation.ts). See
@@ -48,7 +48,7 @@ export function isAtLeast(
 
 /**
  * Monotonic upgrade: returns the more-confirmed of the two states.
- * States never flip backwards (indexer.md §5.1 step 3).
+ * States never flip backwards (indexer.md step 3).
  */
 export function upgradeConfirmationState(
   current: ConfirmationState,
@@ -57,7 +57,7 @@ export function upgradeConfirmationState(
   return compareConfirmationStates(next, current) > 0 ? next : current;
 }
 
-/** Watermark snapshot (indexer.md §3.8 confirmation_watermarks singleton). */
+/** Watermark snapshot (indexer.md confirmation_watermarks singleton). */
 export interface ConfirmationWatermarks {
   /** Highest L2 block posted to L1 ("safe" tag). */
   safeBlock: number | bigint;
@@ -66,12 +66,12 @@ export interface ConfirmationWatermarks {
 }
 
 /**
- * Authoritative rule (indexer.md §3.8): an event's state is `finalized` if
+ * Authoritative rule (indexer.md) an event's state is `finalized` if
  * `blockNumber <= finalizedBlock`, else `posted_to_l1` if `<= safeBlock`,
  * else `soft_confirmed`. This is the TS mirror of the API's read-time SQL
  * derivation (`confirmationStateSql`, apps/api/src/lib/confirmation.ts —
- * spec §12.48c read-derivation); also used by WS clients upgrading held
- * events from `global:confirmations` watermark broadcasts (spec §12.20).
+ * read-derivation); also used by WS clients upgrading held
+ * events from `global:confirmations` watermark broadcasts.
  */
 export function stateForBlock(
   blockNumber: number | bigint,

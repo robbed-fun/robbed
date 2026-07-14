@@ -16,7 +16,7 @@ import type { NetworkGuard } from "../model/use-network-guard";
  * the automatic switch attempt (with the add-chain fallback params from the
  * chain object) and a manual retry; it never opens RainbowKit's chain modal.
  *
- * Copy rules (§1, copy-lint): plain AMM/network wording only — no exchange or
+ * Copy rules (copy-lint) plain AMM/network wording only — no exchange or
  * finality framing, no USD figures, no LP wording.
  */
 export function WrongNetworkBanner({ guard }: { guard: NetworkGuard }) {

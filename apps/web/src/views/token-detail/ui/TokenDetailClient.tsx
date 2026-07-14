@@ -21,13 +21,13 @@ import { TokenHeader } from "./TokenHeader";
 import { TokenInfo } from "./TokenInfo";
 
 /**
- * Client island composing the header + five interactive widgets (§5.2, web.md
- * §3.2). It owns the SINGLE `OptimisticTradesProvider` so a trade submitted in
- * the TradeWidget appears in the TradeFeed and reconciles once (§4) — the two
+ * Client island composing the header + five interactive widgets (, web.md
+ * ). It owns the SINGLE `OptimisticTradesProvider` so a trade submitted in
+ * the TradeWidget appears in the TradeFeed and reconciles once — the two
  * sibling widgets never import each other; they share state through the
  * entity-layer context this view provides.
  *
- * LIVE VENUE SWITCH (TD-6, §5.2/§12.12): `token` here is the LIVE
+ * LIVE VENUE SWITCH (TD-6) `token` here is the LIVE
  * `useLiveTokenDetail` read — the SSR snapshot seeds it, and the WS `graduated`
  * signal (or a v3-venue trade, or a reconnect refetch) flips `status` with no
  * reload. Every status-derived surface consumes the same live object: the
@@ -37,7 +37,7 @@ import { TokenInfo } from "./TokenInfo";
  * TokenInfo V3-pool link.
  *
  * REDESIGN (USER-DIRECTED 2026-07-13): the token-detail SafetyStrip block is
- * REMOVED. The §12.14 LP-destiny hard-rule floor is preserved by a single muted
+ * REMOVED. The LP-destiny hard-rule floor is preserved by a single muted
  * `LP_DESTINY_COPY` footnote rendered in `TokenInfo` (verbatim, copy-lint
  * enforced). Graduation progress/status still live on the Discover carousel +
  * TokenCard; only this page's SafetyStrip is gone. The trade feed + holders
@@ -74,7 +74,7 @@ export function TokenDetailClient({
         columns take `lg:h-full`, so the chart box and the trade-form box are
         EXACTLY equal-height, aligned top and bottom; `lg:items-stretch` keeps
         them flush even if one had less content. Mockup fidelity
-        (redesign mockup, spec §12.50 — panel "2a"): FLAT regions on the page bg, single vertical
+        (redesign mockup, — panel "2a") FLAT regions on the page bg, single vertical
         hairline via the chart column's `border-r`, 320px trade rail self-padded.
         MOBILE (< lg): the two columns STACK — chart (viewport-relative height)
         then trade form — via `flex-col`; the fixed equal-height is scoped to

@@ -1,12 +1,12 @@
 /**
- * §12.19 NORMATIVE — client-side metadata-hash re-verification before signing.
+ * NORMATIVE — client-side metadata-hash re-verification before signing.
  *
  * The API canonicalizes + keccak256-hashes the metadata and returns
  * `{ metadataHash, metadataUri, canonicalJson }`. Before the client puts that
  * `metadataHash` on-chain (it becomes the immutable `TokenCreated` commitment),
  * it MUST recompute the hash itself with the SAME shared canonicalizer the API
  * and indexer use, and refuse to sign on any mismatch — a buggy or malicious
- * server can never commit the user to metadata they didn't author (api.md §3.2).
+ * server can never commit the user to metadata they didn't author (api.md).
  *
  * We verify BOTH layers, strongest first:
  *   1. `canonicalizeMetadata(document)` bytes === the server's `canonicalJson`

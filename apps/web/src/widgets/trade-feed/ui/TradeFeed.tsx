@@ -40,21 +40,21 @@ import { cn } from "@/shared/lib/utils";
 import { type FeedRow, buildFeedRows, prependTrade } from "../model/merge";
 
 /**
- * Live trade feed (§5.2/§2.1) — ROBBED_ terminal TRADES TABLE (AGE · SIDE ·
- * TRADER · AMOUNT · PRICE), now the common `DataTable` (§12.60) with SERVER-SIDE
- * sort + keyset pagination (§12.59). Column headers dispatch `?sort=&dir=` and the
+ * Live trade feed — ROBBED_ terminal TRADES TABLE (AGE · SIDE ·
+ * TRADER · AMOUNT · PRICE), now the common `DataTable` with SERVER-SIDE
+ * sort + keyset pagination. Column headers dispatch `?sort=&dir=` and the
  * browser NEVER re-ranks (`manualSorting`); the opaque forward cursor is a
  * `useCursorStack`.
  *
- * LIVE HEAD vs REST SNAPSHOT (§12.59): the DEFAULT window (age DESC, page 1) is
+ * LIVE HEAD vs REST SNAPSHOT : the DEFAULT window (age DESC, page 1) is
  * the WS-live, SSR-seeded view — WS `trade` messages prepend into it and the
- * user's optimistic trades merge + reconcile in place (§4, unchanged). Sorting or
+ * user's optimistic trades merge + reconcile in place (unchanged). Sorting or
  * paging away makes it a plain REST snapshot (no WS prepend, no optimistic merge)
  * — "sort/paginate beyond the live head is a REST query".
  *
- * §12.56: the soft-confirmed chip is gone — a fresh (soft-confirmed) row shows NO
+ * : the soft-confirmed chip is gone — a fresh (soft-confirmed) row shows NO
  * settlement badge; `ConfirmationBadge` surfaces only once it upgrades to
- * posted-to-L1 / finalized as the §12.20 watermark advances.
+ * posted-to-L1 / finalized as the watermark advances.
  */
 
 /** Default order = age DESC (newest first) — the WS-live, SSR-seeded window. */
@@ -119,7 +119,7 @@ export function TradeFeed({
   const isDefaultView =
     isDefaultSort(sort, DEFAULT_TRADE_SORT) && cursors.cursor === null;
 
-  // Bare key = WS-live default head; params key = a REST snapshot (§12.59).
+  // Bare key = WS-live default head; params key = a REST snapshot.
   const canonicalKey = qk.trades(token.address);
   const queryKey = isDefaultView
     ? canonicalKey
@@ -158,14 +158,14 @@ export function TradeFeed({
       items: prependTrade(old?.items ?? [], wsTradeToRow(msg.data), TRADES_PAGE_SIZE),
       nextCursor: old?.nextCursor ?? null,
     }));
-    // Reconcile any matching optimistic row to indexed truth (§4) regardless of view.
+    // Reconcile any matching optimistic row to indexed truth regardless of view.
     optimistic.applyWsTrade(msg.data);
   });
 
   const rows = useMemo(
     () =>
       buildFeedRows({
-        // Optimistic rows merge only into the live head (§12.59).
+        // Optimistic rows merge only into the live head.
         optimistic: isDefaultView ? optimistic.trades : [],
         indexed,
         creator: token.creator.address,

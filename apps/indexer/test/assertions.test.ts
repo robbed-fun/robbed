@@ -15,8 +15,8 @@ function validConfig(): IndexerConfig {
     curveFactory: "0x" + "11".repeat(20),
     router: undefined,
     migrator: "0x" + "22".repeat(20),
-    creatorVault: undefined, // §12.63 optional — absent on v1 deployments
-    lpFeeVault: "0x" + "66".repeat(20), // §12.69 — always resolved from the registry
+    creatorVault: undefined, // optional — absent on v1 deployments
+    lpFeeVault: "0x" + "66".repeat(20), // — always resolved from the registry
     v3Factory: "0x" + "33".repeat(20),
     v3PositionManager: "0x" + "44".repeat(20),
     swapRouter02: "0x" + "55".repeat(20),
@@ -29,12 +29,12 @@ function validConfig(): IndexerConfig {
   };
 }
 
-describe("assertStaticConfig — fail-closed startup gate (indexer.md §2, §12.55(b) static half)", () => {
+describe("assertStaticConfig — fail-closed startup gate (indexer.md, static half)", () => {
   it("passes a valid config", () => {
     expect(() => assertStaticConfig(validConfig())).not.toThrow();
   });
 
-  it("rejects a chain id with no shared-registry entry (§12.55(b) — no default, no invention)", () => {
+  it("rejects a chain id with no shared-registry entry (no default, no invention)", () => {
     const c = validConfig();
     c.chainId = 1; // mainnet Ethereum — never a robbed deployment
     expect(() => assertStaticConfig(c)).toThrow(/registry/);

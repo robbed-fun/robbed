@@ -1,6 +1,6 @@
 /**
- * curve-quote vectors + normative properties (spec §6.2/§12.19/§8.3;
- * contracts.md §2.3). This is the TS side of the DUAL computation: it must agree
+ * curve-quote vectors + normative properties (;
+ * contracts.md). This is the TS side of the DUAL computation: it must agree
  * with CurveMath.sol byte-for-byte.
  *
  * Golden vectors: exact integer values, hand-derived from the constant-product
@@ -9,7 +9,7 @@
  * DIFFERENT ceil expression than the module (`(n + d − 1) / d` here vs the
  * module's `ceilMulDiv`). Two independent bigint derivations agreeing pins the
  * arithmetic; the property blocks pin the CurveMath fuzz invariants (rounding
- * direction, k non-decreasing, no underflow) that §12.19 makes normative. When
+ * direction, k non-decreasing, no underflow) that makes normative. When
  * `forge` is wired into CI, add a fixture that diff's these against the Solidity
  * library output directly.
  */
@@ -92,7 +92,7 @@ describe("guard — zero reserve reverts (mirrors CurveMathZeroReserve)", () => 
   });
 });
 
-describe("normative properties (CurveMath fuzz invariants, §12.19)", () => {
+describe("normative properties (CurveMath fuzz invariants)", () => {
   // A spread of reserves/amounts covering small, launch-scale, and skewed ratios.
   const vEs = [ONE, 10n * ONE, 30n * ONE, 250n * ONE];
   const vTs = [1073000000n * ONE, 500000000n * ONE, 793100000n * ONE];
@@ -137,7 +137,7 @@ describe("normative properties (CurveMath fuzz invariants, §12.19)", () => {
   });
 });
 
-describe("previewBuy / previewSell — fee-inclusive display quotes (contracts.md §2.3)", () => {
+describe("previewBuy / previewSell — fee-inclusive display quotes (contracts.md)", () => {
   it("previewBuy takes the fee (floor) first, then prices the net on the curve", () => {
     const gross = 100n * ONE;
     const bps = 100; // 1% (CLAUDE.md trade fee)

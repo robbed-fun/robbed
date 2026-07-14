@@ -1,12 +1,12 @@
 /**
  * ────────────────────────────────────────────────────────────────────────────
- *  HAND-AUTHORED derivation layer — NOT a codegen target (I-5/§12.55 split).
+ * HAND-AUTHORED derivation layer — NOT a codegen target (I-5 split).
  *  The GENERATED data lives in @robbed/shared `ROBBED_DEPLOYMENTS` (emitted by
  *  `bun contracts/script/codegen-addresses.ts` after a broadcast); this module
  *  only derives from it and is never rewritten by that script.
  *
  *  ROBBED is DERIVED (never re-declared) from the shared per-chain map for the
- *  env-selected target chain (web.md §2.1/§2.3, architecture.md §4), with the
+ * env-selected target chain (web.md, architecture.md), with the
  *  e2e fork-address override seam layered on top. When no deployment exists for
  *  the target chain yet, the per-deployment addresses stay ZERO sentinels and
  *  `requireAddress()` throws — a missing codegen fails loudly instead of
@@ -23,7 +23,7 @@ import { env } from "@/shared/lib/env";
 const PLACEHOLDER = "0x0000000000000000000000000000000000000000" as const;
 
 /**
- * §12.55 target selection: the deployment entry for THIS build's chain
+ * target selection: the deployment entry for THIS build's chain
  * (`env.chainId()` — NEXT_PUBLIC_CHAIN_ID validated against the shared
  * registry, else compile-time 4663). The testnet build (46630) therefore
  * resolves the T-3 testnet deployment, never the mainnet one.
@@ -47,9 +47,9 @@ const e2eAddr = (v: string | undefined): Address | undefined =>
   process.env.NEXT_PUBLIC_E2E === "true" && v ? (v as Address) : undefined;
 
 /**
- * Per-deployment robbed contract addresses (spec §6) for CHAIN_ID, derived from
+ * Per-deployment robbed contract addresses for CHAIN_ID, derived from
  * the generated @robbed/shared map (or the e2e env override on a fork). Router,
- * CurveFactory, LPFeeVault, V3Migrator, and the treasury Safe (§6.6). ZERO
+ * CurveFactory, LPFeeVault, V3Migrator, and the treasury Safe. ZERO
  * sentinels until a CHAIN_ID deploy is codegen'd.
  */
 export const ROBBED = {
@@ -65,7 +65,7 @@ export const ROBBED = {
 } satisfies Record<string, Address>;
 
 /**
- * Creator-fee vault (§7 / §12.63) — OPTIONAL: it exists only on a creator-fee
+ * Creator-fee vault — OPTIONAL: it exists only on a creator-fee
  * factory deployment; a v1/treasury-only deployment has none, so this is
  * `Address | undefined` (never a zero sentinel). Derived from the shared
  * per-chain map (`getDeployment(chainId).robbed.creatorVault`, itself optional),
@@ -77,9 +77,9 @@ export const CREATOR_VAULT: Address | undefined =
 
 /**
  * Canonical Uniswap V3 set for the TARGET chain — from the shared per-chain
- * registry entry (mainnet 4663 = the §12.28 official set; testnet 46630 = the
- * §12.52 adopted community deployment, TESTNET-ONLY). Falls back to the shared
- * §12.28 mainnet constants only when no registry entry exists (pre-codegen
+ * registry entry (mainnet 4663 = the official set; testnet 46630 = the
+ * adopted community deployment, TESTNET-ONLY). Falls back to the shared
+ * mainnet constants only when no registry entry exists (pre-codegen
  * mainnet builds — identical values by construction). Derived, never
  * re-declared (anti-drift rule 2).
  */
@@ -92,7 +92,7 @@ export const V3 = {
 
 /**
  * Canonical WETH for the TARGET chain — registry-derived (46630's WETH differs
- * from mainnet's, §12.52). The shared mainnet `WETH_ADDRESS` constant is only
+ * from mainnet's). The shared mainnet `WETH_ADDRESS` constant is only
  * the no-registry fallback. All web consumers (V3 path builders, quotes) import
  * THIS, never `WETH_ADDRESS` directly.
  */
@@ -105,7 +105,7 @@ export function isPlaceholder(address: Address): boolean {
 
 /**
  * Read a robbed address, failing loud if no target-chain deployment has been
- * codegen'd — a bad tx to 0x0 is far worse than a clear error. V3 (§12.28/§12.52)
+ * codegen'd — a bad tx to 0x0 is far worse than a clear error. V3
  * addresses are real and do not need this guard.
  */
 export function requireAddress(address: Address, label: string): Address {

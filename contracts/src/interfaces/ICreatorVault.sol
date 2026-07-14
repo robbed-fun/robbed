@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-/// @title ICreatorVault — pull-payment escrow for the creator-fee legs (spec §7, §12.63, §12.69)
+/// @title ICreatorVault — pull-payment escrow for the creator-fee legs
 /// @notice Per-creator escrow with TWO custody tracks, both pull-payment:
-///         (1) **ETH leg** (§12.63) — bonding curves accrue the pre-graduation creator-fee leg
+/// (1) **ETH leg** — bonding curves accrue the pre-graduation creator-fee leg
 ///             in-contract and push native ETH here via a permissionless, non-trade-path
-///             `sweepCreatorFees()` (never during a buy/sell — §12.25 discipline); the creator (or
+/// `sweepCreatorFees()` (never during a buy/sell — discipline); the creator (or
 ///             anyone, on their behalf) pulls it via `claim(creator)`.
-///         (2) **ERC20 legs** (§12.69) — the {LPFeeVault} splits the graduated V3 pool's fees 50/50
+/// (2) **ERC20 legs** — the {LPFeeVault} splits the graduated V3 pool's fees 50/50
 ///             and routes the creator's part-token / part-WETH share here via `depositERC20`, credited
 ///             per `(creator, token)`; the creator pulls each token via `claimERC20(creator, token)`.
 ///         No owner, no admin withdraw, no upgrade path — value leaves ONLY via `claim`/`claimERC20`,
@@ -15,8 +15,8 @@ pragma solidity 0.8.35;
 ///         nothing but its OWN claim: the trade path never touches this contract, and neither push
 ///         (`deposit`/`depositERC20`) calls the creator — only the claim functions do.
 /// @dev Modeled on {ILPFeeVault} (terminal, single-purpose, minimal surface, fixed destinations).
-///      ADDITIVE to the frozen interface set — introduced by the §12.63/§12.69 creator-fee decisions,
-///      the same sanctioned decision-driven path by which §12.25 reconciled {IBondingCurve}.
+/// ADDITIVE to the frozen interface set — introduced by the creator-fee decisions,
+/// the same sanctioned decision-driven path by which reconciled {IBondingCurve}.
 interface ICreatorVault {
     /// @notice A curve credited `amount` of accrued creator fees to `creator` (the sweep landing).
     /// @param creator The token creator earning the fee.
@@ -31,7 +31,7 @@ interface ICreatorVault {
     event CreatorFeeClaimed(address indexed creator, address indexed caller, uint256 amount);
 
     /// @notice The LPFeeVault credited `creator` with `amount` of `token` (a post-graduation collect
-    ///         split landing, spec §12.69).
+    /// split landing).
     /// @param creator The token creator earning the fee.
     /// @param token   The credited ERC20 (the launch token or WETH — the graduated pool's two legs).
     /// @param source  The LPFeeVault that routed the share (`msg.sender`).
@@ -58,7 +58,7 @@ interface ICreatorVault {
     /// @return amount Wei paid out.
     function claim(address creator) external returns (uint256 amount);
 
-    /// @notice Credit `creator`'s claimable `token` balance with `amount` (spec §12.69). Restricted to
+    /// @notice Credit `creator`'s claimable `token` balance with `amount`. Restricted to
     ///         the factory-registered LPFeeVault (the fee source), which must have approved this vault
     ///         for `amount`; this vault pulls via `transferFrom`, so the per-token balance equals the
     ///         sum of collect-routed creator shares to the wei — no external donations pollute it.
@@ -76,7 +76,7 @@ interface ICreatorVault {
     /// @notice Unclaimed accrued creator-fee ETH balance for `creator`.
     function balanceOf(address creator) external view returns (uint256);
 
-    /// @notice Unclaimed accrued creator-fee `token` balance for `creator` (spec §12.69).
+    /// @notice Unclaimed accrued creator-fee `token` balance for `creator`.
     function tokenBalanceOf(address creator, address token) external view returns (uint256);
 
     /// @notice The CurveFactory whose `isCurve` registry gates `deposit` and whose `lpFeeVault`

@@ -8,9 +8,9 @@ import {ICurveFactory} from "src/interfaces/ICurveFactory.sol";
 import {CurveHandler} from "test/invariant/handlers/CurveHandler.sol";
 
 /// @title Gate-2 invariant 4 — graduation fires exactly once and is always reachable
-///        (spec §10 gate 2; contracts.md §6 test matrix row 4)
+/// (gate 2; contracts.md test matrix row 4)
 /// @notice Single-fire: ghost count of successful graduate() calls ≤ 1 (CEI-based by
-///         construction: phase = Graduated precedes all transfers — contracts.md §5.4).
+/// construction: phase = Graduated precedes all transfers — contracts.md).
 ///         Reachability: from ANY invariant state with phase == Trading, a single buy of the
 ///         quote-derived remaining capacity plus graduate() succeeds — no fill sequence strands
 ///         the curve below/at threshold permanently. Checked under snapshot/revert. The
@@ -28,7 +28,7 @@ contract GraduationSingleFireInvariant is Test {
     ///      permissionless CALLER_REWARD to `msg.sender` — so this contract must accept ETH.
     receive() external payable {}
 
-    /// @notice EXACT ASSERTIONS (contracts.md §6 row 4):
+    /// @notice EXACT ASSERTIONS (contracts.md row 4):
     ///         (1) ghost_graduatedCount ≤ 1;
     ///         (2) if phase == Trading: fill-to-threshold + graduate() succeeds (under snapshot);
     ///         (3) if phase == ReadyToGraduate: graduate() alone succeeds (under snapshot).
@@ -51,7 +51,7 @@ contract GraduationSingleFireInvariant is Test {
 
             (,, uint256 realEth,) = curve.reserves();
             uint256 remainingNet = curve.GRADUATION_ETH() - realEth;
-            // acceptedGross = ceilDiv(net · 10_000, 10_000 − TRADE_FEE_BPS) — contracts.md §2.3.
+            // acceptedGross = ceilDiv(net · 10_000, 10_000 − TRADE_FEE_BPS) — contracts.md.
             uint256 gross = Math.ceilDiv(remainingNet * 10_000, 10_000 - curve.TRADE_FEE_BPS());
             address filler = makeAddr("reachability-filler");
             vm.deal(filler, gross);

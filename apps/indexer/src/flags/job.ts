@@ -1,14 +1,14 @@
 /**
- * §8.5 bot/farm scheduled job (M2-13) + its gate-7 cluster-share feed (M2-12).
+ * bot/farm scheduled job (M2-13) + its gate-7 cluster-share feed (M2-12).
  *
  * A wall-clock `setInterval` side-process (same pattern as the confirmation
  * tracker / metadata verifier) that periodically recomputes `address_flags` +
  * `token_flow_stats` from `trades`+`transfers` via the pure `runFlowAnalysis`,
  * then feeds the funder-cluster vol-share gauges (gate-7 X%/Y%). Advisory only —
- * nothing here gates a trade, listing, or any chain interaction (§8.4/§8.5).
+ * nothing here gates a trade, listing, or any chain interaction.
  *
  * Decide-it-yourself: periodic wall-clock cadence (default 60s, like the
- * volume_eth_24h decay job, §4.4) rather than a Ponder block-interval source —
+ * volume_eth_24h decay job) rather than a Ponder block-interval source —
  * these are derived, rebuildable side tables that never need per-block freshness,
  * and a timer is the boring fit (docs verified: Ponder `blocks:` is
  * block-denominated, wrong tool for a periodic derive).
@@ -25,7 +25,7 @@ import {
   type ClusterAlertThresholds,
 } from "../metrics";
 
-/** Default flow-job cadence (ms) — periodic derive, not hot-path (§4.4). */
+/** Default flow-job cadence (ms) — periodic derive, not hot-path. */
 export const FLOW_JOB_INTERVAL_MS = 60_000;
 
 export interface FlowJobDeps {

@@ -24,7 +24,7 @@
 #
 # Supersedes the host systemd user unit cloudflared-robbed-mainnet.service
 # (~/.cloudflared/robbed-mainnet.yml) — decommissioned once this connector verified serving.
-# Account: 0b1b0b8753489a11d35ee922961f6b72 (spec §12.45)
+# Account: 0b1b0b8753489a11d35ee922961f6b72
 
 tunnel: c80870d9-6ce5-40b6-a0d4-3e8e19b537b5
 credentials-file: /etc/cloudflared/creds.json

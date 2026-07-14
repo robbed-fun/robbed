@@ -12,17 +12,17 @@ import { env } from "./env";
 import { robinhoodWallet } from "./wallets/robinhoodWallet";
 
 /**
- * wagmi v2 + RainbowKit config (spec §9/§12.2). Single-chain app: chain 4663
+ * wagmi v2 + RainbowKit config. Single-chain app: chain 4663
  * only; RainbowKit prompts a network switch if the wallet is elsewhere.
  *
  * Docs-first basis (2026-07-10): wagmi.sh/react/api/createConfig,
  * rainbowkit.com/docs/custom-wallet-list. RainbowKit 2.2.11 peers React `>=18`
  * (dev-tested on react@19.2.x) → React 19 compatible (web-6/web-7 finding).
  *
- * NO ERC-4337 / smart-account / gas-sponsorship paths — Phase 2 (§12.2). Classic
+ * NO ERC-4337 / smart-account / gas-sponsorship paths — Phase 2. Classic
  * wagmi/RainbowKit connectors only.
  *
- * Wallet groups (§9): injected · Robinhood Wallet · WalletConnect — exactly
+ * Wallet groups : injected · Robinhood Wallet · WalletConnect — exactly
  * these. Robinhood Wallet + WalletConnect require a projectId and are OMITTED
  * when it is absent, so injected-only dev works with no projectId (web-6).
  */
@@ -64,7 +64,7 @@ export function buildConnectors(projectId: string) {
  * whose dev accounts are unlocked — so tests get REAL txs + REAL signatures
  * (incl. EIP-2612 typed-data for `sellWithPermit`) with NO browser-extension
  * automation, the standard anti-flake pattern. Addresses come from
- * `NEXT_PUBLIC_E2E_ACCOUNTS` (never an inline literal, §2 address-grep) and are
+ * `NEXT_PUBLIC_E2E_ACCOUNTS` (never an inline literal, address-grep) and are
  * anvil's public dev accounts. Guarded strictly behind `NEXT_PUBLIC_E2E`.
  */
 function buildE2eConnectors() {
@@ -88,7 +88,7 @@ function buildE2eConnectors() {
 
 /**
  * One wagmi config for the whole app. `ssr: true` (Next App Router server render,
- * wagmi.sh SSR guide). Transport is the env HTTP RPC — never inlined (§2). In the
+ * wagmi.sh SSR guide). Transport is the env HTTP RPC — never inlined. In the
  * e2e harness (`NEXT_PUBLIC_E2E=true`) the real connectors are replaced by the
  * anvil-backed mock connector; production is untouched.
  */

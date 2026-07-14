@@ -3,9 +3,9 @@ import { formatEther, formatUnits } from "viem";
 import { formatEthNumber } from "@/shared/lib/format";
 
 /**
- * Portfolio-local display formatters (redesign mockup, spec §12.50 — page "2c"). Pure
+ * Portfolio-local display formatters (redesign mockup, — page "2c"). Pure
  * formatting over SUPPLIED indexer/on-chain values — never market math and never
- * a hardcoded metric (§2). These are slice-local because they differ from the
+ * a hardcoded metric. These are slice-local because they differ from the
  * shared token/ETH formatters: balances render as GROUPED integers (mockup
  * "4,120,551", not the compact "4.12M" the grid uses) and PnL values carry an
  * explicit sign.
@@ -42,7 +42,7 @@ export type PnlTone = "green" | "red" | "muted";
 /**
  * Tone for a PnL ETH range: green when the whole range is a gain, red when it is
  * a loss, muted when it straddles zero (or is exactly zero) — so a range that
- * cannot commit to a sign is NOT painted as a win/loss (no false precision, §5.2).
+ * cannot commit to a sign is NOT painted as a win/loss (no false precision).
  */
 export function pnlTone(lowEth: number, highEth: number): PnlTone {
   if (lowEth >= 0 && highEth > 0) return "green";

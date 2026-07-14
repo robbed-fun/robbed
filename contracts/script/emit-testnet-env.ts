@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 /**
- * emit-testnet-env.ts — Phase T-3 deploy-artifact emitter (docs/developers/runbooks/testnet.md §6;
+ * emit-testnet-env.ts — Phase T-3 deploy-artifact emitter (docs/developers/runbooks/testnet.md;
  * docker-compose.testnet.yml contract documented in docs/developers/runbooks/docker.md "Testnet stack").
  *
  * The LOCAL stack's `deploychain` compose one-shot emits tools/localstack/out/local.env inline
  * (docker-compose.yml) because it also runs the deploy. On TESTNET there is no deploychain — the
- * deploy is a manual `forge script … --broadcast` against the remote chain (testnet.md §6) — so
+ * deploy is a manual `forge script … --broadcast` against the remote chain (testnet.md) — so
  * this script is the post-broadcast leg. Run it from anywhere after a testnet broadcast:
  *
  *   bun contracts/script/emit-testnet-env.ts
@@ -20,13 +20,13 @@
  *
  * Writes:
  *   tools/deployments/testnet.json        — addresses + START_BLOCK + verification-GUID
- *     placeholders (filled as `forge verify-contract` runs report GUIDs — contracts.md §7.2
- *     step 8; Blockscout v2 verifier on the testnet explorer needs no API key, spec §12.52)
+ * placeholders (filled as `forge verify-contract` runs report GUIDs — contracts.md
+ * step 8; Blockscout v2 verifier on the testnet explorer needs no API key)
  *   tools/localstack/out/testnet.env      — SAME keys as the deploychain-emitted local.env
  *     (CURVE_FACTORY_ADDRESS, ROUTER_ADDRESS, MIGRATOR_ADDRESS, TREASURY_ADDRESS,
  *     LP_FEE_VAULT_ADDRESS, CREATOR_VAULT_ADDRESS, WETH_ADDRESS, START_BLOCK) — the
  *     fail-closed prerequisite of docker-compose.testnet.yml's api/indexer services
- *     (the last two gate the §12.63/§12.69 creator-fee indexing + USD pricing).
+ * (the last two gate the creator-fee indexing + USD pricing).
  *
  * Fail-closed by design: any missing file, wrong mode/chainId, malformed address, or absent
  * receipts exits 1 — a partial/ambiguous emit is worse than none (the compose stack refuses
@@ -36,7 +36,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Official Robinhood Chain testnet id (spec §12.49; docs/developers/runbooks/testnet.md §1).
+// Official Robinhood Chain testnet id (docs/developers/runbooks/testnet.md).
 const TESTNET_CHAIN_ID = 46630;
 
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
@@ -60,7 +60,7 @@ if (!existsSync(artifactPath)) {
   fail(
     `${artifactPath} not found — run the T-3 deploy first:\n` +
       `  cd contracts && forge script script/Deploy.s.sol --rpc-url "$TESTNET_RPC_URL" --broadcast\n` +
-      `(needs DEPLOYER_PRIVATE_KEY + tools/m0/out/constants.testnet.json — testnet.md §6)`,
+      `(needs DEPLOYER_PRIVATE_KEY + tools/m0/out/constants.testnet.json — testnet.md)`,
   );
 }
 type Artifact = {
@@ -144,12 +144,12 @@ const record = {
     quoterV2: artifact.quoterV2,
   },
   canary: { token: artifact.canaryToken, curve: artifact.canaryCurve },
-  // Blockscout verification GUIDs (contracts.md §7.2 step 8) — placeholders until each
+  // Blockscout verification GUIDs (contracts.md step 8) — placeholders until each
   // `forge verify-contract … --verifier blockscout --verifier-url $TESTNET_BLOCKSCOUT_URL/api`
   // run reports its GUID; recorded here so CI/the runbook can audit verification coverage.
   verification: {
     status: "PENDING",
-    verifier: "blockscout-v2 (no API key — spec §12.52)",
+    verifier: "blockscout-v2 (no API key)",
     guids: Object.fromEntries(verificationContracts.map((c) => [c, null])),
   },
 };
@@ -174,9 +174,9 @@ const env = [
   `MIGRATOR_ADDRESS=${artifact.v3Migrator}`,
   `TREASURY_ADDRESS=${artifact.treasury}`,
   `LP_FEE_VAULT_ADDRESS=${artifact.lpFeeVault}`,
-  // §12.63/§12.69 creator-fee generation: the indexer/api register the CreatorVault
+  // creator-fee generation: the indexer/api register the CreatorVault
   // source + price the WETH claim leg off these. Absent ⇒ post-grad creator claims
-  // go unindexed and claimableUsd reads null (fail-safe, spec §2).
+  // go unindexed and claimableUsd reads null (fail-safe).
   `CREATOR_VAULT_ADDRESS=${artifact.creatorVault}`,
   `WETH_ADDRESS=${artifact.weth}`,
   `START_BLOCK=${startBlock}`,

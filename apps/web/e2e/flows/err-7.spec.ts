@@ -16,7 +16,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:ERR-7 — Graduating-window lock (ReadyToGraduate, §12.12)
+// @flow:ERR-7 — Graduating-window lock (ReadyToGraduate)
 // assertable-layers: on-chain · indexed · UI  (full 3-layer)
 test(
   "ERR-7 at threshold both sides lock as a deterministic Graduating state (never 'paused')",

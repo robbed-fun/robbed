@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { describeFeeSplit, formatBpsPercent } from "@/entities/curve";
 
 /**
- * Trade-fee split presentation (§7 / §12.63). Both bps components are read LIVE
- * (never hardcoded, §2); this proves the pure formatter the SafetyStrip and the
+ * Trade-fee split presentation. Both bps components are read LIVE
+ * (never hardcoded); this proves the pure formatter the SafetyStrip and the
  * /create panel share — treasury-only vs. treasury+creator, and the "unread" gate.
  */
 

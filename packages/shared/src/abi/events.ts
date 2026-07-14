@@ -3,20 +3,20 @@
  * (apps/indexer) and frontend decoding (apps/web).
  *
  * Shapes are TRANSCRIBED from the ratified contract designs:
- * - `TokenCreated`  — spec §12.15; docs/developers/contracts.md §2.2 (CurveFactory)
- * - `Trade`         — spec §12.15; contracts.md §2.3 (BondingCurve; ethAmount is GROSS, fee separate)
- * - `Graduated`     — contracts.md §2.5 (V3Migrator)
+ * - `TokenCreated` —; docs/developers/contracts.md (CurveFactory)
+ * - `Trade` —; contracts.md (BondingCurve; ethAmount is GROSS, fee separate)
+ * - `Graduated` — contracts.md (V3Migrator)
  * - `Transfer`      — canonical ERC-20; sixth indexed event family, sole source of
- *                     holder-balance truth (spec §12.16; indexer.md §3.6)
- * - V3 `Swap`       — canonical Uniswap V3 pool event (indexer.md §3.4)
- * - `Collect`       — canonical Uniswap V3 NonfungiblePositionManager event (indexer.md §3.5)
+ * holder-balance truth (indexer.md)
+ * - V3 `Swap` — canonical Uniswap V3 pool event (indexer.md)
+ * - `Collect` — canonical Uniswap V3 NonfungiblePositionManager event (indexer.md)
  *
  * M1 contract artifacts must match these byte-for-byte; any divergence found at
- * implementation time is escalated to hoodpad-architect, never patched around
- * (indexer.md §3, OI-1).
+ * implementation time is escalated to robbed-architect, never patched around
+ * (indexer.md, OI-1).
  */
 
-/** spec §12.15 / contracts.md §2.2 — emitted by CurveFactory. */
+/** / contracts.md — emitted by CurveFactory. */
 export const tokenCreatedEvent = {
   type: "event",
   name: "TokenCreated",
@@ -27,15 +27,15 @@ export const tokenCreatedEvent = {
     { name: "name", type: "string", indexed: false },
     { name: "symbol", type: "string", indexed: false },
     { name: "metadataHash", type: "bytes32", indexed: false },
-    // R2 canonical JSON URL — event-only; the integrity commitment is metadataHash (§8.3)
+    // R2 canonical JSON URL — event-only; the integrity commitment is metadataHash
     { name: "metadataUri", type: "string", indexed: false },
-    // V3 pool, pre-created + initialized at creation time (§6.3.2)
+    // V3 pool, pre-created + initialized at creation time
     { name: "pool", type: "address", indexed: false },
   ],
 } as const;
 
 /**
- * spec §12.15 / contracts.md §2.3 — emitted by each BondingCurve (Ponder
+ * / contracts.md — emitted by each BondingCurve (Ponder
  * factory children via TokenCreated). `ethAmount` is GROSS (fee included);
  * net = ethAmount − fee. Reserve fields are post-trade → zero hot-path RPC reads.
  */
@@ -54,7 +54,7 @@ export const tradeEvent = {
   ],
 } as const;
 
-/** contracts.md §2.5 — emitted by V3Migrator at graduation (single-fire per token). */
+/** contracts.md — emitted by V3Migrator at graduation (single-fire per token). */
 export const graduatedEvent = {
   type: "event",
   name: "Graduated",
@@ -76,7 +76,7 @@ export const graduatedEvent = {
 /**
  * Canonical ERC-20 Transfer — indexed on every LaunchToken (Ponder factory
  * children via TokenCreated). Sixth event family, sole source of holder-balance
- * truth (spec §12.16; indexer.md §3.6).
+ * truth (indexer.md).
  */
 export const transferEvent = {
   type: "event",
@@ -89,8 +89,8 @@ export const transferEvent = {
 } as const;
 
 /**
- * Canonical Uniswap V3 pool Swap (stable upstream shape, indexer.md §3.4).
- * Indexed only on graduated pools (Ponder factory over Graduated.pool, §12.16).
+ * Canonical Uniswap V3 pool Swap (stable upstream shape, indexer.md).
+ * Indexed only on graduated pools (Ponder factory over Graduated.pool).
  */
 export const v3SwapEvent = {
   type: "event",
@@ -107,8 +107,8 @@ export const v3SwapEvent = {
 } as const;
 
 /**
- * Canonical Uniswap V3 NonfungiblePositionManager Collect (indexer.md §3.5).
- * Indexed on the NPM (address from config — open item §13), filtered to
+ * Canonical Uniswap V3 NonfungiblePositionManager Collect (indexer.md).
+ * Indexed on the NPM (address from config — open item), filtered to
  * lp_token_ids held by LPFeeVault. Feeds the treasury fee-accrual dashboard.
  */
 export const v3CollectEvent = {
@@ -122,10 +122,10 @@ export const v3CollectEvent = {
   ],
 } as const;
 
-// ── Creator-fee event family (spec §7 / §12.63 — ADDITIVE, Phase-2 fold-in) ──
+// ── Creator-fee event family (ADDITIVE, Phase-2 fold-in) ──
 //
-// Distinct from the six ratified §12.15-16 families above: these are the
-// §12.63 creator-fee leg (new CurveFactory + BondingCurve + Router + pull-payment
+// Distinct from the six ratified families above: these are the
+// creator-fee leg (new CurveFactory + BondingCurve + Router + pull-payment
 // CreatorVault). TRANSCRIBED byte-for-byte from the landed contract artifacts
 // (contracts/out/{BondingCurve,CreatorVault}.sol; interfaces IBondingCurve /
 // ICreatorVault) — never invented. They are NOT added to `robbedEventsAbi` or
@@ -133,12 +133,12 @@ export const v3CollectEvent = {
 // the indexer registers them via the dedicated groupings below so the ratified
 // set and the additive set can't be conflated.
 //
-// DOC-LOCKSTEP (report): the owning design doc (contracts.md §2/§7) still
+// DOC-LOCKSTEP (report) the owning design doc (contracts.md) still
 // describes v1 (`creatorFeeBps ≡ 0`, no CreatorVault) — robbed-contracts must
 // document this surface there (docs-precede-code). This mirror tracks the
 // already-landed contracts; the shapes here are the compiled truth.
 
-/** IBondingCurve (§12.63) — a curve pushed its accrued creator-fee leg to the vault. */
+/** IBondingCurve — a curve pushed its accrued creator-fee leg to the vault. */
 export const creatorFeesSweptEvent = {
   type: "event",
   name: "CreatorFeesSwept",
@@ -149,7 +149,7 @@ export const creatorFeesSweptEvent = {
   ],
 } as const;
 
-/** ICreatorVault (§12.63) — a curve credited `creator`'s claimable balance (the sweep landing). */
+/** ICreatorVault — a curve credited `creator`'s claimable balance (the sweep landing). */
 export const creatorFeeDepositedEvent = {
   type: "event",
   name: "CreatorFeeDeposited",
@@ -160,7 +160,7 @@ export const creatorFeeDepositedEvent = {
   ],
 } as const;
 
-/** ICreatorVault (§12.63) — `caller` paid out `creator`'s full accrued balance to the creator. */
+/** ICreatorVault — `caller` paid out `creator`'s full accrued balance to the creator. */
 export const creatorFeeClaimedEvent = {
   type: "event",
   name: "CreatorFeeClaimed",
@@ -191,7 +191,7 @@ export const v3PoolEventsAbi = [v3SwapEvent] as const;
 /** Uniswap V3 NonfungiblePositionManager (single source, address from config). */
 export const v3PositionManagerEventsAbi = [v3CollectEvent] as const;
 
-/** Everything the indexer consumes, in one artifact (§8, §12.15-16). */
+/** Everything the indexer consumes, in one artifact. */
 export const robbedEventsAbi = [
   tokenCreatedEvent,
   tradeEvent,
@@ -201,9 +201,9 @@ export const robbedEventsAbi = [
   v3CollectEvent,
 ] as const;
 
-// ── Creator-fee groupings (§12.63 — what the indexer registers for the leg) ──
+// ── Creator-fee groupings (what the indexer registers for the leg) ──
 // Kept SEPARATE from the frozen six-family groupings above so `robbedEventsAbi`
-// stays the ratified §12.15-16 set. robbed-indexer registers `CreatorFeesSwept`
+// stays the ratified set. robbed-indexer registers `CreatorFeesSwept`
 // on the existing BondingCurve source (merge with `bondingCurveEventsAbi`) and a
 // NEW CreatorVault Ponder source (`getDeployment(chainId).robbed.creatorVault`,
 // present once a creator-fee factory is deployed) with `creatorVaultEventsAbi`.
@@ -211,7 +211,7 @@ export const robbedEventsAbi = [
 /** BondingCurve creator-leg slice — merge with `bondingCurveEventsAbi` on the curve source. */
 export const bondingCurveCreatorEventsAbi = [creatorFeesSweptEvent] as const;
 
-/** CreatorVault (§12.63) — new Ponder source; address from the deployment registry. */
+/** CreatorVault — new Ponder source; address from the deployment registry. */
 export const creatorVaultEventsAbi = [
   creatorFeeDepositedEvent,
   creatorFeeClaimedEvent,
@@ -224,26 +224,26 @@ export const creatorFeeEventsAbi = [
   creatorFeeClaimedEvent,
 ] as const;
 
-// ── Post-graduation 50/50 LP-fee-split event family (spec §12.69 — LANDED) ───
+// ── Post-graduation 50/50 LP-fee-split event family (LANDED) ───
 //
-// The POST-GRAD half of the creator leg (§12.68 is the pre-grad half). TRANSCRIBED
+// The POST-GRAD half of the creator leg (is the pre-grad half). TRANSCRIBED
 // byte-for-byte from the regenerated Phase-2 artifacts (contracts/out/{LPFeeVault,
 // CreatorVault}.sol → packages/shared/src/abi/{LPFeeVault,CreatorVault}.json) after
 // `bun contracts/script/codegen-abi.ts` — never invented. Custody is Option B
-// (§12.69(C)): the creator-aware `LPFeeVault.collect(tokenId)` splits the V3 pool's
+// : the creator-aware `LPFeeVault.collect(tokenId)` splits the V3 pool's
 // 1% fees 50/50 (`creatorLpShareBps() == 5000`), treasury share PUSHED to the fixed
 // treasury, creator share routed to the pull-payment CreatorVault as a per-`(creator,
 // token)` ERC20 balance via `depositERC20(creator, token, share)` — token ∈ {launch
 // token, WETH}, NOT unwrapped to ETH. Claimed per ERC20 via `claimERC20(creator,
 // token)`; the pre-grad native-ETH leg (`CreatorFeeDeposited`/`Claimed`) stays SEPARATE.
 //
-// Kept OFF the frozen six-family groupings AND off the §12.63 pre-grad groupings so
+// Kept OFF the frozen six-family groupings AND off the pre-grad groupings so
 // each set stays independently assertable (abi.test.ts). robbed-indexer registers
 // `FeesSplit` on the LPFeeVault source and the two `CreatorToken*` events on the
 // existing CreatorVault source (merge with `creatorVaultEventsAbi`).
 
 /**
- * LPFeeVault (§12.69) — the 50/50 split emitted at `collect()`. Per-beneficiary
+ * LPFeeVault — the 50/50 split emitted at `collect()`. Per-beneficiary
  * per-leg amounts (`treasury{0,1}`/`creator{0,1}` in RAW pool ordering; the indexer
  * resolves 0/1 → token/weth via `graduations.token_is_token0`). `FeesCollected`
  * (tokenId, amount0, amount1) ALSO still emits — the pre-split harvest total.
@@ -262,7 +262,7 @@ export const feesSplitEvent = {
 } as const;
 
 /**
- * CreatorVault (§12.69) — post-grad ERC20 leg credited per `(creator, token)`.
+ * CreatorVault — post-grad ERC20 leg credited per `(creator, token)`.
  * `token` is the ERC20 (a graduated launch token OR canonical WETH); `source` is the
  * depositor (the LPFeeVault). Distinct from the pre-grad `CreatorFeeDeposited`
  * (per-creator native ETH from a curve).
@@ -278,7 +278,7 @@ export const creatorTokenDepositedEvent = {
   ],
 } as const;
 
-/** CreatorVault (§12.69) — `caller` paid out `creator`'s ERC20 `token` balance (`claimERC20`). */
+/** CreatorVault — `caller` paid out `creator`'s ERC20 `token` balance (`claimERC20`). */
 export const creatorTokenClaimedEvent = {
   type: "event",
   name: "CreatorTokenClaimed",
@@ -290,13 +290,13 @@ export const creatorTokenClaimedEvent = {
   ],
 } as const;
 
-/** LPFeeVault post-grad split slice (§12.69) — registered on the LPFeeVault source. */
+/** LPFeeVault post-grad split slice — registered on the LPFeeVault source. */
 export const lpFeeVaultSplitEventsAbi = [feesSplitEvent] as const;
 
-/** CreatorVault post-grad ERC20 leg (§12.69) — merge with `creatorVaultEventsAbi` on the vault source. */
+/** CreatorVault post-grad ERC20 leg — merge with `creatorVaultEventsAbi` on the vault source. */
 export const creatorVaultTokenEventsAbi = [creatorTokenDepositedEvent, creatorTokenClaimedEvent] as const;
 
-/** The full additive §12.69 post-grad creator-split manifest (parallels `creatorFeeEventsAbi`). */
+/** The full additive post-grad creator-split manifest (parallels `creatorFeeEventsAbi`). */
 export const postGradCreatorFeeEventsAbi = [
   feesSplitEvent,
   creatorTokenDepositedEvent,

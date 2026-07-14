@@ -6,16 +6,16 @@ import { MobileNav } from "@/widgets/mobile-nav";
 import { PortfolioClient } from "./PortfolioClient";
 
 /**
- * Portfolio `/portfolio` (§5.4 — Phase-2 page surfaced day 1 by the ROBBED_
- * redesign, spec §12.50, page "2c"). SERVER shell: the SSR chrome (status banner,
+ * Portfolio `/portfolio` (— Phase-2 page surfaced day 1 by the ROBBED_
+ * redesign, page "2c"). SERVER shell: the SSR chrome (status banner,
  * header, bottom nav) matches every other view, while the wallet-scoped content
  * hydrates as one client island (`PortfolioClient`) — the subject address comes
  * from the connected wallet or an explicit `?address=`, so there is nothing
  * meaningful to server-render inside the panel until the client resolves it.
  *
- * NO mocked metrics (§2): every value under the panel is a live
+ * NO mocked metrics : every value under the panel is a live
  * `/v1/portfolio/*` read (totals/PnL are ETH-first with a live-priced USD
- * mirror; PnL is a nullable range — §5.2). NO OG work here (out of scope).
+ * mirror; PnL is a nullable range —). NO OG work here (out of scope).
  */
 export default async function PortfolioView({
   searchParams,

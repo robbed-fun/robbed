@@ -5,9 +5,9 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @title IWETH9 — minimal canonical wrapped-ETH interface
 /// @notice Canonical WETH on Robinhood Chain: `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73`
-///         (spec §2 chain facts; the address is a constructor/config param, asserted in the
-///         deploy script — contracts.md §2.2 storage, §7.2).
-/// @dev Minimal local interface, no upstream npm dependency (contracts.md §2 inventory).
+/// (chain facts; the address is a constructor/config param, asserted in the
+/// deploy script — contracts.md storage).
+/// @dev Minimal local interface, no upstream npm dependency (contracts.md inventory).
 interface IWETH9 is IERC20 {
     /// @notice Wrap ETH: mints `msg.value` WETH to the caller.
     function deposit() external payable;

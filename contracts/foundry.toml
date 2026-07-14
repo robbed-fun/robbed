@@ -1,4 +1,4 @@
-# ROBBED_ contracts — spec §6.7: ONE exact compiler pin, no ranges, anywhere.
+# ROBBED_ contracts — ONE exact compiler pin, no ranges, anywhere.
 # Pin 0.8.35 CONFIRMED against robinhoodchain.blockscout.com verifier config
 # (v0.8.35+commit.47b9dedd present in /api/v2/smart-contracts/verification/config,
 # checked 2026-07-09).
@@ -10,7 +10,7 @@ libs = ["lib"]
 test = "test"
 script = "script"
 
-solc = "0.8.35"          # exact pin — never a range (spec §6.7)
+solc = "0.8.35"          # exact pin — never a range
 optimizer = true
 optimizer_runs = 200
 # evm_version PINNED "cancun" (F-2, 2026-07-10) — do NOT leave unset. Foundry 1.7.1 defaults to
@@ -18,14 +18,14 @@ optimizer_runs = 200
 # Osaka/Prague-era opcodes untested on the ArbOS target. We pin an explicit, ArbOS-supported,
 # Blockscout-verifiable target instead.
 #
-# Why "cancun" and NOT a pre-Cancun target (shanghai/paris), despite contracts.md §7.1's original
+# Why "cancun" and NOT a pre-Cancun target (shanghai/paris), despite contracts.md 's original
 # "do not assume Cancun" guidance: OpenZeppelin v5.5.0's `utils/Bytes.sol` uses the `mcopy` opcode
 # (EIP-5656, Cancun-only). It is pulled into EVERY deployed contract via the mandatory
-# ERC20Permit → ECDSA/EIP712 → Strings → Bytes import chain (LaunchToken, §6.1). Compiling that
+# ERC20Permit → ECDSA/EIP712 → Strings → Bytes import chain (LaunchToken). Compiling that
 # stack on "shanghai" HARD-FAILS: solc "Error (7755): the mcopy instruction is only available for
 # Cancun-compatible VMs". So Cancun opcodes are already unavoidable in our deployed bytecode short of
-# downgrading OZ — making "cancun" the correct, honest target. (§7.1 amendment flagged to
-# robbed-architect for a §12 decision, 2026-07-10.)
+# downgrading OZ — making "cancun" the correct, honest target. (amendment flagged to
+# robbed-architect for a decision, 2026-07-10.)
 #
 # ArbOS Cancun support (docs-first, checked 2026-07-10):
 #   - CONFIRMED: ArbOS 20 "Atlas" added the Cancun EVM opcodes — "Addition of the MCOPY EVM opcode
@@ -38,9 +38,9 @@ optimizer_runs = 200
 #     solidity_evm_versions (["...","london","paris","shanghai","cancun","prague","osaka","default"],
 #     checked 2026-07-10) — the same source that confirmed the 0.8.35 pin.
 # Note: only `mcopy` (memory copy, deterministic) is used — NOT transient storage. The storage-based
-# ReentrancyGuard choice STANDS (EIP-1153 remains optional/unused, per §7.1 intent).
+# ReentrancyGuard choice STANDS (EIP-1153 remains optional/unused, per intent).
 # Final Blockscout round-trip + on-chain ArbOS-version confirmation tie to M1-2 (throwaway
-# verification, O-5 / §13).
+# verification, O-5 /).
 evm_version = "cancun"
 # via_ir: deliberately NOT enabled. It compiles the deep V3Migrator graduation flow, but it changed
 # the revert behaviour of the already-green Router deadline path (M1-9) — an unacceptable blast
@@ -54,14 +54,14 @@ evm_version = "cancun"
 # bytecode, deployed via vm.getCode in the gate-2 invariant-6 harness AND in Deploy.s.sol's local
 # anvil smoke). This is the ONLY way to exercise the REAL V3 pool math locally under the single
 # 0.8.35 pin — v3-core is 0.7.6 and cannot be compiled in-project. Test/smoke-only; production
-# reads §12.28 addresses from constants.json.
+# reads addresses from constants.json.
 #
 # `../tools/m0/out` (read): the M0 economics/constants notebook output that `script/Deploy.s.sol`
 #   (M1-14) loads via `vm.readFile` — the single source of every market-dependent parameter
-#   (spec §2/§6.4: NEVER inlined in src/). Read-only: the deploy script must not mutate M0 output.
+# (NEVER inlined in src). Read-only: the deploy script must not mutate M0 output.
 # `./deployments` (read-write): where Deploy.s.sol writes the per-chain deploy artifact
 #   (`deployments/<chainId>.json`) that the addresses codegen (`script/codegen-addresses.ts`)
-#   consumes to emit the generated `@robbed/shared` + web addresses modules (architecture.md §4).
+# consumes to emit the generated `@robbed/shared` + web addresses modules (architecture.md).
 # `../tools/localstack` (read): the I-2 dev-fork constants fixture (constants.fork.json — canonical
 #   M0 constants with a LOCAL treasury stand-in) that Deploy.s.sol loads via ROBBED_CONSTANTS when
 #   deploying against the local anvil fork of chain 4663. Read-only, dev-only; never a real deploy input.
@@ -89,10 +89,10 @@ quote_style = "double"
 number_underscore = "thousands"
 
 [rpc_endpoints]
-# Robinhood Chain (chain ID 4663) — used by fork tests (spec §10 gate 3).
+# Robinhood Chain (chain ID 4663) — used by fork tests (gate 3).
 robinhood = "${ROBINHOOD_RPC_URL}"
 
-# ── Gate-3 fork profile (M1-12; contracts.md §6 "Gate 3 — fork tests") ─────────────────────────
+# ── Gate-3 fork profile (M1-12; contracts.md "Gate 3 — fork tests") ─────────────────────────
 # Run: `FOUNDRY_PROFILE=fork ROBINHOOD_RPC_URL=https://rpc.mainnet.chain.robinhood.com forge test`
 # Inherits EVERYTHING from [profile.default] (solc 0.8.35 pin, evm_version, fs_permissions,
 # remappings — Foundry Book /config/profiles: "All profiles inherit from `default`"); overrides:
@@ -100,7 +100,7 @@ robinhood = "${ROBINHOOD_RPC_URL}"
 #     RPC is rate-limited; the unit/fuzz/invariant campaigns are the DEFAULT profile's job and
 #     re-running them here would only burn the shared rate budget without adding gate-3 evidence.
 #   fuzz.runs = 32 (default 256) — gate 3 is a lifecycle-CORRECTNESS gate, not a fuzz campaign
-#     (contracts.md §6: "fuzz-light trade sequence"); every fuzz run re-executes setUp() → fresh
+# (contracts.md : "fuzz-light trade sequence"); every fuzz run re-executes setUp() → fresh
 #     fork state fetches, so runs are kept minimal for the rate-limited public endpoint. The heavy
 #     fuzz/invariant load stays on the default (local) profile where it belongs.
 # Determinism: the fork tests pin a block (env-overridable ROBINHOOD_FORK_BLOCK) so repeated runs

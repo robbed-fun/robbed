@@ -1,5 +1,5 @@
 /**
- * TokenDetailRow → `TokenDetail` (frozen shared DTO = TokenCard + §5.2 fields +
+ * TokenDetailRow → `TokenDetail` (frozen shared DTO = TokenCard + fields +
  * Trust panel). `creator` is the enriched `{ address, tokensCreated }` profile
  * that supersedes the card's plain address (RATIFIED X-13; address is inside).
  */
@@ -57,7 +57,7 @@ export function toTokenDetail(
         : {}),
     },
     // Restores the TokenHeader "Holders" stat dropped by the /holders
-    // {items,nextCursor} migration (`tokens.holder_count`, indexer.md §3.6).
+    // {items,nextCursor} migration (`tokens.holder_count`, indexer.md).
     holderCount: row.holder_count,
   };
 }

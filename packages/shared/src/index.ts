@@ -1,9 +1,9 @@
 /**
  * @robbed/shared — frozen cross-service interface artifacts (contract-first).
  *
- * Module map (api.md §5): abi/events (canonical ABIs), confirmation,
+ * Module map (api.md) abi/events (canonical ABIs), confirmation,
  * channels, ws-messages, api-types, events (decoded structs), db-rows,
- * constants, metadata (canonicalization + keccak256 — spec §8.3/§12.19).
+ * constants, metadata (canonicalization + keccak256).
  */
 export * from "./constants";
 export * from "./text";

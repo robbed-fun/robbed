@@ -15,11 +15,11 @@ import {INonfungiblePositionManager} from "src/interfaces/external/INonfungibleP
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {ZeroAddress, NotPositionManager} from "src/errors/Errors.sol";
 
-/// @title LPFeeVault unit tests (M1-10; spec §6.3.4, §6.6, §12.69)
+/// @title LPFeeVault unit tests (M1-10)
 /// @notice Proves: LP NFT custody; `collect` splits accrued V3 fees 50/50 treasury/creator (creator
 ///         cut routed to the {CreatorVault}); the caller can never siphon; principal liquidity is
 ///         untouched by a collect; `onERC721Received` accepts NFTs only from the NPM; constructor
-///         zero-checks. The §12.69 split invariants (exact-sum, principal-monotonic, un-brickable,
+/// zero-checks. The split invariants (exact-sum, principal-monotonic, un-brickable,
 ///         set-once) live in `test/unit/LPFeeVaultCreatorSplit.t.sol`; this suite keeps the base
 ///         custody/guard coverage.
 contract LPFeeVaultTest is Test, V3Fixture {
@@ -65,7 +65,7 @@ contract LPFeeVaultTest is Test, V3Fixture {
         );
     }
 
-    // ── full lifecycle: fees split 50/50 treasury/creator, principal locked (§12.69) ─────────────
+    // ── full lifecycle: fees split 50/50 treasury/creator, principal locked ─────────────
 
     function test_collect_split50_50_principalUntouched() public {
         (LaunchToken token, BondingCurve curve, address pool, uint256 tokenId) = _graduate("v1");

@@ -9,10 +9,10 @@ import {
 import { holderRow, tokenDetail } from "./fixtures";
 
 /**
- * Holder funding-cluster grouping (v1.2, §5.2/§8.5) — the PURE grouping helper is
- * preserved (public entity API). NOTE (§12.58/§12.22): the redesigned Top Holders
+ * Holder funding-cluster grouping (v1.2) — the PURE grouping helper is
+ * preserved (public entity API). NOTE : the redesigned Top Holders
  * table NO LONGER re-groups client-side (that would re-rank a server-authoritative
- * list); the surviving public §8.5 signal is the per-row advisory bot-flag chips,
+ * list); the surviving public signal is the per-row advisory bot-flag chips,
  * proven in the render block below.
  */
 
@@ -43,8 +43,8 @@ describe("groupHoldersByCluster (pure)", () => {
   });
 });
 
-describe("HolderTable render — row shape + advisory botFlags (§12.58)", () => {
-  it("renders rank/label/amount rows with structural + advisory §8.5 flag chips", async () => {
+describe("HolderTable render — row shape + advisory botFlags ", () => {
+  it("renders rank/label/amount rows with structural + advisory flag chips", async () => {
     vi.doMock("@/shared/api", () => ({
       getHolders: vi.fn(async () => ({ items: [], nextCursor: null })),
     }));
@@ -68,10 +68,10 @@ describe("HolderTable render — row shape + advisory botFlags (§12.58)", () =>
       </QueryClientProvider>,
     );
 
-    // Titled table + the RULED row surface (§12.58): advisory bot-flag chip
+    // Titled table + the RULED row surface : advisory bot-flag chip
     // (surviving public organic-flow signal) + structural role chip.
     expect(screen.getByText("Top holders")).toBeTruthy();
-    expect(screen.getByText("farm")).toBeTruthy(); // advisory §8.5 botFlag chip
+    expect(screen.getByText("farm")).toBeTruthy(); // advisory botFlag chip
     expect(screen.getByText("Bonding curve")).toBeTruthy(); // structural flag chip
   });
 });

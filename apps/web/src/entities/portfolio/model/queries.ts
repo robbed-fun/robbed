@@ -15,7 +15,7 @@ import {
  * shared `qk` factory is a fenced data-layer module) and namespaced by address
  * so switching wallets / viewing another address swaps caches cleanly.
  *
- * These are ADVISORY reads (api.md §3.4a): no WS channel patches them, so they
+ * These are ADVISORY reads (api.md) no WS channel patches them, so they
  * rely on `staleTime` + refetch rather than the live-prefix invalidation the
  * trade/token families use.
  */

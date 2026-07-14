@@ -3,16 +3,16 @@
 
 /*
  * ROBBED_ design system — dark terminal-mono (redesign Phase F; basis:
- * docs/design/robbed-redesign-plan.md + the ratified redesign, spec §12.50). Dark-only (§12.23
+ * docs/design/robbed-redesign-plan.md + the ratified redesign). Dark-only (
  * stands); mobile-first. Supersedes the M3-2 ROBBED_/shadcn look (recorded in
- * docs/developers/web.md §7 + the plan's "spec deviations" list for §12).
+ * docs/developers/web.md + the plan's "spec deviations" list for).
  *
  * THIS IS THE ONLY FILE ALLOWED TO CONTAIN RAW COLOR VALUES.
  * The token-bypass lint (tests/copy-lint.test.ts) fails CI on any hex/rgb/hsl
  * or arbitrary color class elsewhere in app/ or src/ (except shared/ui/kit/**
  * and the non-presentational shared plumbing). Re-theming = swap values here.
  *
- * EVERY VALUE BELOW WAS SAMPLED from the ratified redesign (spec §12.50) via Playwright
+ * EVERY VALUE BELOW WAS SAMPLED from the ratified redesign via Playwright
  * getComputedStyle (2026-07-10) — not eyeballed, not taken from the plan's
  * directional palette. Usage notes cite where the mockup uses each value.
  *
@@ -23,7 +23,7 @@
  */
 
 /* Dark-only: `<html class="dark">` is hard-set in layout.tsx; there is no toggle
- * (§12.23). This variant keeps shadcn's `dark:` utilities working if any land. */
+ *. This variant keeps shadcn's `dark:` utilities working if any land. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ── Layer 1: semantic ROBBED_ tokens (exact mockup values) ─────────────────── */
@@ -63,7 +63,7 @@
   --color-accent: #4ade80;
   --color-accent-foreground: #0b0d0b;
 
-  /* confirmation tiers (§2.1) — used by ConfirmationBadge (M3-7). The mockup
+  /* confirmation tiers — used by ConfirmationBadge (M3-7). The mockup
    * shows no badge hues; DECISION (Phase F): keep soft/posted distinct from the
    * buy/sell/graduate hues (amber/blue), map finalized onto terminal green. */
   --color-soft-confirmed: #f59e0b;
@@ -117,7 +117,7 @@
     }
   }
 
-  /* TRENDING carousel marquee — pixel-matched to the ratified redesign (spec §12.50 — panel "2d")
+  /* TRENDING carousel marquee — pixel-matched to the ratified redesign (panel "2d")
    * (`feat-scroll 32s linear infinite`, translateX 0 → -50% over a track that
    * holds two identical card sets for a seamless loop). Pure CSS, no client JS. */
   --animate-feat-scroll: feat-scroll 32s linear infinite;
@@ -185,7 +185,7 @@
    * cycle that resolves to EMPTY → every `border-border` utility and the
    * `@layer base *{border-color}` default fall back to `currentColor` (bright
    * text) instead of the #1C221C token, so app-wide borders render far too light
-   * vs the ratified redesign (spec §12.50). Leaving `--color-border` as its Layer-1 @theme value
+   * vs the ratified redesign. Leaving `--color-border` as its Layer-1 @theme value
    * (#1c221c) lets both the Tailwind utility and shadcn `--border` resolve it. */
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -201,7 +201,7 @@
   body {
     background-color: var(--color-bg);
     /* Mockup page-wrapper base color is #C9D3C9 (secondary); bright #EDF3ED is
-     * opt-in per element (names, wordmark, values) — the ratified redesign (spec §12.50, mockup line 177). */
+     * opt-in per element (names, wordmark, values) — the ratified redesign (mockup line 177). */
     color: var(--color-text-secondary);
     font-family: var(--font-mono);
     font-feature-settings: "rlig" 1, "calt" 1;
@@ -209,7 +209,7 @@
     font-size: 0.8125rem;
     line-height: 1.45;
   }
-  /* Every numeric column is tabular (web.md §7). */
+  /* Every numeric column is tabular (web.md). */
   .tabular-nums,
   table {
     font-variant-numeric: tabular-nums;

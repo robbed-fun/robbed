@@ -4,7 +4,7 @@ import { AMM_TAGLINE, BRAND } from "@/shared/config/copy";
 import { ApiError, getToken } from "@/shared/api";
 import { env } from "@/shared/lib/env";
 
-/** Fixed OG canvas — the X/Telegram/Discord share unit (spec §5.2/§9). */
+/** Fixed OG canvas — the X/Telegram/Discord share unit. */
 const OG_WIDTH = 1200;
 const OG_HEIGHT = 630;
 
@@ -29,8 +29,8 @@ export async function generateTokenMetadata(address: string): Promise<Metadata> 
     const description =
       token.description?.slice(0, 200) ||
       `${token.name} on ${BRAND} — ${AMM_TAGLINE} on Robinhood Chain.`;
-    // Absolute URL from env (§2 — never inline an origin). DELIBERATELY the
-    // PUBLIC base, NOT the split-horizon `env.apiFetchBaseUrl()` (web.md §2.3):
+    // Absolute URL from env (never inline an origin). DELIBERATELY the
+    // PUBLIC base, NOT the split-horizon `env.apiFetchBaseUrl()` (web.md):
     // generateMetadata runs server-side, but this URL is emitted into the HTML
     // head for EXTERNAL crawlers (X/Telegram/Discord), which fetch it from
     // OUTSIDE our network — swapping in `API_BASE_URL_INTERNAL` would make

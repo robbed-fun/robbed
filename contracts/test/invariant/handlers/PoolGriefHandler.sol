@@ -9,7 +9,7 @@ import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
 import {IUniswapV3Pool} from "src/interfaces/external/IUniswapV3Pool.sol";
 
 /// @title PoolGriefHandler — adversarial handler for gate-2 invariant 6 (pre-seed defense)
-///        (spec §6.3.2, §10 gate 2; contracts.md §6 test matrix row 6)
+/// (gate 2; contracts.md test matrix row 6)
 /// @notice Deploys the REAL Uniswap V3 stack once (V3Fixture), then each fuzz call runs an
 ///         INDEPENDENT full lifecycle on a FRESH subject token/pool: create → fuzz-grief the
 ///         near-empty pool (donations, sync-style dual inflation, price-limited swaps both
@@ -26,7 +26,7 @@ contract PoolGriefHandler is V3Fixture {
 
     address internal buyer = makeAddr("griefFiller");
 
-    // ── Ghost state (contracts.md §6 row 6) ──────────────────────────────────────
+    // ── Ghost state (contracts.md row 6) ──────────────────────────────────────
     /// @notice MUST remain false forever: set if graduation minted while the pool tick was outside
     ///         target ± TOLERANCE_TICKS (the hostile-ratio mint).
     bool public ghost_mintedOutsideTolerance;

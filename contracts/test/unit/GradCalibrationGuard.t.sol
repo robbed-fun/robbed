@@ -31,10 +31,10 @@ contract CalibrationHarness is Deploy {
 ///         equivalent-in-reachable-states ONLY while
 ///           `1.0001^TOLERANCE_TICKS × (1 − MIGRATION_SLIPPAGE_BPS/1e4) ≤ 1`
 ///         (currently 1.0001^100 × 0.99 ≈ 0.99994917, margin ≈ 0.00508%). Both parameters are
-///         beta-retunable (spec §12.32/§12.33), so WITHOUT this guard a retune could silently
+/// beta-retunable, so WITHOUT this guard a retune could silently
 ///         invalidate the disposition with no test failing — and, worse, let the mins bite inside
 ///         the L255 tolerance band (NPM amount-min revert after the tolerance check passed →
-///         §12.12 ReadyToGraduate liveness risk). This suite (a) asserts the relation for the
+/// ReadyToGraduate liveness risk). This suite (a) asserts the relation for the
 ///         live TestConstants M0 fixture, (b) proves the predicate demonstrably CATCHES bad
 ///         calibrations (pure-math negative pins — TestConstants itself is never touched), and
 ///         (c) proves the matching `Deploy._consistencyChecks` assert fails a retuned constants
@@ -100,7 +100,7 @@ contract GradCalibrationGuardTest is Test {
     }
 
     /// @dev Nonsense calibrations fail closed: negative tolerance, and slippage ≥ 100% (a ZERO
-    ///      §6.3.2 min floor — the amount-min defense would be disabled outright).
+    /// min floor — the amount-min defense would be disabled outright).
     function test_gate4Calibration_nonsenseDomains_failClosed() public view {
         assertFalse(harness.covers(-1, 100), "negative tolerance is a miscalibration");
         assertFalse(harness.covers(100, 10_000), "slippage == 100% zeroes the min floor");
@@ -129,7 +129,7 @@ contract GradCalibrationGuardTest is Test {
     // ── config-discipline: the deploy-side cap-reachability guard fails a below-threshold cap ──
 
     /// @notice `Deploy._consistencyChecks` mirrors the factory constructor's `_requireCapsReachGraduation`:
-    ///         a `perTokenEthCap` below `graduationEth` bricks graduation reachability (§12.11), so a
+    /// a `perTokenEthCap` below `graduationEth` bricks graduation reachability, so a
     ///         constants file with such a cap must fail closed pre-broadcast with `CapBelowGraduation`.
     function test_deploy_lowCapConstants_failsClosed() public {
         vm.chainId(46_630);

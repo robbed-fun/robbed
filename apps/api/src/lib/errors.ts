@@ -1,14 +1,14 @@
 /**
- * Error taxonomy (decide-it-yourself, api.md §5). SINGLE central mapping from a
+ * Error taxonomy (decide-it-yourself, api.md). SINGLE central mapping from a
  * thrown domain error to `{ httpStatus, error.code }`. Consumers switch on the
- * stable `error.code`, never on prose (api.md §2 envelope).
+ * stable `error.code`, never on prose (api.md envelope).
  *
  * The `error.code` vocabulary is a CROSS-SERVICE shape and lives in
  * `@robbed/shared` (`ERROR_CODE_VALUES` / `errorCodeSchema`) — never redeclared
  * here. We import it.
  *
  * RECONCILE (2026-07-10): `upstream_unavailable` and `conflict` are now RATIFIED
- * in `errorCodeSchema` / `ERROR_CODES` (api.md §5 disposition). This file now
+ * in `errorCodeSchema` / `ERROR_CODES` (api.md disposition). This file now
  * references the ratified members directly, so every response code — deliberate
  * domain errors and the internal-500 / readyz-503 path alike — is enum-validated.
  */
@@ -52,7 +52,7 @@ export const errors = {
    * ratified enum member (shared's enum doc cites this exact imageHash case),
    * so switching this path to 409 / `conflict` is possible — but that is a
    * consumer-visible change (status + code the frontend branches on, plus the
-   * metadata test's 400 assertion). FLAGGED for hoodpad-architect/shared to
+   * metadata test's 400 assertion). FLAGGED for robbed-architect/shared to
    * decide; not self-flipped here.
    */
   conflict: (message = "conflicting request") =>

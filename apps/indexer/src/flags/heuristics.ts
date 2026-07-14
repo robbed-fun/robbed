@@ -1,41 +1,41 @@
 /**
- * Bot/farm detection — PURE heuristics (indexer.md §8.5, spec §8.5, v1.2; M2-13).
+ * Bot/farm detection — PURE heuristics (indexer.md, v1.2; M2-13).
  *
  * This module is DB-free and fully unit-testable: it is the single source of the
- * §8.5 heuristic math. `src/flags/store.ts` runs the SQL views (`views.sql`) to
+ * heuristic math. `src/flags/store.ts` runs the SQL views (`views.sql`) to
  * gather the aggregates below, calls `runFlowAnalysis`, and upserts the results
  * into `address_flags` + `token_flow_stats`. The whole pipeline is rebuildable
- * from `trades` + `transfers` (indexer.md §8.5.2 / §4.4).
+ * from `trades` + `transfers` (indexer.md).
  *
  * STRICTLY ADVISORY — labeling only. Nothing here (or downstream) gates a trade,
- * a listing, or any chain interaction (§8.4/§8.5). Outputs are always presented
- * as estimates / RANGES (§5.2 forbids false precision).
+ * a listing, or any chain interaction. Outputs are always presented
+ * as estimates / RANGES (forbids false precision).
  *
  * The `BotFlag` vocabulary is imported from `@robbed/shared` (`address_flags.
  * flags[]` and the wire both use it — never redeclared here).
  *
  * Decide-it-yourself decisions (basis recorded inline):
  *  - **Thresholds are config, not literals** (indexer.md decide-it-yourself
- *    "Bot-heuristic thresholds"). Defaults are the spec §8.5 v1 values; every one
+ * "Bot-heuristic thresholds"). Defaults are the v1 values; every one
  *    is overridable via env (`loadFlowThresholds`) so they tune with M2 data
  *    without a code change. Never gates chain state.
- *  - **Organic-holder % is a RANGE** (§5.2). `low` counts EVERY flag as
+ * - **Organic-holder % is a RANGE**. `low` counts EVERY flag as
  *    non-organic (most conservative → fewest organic holders); `high` counts only
  *    the strongest flags (`farm`, `wash`) as non-organic (sniper/programmatic/
  *    arb_exit may still be organic-ish). `low <= high` by construction. The band
  *    encodes heuristic uncertainty instead of a false point value.
  *  - **Wash volume is excluded from organic volume** by flagging the washing
  *    address `wash`; the organic-volume numerator only sums UNFLAGGED addresses,
- *    so wash-flagged volume drops out automatically (heuristic 4, §8.5.1).
+ * so wash-flagged volume drops out automatically (heuristic 4).
  *  - **Own contracts are never `programmatic`** — the executor whitelist (our
  *    Router/factory/migrator/NPM/swapRouter) legitimately mediates trades, so a
- *    trade routed through them is not flagged (heuristic 3, §8.5.1).
+ * trade routed through them is not flagged (heuristic 3).
  */
 import type { BotFlag } from "@robbed/shared";
 
 const DAY_SECONDS = 86_400;
 
-// ── Tunable thresholds (spec §8.5 v1 defaults; env-overridable) ──────────────
+// ── Tunable thresholds (v1 defaults; env-overridable) ──────────────
 
 export interface FlowThresholds {
   /** Funder fan-out: a funder of ≥ this many micro-funded wallets/24h → cluster. */
@@ -56,7 +56,7 @@ export interface FlowThresholds {
   washFeeTolerance: number;
 }
 
-/** Spec §8.5.1 v1 defaults. 0.001 ETH = 1e15 wei. */
+/** v1 defaults. 0.001 ETH = 1e15 wei. */
 export const DEFAULT_FLOW_THRESHOLDS: FlowThresholds = {
   funderMinWallets: 20,
   microTransferWei: 1_000_000_000_000_000n, // 0.001 ETH
@@ -86,7 +86,7 @@ function envBigint(env: Record<string, string | undefined>, name: string, dflt: 
   }
 }
 
-/** Load thresholds from env with the spec §8.5 defaults (config, not literals). */
+/** Load thresholds from env with the defaults (config, not literals). */
 export function loadFlowThresholds(env: Record<string, string | undefined> = process.env): FlowThresholds {
   return {
     funderMinWallets: envInt(env, "FLOW_FUNDER_MIN_WALLETS", DEFAULT_FLOW_THRESHOLDS.funderMinWallets),
@@ -170,7 +170,7 @@ export interface FlowInput {
 // ── Per-heuristic pure classifiers ──────────────────────────────────────────
 
 /**
- * Heuristic 1 — funder clustering (§8.5.1). Group wallets whose FIRST inbound is
+ * Heuristic 1 — funder clustering. Group wallets whose FIRST inbound is
  * a micro-transfer (< `microTransferWei`) by their funder within a rolling 24h
  * window; a funder that seeded ≥ `funderMinWallets` distinct wallets in any such
  * window marks all of them `farm`, `cluster_id = funder:{addr}`. Returns the
@@ -212,7 +212,7 @@ export function classifyFunderClusters(
 }
 
 /**
- * Heuristic 2 — wallet age vs. action (§8.5.1). First buy strictly < `sniperWindowSec`
+ * Heuristic 2 — wallet age vs. action. First buy strictly < `sniperWindowSec`
  * after `TokenCreated` AND funded strictly < `sniperFundedWithinSec` before that
  * buy. `fundedAtSec` is `null` when the wallet has no prior inbound (cannot be a
  * funded sniper).
@@ -231,7 +231,7 @@ export function isSniper(
 }
 
 /**
- * Heuristic 3 — contract-mediated execution (§8.5.1). Flag when the executor
+ * Heuristic 3 — contract-mediated execution. Flag when the executor
  * differs from the token recipient, UNLESS the executor is one of OUR contracts
  * (Router/factory/migrator/NPM/swapRouter) — those legitimately mediate and are
  * NEVER flagged. `whitelist` holds lowercased own-contract addresses.
@@ -243,7 +243,7 @@ export function isProgrammatic(executor: string, recipient: string, whitelist: R
 }
 
 /**
- * Heuristic 4 — wash-loop (§8.5.1). A round-trip buy→sell of similar size netting
+ * Heuristic 4 — wash-loop. A round-trip buy→sell of similar size netting
  * ≈ fees: the address bought AND sold, both legs non-zero, and the ETH delta is
  * within `washFeeTolerance × fee`. Wash volume is later excluded from organic
  * volume (the address carries the `wash` flag).
@@ -256,7 +256,7 @@ export function isWash(agg: Pick<TradeAggRow, "buyEthWei" | "sellEthWei" | "feeW
   return delta <= scaled;
 }
 
-/** Heuristic 5 — same-second multi-pool exit (§8.5.1): ≥ N pools in one block. */
+/** Heuristic 5 — same-second multi-pool exit : ≥ N pools in one block. */
 export function isArbExit(poolCount: number, thresholds: FlowThresholds): boolean {
   return poolCount >= thresholds.multiPoolExitMin;
 }
@@ -286,7 +286,7 @@ export interface FlowResult {
 }
 
 /**
- * Run every §8.5 heuristic over the gathered aggregates and produce the
+ * Run every heuristic over the gathered aggregates and produce the
  * `address_flags` + `token_flow_stats` rows. Pure and deterministic (flags and
  * tokens are emitted in a stable, sorted order) so `rebuild` output is byte-equal
  * to the incremental output. `whitelist` = our own contracts (never flagged
@@ -364,7 +364,7 @@ function pct(part: bigint, whole: bigint): number {
 
 /**
  * Platform-wide funder-cluster vol share (%) — the largest single funder
- * cluster's share of PLATFORM-WIDE trailing-24h curve volume (gate-7 Y%, §10
+ * cluster's share of PLATFORM-WIDE trailing-24h curve volume (gate-7 Y%,
  * amend). Distinct from the per-token `flaggedClusterVolPct24h` (gate-7 X%);
  * computed here because only the full `FlowResult` + input span every token.
  */

@@ -4,9 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { tokenCard, usdValue } from "./fixtures";
 
 /**
- * TokenCard renders the §5.1 field set EXACTLY and performs no client market
+ * TokenCard renders the field set EXACTLY and performs no client market
  * math (metrics come straight from the `TokenCard` payload; mcap discloses its
- * source + timestamp per §2). Navigation is asserted through a mocked router.
+ * source + timestamp per). Navigation is asserted through a mocked router.
  */
 const { push, prefetch } = vi.hoisted(() => ({ push: vi.fn(), prefetch: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -22,7 +22,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("TokenCard — §5.1 fields", () => {
+describe("TokenCard — fields", () => {
   it("renders image(monogram) · name · ticker · mcap · progress · 24h Δ% · creator · age", () => {
     const { container } = render(
       <TokenCard token={tokenCard({ imageUrl: null })} />,
@@ -70,7 +70,7 @@ describe("TokenCard — §5.1 fields", () => {
     expect(push).toHaveBeenCalledWith("/t/0x00000000000000000000000000000000000000cd");
   });
 
-  it("creator click deep-links to a creator-filtered search (§5.1)", () => {
+  it("creator click deep-links to a creator-filtered search ", () => {
     render(<TokenCard token={tokenCard()} />);
     fireEvent.click(screen.getByTitle("Filter by creator"));
     expect(push).toHaveBeenCalledWith(

@@ -5,7 +5,7 @@
  * "due" and gets its first `unfetched`/verdict write here — keeping the
  * sole-writer invariant while the `TokenCreated` handler only writes the Ponder
  * `tokens` row). `tokens` lives in the Ponder schema; `metadata_verifications`
- * in stable `public` (§7.3) — the query spans both.
+ * in stable `public` — the query spans both.
  */
 import { Pool } from "pg";
 import {
@@ -64,8 +64,8 @@ export function createPgMetadataStore(pool: Pool, schema: string): MetadataStore
     async writeVerification(write: VerificationWrite): Promise<void> {
       const { outcome } = write;
       const verifiedAt = outcome.status === "unfetched" ? null : write.nowIso;
-      // Display fields (0008; §6.1 step 5 reworked onto this offchain sidecar
-      // per the §7.3 OI-11 verdict — see migrations/0008_metadata_display.sql):
+      // Display fields (0008; step 5 reworked onto this offchain sidecar
+      // per the OI-11 verdict — see migrations/0008_metadata_display.sql):
       // overwritten ONLY when this attempt yielded a strict-parsed doc
       // ($10 = true). A later failed fetch (or unparseable body) must never
       // null out previously extracted fields — the last-good content keeps

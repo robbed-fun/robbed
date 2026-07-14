@@ -9,7 +9,7 @@ import {
 import { LIVE_QUERY_PREFIXES } from "./query-keys";
 
 /**
- * Multiplexed WS client (spec §2.1/§5; web.md §2.5; indexer.md §8). ONE socket
+ * Multiplexed WS client (web.md; indexer.md). ONE socket
  * for the whole app; components subscribe to channels through the React
  * `WsProvider` (lib/ws.tsx) which owns a single instance of this class.
  *
@@ -18,13 +18,13 @@ import { LIVE_QUERY_PREFIXES } from "./query-keys";
  * watermark paths with a mock socket and a real QueryClient — no jsdom WebSocket.
  *
  * RECONCILIATION DECISIONS (recorded here; proven by ws-reconnect.test.ts):
- * - No replay buffer exists (spec §12.23), so on EITHER a reconnect OR a per-
+ * - No replay buffer exists, so on EITHER a reconnect OR a per-
  *   channel `seq` gap we invalidate ALL live query families and let REST re-serve
  *   resumable truth. This is the safest correct option: it can never surface a
  *   dropped or stale trade. Alternatives (per-channel replay, targeted family
  *   invalidation) are unavailable / strictly riskier given no server buffer.
  * - Confirmation tiers upgrade from the O(1) `confirmations` watermark broadcast
- *   (spec §12.20), NOT per-row messages; we store the watermark and notify
+ *, NOT per-row messages; we store the watermark and notify
  *   listeners (the M3-7 trade reducer derives posted/finalized locally).
  */
 
@@ -49,7 +49,7 @@ export interface WsClientOptions {
   /** Overridable for tests (default `setTimeout`). */
   schedule?: (fn: () => void, ms: number) => unknown;
   cancel?: (handle: unknown) => void;
-  /** Backoff bounds (web.md §2.5: 0.5s → 8s, jitter). */
+  /** Backoff bounds (web.md : 0.5s → 8s, jitter). */
   minBackoffMs?: number;
   maxBackoffMs?: number;
   /** Called when connectivity state flips (drives the degraded banner). */
@@ -136,7 +136,7 @@ export class WsClient {
     }
     if (this.hasConnectedOnce) {
       // Reconnect: close the gap of any events missed while down (no replay
-      // buffer, §12.23) by invalidating every live family — REST is truth.
+      // buffer) by invalidating every live family — REST is truth.
       this.invalidateAllLive();
       this.lastSeq.clear();
     }
@@ -174,7 +174,7 @@ export class WsClient {
     }
     this.lastSeq.set(parsed.channel, parsed.seq);
 
-    // Watermark advances (spec §12.20) — store + notify; no per-row fanout.
+    // Watermark advances — store + notify; no per-row fanout.
     if (parsed.type === "confirmations") {
       this.watermarks = {
         safeBlock: parsed.data.safeBlock,
@@ -182,7 +182,7 @@ export class WsClient {
       };
       this.emitWatermarks();
     }
-    // Reorg → the local optimistic/indexed picture may be wrong; re-heal (indexer.md §5.3).
+    // Reorg → the local optimistic/indexed picture may be wrong; re-heal (indexer.md).
     if (parsed.type === "reorg") {
       this.invalidateAllLive();
     }

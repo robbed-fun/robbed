@@ -3,10 +3,10 @@ pragma solidity 0.8.35;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-/// @title CurveMath — pure virtual-reserve constant-product math (spec §6.2, §6.4; contracts.md §2.3)
+/// @title CurveMath — pure virtual-reserve constant-product math (contracts.md)
 /// @notice Stateless buy/sell primitives for the ROBBED_ bonding curve. The invariant product is
 ///         `k = virtualEth × virtualToken`; every trade is priced so that the post-trade product is
-///         **≥** the pre-trade product — `k` is non-decreasing (gate-2 invariant, contracts.md §2.3).
+/// **≥** the pre-trade product — `k` is non-decreasing (gate-2 invariant, contracts.md).
 ///         The library holds no state and reads no chain context; the {BondingCurve} (M1-8) owns
 ///         reserve storage, fees, phase, caps and the graduation clamp and calls these two functions.
 ///
@@ -15,8 +15,8 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 ///      Both functions solve the constant-product relation `newA × newB = k` for the reserve the
 ///      trader does NOT supply, and round that reserve **up** (`Math.Rounding.Ceil`). Rounding the
 ///      *retained* reserve up is identical to rounding the *paid-out* amount down, so **every
-///      rounding error accrues to the curve, never to the caller** (spec §6.2 "rounding always
-///      favors the curve"; §12.25 solvency). Concretely:
+/// rounding error accrues to the curve, never to the caller** ("rounding always
+/// favors the curve"; solvency). Concretely:
 ///
 ///        buy : newVirtualToken = ceil(k / (vE + eIn));  tokensOut = vT − newVirtualToken   (down)
 ///        sell: newVirtualEth   = ceil(k / (vT + tIn));  ethOutGross = vE − newVirtualEth    (down)
@@ -32,7 +32,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 ///        - OZ v5 `mulDiv` computes the product in **512 bits** (`mul512`), so it is correct even if
 ///          `vE·vT` were to exceed 2²⁵⁶. For launch-scale values (`vT ≤ ~1.073e27`,
 ///          `vE ≤ a few hundred ETH ≈ 1e21`) the product fits in 256 bits, but using the audited
-///          512-bit primitive removes an overflow-assumption footgun for free (contracts.md §2.3).
+/// 512-bit primitive removes an overflow-assumption footgun for free (contracts.md).
 ///        - It is a widely-used, audited primitive with built-in directed rounding — preferred over a
 ///          clever bespoke expression per the "boring, audited pattern" rule.
 ///

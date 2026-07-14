@@ -1,5 +1,5 @@
 /**
- * Creator-fee handlers (spec §7 / §12.63, ADDITIVE Phase-2 leg). Maintains the
+ * Creator-fee handlers (ADDITIVE Phase-2 leg). Maintains the
  * reorg-tracked `creator_claimable` roll-up from the on-chain creator-fee events.
  *
  *   BondingCurve:CreatorFeesSwept  → ACCRUED   (always registered — curve source)

@@ -1,5 +1,5 @@
 /**
- * Admin auth middleware (§6.2). `requireAdmin` verifies the stateless signed
+ * Admin auth middleware. `requireAdmin` verifies the stateless signed
  * session cookie and pins the address/nonce onto the context; `requireCsrf`
  * enforces the session-bound CSRF token on mutations (double-submit). Both throw
  * `unauthorized` (401) — the only auth code in the frozen enum.

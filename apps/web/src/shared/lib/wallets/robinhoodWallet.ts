@@ -9,24 +9,24 @@ import {
  *   - `walletConnectors/` dir listing → only injected/walletConnect/… (no robinhood)
  *   - GitHub code search `robinhood repo:rainbow-me/rainbowkit` → 0 hits.
  * The web.md/CLAUDE.md line "verify the `robinhoodWallet` RainbowKit connector"
- * assumed an export that does not exist. Escalated to hoodpad-architect (§13).
+ * assumed an export that does not exist. Escalated to robbed-architect.
  *
  * Interim (safest-correct): a CUSTOM RainbowKit wallet wrapping the shared
  * WalletConnect connector via the documented `getWalletConnectConnector`
- * (rainbowkit.com/docs/custom-wallets). web.md §2.4 states Robinhood Wallet is
+ * (rainbowkit.com/docs/custom-wallets). web.md states Robinhood Wallet is
  * "WalletConnect-based under the hood", so this is the sanctioned mechanism.
  * It is UNVERIFIED against a real Robinhood Wallet on chain 4663 (no deep-link /
  * WC metadata / on-device test yet) — NOT connection-proven. It only appears
  * when a WalletConnect `projectId` is present (dev without one omits it).
  *
  * NEEDS-USER: real Robinhood Wallet WC metadata + a device connection test on
- * 4663 (web-6), and official brand icon assets (§13 brand pending).
+ * 4663 (web-6), and official brand icon assets (brand pending).
  */
 export function robinhoodWallet(options: { projectId: string }): Wallet {
   return {
     id: "robinhood",
     name: "Robinhood Wallet",
-    // Neutral placeholder mark until official brand assets land (§13). Lives in
+    // Neutral placeholder mark until official brand assets land. Lives in
     // `lib/` (outside the token-lint scan of app/ + components/).
     iconUrl: async () =>
       "data:image/svg+xml;base64," +

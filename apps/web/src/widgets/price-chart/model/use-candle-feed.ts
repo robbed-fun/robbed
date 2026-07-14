@@ -9,14 +9,14 @@ import { qk } from "@/shared/lib/query-keys";
 import { candleWindow } from "./candles";
 
 /**
- * Historical candle backfill for one interval (§5.2). The endpoint takes
+ * Historical candle backfill for one interval. The endpoint takes
  * `from`/`to` (unix seconds), not `limit` (api.md) — we compute a trailing window
  * sized to the interval so every interval shows a comparable span of history.
  *
  * Live updates are NOT in this hook: the chart subscribes to the WS candle
  * channel and patches the series imperatively via `series.update()` (the pure
  * transform lives in ./candles). This hook only owns resumable REST truth, which
- * is also what a WS reconnect/seq-gap re-serves (web.md §2.5).
+ * is also what a WS reconnect/seq-gap re-serves (web.md).
  *
  * `candleWindow` moved to ./candles (pure, server-safe) so the SSR view can call
  * it without importing this client module; re-exported here for existing callers.

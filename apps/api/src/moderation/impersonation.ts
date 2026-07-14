@@ -1,9 +1,9 @@
 /**
- * Impersonation matcher (§4.4, §8.4; watchlist §12.23). Case-insensitive EXACT +
+ * Impersonation matcher (watchlist). Case-insensitive EXACT +
  * CONFUSABLE-NORMALIZED (homoglyph fold) match on ticker and name against the
  * curated, dated watchlist data file (top-asset tickers + Robinhood Stock
  * Tokens). A match sets `impersonation_flag` (a badge + review-queue push, NOT a
- * hide — §4.4). Watchlist entries are DATA, never hardcoded market metrics (§2).
+ * hide —). Watchlist entries are DATA, never hardcoded market metrics.
  */
 import type { z } from "zod";
 import { z as zod } from "zod";

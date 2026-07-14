@@ -6,7 +6,7 @@ import { LIVE_QUERY_PREFIXES } from "@/shared/lib/query-keys";
 import { WsClient, type WsLike } from "@/shared/lib/ws-client";
 
 /**
- * WS reconnect + seq-gap + watermark proofs (spec §2.1/§12.20/§12.23; web.md
+ * WS reconnect + seq-gap + watermark proofs (; web.md
  * decide-it-yourself "WS reconnect + backfill"). Awaiting the reconcile pass to
  * execute; the logic under test is React-free (ws-client.ts).
  */
@@ -80,7 +80,7 @@ function tradeFrame(seq: number) {
  * Index helper: asserts the element exists (tsconfig `noUncheckedIndexedAccess`
  * types `arr[i]` as `T | undefined`). A missing socket/timer then surfaces as an
  * explicit test failure — not a silenced non-null cast — so the reconnect /
- * seq-gap semantics under test (§12.20/§12.23) stay fully asserted.
+ * seq-gap semantics under test stay fully asserted.
  */
 function nth<T>(arr: readonly T[], i: number): T {
   const v = arr[i];
@@ -121,7 +121,7 @@ describe("WsClient reconnect", () => {
     expect(invalidateSpy).not.toHaveBeenCalled();
   });
 
-  it("invalidates ALL live families on reconnect (no replay buffer, §12.23)", () => {
+  it("invalidates ALL live families on reconnect (no replay buffer)", () => {
     const { client, sockets, invalidateSpy, scheduled } = makeClient();
     client.connect();
     nth(sockets, 0).triggerOpen();
@@ -183,7 +183,7 @@ describe("WsClient seq-gap heal", () => {
   });
 });
 
-describe("WsClient confirmation watermark (§12.20)", () => {
+describe("WsClient confirmation watermark ", () => {
   it("stores + notifies watermark advances from the O(1) broadcast", () => {
     const { client, sockets } = makeClient();
     const seen: number[] = [];

@@ -1,10 +1,10 @@
 /**
- * Creator-fee claim surface (spec §7 / §12.63). `GET /v1/creators/:address/
+ * Creator-fee claim surface. `GET /v1/creators/:address
  * claimable` → the shared `CreatorClaimable` DTO: lifetime accrued/claimed from
  * the indexed `creator_claimable` roll-up + the AUTHORITATIVE live
  * `CreatorVault.balanceOf(creator)` as `claimableEth` (falling back to the
  * event-derived mirror when no RPC is configured). USD is computed at request
- * time (§2). Read-only; never touches chain state (§8.4).
+ * time. Read-only; never touches chain state.
  *
  * Vault resolution: the creator's `creator_claimable.vault` (once they have
  * accrued) else the configured `CREATOR_VAULT_ADDRESS`. When NEITHER exists (a
@@ -61,14 +61,14 @@ export function creatorRoutes(deps: AppDeps) {
     return ok(c, creatorClaimableSchema.parse(body));
   });
 
-  // ── Post-graduation 50/50 split claim surface (spec §12.69) ────────────────
+  // ── Post-graduation 50/50 split claim surface ────────────────
   // GET /v1/creators/:address/claimable/:token → the shared CreatorTokenClaimable DTO
   // for ONE (creator, ERC20-token) pair, matching `claimERC20(creator, token)` 1:1.
   // `claimable` is the AUTHORITATIVE live `CreatorVault.tokenBalanceOf(creator, token)`
   // (mirror fallback when no RPC). `token` is a graduated launch token (sell-leg) OR
   // canonical WETH (buy-leg, aggregated across the creator's tokens); USD only on the
-  // WETH leg (§2). Read-only; never touches chain state (§8.4). Endpoint shape is a
-  // sensible default pending architect ratification (§12.69 doc-lockstep).
+  // WETH leg. Read-only; never touches chain state. Endpoint shape is a
+  // sensible default pending architect ratification (doc-lockstep).
   app.get("/v1/creators/:address/claimable/:token", async (c) => {
     const address = parse(addressSchema, c.req.param("address").toLowerCase());
     const token = parse(addressSchema, c.req.param("token").toLowerCase());

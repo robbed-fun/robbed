@@ -1,14 +1,14 @@
 /**
  * Server-side sort + keyset composition for the token-detail TRADES and HOLDERS
- * tables (spec §12.59; api.md §3.4). This module is the ORDER BY SECURITY
+ * tables (api.md). This module is the ORDER BY SECURITY
  * BOUNDARY: the sort-field enums are validated in `@robbed/shared`
  * (`TRADE_SORT_FIELDS` / `HOLDER_SORT_FIELDS`), and here each enum member maps to
  * a FIXED SQL column expression. A caller string never reaches ORDER BY — the
  * route rejects out-of-allowlist values with 400 before this map is consulted,
  * and even if it didn't, only these hardcoded identifiers can be selected.
  *
- * The runtime column map stays API-local by design (robbed-shared §12.59 report:
- * "one consumer — the SQL builder"; §12.40c single-consumer precedent). The
+ * The runtime column map stays API-local by design (robbed-shared report:
+ * "one consumer — the SQL builder"; single-consumer precedent). The
  * cursor-key extractors + the label ordering also live here so the DB SQL builder
  * (db.bun.ts) and the in-memory test fake (test/helpers.ts) build against ONE
  * definition and cannot drift.
@@ -37,7 +37,7 @@ export interface SortColumn {
 
 // ── Trades (GET /v1/tokens/:address/trades) ─────────────────────────────────
 //
-// enum → fixed `trades` column (indexer.md §3.2; ponder.schema trades table).
+// enum → fixed `trades` column (indexer.md; ponder.schema trades table).
 // Tiebreak for every trade sort is the row `id` (`${tx_hash}-${log_index}`).
 export const TRADE_SORT_COLUMNS: Record<TradeSortField, SortColumn> = {
   age: { expr: "block_timestamp", cast: "bigint" },
@@ -86,22 +86,22 @@ export const HOLDER_SORT_COLUMNS: Record<HolderSortField, SortColumn> = {
   label: { expr: "label_rank", cast: "int" },
 };
 export const HOLDER_TIEBREAK = "holder";
-/** Default rank ≡ balance (spec §12.59: "amount DESC ≡ rank ASC" — biggest first). */
+/** Default rank ≡ balance ("amount DESC ≡ rank ASC" — biggest first). */
 export const HOLDER_SORT_DEFAULT: HolderSortField = "rank";
 export const HOLDER_DIR_DEFAULT: SortDir = "desc";
 
 /**
- * The label sort's deterministic ordering (spec §12.58 row-shape `label`). Lower
+ * The label sort's deterministic ordering (row-shape `label`). Lower
  * rank sorts first under `desc`... no: it is a plain integer key ordered by the
  * active `dir` like any other column. The GROUPING is what matters and it is
  * fixed here: protocol accounts first (bonding curve, creator, LP pool, vault),
- * then §8.5 bot-flagged holders, then unlabeled. This function is the SINGLE
+ * then bot-flagged holders, then unlabeled. This function is the SINGLE
  * source; the SQL CASE in db.bun.ts and the test fake both reproduce these exact
  * integers — a change here is a change in both by construction (drift guard).
  */
 export interface HolderLabelInput {
   holder: string;
-  /** §8.5 advisory bot flags, if the address carries any. */
+  /** advisory bot flags, if the address carries any. */
   botFlags?: readonly string[] | null;
 }
 export interface HolderSpecialAddresses {
@@ -120,7 +120,7 @@ export function holderLabelRank(
   if (addr === special.creator.toLowerCase()) return 1; // Creator
   if (special.pool && addr === special.pool.toLowerCase()) return 2; // LP pool
   if (special.vaults.has(addr)) return 3; // Vault
-  if (row.botFlags && row.botFlags.length > 0) return 4; // §8.5 flagged
+  if (row.botFlags && row.botFlags.length > 0) return 4; // flagged
   return 5; // unlabeled
 }
 

@@ -11,7 +11,7 @@
  * non-archive node. Only ever used for Solidity immutables, where a `latest` read
  * is value-identical (see the decision note in src/reads.ts).
  *
- * Memoized per process; RPC endpoint from the §12.55 registry-validated config.
+ * Memoized per process; RPC endpoint from the registry-validated config.
  */
 import { createPublicClient, http } from "viem";
 import { config } from "./runtime";

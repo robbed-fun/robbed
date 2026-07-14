@@ -6,13 +6,13 @@ import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
 import {CurveHandler} from "test/invariant/handlers/CurveHandler.sol";
 
 /// @title Gate-2 invariant 5 — post-graduation curve holds zero value
-///        (spec §10 gate 2; contracts.md §6 test matrix row 5)
+/// (gate 2; contracts.md test matrix row 5)
 /// @notice graduate() transfers the curve's ENTIRE token balance and ENTIRE ETH balance
-///         (donations included) to the migrator (contracts.md §2.3), so immediately after
+/// (donations included) to the migrator (contracts.md), so immediately after
 ///         graduation the curve holds exactly 0 ETH and 0 tokens. The handler keeps fuzzing
 ///         post-grad pokes (buy/sell/graduate/donations); nothing may become extractable — any
 ///         value that appears post-grad must be exactly the recorded post-grad donations, and
-///         all state-mutating functions revert (phase is terminal — contracts.md §2.3).
+/// all state-mutating functions revert (phase is terminal — contracts.md).
 /// forge-config: default.invariant.fail-on-revert = true
 contract PostGraduationZeroValueInvariant is Test {
     CurveHandler internal handler;
@@ -22,7 +22,7 @@ contract PostGraduationZeroValueInvariant is Test {
         targetContract(address(handler));
     }
 
-    /// @notice EXACT ASSERTIONS (contracts.md §6 row 5, §12.25-updated), evaluated whenever
+    /// @notice EXACT ASSERTIONS (contracts.md row 5, -updated), evaluated whenever
     ///         phase == Graduated:
     ///         (1) address(curve).balance == accruedFees + ghost_postGradEthDonated — the ONLY ETH a
     ///             graduated curve holds is the withheld, treasury-only-sweepable trade fees plus any
@@ -41,7 +41,7 @@ contract PostGraduationZeroValueInvariant is Test {
         );
         assertEq(handler.token().balanceOf(address(curve)), 0, "gate-2 row 5: curve holds tokens post-graduation");
 
-        // §12.25: sweepFees works in the terminal phase and drains reserve/LP value to exactly the
+        // : sweepFees works in the terminal phase and drains reserve/LP value to exactly the
         // inert donations. Checked under snapshot so it does not perturb the ongoing fuzz run.
         uint256 snap = vm.snapshotState();
         curve.sweepFees();
@@ -51,7 +51,7 @@ contract PostGraduationZeroValueInvariant is Test {
             "gate-2 row 5 (12.25): sweepFees did not drain accrued fees post-graduation"
         );
 
-        // Terminal-phase probe: every trade/graduate entry reverts (contracts.md §2.3). Calls come
+        // Terminal-phase probe: every trade/graduate entry reverts (contracts.md). Calls come
         // from this test (not the router) so they revert on NotRouter/NotReady regardless — the
         // point is that NO state-mutating value path succeeds post-graduation.
         vm.deal(address(this), 1 ether);

@@ -15,17 +15,17 @@ import { formatPercent, shortAddress } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Discover token card — the §5.1 field set EXACTLY:
+ * Discover token card — the field set EXACTLY:
  *   image · name · ticker · mcap · progress bar · 24h Δ% · creator · age.
  *
  * All metrics are indexer-computed values off `TokenCard` (mcap is a live-priced
  * `UsdValue` carrying source+asOf; volume24h/Δ% are indexer aggregates) — this
- * component performs ZERO market math and holds no metric constant (§2).
+ * component performs ZERO market math and holds no metric constant.
  *
  * Navigation: DECISION — the card navigates via `useRouter().push` (not an
  * `<a>` wrapper) so the nested creator/Blockscout anchors stay valid HTML (no
  * `<a>`-in-`<a>`) while still honoring "creator click → search filtered by
- * creator" (§5.1). Hover prefetches the detail route (web.md §7 speed).
+ * creator". Hover prefetches the detail route (web.md speed).
  */
 export function TokenCard({
   token,

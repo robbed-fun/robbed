@@ -12,17 +12,17 @@ import {
 import { tradeRow } from "./fixtures";
 
 /**
- * ConfirmationBadge tiers (§2.1). §12.56 (USER-DIRECTED): the soft-confirmed tier
+ * ConfirmationBadge tiers. (USER-DIRECTED) the soft-confirmed tier
  * renders NO visible chip — only posted-to-L1 / finalized surface. Proves the
  * remaining tiers, that a soft-confirmed row shows no settlement badge (so it can
  * never render as unqualified-final), and that the tier MACHINERY is unchanged:
  * the display state still advances from soft-confirmed via the O(1)
- * `global:confirmations` WATERMARK — not per-row messages (§12.20).
+ * `global:confirmations` WATERMARK — not per-row messages.
  */
 
 afterEach(cleanup);
 
-describe("confirmationBadgeMeta — surfaced tiers + the removed soft chip (§12.56)", () => {
+describe("confirmationBadgeMeta — surfaced tiers + the removed soft chip ", () => {
   it("renders NO badge for the soft-confirmed tier (chip removed)", () => {
     expect(confirmationBadgeMeta("optimistic:soft-confirmed")).toBeNull();
     expect(confirmationBadgeMeta("indexed:soft-confirmed")).toBeNull();
@@ -56,7 +56,7 @@ describe("ConfirmationBadge render — surfaced tiers only", () => {
   });
 });
 
-describe("watermark drives tier upgrades on a RECONCILED trade (§12.20)", () => {
+describe("watermark drives tier upgrades on a RECONCILED trade ", () => {
   const txHash =
     "0xabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcab";
   const token = "0x00000000000000000000000000000000000000aa";
@@ -118,7 +118,7 @@ describe("watermark drives tier upgrades on a RECONCILED trade (§12.20)", () =>
       watermarks: { safeBlock: 10_000, finalizedBlock: 10_000 },
     });
     // Machinery unchanged: the state stays soft-confirmed until an indexed
-    // reconcile arrives (§4). §12.56: that state renders no visible chip.
+    // reconcile arrives. that state renders no visible chip.
     expect(tradeDisplayState(s.byId.t2!)).toBe("optimistic:soft-confirmed");
     expect(confirmationBadgeMeta(tradeDisplayState(s.byId.t2!))).toBeNull();
   });

@@ -5,7 +5,7 @@ import { defineConfig } from "vitest/config";
 /**
  * Vitest config (docs: vitest.dev/guide, verified 2026-07-10).
  *
- * Runner choice (decision, hoodpad-frontend): Vitest — NOT Bun's native test
+ * Runner choice (decision, robbed-frontend): Vitest — NOT Bun's native test
  * runner — because the React component suites (.test.tsx) need jsdom + Testing
  * Library + the Vite/JSX transform, which `bun test` does not provide. `bun run
  * test` invokes `vitest run`, keeping Bun the entrypoint (CLAUDE.md) while Vitest

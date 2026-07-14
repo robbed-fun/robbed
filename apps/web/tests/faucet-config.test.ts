@@ -8,8 +8,8 @@ import {
 
 /**
  * Faucet CTA config + pure trigger logic (features/get-testnet-eth).
- * - faucetsFor: testnet-registry-gated — official URLs (spec §12.52 / runbook
- *   §1+§3) surface ONLY for a registered mode="testnet" chain; mainnet/local/
+ * - faucetsFor: testnet-registry-gated — official URLs (/ runbook
+ * +) surface ONLY for a registered mode="testnet" chain; mainnet/local
  *   unknown chains get null (no invented faucets, never shown off-testnet).
  * - buildFaucetUrl: the official faucet's `?address=` prefill deep link.
  * - shouldShowFaucetCta: zero-balance trigger with wrong-network precedence.

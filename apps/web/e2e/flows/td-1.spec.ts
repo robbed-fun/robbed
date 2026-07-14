@@ -13,7 +13,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:TD-1 — Venue-continuous candles: load, interval switch, live patch (§5.2)
+// @flow:TD-1 — Venue-continuous candles: load, interval switch, live patch
 // assertable-layers: on-chain · indexed · UI
 test(
   "TD-1 candles load as one merged series and switch interval",

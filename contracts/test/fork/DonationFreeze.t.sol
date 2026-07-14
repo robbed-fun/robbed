@@ -21,14 +21,14 @@ import {IUniswapV3Pool} from "src/interfaces/external/IUniswapV3Pool.sol";
 import {TestConstants} from "test/harness/TestConstants.sol";
 
 /// @title Gate-3 F-1 fork regression — a 10×G curve donation must graduate through the REAL V3
-///        stack (finding F-1, HIGH, PoC-confirmed 2026-07-13; spec §6.3.2, §10 gate 3, §12.13)
+/// stack (finding F-1, HIGH, PoC-confirmed 2026-07-13; gate 3)
 /// @notice Companion to test/fork/Lifecycle.t.sol (whose stage-4 donation, now 0.25 ETH > the ~1%
 ///         freeze threshold, exercises F-1 under combined pool griefing): this suite isolates the
 ///         EXTREME donation magnitude the audit called out — 10× GRADUATION_ETH (~79 ETH) sent to
 ///         the curve's ungated `receive()` on a PRISTINE at-target pool — and proves against the
-///         real §12.28 NonfungiblePositionManager that graduation succeeds and every donated wei
+/// real NonfungiblePositionManager that graduation succeeds and every donated wei
 ///         surfaces as treasury WETH dust (wei-exact conservation). Pre-fix, ANY donation above
-///         ~`MIGRATION_SLIPPAGE_BPS` of G froze the curve forever in `ReadyToGraduate` (§12.12):
+/// ~`MIGRATION_SLIPPAGE_BPS` of G froze the curve forever in `ReadyToGraduate` :
 ///         the mint's WETH amount-min anchored to the donation-inflated `wethForMint` and the real
 ///         NPM reverted "Price slippage check" on every retry.
 /// @dev Run under the fork profile: `FOUNDRY_PROFILE=fork ROBINHOOD_RPC_URL=… forge test`.
@@ -71,13 +71,13 @@ contract DonationFreezeForkTest is Test {
     function test_fork_F1_donation10xG_graduates_donationToDust() public {
         if (!forked) vm.skip(true);
 
-        // Externals from the canonical M0 constants (never invented — §12.28 / contracts.md O-4).
+        // Externals from the canonical M0 constants (never invented — / contracts.md O-4).
         string memory json = vm.readFile("../tools/m0/out/constants.json");
         address v3FactoryAddr = vm.parseJsonAddress(json, ".external.v3Factory");
         address npmAddr = vm.parseJsonAddress(json, ".external.positionManager");
         assertEq(vm.parseJsonAddress(json, ".external.weth"), WETH, "constants WETH != canonical");
 
-        // Production stack (§12.69 generation order), same shape as Lifecycle._stage1.
+        // Production stack (generation order), same shape as Lifecycle._stage1.
         factory = new CurveFactory(TestConstants.factoryInit(treasury, safeOwner));
         CreatorVault creatorVault = new CreatorVault(address(factory));
         vault = new LPFeeVault(npmAddr, treasury, address(factory));

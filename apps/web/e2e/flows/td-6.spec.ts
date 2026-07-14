@@ -16,7 +16,7 @@ import {
   waitForKeeperGraduation,
 } from "../harness";
 
-// @flow:TD-6 — Graduation venue switch · tx `graduate()` (§5.2/§12.12)
+// @flow:TD-6 — Graduation venue switch · tx `graduate()`
 // assertable-layers: on-chain · indexed · UI
 test(
   "TD-6 permissionless graduate() flips the venue via WS with no reload",
@@ -28,7 +28,7 @@ test(
     // graduated). The compose keeper may fire graduate() the moment this locks.
     // `crossGraduationThreshold` reads GRADUATION_ETH() LIVE off the curve, so the
     // buy-to-graduation math already targets the new flat G≈2.484-ETH threshold
-    // (§12.67) with no hardcoded figure — nothing to rescale here.
+    // with no hardcoded figure — nothing to rescale here.
     await crossGraduationThreshold(token.token, token.curve);
 
     // Observe the flip live: land on the page around the graduation moment.

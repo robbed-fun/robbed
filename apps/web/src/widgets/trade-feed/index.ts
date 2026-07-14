@@ -1,5 +1,5 @@
 /**
- * Public API for the trade-feed widget (§5.2/§2.1). Live trades with
+ * Public API for the trade-feed widget. Live trades with
  * ConfirmationBadge tiers, merging the user's optimistic trades from the shared
  * store (entities/trade).
  */

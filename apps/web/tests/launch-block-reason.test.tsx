@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Launch-blocked reason (§5.3). Two layers:
+ * Launch-blocked reason. Two layers:
  *   1. `launchBlockReason` — the pure priority ladder (not connected → uploading →
  *      image error → field error → creates-paused → in-flight).
  *   2. `LaunchForm` wiring — the button stays CLICKABLE while blocked, renders the

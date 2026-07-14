@@ -10,7 +10,7 @@ import { Button, Wordmark } from "@/shared/ui";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * ROBBED_ app header (redesign Phase F; mockup: the ratified redesign, spec §12.50, all pages).
+ * ROBBED_ app header (redesign Phase F; mockup: the ratified redesign, all pages).
  * Desktop (`md:`+): ROBBED_ wordmark · `discover` `portfolio` nav · search ·
  * `+ CREATE` (green outline) · wallet chip — one dense row.
  * Mobile-first: the row collapses to wordmark + wallet chip, with the search
@@ -39,7 +39,7 @@ export function AppHeader() {
   return (
     // Solid bg (mockup header sits on the flat page bg — no translucency/blur).
     <header className="sticky top-0 z-40 border-b border-border bg-bg">
-      {/* Mockup header row: padding 14px 24px, gap 24px (the ratified redesign, spec §12.50 — mockup line 178). */}
+      {/* Mockup header row: padding 14px 24px, gap 24px (the ratified redesign, — mockup line 178). */}
       <div className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3.5">
         <Link href="/" aria-label="ROBBED_ home" className="shrink-0">
           <Wordmark />

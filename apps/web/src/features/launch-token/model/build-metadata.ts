@@ -1,7 +1,7 @@
 /**
- * Build the canonical metadata DOCUMENT the client hashes for the §12.19
+ * Build the canonical metadata DOCUMENT the client hashes for the
  * re-verification. This is the same "fixed field set + version tag" the API
- * canonicalizes (api.md §3.2): the version comes from the shared
+ * canonicalizes (api.md) the version comes from the shared
  * `METADATA_VERSION` and the shape is validated by the shared
  * `tokenMetadataSchema` — nothing is redeclared. Key ORDER is irrelevant (the
  * shared canonicalizer sorts keys), but we still parse through the schema so the

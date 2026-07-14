@@ -28,7 +28,7 @@ import {MockArbSys} from "test/mocks/MockArbSys.sol";
 ///         exercise the genuine `slot0`/`swap`/`mint` math under this workspace. The core factory's
 ///         constructor pre-enables the 1% tier (10000→200), and the periphery's baked-in
 ///         POOL_INIT_CODE_HASH matches this core, so `createAndInitializePoolIfNecessary`/`mint`
-///         resolve pool addresses correctly. Gate-3 fork tests (M1-12) hit the real §12.28
+/// resolve pool addresses correctly. Gate-3 fork tests (M1-12) hit the real
 ///         deployment + real WETH instead.
 /// @dev Inherits the forge-std base so both `Test`-based unit suites and the `CommonBase`-based
 ///      invariant handler can reuse the same deploy path.
@@ -72,7 +72,7 @@ abstract contract V3Fixture is CommonBase, StdCheats, StdUtils {
         }
         (v3Factory, npm) = _deployRealV3(address(weth));
 
-        // Creator-fee generation order (§12.69): factory → CreatorVault → LPFeeVault(factory) →
+        // Creator-fee generation order : factory → CreatorVault → LPFeeVault(factory) →
         // migrator → router, then wire the four one-time setters.
         factory = new CurveFactory(TestConstants.factoryInit(treasury, owner, address(weth)));
         creatorVault = new CreatorVault(address(factory));

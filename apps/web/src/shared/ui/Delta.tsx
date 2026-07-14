@@ -4,7 +4,7 @@ import { cn } from "@/shared/lib/utils";
 /**
  * Signed percentage delta (ROBBED_ Phase F): `+41.2%` green / `−1.8%` red /
  * zero muted, per the mockup tape + trending cards. `value` is a SUPPLIED
- * indexer/API percentage — never computed here (§2). `null` renders the
+ * indexer/API percentage — never computed here. `null` renders the
  * `placeholder` (the mockup shows faint "new" for just-launched rows).
  */
 export function Delta({

@@ -1,5 +1,5 @@
 /**
- * curve → token routing for the `Trade` handler (indexer.md §3.2). The `Trade`
+ * curve → token routing for the `Trade` handler (indexer.md). The `Trade`
  * event is emitted by the BondingCurve and carries no token field, so the
  * handler resolves the token from the emitting curve address
  * (`event.log.address`).

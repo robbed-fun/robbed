@@ -1,4 +1,4 @@
-/** Confirmation-state enum + transition helpers (spec §2.1, §12.20; indexer.md §3.8/§5). */
+/** Confirmation-state enum + transition helpers (indexer.md). */
 import { describe, expect, it } from "bun:test";
 import {
   CONFIRMATION_STATES,
@@ -9,7 +9,7 @@ import {
   upgradeConfirmationState,
 } from "../src/confirmation";
 
-describe("wire values (snake_case, §2.1/§12.20)", () => {
+describe("wire values (snake_case)", () => {
   it("has exactly the three ratified states in order", () => {
     expect(CONFIRMATION_STATES).toEqual(["soft_confirmed", "posted_to_l1", "finalized"]);
   });
@@ -38,14 +38,14 @@ describe("ordering helpers", () => {
     expect(isAtLeast("soft_confirmed", "posted_to_l1")).toBe(false);
   });
 
-  it("upgrade is monotonic — never downgrades (indexer.md §5.1)", () => {
+  it("upgrade is monotonic — never downgrades (indexer.md)", () => {
     expect(upgradeConfirmationState("soft_confirmed", "posted_to_l1")).toBe("posted_to_l1");
     expect(upgradeConfirmationState("finalized", "soft_confirmed")).toBe("finalized");
     expect(upgradeConfirmationState("posted_to_l1", "posted_to_l1")).toBe("posted_to_l1");
   });
 });
 
-describe("stateForBlock (authoritative rule, indexer.md §3.8)", () => {
+describe("stateForBlock (authoritative rule, indexer.md)", () => {
   const wm = { safeBlock: 1000, finalizedBlock: 500 };
 
   it("classifies below / between / above watermarks", () => {

@@ -3,7 +3,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "ROBBED_ API — Hono on Bun: R2 presigned uploads, moderation, search, read API (spec §8). M2-9/M2-10/M2-11.",
+  "description": "ROBBED_ API — Hono on Bun: R2 presigned uploads, moderation, search, read API. M2-9/M2-10/M2-11.",
   "main": "./src/index.ts",
   "scripts": {
     "dev": "bun run --hot src/index.ts",

@@ -30,7 +30,7 @@ import {
   impersonationWatchlistSchema,
 } from "./moderation/impersonation";
 
-/** Cold uncollected-fee read (api.md §3.4) — injectable so /fees is testable. */
+/** Cold uncollected-fee read (api.md) — injectable so /fees is testable. */
 export interface UncollectedFeesReader {
   read(input: {
     token: string;
@@ -53,7 +53,7 @@ export interface AppDeps {
   /** Live native-ETH balance reader (portfolio summary; RPC, never hot path). */
   walletBalance: WalletBalanceReader;
   /**
-   * Live `CreatorVault.balanceOf(creator)` reader (spec §12.63; claimable
+   * Live `CreatorVault.balanceOf(creator)` reader (; claimable
    * endpoint). Cold RPC read behind the interface so it never enters the WS/
    * publish hot path; null result ⇒ route uses the event-derived mirror.
    */
@@ -78,7 +78,7 @@ export function loadWatchlist(
 
 /**
  * Stub uncollected-fees reader — returns zero. The real reader does a cached
- * (60s) `NonfungiblePositionManager.tokensOwed` RPC read (api.md §3.4); wiring
+ * (60s) `NonfungiblePositionManager.tokensOwed` RPC read (api.md); wiring
  * it needs `ROBINHOOD_RPC_URL` + the NPM address (shared `UNISWAP_V3`). Kept
  * behind the interface so it never enters the WS/publish hot path (row-9 rule).
  */
@@ -105,7 +105,7 @@ export function buildDeps(dbFactory: (cfg: Config) => Db): AppDeps {
       publicBaseUrl: config.R2_PUBLIC_BASE_URL,
     }),
     reencoder: createSharpReencoder(),
-    vendors: stubVendors(), // real vendors OPEN §13 OI-A7; boot guard enforces prod
+    vendors: stubVendors(), // real vendors OPEN OI-A7; boot guard enforces prod
     rateLimit: new InMemoryRateLimitStore(),
     watchlist: loadWatchlist(),
     uncollectedFees: zeroUncollectedFees,
@@ -113,7 +113,7 @@ export function buildDeps(dbFactory: (cfg: Config) => Db): AppDeps {
     walletBalance: config.ROBINHOOD_RPC_URL
       ? createRpcWalletBalance(config.ROBINHOOD_RPC_URL)
       : zeroWalletBalance,
-    // Live CreatorVault balanceOf (§12.63) — real reader when RPC configured,
+    // Live CreatorVault balanceOf — real reader when RPC configured,
     // else the null stub (route falls back to the accrued − claimed mirror).
     creatorVaultBalance: config.ROBINHOOD_RPC_URL
       ? createRpcCreatorVaultBalance(config.ROBINHOOD_RPC_URL)

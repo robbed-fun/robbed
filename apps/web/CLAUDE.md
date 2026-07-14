@@ -1,8 +1,8 @@
 # apps/web — Next.js frontend (owner: robbed-frontend)
 
-Next.js 16 + React 19 — **exact majors, no ranges** (§12.37) — App Router on Bun, structured with Feature-Sliced Design (`entities/ features/ widgets/ views/ shared/`), wagmi v2 + viem + RainbowKit, TanStack Query + WebSocket, lightweight-charts, Tailwind dark-first, satori OG images.
+Next.js 16 + React 19 — **exact majors, no ranges** — App Router on Bun, structured with Feature-Sliced Design (`entities/ features/ widgets/ views/ shared/`), wagmi v2 + viem + RainbowKit, TanStack Query + WebSocket, lightweight-charts, Tailwind dark-first, satori OG images.
 
-Three pages (spec §5, §9): Discover `/`, Token Detail `/t/[address]`, Launch `/launch` — including the Trust panel and all user-facing copy. The copy rules load with this subtree (`.claude/rules/lp-copy.md`): canonical LP sentence, never "order book", confirmation tiers named soft-confirmed → posted-to-L1 → finalized (§2.1).
+Three pages (design doc `docs/developers/web.md`): Discover `/`, Token Detail `/t/[address]`, Launch `/launch` — including the Trust panel and all user-facing copy. The copy rules load with this subtree (`.claude/rules/lp-copy.md`): canonical LP sentence, never "order book", confirmation tiers named soft-confirmed → posted-to-L1 → finalized.
 
 ## Commands
 

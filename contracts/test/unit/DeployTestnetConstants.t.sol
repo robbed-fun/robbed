@@ -35,7 +35,7 @@ contract DeployTestnetConstantsTest is Test {
         (address weth, address v3Factory, address npm,,, address treasury) =
             harness.loadAndResolveFrom(TESTNET_CONSTANTS);
 
-        // Externals resolved from the file (§12.52 ratified set — non-zero by the derive fail-closed
+        // Externals resolved from the file (ratified set — non-zero by the derive fail-closed
         // loader; the O-6 treasury guard did not revert, so the dev-signer Safe is wired).
         assertTrue(weth != address(0) && v3Factory != address(0) && npm != address(0), "externals unresolved");
         assertTrue(treasury != address(0), "treasury Safe unresolved");

@@ -14,14 +14,14 @@ import { cn } from "@/shared/lib/utils";
 import type { TradeDisplayState } from "../model/trades";
 
 /**
- * The single confirmation-tier badge (§2.1/§2.1.1-3, web.md §4.2). One component
+ * The single confirmation-tier badge (web.md). One component
  * renders every SURFACED tier so the semantics are product-wide and can't drift:
  *   (soft-confirmed → no chip) → posted (blue) → finalized (green).
  *
- * §12.56 (USER-DIRECTED 2026-07-12): the user-facing "Soft-confirmed" chip + its
+ * (USER-DIRECTED 2026-07-12) the user-facing "Soft-confirmed" chip + its
  * L2-finality tooltip are REMOVED — the soft-confirmed display states render NO
  * badge. The tier MACHINERY is UNCHANGED and still binding: the reducer/reconcile
- * still tracks soft-confirmed, the §12.20 `global:confirmations` watermark still
+ * still tracks soft-confirmed, the `global:confirmations` watermark still
  * upgrades rows, and the never-final-while-soft rule holds trivially (no chip is
  * shown until an indexed higher tier — posted/finalized — arrives). Only tier
  * (1)'s VISIBLE badge is dropped; posted/finalized surfacing stays.
@@ -30,7 +30,7 @@ import type { TradeDisplayState } from "../model/trades";
  * - A soft-confirmed trade NEVER renders as unqualified-"final"/"confirmed": it
  *   renders no settlement chip at all until it upgrades.
  * - The posted/finalized tooltips still disclose the single-sequencer dependency
- *   (§10.10) — soft confirmation is sequencer inclusion, not L1 settlement.
+ * — soft confirmation is sequencer inclusion, not L1 settlement.
  */
 
 type BadgeVariant =
@@ -48,9 +48,9 @@ interface BadgeMeta {
 }
 
 const SEQUENCER_NOTE =
-  "ROBBED_ settles on a single-sequencer L2 (§10.10) — soft confirmation is FCFS sequencer inclusion, not L1 finality.";
+  "ROBBED_ settles on a single-sequencer L2 — soft confirmation is FCFS sequencer inclusion, not L1 finality.";
 
-/** Pure map from the §4 display node → badge presentation. */
+/** Pure map from the display node → badge presentation. */
 export function confirmationBadgeMeta(state: TradeDisplayState): BadgeMeta | null {
   switch (state) {
     case "submitted":
@@ -69,7 +69,7 @@ export function confirmationBadgeMeta(state: TradeDisplayState): BadgeMeta | nul
       };
     case "optimistic:soft-confirmed":
     case "indexed:soft-confirmed":
-      // §12.56: the soft-confirmed tier renders NO visible chip/tooltip. The
+      // : the soft-confirmed tier renders NO visible chip/tooltip. The
       // state itself is unchanged (reconcile + watermark upgrades still fire);
       // the badge simply appears once the row upgrades to posted/finalized.
       return null;
@@ -118,7 +118,7 @@ export function ConfirmationBadge({
   className,
 }: {
   state: TradeDisplayState;
-  /** WS-silence flag — appends an "awaiting index" note (web.md §4.5). */
+  /** WS-silence flag — appends an "awaiting index" note (web.md). */
   awaitingIndex?: boolean;
   className?: string;
 }) {

@@ -8,7 +8,7 @@ import {
   test,
 } from "../harness";
 
-// @flow:ERR-12 — Stored-link XSS render safety (UM-5) (§5 copy rules)
+// @flow:ERR-12 — Stored-link XSS render safety (UM-5) (copy rules)
 // assertable-layers: indexed · UI   (N/A on-chain: render-safety, no chain surface — waiver)
 //
 // MECHANICS NOTE (I-5b rework): the token page renders `links` from an SSR fetch

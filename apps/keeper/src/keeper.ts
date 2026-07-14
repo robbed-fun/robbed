@@ -12,9 +12,9 @@
  *    is a win (the caller reward went to whoever landed first — expected under a
  *    permissionless graduate()), NOT a failure.
  *  - RETRY with backoff (default 3 attempts); a PERSISTENT revert (tx reverts
- *    while phase stays `ready`) is the donation-brick signature (§6.3/§12.33
+ * while phase stays `ready`) is the donation-brick signature (
  *    arb-back cannot restore the pool tick) → a distinct loud alert + a cooldown
- *    so we do NOT hot-loop. A corrector may fix the tick (§12.62), so the sweep
+ * so we do NOT hot-loop. A corrector may fix the tick, so the sweep
  *    retries after the cooldown, but never in a tight spin.
  *
  * Revert-classification rule (recorded):
@@ -196,7 +196,7 @@ export class GraduationKeeper {
       source,
       attempts: this.tuning.maxAttempts,
       alert: "donation_brick_suspected",
-      hint: "graduate() reverts while phase stays ReadyToGraduate — pool tick likely outside arb-back tolerance (§6.3/§12.33); a corrector swap can restore it (§12.62). Escalate per keeper runbook.",
+      hint: "graduate() reverts while phase stays ReadyToGraduate — pool tick likely outside arb-back tolerance; a corrector swap can restore it. Escalate per keeper runbook.",
     });
     return { curve, status: "failed_persistent" };
   }

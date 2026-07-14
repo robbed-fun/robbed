@@ -1,5 +1,5 @@
 /**
- * M2-11 rate limiting (§6.3): sliding-window math (boundary/refill) + the
+ * M2-11 rate limiting : sliding-window math (boundary/refill) + the
  * trusted-proxy IP source (forged XFF must NOT evade the per-IP window).
  */
 import { describe, expect, it } from "bun:test";
@@ -61,9 +61,9 @@ describe("resolveClientIp (anti-spoof)", () => {
 describe("RATE_LIMIT_SCALE (dev/e2e multiplier — never a bypass)", () => {
   // ROUTE_LIMITS is computed at module load; this suite runs with the ambient
   // env (unset or the compose value), so assert the INVARIANTS rather than a
-  // specific product: limits are exact multiples of the §6.3 base values and
+  // specific product: limits are exact multiples of the base values and
   // the multiplier is a clamped integer ≥ 1.
-  it("limits are the §6.3 base values times one shared integer scale ≥ 1", async () => {
+  it("limits are the base values times one shared integer scale ≥ 1", async () => {
     const { ROUTE_LIMITS } = await import("../src/mw/ratelimit");
     const base = { uploadsHour: 10, uploadsMin: 3, metadata: 20, search: 60, reads: 300, admin: 60 };
     const scale = ROUTE_LIMITS.uploadsHour.limit / base.uploadsHour;

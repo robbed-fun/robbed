@@ -1,5 +1,5 @@
 /**
- * SIWE (EIP-4361) admin login (§6.2). Nonce is single-use in Redis (replay
+ * SIWE (EIP-4361) admin login. Nonce is single-use in Redis (replay
  * defense); signature verified with viem; the recovered address must be in the
  * config allowlist (OI-A8 open — dev allowlist meanwhile). On success a stateless
  * session cookie is issued (session.ts).

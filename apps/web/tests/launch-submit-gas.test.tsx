@@ -1,8 +1,9 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BaseError } from "viem";
+import { ContractFunctionRevertedError, encodeErrorResult } from "viem";
 
 import { canonicalizeMetadata, metadataHash } from "@robbed/shared";
+import { curveFactoryAbi } from "@robbed/shared/abi";
 
 /**
  * Regression: MetaMask "Network fee unavailable" on the Robinhood Orbit LAUNCH tx.
@@ -73,7 +74,7 @@ vi.mock("@/shared/config/addresses", () => ({
 import { buildMetadataDocument, useLaunch } from "@/features/launch-token";
 
 // A server metadata response whose hash byte-matches what the client recomputes
-// (§12.19) — otherwise `launch()` blocks at verify-failed and never signs.
+// — otherwise `launch()` blocks at verify-failed and never signs.
 function serverFor(name: string, ticker: string) {
   const doc = buildMetadataDocument({ name, ticker, imageUrl: IMAGE_URL, imageHash: IMAGE_HASH });
   return {
@@ -131,7 +132,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("createToken carries an explicit pre-estimated gas limit (§ launch fix)", () => {
+describe("createToken carries an explicit pre-estimated gas limit (launch fix)", () => {
   it("estimates node-side (value = deployFee + initialBuy, account), writes gas = 2× estimate", async () => {
     m.estimateContractGas.mockResolvedValue(3_700_000n); // create() is heavy (~7.4M @2×)
     await runLaunch(launchOpts());
@@ -159,14 +160,20 @@ describe("createToken carries an explicit pre-estimated gas limit (§ launch fix
 
 describe("a genuine estimate revert is surfaced, not swallowed", () => {
   it("estimateContractGas throwing → reason shown, tx NOT broadcast, optimistic row rejected", async () => {
+    // A realistic viem revert: CreatesPaused is in the createToken call ABI, so
+    // viem decodes it into `.data` — the central humanizer maps it by error name.
     m.estimateContractGas.mockRejectedValue(
-      new BaseError("execution reverted: CreatesPaused()"),
+      new ContractFunctionRevertedError({
+        abi: curveFactoryAbi,
+        data: encodeErrorResult({ abi: curveFactoryAbi, errorName: "CreatesPaused" }),
+        functionName: "createToken",
+      }),
     );
     const result = await runLaunch(launchOpts());
 
     // The write NEVER happened — we didn't proceed past the revert.
     expect(m.writeContractAsync).not.toHaveBeenCalled();
-    // The user sees WHY (mapped from the decoded shortMessage).
+    // The user sees WHY (mapped from the decoded error name).
     expect(result.current.error).toBe("New launches are temporarily paused.");
     expect(result.current.step).toBe("error");
     // The optimistic row is rolled back (it never reached chain).

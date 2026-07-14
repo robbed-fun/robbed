@@ -16,7 +16,7 @@ import {
  * importing each other. Lifting the single `useOptimisticTrades` store into the
  * trade entity and exposing it via context lets the view compose one provider
  * around both widgets, so a buy placed in the widget appears optimistically in
- * the feed and reconciles once (spec §4). Both widgets read this via the entity's
+ * the feed and reconciles once. Both widgets read this via the entity's
  * public API; the view owns the provider.
  */
 const OptimisticTradesContext = createContext<OptimisticTradesApi | null>(null);

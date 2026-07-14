@@ -22,14 +22,14 @@ import {
   waitForKeeperGraduation,
 } from "../harness";
 
-// @flow:TD-6b — Graduation succeeds despite a large curve donation (F-1 regression) · tx `graduate()` (§12.12/§6.3/§12.33)
+// @flow:TD-6b — Graduation succeeds despite a large curve donation (F-1 regression) · tx `graduate()`
 // assertable-layers: on-chain · indexed · UI  (full 3-layer)
 //
 // The UI/integration analog of the Foundry `MigratorDonationFreeze` regression.
 // A donation ABOVE ~1% of GRADUATION_ETH pushed the migrator's WETH-min floor to
 // the donation-inflated `wethForMint` (pre-fix), so `NPM.mint` reverted "Price
 // slippage check", `graduate()` reverted, and the curve FROZE in ReadyToGraduate
-// (spec §12.12). The fix anchors `wethMin` to `min(wethForMint, W*)` — the donated
+//. The fix anchors `wethMin` to `min(wethForMint, W*)` — the donated
 // ETH has no paired token and surfaces as WETH dust to the treasury. Graduation is
 // KEEPER-DRIVEN (uniform with GRAD-AUTO): the test never calls graduate(); the
 // compose keeper can only reach Graduated if the F-1 fix holds — pre-fix it would
@@ -82,7 +82,7 @@ test(
         expect(graduated.args.wethDustToTreasury >= (donation * 80n) / 100n).toBe(true);
 
         // The LP-position NFT is owned by the LPFeeVault (principal permanently
-        // locked, §6.3/§12.14).
+        // locked).
         const owner = await readLpNftOwner(graduated.args.tokenId);
         expect(owner.toLowerCase()).toBe(lpFeeVault.toLowerCase());
 

@@ -1,4 +1,4 @@
-# ROBBED_ gate-1 Aderyn config (spec §10 gate 1, contracts.md §6). Run from contracts/ as `aderyn`.
+# ROBBED_ gate-1 Aderyn config (gate 1, contracts.md). Run from contracts as `aderyn`.
 # Scopes the scan to first-party src/ only (Foundry auto-detects src="src"); lib/ (OZ + vendored
 # V3) and test/ + script/ are excluded so third-party + harness code never pollutes the register.
 # Every remaining finding is dispositioned in slither.triage.json (shared register) — Aderyn's

@@ -1,5 +1,5 @@
 /**
- * Cursor pagination (decide-it-yourself, api.md §5). Opaque, HMAC-SIGNED,
+ * Cursor pagination (decide-it-yourself, api.md). Opaque, HMAC-SIGNED,
  * base64url KEYSET cursor encoding `(sortKey, id)` — NOT `OFFSET`.
  *
  * Basis: keyset is stable under concurrent inserts and O(1); `OFFSET` drifts and
@@ -18,7 +18,7 @@ import { errors } from "./errors";
 
 /**
  * The signed cursor's logical payload. STRUCTURAL DEDUP (robbed-shared report
- * note, §12.59): the `{ k, i }` shape is single-sourced as `KeysetCursorPayload`
+ * note) the `{ k, i }` shape is single-sourced as `KeysetCursorPayload`
  * in `@robbed/shared` and re-exported here as `Cursor` — the API keeps ownership
  * of the HMAC signing/verification, the shape lives once. `k` = string form of
  * the active sort column's value on the last row; `i` = its stable tiebreak.
@@ -52,7 +52,7 @@ export function decodeCursor(secret: string, raw: string | undefined): Cursor | 
 }
 
 /**
- * STRUCTURAL DEDUP (robbed-shared report note, §12.59): delegates to the shared
+ * STRUCTURAL DEDUP (robbed-shared report note) delegates to the shared
  * `clampListLimit` — the single source for the `[1, PAGE_LIMIT_MAX]` clamp with
  * `PAGE_LIMIT_DEFAULT` fallback. Kept as a thin re-export so existing call sites
  * (`clampLimit`) stay stable while the logic lives once in `@robbed/shared`.

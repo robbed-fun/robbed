@@ -3,14 +3,10 @@
 import { curveFactoryAbi } from "@robbed/shared/abi";
 import type { MetadataRequest } from "@robbed/shared";
 import { useCallback, useMemo, useState } from "react";
-import {
-  type Abi,
-  type Address,
-  BaseError,
-  ContractFunctionRevertedError,
-  parseEventLogs,
-} from "viem";
+import { type Abi, type Address, parseEventLogs } from "viem";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+
+import { humanizeContractError } from "@/shared/lib/humanize-contract-error";
 
 import { type TrackedTrade, useOptimisticTrades } from "@/entities/trade";
 import { computeChainDeadline } from "@/entities/curve";
@@ -34,10 +30,10 @@ import { waitForIndexed } from "./index-grace";
 import { verifyFailureMessage, verifyMetadataHash } from "./verify-hash";
 
 /**
- * Launch orchestration (§5.3) — the single flow that turns a filled form into a
+ * Launch orchestration — the single flow that turns a filled form into a
  * live token:
- *   image upload (eager, API-mediated §12.19) → metadata pin → CLIENT HASH
- *   RE-VERIFY (§12.19 normative) → one `createToken` tx (deployFee + initialBuy)
+ * image upload (eager, API-mediated) → metadata pin → CLIENT HASH
+ * RE-VERIFY (normative) → one `createToken` tx (deployFee + initialBuy)
  *   → optimistic soft-confirmed → index grace → redirect to /t/[address].
  *
  * All network + navigation dependencies are injectable so the flow is
@@ -58,7 +54,7 @@ export interface LaunchSubmitInput {
   /** Optional atomic initial creator buy, wei (0 = none). */
   initialBuyWei: bigint;
   /**
-   * Non-zero slippage floor for the atomic initial buy (§5.3, M3-6): tokensOut ×
+   * Non-zero slippage floor for the atomic initial buy (M3-6) tokensOut ×
    * (1 − slippage), derived by the form from the shared `previewBuy` seeded by the
    * factory's virtual reserves. 0 only when there is no initial buy or the seed
    * reserves aren't readable yet (safe — atomic in `createToken`, no front-run).
@@ -105,7 +101,7 @@ const IMAGE_INIT: ImageState = {
 };
 
 /**
- * Upper bound on the API-mediated image upload (§12.19). Without it a hung
+ * Upper bound on the API-mediated image upload. Without it a hung
  * request (e.g. an unreachable/misrouted upload host — the R2-localhost bug)
  * leaves `image.uploading` wedged `true` forever, so the Launch button stays
  * silently disabled with no way to recover. Aborting after this window settles
@@ -216,7 +212,7 @@ export function useLaunch(opts: UseLaunchOptions = {}): UseLaunchApi {
         const request = buildMetadataRequest(buildInput);
         const server = await postMetadataFn(request);
 
-        // 2. §12.19 NORMATIVE — re-verify the server's hash locally BEFORE signing.
+        // 2. NORMATIVE — re-verify the server's hash locally BEFORE signing.
         setStep("verifying");
         const document = buildMetadataDocument(buildInput);
         const verified = verifyMetadataHash(document, server);
@@ -260,13 +256,13 @@ export function useLaunch(opts: UseLaunchOptions = {}): UseLaunchApi {
           tokenAmount: "0",
         });
 
-        // GAS PRE-ESTIMATE (same ArbOS L1-data-fee quirk as trades, §2/§6.5): on
+        // GAS PRE-ESTIMATE (same ArbOS L1-data-fee quirk as trades) on
         // the Robinhood Orbit L2 the WALLET's own gas estimation fails on the L1
         // component ("Network fee unavailable" in MetaMask). The node's
         // `eth_estimateGas` DOES include it, so we estimate against publicClient
         // and pass an explicit `gas` — per viem, passing a gas limit also skips
         // the wallet's estimation. A genuine revert THROWS here and propagates to
-        // the catch → humanizeError (decoded reason surfaced), never swallowed.
+        // the catch → humanizeContractError (decoded reason surfaced), never swallowed.
         const gas = await estimateBufferedGas(publicClient, {
           address: req.address,
           abi: req.abi as Abi,
@@ -318,7 +314,17 @@ export function useLaunch(opts: UseLaunchOptions = {}): UseLaunchApi {
         }
       } catch (e) {
         if (optimisticId) optimistic.reject(optimisticId);
-        setError(humanizeError(e));
+        // Central humanizer (shared/lib) — decodes the revert by ABI error name
+        // against the MERGED all-contracts error ABI, so a nested BondingCurve
+        // error (e.g. EarlyBuyCapExceeded → the anti-snipe cap message) surfaces
+        // instead of the bare selector. Launch keeps its reusable-assets nuance
+        // on the wallet-rejection path via `rejectionMessage`.
+        setError(
+          humanizeContractError(e, {
+            rejectionMessage:
+              "Transaction rejected in wallet. Your image and metadata are reusable — retry.",
+          }),
+        );
         setStep((s) => (s === "verify-failed" ? s : "error"));
       }
     },
@@ -380,7 +386,7 @@ interface EstimateGasParams {
  * `eth_estimateGas` (which DOES include the ArbOS L1-data-fee component the wallet
  * can't estimate), then we return `estimate * 2` capped so the caller passes an
  * explicit `gas` and the wallet skips its own (failing) estimation. A REVERTING
- * call throws here — the caller must let it propagate to `humanizeError`, never
+ * call throws here — the caller must let it propagate to `humanizeContractError`, never
  * swallow it. `undefined` (no publicClient) falls back to wallet estimation.
  */
 async function estimateBufferedGas(
@@ -393,48 +399,4 @@ async function estimateBufferedGas(
   );
   const buffered = estimate * GAS_BUFFER_MULTIPLIER;
   return buffered > GAS_LIMIT_CEILING ? GAS_LIMIT_CEILING : buffered;
-}
-
-/**
- * The DECODED custom-error name of a reverted contract call (e.g.
- * "DeadlineExpired", "CreatesPaused"), or undefined if the failure wasn't a
- * decodable revert (network/transport error, out-of-gas, user rejection).
- *
- * This must be used INSTEAD of substring-matching the error message: viem's
- * verbose message embeds the full function signature — `createToken(…, uint256
- * minTokensOut, uint256 deadline)` — so a naive `/deadline/i` test matches EVERY
- * createToken revert and mislabels unrelated failures as "Deadline expired".
- */
-function decodedErrorName(e: unknown): string | undefined {
-  if (!(e instanceof BaseError)) return undefined;
-  const revert = e.walk((err) => err instanceof ContractFunctionRevertedError);
-  if (revert instanceof ContractFunctionRevertedError) {
-    return revert.data?.errorName ?? revert.reason ?? undefined;
-  }
-  return undefined;
-}
-
-function humanizeError(e: unknown): string {
-  // A pre-estimate revert surfaces as a viem BaseError; prefer its decoded
-  // `shortMessage` (the revert reason) over the verbose full message — the whole
-  // point vs MetaMask's opaque "Network fee unavailable".
-  const short = e instanceof BaseError ? e.shortMessage : undefined;
-  const full = e instanceof Error ? e.message : String(e);
-  const errorName = decodedErrorName(e);
-  // User rejection is a wallet-layer message, not a decodable revert — keep the
-  // message match, but ONLY against the concise shortMessage, never the dump.
-  if (/user rejected|denied|rejected the request/i.test(short ?? full)) {
-    return "Transaction rejected in wallet. Your image and metadata are reusable — retry.";
-  }
-  // Deadline: match the DECODED error name, or "transaction too old" which some
-  // Orbit nodes return for a stale tx — never a bare "deadline"/"expired".
-  if (errorName === "DeadlineExpired" || /transaction too old/i.test(short ?? "")) {
-    return "Deadline expired — retry.";
-  }
-  if (errorName === "CreatesPaused") return "New launches are temporarily paused.";
-  // Otherwise surface the REAL reason — the decoded custom-error name if we have
-  // one (e.g. InvalidMsgValue, SlippageExceeded), else the shortMessage. No more
-  // masking every failure as a deadline problem.
-  const surfaced = errorName ?? short ?? full;
-  return surfaced.length > 180 ? `${surfaced.slice(0, 177)}…` : surfaced;
 }

@@ -1,5 +1,5 @@
 /**
- * address_pnl roll-up suite (spec §5.4 portfolio; db-rows `AddressPnlRow`). Drives
+ * address_pnl roll-up suite (portfolio; db-rows `AddressPnlRow`). Drives
  * the PURE `rollUpAddressPnl` + `realizedForLeg` — the same code the roll-up job
  * runs. Advisory ONLY: asserts realized ranges + confidence + aggregation; there
  * is no code path that gates a trade/listing on any of it.

@@ -7,7 +7,7 @@ import type { TokenCard } from "@robbed/shared";
 import type { EthUsdSnapshot } from "../lib/usd";
 
 /** Epoch-zero placeholder when NO snapshot exists — marks the value stale
- * (age → ∞) rather than inventing a constant price (spec §2). */
+ * (age → ∞) rather than inventing a constant price. */
 export const MISSING_ETH_USD: EthUsdSnapshot = {
   price_usd: 0,
   fetched_at: "1970-01-01T00:00:00.000Z",
@@ -36,8 +36,8 @@ export function progressFraction(realEth: string, gradEth: string): number {
 }
 
 /**
- * Derived venue/status pill (indexer.md §3.2): `graduated` → graduated;
- * `real_eth ≥ graduation_eth` and not yet graduated → the §12.12 lock window
+ * Derived venue/status pill (indexer.md) `graduated` → graduated;
+ * `real_eth ≥ graduation_eth` and not yet graduated → the lock window
  * `graduating`; else `curve`. SINGLE source used by the card and portfolio
  * token-ref projections so the pill can't drift between surfaces.
  */

@@ -1,5 +1,5 @@
 /**
- * Post-graduation 50/50 split roll-up — PURE ledger math (spec §12.69).
+ * Post-graduation 50/50 split roll-up — PURE ledger math.
  * Deposit is the ACCRUED source (concrete per-(creator, token) ERC20 amount), claim
  * reduces claimable + stamps last_claim_at, the claimable floor, and the raw pool
  * ordering → token/weth leg resolution (sign pinned by test, not prose).

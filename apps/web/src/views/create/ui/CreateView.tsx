@@ -5,7 +5,7 @@ import { LiveStatusBanner } from "@/widgets/live-status-banner";
 import { NetworkBanner } from "@/widgets/network-banner";
 
 /**
- * Create `/create` screen (§5.3; ROBBED_ mockup "2b — Create token"; renamed
+ * Create `/create` screen (; ROBBED_ mockup "2b — Create token"; renamed
  * from /launch by the redesign). Server shell: static above-the-fold copy
  * renders without client JS; the whole interactive flow (form, upload,
  * economics reads, stepper) hydrates inside the `features/launch-token`

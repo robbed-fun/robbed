@@ -1,8 +1,8 @@
 /**
- * Not-yet-indexed grace before redirecting to `/t/[address]` (web.md §4
- * pending-shell case; §5.3 "token tradeable <1s, soft-confirmed").
+ * Not-yet-indexed grace before redirecting to `/t/[address]` (web.md
+ * pending-shell case; "token tradeable <1s, soft-confirmed").
  *
- * DECISION (hoodpad-frontend; basis: web.md WS decide-yourself — "REST is the
+ * DECISION (robbed-frontend; basis: web.md WS decide-yourself — "REST is the
  * source of resumable truth"): the Token Detail server view `notFound()`s on a
  * 404 (M3-5, owned elsewhere, not touched here), so the flagship launch flow must
  * NOT navigate until the API can actually resolve the new token — otherwise the

@@ -1,7 +1,7 @@
 /**
  * Public API for the `launch-token` feature (FSD reference/public-api) — the
- * §5.3 Launch flow: form + shared-zod validation, API-mediated image upload
- * (§12.19), client-side metadata-hash re-verification before signing (§12.19
+ * Launch flow: form + shared-zod validation, API-mediated image upload
+ *, client-side metadata-hash re-verification before signing (
  * normative), the atomic-initial-buy `createToken` write, live-read economics,
  * and the soft-confirmed stepper with the not-yet-indexed redirect grace.
  *

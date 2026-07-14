@@ -12,7 +12,7 @@
  * available` (surfaced by viem as `InvalidInputRpcError` / `RpcRequestError`,
  * shortMessage "Missing or invalid parameters"). When a handler read throws,
  * Ponder retries the handler 9× with backoff and then WEDGES the whole backfill
- * (progress stuck at 0.0%). Observed live during the §12.55 reindex: selectors
+ * (progress stuck at 0.0%). Observed live during the reindex: selectors
  * `CURVE_SUPPLY()` (0x1e4c7292), `GRADUATION_ETH()` (0xa6f5302b), and
  * `TRADE_FEE_BPS()` (0x9185f598) all returned "missing trie node".
  *

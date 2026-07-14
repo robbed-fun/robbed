@@ -1,7 +1,7 @@
 /**
  * 24h change anchor resolver — RE-EXPORT of the canonical shared implementation.
  *
- * ZERO-DRIFT (CLAUDE.md anti-drift rule; spec §12.40e): this logic
+ * ZERO-DRIFT (CLAUDE.md anti-drift rule) this logic
  * has ≥2 consumers — the indexer's `volume_eth_24h` decay/materialization job AND
  * the API `card`/`detail` projections — so its single source of truth now lives
  * in `packages/shared` (`@robbed/shared/change24h`). This module previously held
@@ -9,7 +9,7 @@
  * as a thin re-export so any indexer job importing `./change24h` transparently
  * gets the one shared implementation (no second copy can drift).
  *
- * Semantics (spec §12.40e; indexer.md §4.5): unchanged — see the shared source.
+ * Semantics (indexer.md) unchanged — see the shared source.
  */
 export {
   computeChange24hPct,

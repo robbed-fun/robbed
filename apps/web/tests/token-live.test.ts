@@ -10,7 +10,7 @@ import {
 import { tokenDetail } from "./fixtures";
 
 /**
- * TD-6 venue-flip reconciliation rules (§5.2/§12.12/§2.1) — the pure model
+ * TD-6 venue-flip reconciliation rules — the pure model
  * behind `useLiveTokenDetail`. The wiring (WS subscription → cache patch →
  * invalidate → REST truth; reconnect refetch) is proven end-to-end by
  * e2e/flows/td-6.spec.ts + tests/ws-reconnect.test.ts; these units pin the
@@ -97,7 +97,7 @@ describe("tradeMovesBondingProgress (a curve buy/sell → re-serve the bonding c
     const sell = tradeMsg("curve");
     if (sell.type === "trade") sell.data.isBuy = false;
     expect(tradeMovesBondingProgress(tokenDetail({ status: "curve" }), sell)).toBe(true);
-    // Still bonding while in the §12.12 ready-to-graduate window.
+    // Still bonding while in the ready-to-graduate window.
     expect(
       tradeMovesBondingProgress(tokenDetail({ status: "graduating" }), tradeMsg("curve")),
     ).toBe(true);

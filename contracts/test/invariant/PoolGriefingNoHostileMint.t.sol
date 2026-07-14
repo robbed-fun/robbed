@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {PoolGriefHandler} from "test/invariant/handlers/PoolGriefHandler.sol";
 
 /// @title Gate-2 invariant 6 — pre-seeded/donated/swapped V3 pool cannot cause a hostile-ratio
-///        mint (spec §6.3.2, §10 gate 2; contracts.md §6 test matrix row 6)
+/// mint (gate 2; contracts.md test matrix row 6)
 /// @notice Dedicated adversarial campaign against the REAL Uniswap V3 stack: the fuzzer drives
 ///         donations (token/WETH), sync-style dual-side inflation, price-limited swaps in both
 ///         directions, and attacker-minted concentrated positions at hostile ticks against the
@@ -24,7 +24,7 @@ contract PoolGriefingNoHostileMintInvariant is Test {
         targetContract(address(handler));
     }
 
-    /// @notice EXACT ASSERTIONS (contracts.md §6 row 6):
+    /// @notice EXACT ASSERTIONS (contracts.md row 6):
     ///         (1) never minted outside target ± TOLERANCE_TICKS;
     ///         (2) if graduated: |tickAtMint − targetTick| ≤ TOLERANCE_TICKS;
     ///         (3) failed graduations never strand the curve (still permissionlessly retriable).

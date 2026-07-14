@@ -1,5 +1,5 @@
 /**
- * §12.59 server-side sorted + keyset-paginated TRADES and HOLDERS endpoints
+ * server-side sorted + keyset-paginated TRADES and HOLDERS endpoints
  * (route level, through the real projections + FakeDb keyset mirror): each valid
  * sort field orders correctly, out-of-allowlist ⇒ 400, keyset walks all pages with
  * no dup/skip under every sort, defaults hold, HolderRow.rank is the true balance
@@ -74,7 +74,7 @@ async function collectAll<T>(
   return out;
 }
 
-describe("GET /v1/tokens/:address/trades — sort + keyset (§12.59)", () => {
+describe("GET /v1/tokens/:address/trades — sort + keyset ", () => {
   const app = tradesApp();
   const url = (q = "") => `/v1/tokens/${TEST_ADDR}/trades${q}`;
 
@@ -138,7 +138,7 @@ describe("GET /v1/tokens/:address/trades — sort + keyset (§12.59)", () => {
   });
 });
 
-describe("GET /v1/tokens/:address/holders — sort + keyset + rank (§12.59)", () => {
+describe("GET /v1/tokens/:address/holders — sort + keyset + rank ", () => {
   const app = holdersApp();
   const url = (q = "") => `/v1/tokens/${TEST_ADDR}/holders${q}`;
 

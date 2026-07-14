@@ -1,13 +1,13 @@
 import type { BotFlag, HolderRow } from "@robbed/shared";
 
 /**
- * Holder-list domain helpers (§5.2 HolderTable + v1.2 funding-cluster grouping).
+ * Holder-list domain helpers (HolderTable + v1.2 funding-cluster grouping).
  * PURE — unit-testable (tests/holder-cluster.test.tsx). All labels here are
- * ADVISORY heuristics (spec §8.5): they describe indexer estimates, never gate
+ * ADVISORY heuristics : they describe indexer estimates, never gate
  * anything, and must be framed as heuristic, never as fact.
  */
 
-/** Human label for a structural holder flag (§5.2 "creator/curve/vault flagged"). */
+/** Human label for a structural holder flag ("creator/curve/vault flagged"). */
 export const HOLDER_FLAG_LABELS: Record<HolderRow["flags"][number], string> = {
   creator: "Creator",
   curve: "Bonding curve",
@@ -15,7 +15,7 @@ export const HOLDER_FLAG_LABELS: Record<HolderRow["flags"][number], string> = {
   vault: "LP fee vault",
 };
 
-/** Human label for an advisory §8.5 bot/farm flag. Heuristic framing only. */
+/** Human label for an advisory bot/farm flag. Heuristic framing only. */
 export const BOT_FLAG_LABELS: Record<BotFlag, string> = {
   farm: "farm",
   sniper: "sniper",
@@ -32,9 +32,9 @@ export interface HolderCluster {
 
 /**
  * Group the top-N holder rows so addresses sharing a `clusterId` (same
- * gas-funding source, §8.5) are visually adjacent while preserving rank order.
+ * gas-funding source) are visually adjacent while preserving rank order.
  * Ungrouped rows (no clusterId, or a singleton cluster) render standalone —
- * grouping a lone address would over-state confidence (spec §5.2 "heuristic").
+ * grouping a lone address would over-state confidence ("heuristic").
  *
  * Order is stable: a cluster takes the position of its highest-ranked member, so
  * the balance ranking is preserved as the primary axis.

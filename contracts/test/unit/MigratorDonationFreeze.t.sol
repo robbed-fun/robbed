@@ -11,8 +11,8 @@ import {BondingCurve} from "src/BondingCurve.sol";
 import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
 
 /// @title F-1 donation-freeze regression — curve ETH donations must NEVER freeze graduation
-///        (finding F-1, HIGH, PoC-confirmed 2026-07-13; spec §6.3.2, §12.12, §12.13, §10 gate 2)
-/// @notice THE BUG: {BondingCurve} exposes an ungated `receive()` (spec §5.7 donations), and
+/// (finding F-1, HIGH, PoC-confirmed 2026-07-13; gate 2)
+/// @notice THE BUG: {BondingCurve} exposes an ungated `receive()` (donations), and
 ///         `graduate()` forwards the curve's ENTIRE ETH balance — donations included — so the
 ///         migrator sees `wethForMint = W* + donation`, where `W* = GRADUATION_ETH − CALLER_REWARD −
 ///         GRADUATION_FEE` is the only WETH a full-range position at the (verified) target price can
@@ -21,7 +21,7 @@ import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
 ///         `(W* + donation)·(1 − slippageBps)` in the position — unachievable once
 ///         `donation > W*·bps/(1−bps)` (~1% of G ≈ 0.058 ETH on the M0 fixture) — so `NPM.mint`
 ///         reverted "Price slippage check", `graduate()` reverted FOREVER, and the curve froze in
-///         `ReadyToGraduate` where BOTH buys and sells revert `NotTrading` (§12.12): a ~0.058 ETH
+/// `ReadyToGraduate` where BOTH buys and sells revert `NotTrading` : a ~0.058 ETH
 ///         donation permanently locked the whole raise and every holder's exit, on a pristine
 ///         at-target pool. Post-fix the floor anchors to `min(wethForMint, W*)` (V3Migrator decision
 ///         #5), so a donation surfaces as MORE treasury WETH dust — never a revert.

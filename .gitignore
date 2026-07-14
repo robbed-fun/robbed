@@ -2,11 +2,11 @@
 # ROBBED_ monorepo .gitignore
 # Rule of thumb: ignore machine-regenerable build/cache output; COMMIT anything
 # that is a source of truth or can't be reproduced. Notable KEEPs (do NOT ignore):
-#   - pnpm-lock.yaml            single lockfile, §12.29
+# - pnpm-lock.yaml single lockfile,
 #   - contracts/lib/            vendored OpenZeppelin v5 — must be committed
 #   - tools/m0/out/             M0 constants: generated from a LIVE ETH/USD fetch,
 #                               non-deterministic → the committed values ARE canonical
-#   - packages/shared/src/abi/  codegen'd ABIs consumed without a build (§12.38)
+# - packages/shared/src/abi codegen'd ABIs consumed without a build
 #   - **/.env.example           committed templates
 #   - apps/indexer/ponder-env.d.ts  Ponder codegen output, committed per Ponder docs
 # ─────────────────────────────────────────────────────────────────────────────
@@ -124,7 +124,7 @@ desktop.ini
 tmp/
 .tmp/
 tools/localstack/out/
-# 4663 is a LOCAL fork-deploy artifact (mode:"fork" after the §12.55 fix) —
+# 4663 is a LOCAL fork-deploy artifact (mode:"fork" after the fix) —
 # regenerable, NOT a real deployment record. The canonical testnet record is
 # contracts/deployments/46630.json (committed).
 contracts/deployments/4663.json

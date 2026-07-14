@@ -1,5 +1,5 @@
 /**
- * HTTP entrypoint (api.md §7). Bun serves the Hono app; the moderation worker
+ * HTTP entrypoint (api.md). Bun serves the Hono app; the moderation worker
  * subscribes to `global:launches` (X-10) alongside. The WS fanout host
  * (`apps/api/src/ws.ts`) is a SEPARATE process authored under indexer M2-8 — not
  * started here.
@@ -14,7 +14,7 @@ import { startModerationWorker } from "./moderation/worker";
 const config = getConfig();
 const deps = buildDeps(createBunDb);
 
-// Prod boot guard: refuse to run on stub moderation vendors (§4.3).
+// Prod boot guard: refuse to run on stub moderation vendors.
 assertVendorsBootable(deps.vendors, config.API_ENV, config.MODERATION_ALLOW_STUBS);
 
 // X-10 moderation seam — subscribe to launches (best-effort; logs on failure).

@@ -1,6 +1,6 @@
 /**
- * Trade feed + optimistic-UI reconciliation (§5.2, api.md §3.4). The token feed
- * is SERVER-side sorted + keyset-paginated (§12.59): `?sort` comes from the shared
+ * Trade feed + optimistic-UI reconciliation (api.md). The token feed
+ * is SERVER-side sorted + keyset-paginated : `?sort` comes from the shared
  * closed allowlist (`tradeListQuerySchema` → 400 on anything else — the ORDER BY
  * security boundary), `?dir` asc|desc, plus the uniform `{ items, nextCursor }`
  * envelope. Each row carries venue + `confirmationState`; `?since` still backfills

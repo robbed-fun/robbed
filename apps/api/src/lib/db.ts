@@ -1,7 +1,7 @@
 /**
  * DB access boundary. Routes depend on this INTERFACE, never on a concrete
  * driver — so unit tests inject a fake and the Bun.sql implementation
- * (`db.bun.ts`) is swapped at boot. Two logical roles (api.md §7, spec §7):
+ * (`db.bun.ts`) is swapped at boot. Two logical roles (api.md):
  * every method here that reads indexer-owned tables runs on the READ-ONLY
  * connection; the four moderation/audit writers run on the READ-WRITE
  * connection scoped to API-owned tables only. The role split is enforced at the
@@ -38,9 +38,9 @@ import type { HolderSpecialAddresses } from "./listSort";
 
 /**
  * Per-token inputs for the shared `computeChange24hPct` resolver
- * (`@robbed/shared/change24h`, spec §12.40e). Fetched batched per response page
+ * (`@robbed/shared/change24h`). Fetched batched per response page
  * (never N+1) and fed into the card/detail projection so the Δ% is identical
- * across `/tokens` list and `/tokens/:address` detail (indexer.md §4.5). The
+ * across `/tokens` list and `/tokens/:address` detail (indexer.md). The
  * anchor SELECTION (young-token / candle-close / fallback branches) stays in the
  * ONE shared function — this only carries the raw candle superset + first-trade
  * price it reads, so there is no second copy of the anchor logic (anti-drift).
@@ -62,7 +62,7 @@ export interface TokenListRow extends TokenRow {
 /** Token row joined to everything the detail + Trust panel needs. */
 export interface TokenDetailRow extends TokenListRow {
   creator_tokens_created: number;
-  /** Token balance held by the curve address (supply.curveHeld, api.md §3.4). */
+  /** Token balance held by the curve address (supply.curveHeld, api.md). */
   curve_balance: string | null;
   /** Token balance held by the V3 pool (supply.lpTranche). */
   pool_balance: string | null;
@@ -81,14 +81,14 @@ export interface TokenDetailRow extends TokenListRow {
 export interface HolderJoinedRow extends BalanceRow {
   flags: Pick<AddressFlagsRow, "flags" | "cluster_id"> | null;
   /**
-   * True balance-descending rank within the token (§12.59 / api.md §3.4), from
+   * True balance-descending rank within the token (/ api.md), from
    * `ROW_NUMBER() OVER (ORDER BY balance::numeric DESC, holder DESC)` over the
    * WHOLE token — so a page sorted by address/label still carries the real rank
    * (surfaces as the optional `HolderRow.rank`). Always populated now.
    */
   rank: number;
   /**
-   * Deterministic label-sort key (§12.58/§12.59) from the role/flag CASE
+   * Deterministic label-sort key from the role/flag CASE
    * (listSort.ts `holderLabelRank`) — only consumed as the `label` sort's keyset
    * value; not a wire field.
    */
@@ -96,9 +96,9 @@ export interface HolderJoinedRow extends BalanceRow {
 }
 
 /**
- * §8.5 advisory bot-flag summary over a token's CURRENT holders (api.md §3.7,
+ * advisory bot-flag summary over a token's CURRENT holders (api.md,
  * D-4/M2-13). Query artifact, not a wire shape — the route zero-fills `byFlag`
- * into the full shared `BotFlag` record. Advisory only (§8.4/§8.5).
+ * into the full shared `BotFlag` record. Advisory only.
  */
 export interface TokenFlagSummary {
   /** Holders (balance > 0) carrying at least one bot flag. */
@@ -135,7 +135,7 @@ export interface PortfolioHoldingRow {
   virtual_eth: string;
   virtual_token: string;
   last_price_eth: number | null;
-  /** Per-curve immutable fee snapshot (§12.40d) — the curve-quote fee input. */
+  /** Per-curve immutable fee snapshot — the curve-quote fee input. */
   trade_fee_bps: number;
 }
 
@@ -170,8 +170,8 @@ export interface Db {
   /** Executes a pre-built search query (search/builder.ts) → joined list rows. */
   searchTokens(query: RawQuery): Promise<TokenListRow[]>;
   /**
-   * Batched 24h-change anchors for a response page (spec §12.40e; indexer.md
-   * §4.5). One query for all `tokens` — never per-row — keyed lowercase address →
+   * Batched 24h-change anchors for a response page (; indexer.md
+   * ). One query for all `tokens` — never per-row — keyed lowercase address →
    * {@link Change24hAnchor}. `nowSec` sets the `now−24h` candle cutoff. Missing
    * tokens (no trades / no candles) simply have no map entry (→ Δ% 0).
    */
@@ -182,7 +182,7 @@ export interface Db {
 
   // ── trades / candles / holders / fees ─────────────────────────────────────
   /**
-   * Token trade feed — SERVER-side sorted + keyset-paginated (§12.59). `sort`/`dir`
+   * Token trade feed — SERVER-side sorted + keyset-paginated. `sort`/`dir`
    * are already validated against the shared allowlist by the route; this method
    * maps `sort`→a fixed column via `listSort.ts` (never interpolates a caller
    * string). `cursorKey`/`cursorId` are the decoded keyset `(k, i)`. `since` is the
@@ -206,7 +206,7 @@ export interface Db {
     limit: number;
   }): Promise<CandleRow[]>;
   /**
-   * Holders page — SERVER-side sorted + keyset-paginated (§12.59). Every row
+   * Holders page — SERVER-side sorted + keyset-paginated. Every row
    * carries the token-global balance `rank` (ROW_NUMBER) + a `label_rank` for the
    * `label` sort. `special` (creator/curve/pool/vault) drives the label CASE and
    * is passed as bind params (never interpolated). `sort` is pre-validated.
@@ -227,7 +227,7 @@ export interface Db {
    */
   getLpTokenId(token: string): Promise<string | null>;
 
-  // ── creator-fee claimable (RO; Ponder `creator_claimable` — spec §12.63) ──
+  // ── creator-fee claimable (RO; Ponder `creator_claimable`) ──
   /**
    * Per-creator claimable roll-up (accrued/claimed/vault) backing GET
    * /v1/creators/:address/claimable. Null when the creator has never accrued
@@ -238,7 +238,7 @@ export interface Db {
   getCreatorClaimable(creator: string): Promise<CreatorClaimableRow | null>;
   /**
    * Per-`(creator, ERC20-token)` post-graduation split roll-up (accrued/claimed/vault)
-   * backing GET /v1/creators/:address/claimable/:token (spec §12.69). Null when the
+   * backing GET /v1/creators/:address/claimable/:token. Null when the
    * `(creator, token)` pair has never accrued (no row) — the route then falls back to
    * the config vault (or 404s). The live `CreatorVault.tokenBalanceOf(creator, token)`
    * (CreatorVaultBalanceReader.readToken) is the authoritative claimable; this row
@@ -250,7 +250,7 @@ export interface Db {
     token: string,
   ): Promise<CreatorTokenClaimableRow | null>;
 
-  // ── portfolio (spec §5.4; api.md §3) ──────────────────────────────────────
+  // ── portfolio (api.md) ──────────────────────────────────────
   /** Per-address materialized roll-up backing GET /v1/portfolio/:address; null when the address never appeared. */
   getAddressPnl(address: string): Promise<AddressPnlRow | null>;
   /**
@@ -288,7 +288,7 @@ export interface Db {
     limit: number;
   }): Promise<TokenListRow[]>;
 
-  // ── internal dashboard (D-4; api.md §3.7) — read-only, advisory §8.5 ──────
+  // ── internal dashboard (D-4; api.md) — read-only, advisory ──────
   /** `token_flow_stats` row for one token; null until the flow job computes. */
   getTokenFlowStats(token: string): Promise<TokenFlowStatsRow | null>;
   /** Bot-flag counts over the token's current holders (M2-13 flow quality). */
@@ -296,7 +296,7 @@ export interface Db {
   /**
    * `competitor_snapshots` newest-first (M2-14; Gate G-A.2). Keyset cursor
    * `(captured_at, source)` DESC — rows are shared `CompetitorSnapshotRow`
-   * verbatim (§2: source + captured_at always present, never fabricated).
+   * verbatim (source + captured_at always present, never fabricated).
    */
   listCompetitorSnapshots(input: {
     cursorCapturedAt: string | null;

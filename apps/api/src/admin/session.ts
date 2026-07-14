@@ -1,5 +1,5 @@
 /**
- * Admin session (decide-it-yourself, api.md §5/§6.2): STATELESS HMAC-signed
+ * Admin session (decide-it-yourself, api.md) STATELESS HMAC-signed
  * cookie over `{ addr, iat, exp, nonce }` (12h, HttpOnly, SameSite=strict) — no
  * session table to leak; the only server state is the single-use nonce in Redis
  * (replay defense, siwe.ts). CSRF token bound to the session nonce is required on

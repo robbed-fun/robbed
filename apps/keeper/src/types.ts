@@ -26,7 +26,7 @@ export type Phase = "trading" | "ready" | "graduated" | "unknown";
 /**
  * How a caught chain error is shaped. `contract_revert` = the node returned a
  * deterministic execution revert (the tx/estimate would revert again on the
- * same state → a candidate donation-brick, §6.3/§12.33 arb-back failure).
+ * same state → a candidate donation-brick, arb-back failure).
  * `transient` = RPC/network/nonce/timeout — safe to retry.
  */
 export type ErrorClass = "contract_revert" | "transient";

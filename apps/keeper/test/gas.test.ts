@@ -4,7 +4,7 @@ import { DEFAULT_GAS_CAP, gasWithBuffer } from "../src/gas";
 describe("gasWithBuffer (estimate*2 capped at 30M)", () => {
   test("doubles a normal estimate", () => {
     expect(gasWithBuffer(1_000_000n)).toBe(2_000_000n);
-    expect(gasWithBuffer(817_845n)).toBe(1_635_690n); // §12.62 fork worst-case
+    expect(gasWithBuffer(817_845n)).toBe(1_635_690n); // fork worst-case
   });
 
   test("clamps to the cap instead of overflowing it", () => {

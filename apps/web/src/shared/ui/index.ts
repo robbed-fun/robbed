@@ -37,7 +37,7 @@ export * from "./ErrorState";
 export * from "./AddressLink";
 export * from "./TokenAvatar";
 
-// ROBBED_ terminal atoms (redesign Phase F — spec §12.50)
+// ROBBED_ terminal atoms (redesign Phase F)
 export * from "./MonoText";
 export * from "./Chip";
 export * from "./TabBar";
@@ -55,6 +55,6 @@ export * from "./Toaster";
 
 // reusable headless table (TanStack Table v8 wrapper — stable-ref contract)
 export * from "./DataTable";
-// server-sortable + keyset-paginated table chrome (§12.59/§12.60)
+// server-sortable + keyset-paginated table chrome
 export * from "./SortHeader";
 export * from "./Pagination";

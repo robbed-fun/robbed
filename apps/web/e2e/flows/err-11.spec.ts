@@ -13,7 +13,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:ERR-11 — WS reconnect / seq-gap heal (§12.23)
+// @flow:ERR-11 — WS reconnect / seq-gap heal
 // assertable-layers: indexed · UI   (N/A on-chain: client+REST recovery — waiver)
 test(
   "ERR-11 a dropped socket shows the degraded banner then REST-heals the gap on reconnect",

@@ -1,5 +1,5 @@
 /**
- * M2-9 search builder (§5.1, §12.22). All four field classes + address-mode
+ * M2-9 search builder. All four field classes + address-mode
  * detection + ticker-boost / volume-tiebreak / similarity-floor ordering.
  */
 import { describe, expect, it } from "bun:test";

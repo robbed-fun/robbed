@@ -1,5 +1,5 @@
 /**
- * CreatorVault live-balance reader (spec §7 / §12.63; GET /v1/creators/:address/
+ * CreatorVault live-balance reader (; GET /v1/creators/:address
  * claimable). The AUTHORITATIVE claimable value is the live on-chain
  * `CreatorVault.balanceOf(creator)` — exactly like `/fees` reads the live NPM
  * `tokensOwed` rather than trusting a projection. Injectable behind an interface
@@ -17,11 +17,11 @@ import { type Address, createPublicClient, http } from "viem";
 import { creatorVaultAbi } from "@robbed/shared/abi";
 
 export interface CreatorVaultBalanceReader {
-  /** Live `balanceOf(creator)` on `vault`, wei decimal string; null if unavailable (§12.63 native-ETH leg). */
+  /** Live `balanceOf(creator)` on `vault`, wei decimal string; null if unavailable (native-ETH leg). */
   read(input: { vault: string; creator: string }): Promise<string | null>;
   /**
    * Live `tokenBalanceOf(creator, token)` on `vault`, wei decimal string; null if
-   * unavailable (§12.69 post-grad ERC20 leg — a graduated launch token or WETH). The
+   * unavailable (post-grad ERC20 leg — a graduated launch token or WETH). The
    * AUTHORITATIVE per-`(creator, token)` claimable, matching `claimERC20` 1:1; null ⇒
    * the route falls back to the event-derived mirror.
    */

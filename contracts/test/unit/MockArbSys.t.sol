@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {IArbSys} from "src/interfaces/external/IArbSys.sol";
 import {MockArbSys} from "test/mocks/MockArbSys.sol";
 
-/// @title MockArbSys harness test (contracts.md §6: unit/fuzz/invariant tests run against
+/// @title MockArbSys harness test (contracts.md : unit/fuzz/invariant tests run against
 ///        MockArbSys etched at address(100); the real precompile path is fork-only, gate 3)
 contract MockArbSysTest is Test {
     address internal constant ARB_SYS = address(100);

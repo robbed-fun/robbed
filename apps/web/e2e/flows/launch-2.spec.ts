@@ -20,7 +20,7 @@ const PNG = Buffer.from(
   "base64",
 );
 
-// @flow:LAUNCH-2 — Create token with atomic initial creator buy · tx `createToken` (+ buy) (§5.3)
+// @flow:LAUNCH-2 — Create token with atomic initial creator buy · tx `createToken` (+ buy)
 // assertable-layers: on-chain · indexed · UI
 test(
   "LAUNCH-2 create token with an atomic initial creator buy (anti-self-snipe)",
@@ -39,10 +39,10 @@ test(
         buffer: PNG,
       });
       await launch.initialBuy(page).fill("0.05");
-      // Live preview of tokens received + min-received (anti-self-snipe §5.3/§6.5).
+      // Live preview of tokens received + min-received (anti-self-snipe).
       await expect(page.getByText(/min|slippage|receive/i).first()).toBeVisible();
       await launch.submit(page).click();
-      // §12.56 dropped the visible "Soft-confirmed" launch label; the receipt-success
+      // dropped the visible "Soft-confirmed" launch label; the receipt-success
       // node now reads "Tradeable" (`launchStepLabel` + LaunchProgress), exactly as
       // LAUNCH-1 asserts — the shared ConfirmationBadge stays absent for the soft-
       // confirmed tier. (Was a stale `Soft-confirmed` selector — updated 2026-07-13.)

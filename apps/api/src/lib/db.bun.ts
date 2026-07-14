@@ -1,13 +1,13 @@
 /**
  * Bun-native Postgres implementation of the `Db` interface (Bun's built-in `SQL`
- * — no `pg`/`postgres` dependency). Two clients enforce the role split (§7): `ro`
+ * — no `pg`/`postgres` dependency). Two clients enforce the role split : `ro`
  * reads indexer-owned tables; `rw` writes ONLY the API-owned tables
  * (`moderation_status`, `moderation_audit_log`). The grant boundary is created in
  * `migrations/001_api_tables.sql`; this file honors it structurally by never
  * issuing a write on `ro`.
  *
  * Row coercion: `numeric(78,0)` arrives as string (kept as-is → decimal string
- * DTOs); `int8`/`integer` are coerced to `number` (indexer.md §3 convention);
+ * DTOs); `int8`/`integer` are coerced to `number` (indexer.md convention);
  * `timestamptz` to ISO string. All parameterized — no string interpolation of
  * user input (search/list order expressions inline only server-computed numbers).
  */
@@ -55,11 +55,11 @@ const iso = (v: unknown): string =>
   v instanceof Date ? v.toISOString() : String(v ?? new Date(0).toISOString());
 
 // `confirmation_state` is DERIVED per row from the watermark sidecar (OI-11 /
-// §12.48c — no stored column on Ponder tables); the shared db-row shapes are
+// — no stored column on Ponder tables); the shared db-row shapes are
 // satisfied by the derived SELECT column.
 // Display fields (image/description/links) are READ-DERIVED from the verifier's
 // offchain sidecar (metadata_verifications 0008 columns), COALESCEd over the
-// tokens columns in the mapper — indexer.md §6.1 step 5 reworked per the §7.3
+// tokens columns in the mapper — indexer.md step 5 reworked per the
 // OI-11 verdict (no external writes into Ponder-managed `tokens`, so
 // tokens.image_url/description/links stay null and mv.* is the live source).
 const TOKEN_LIST_SELECT = `
@@ -78,7 +78,7 @@ function mapTokenList(r: Record<string, unknown>): TokenListRow {
     curve_address: String(r.curve_address),
     creator: String(r.creator),
     creator_fee_bps: num(r.creator_fee_bps),
-    // §12.40d: per-curve immutable trade fee; Trust-panel/card fee source (NOT
+    // : per-curve immutable trade fee; Trust-panel/card fee source (NOT
     // the factory-current config value, which misreports older curves).
     trade_fee_bps: num(r.trade_fee_bps),
     name: String(r.name),
@@ -343,7 +343,7 @@ export function createBunDb(config: Config): Db {
       // $1..$n = addresses, $(n+1) = 24h cutoff. Per-token subqueries: earliest
       // trade price + the single 1h candle at/before the cutoff (LATERAL LIMIT 1).
       // The anchor SELECTION stays in the shared resolver — this only fetches the
-      // raw inputs it reads (indexer.md §4.5; anti-drift).
+      // raw inputs it reads (indexer.md; anti-drift).
       const placeholders = tokens.map((_, i) => `$${i + 1}`).join(",");
       const cutoffParam = `$${tokens.length + 1}`;
       const text = `
@@ -376,7 +376,7 @@ export function createBunDb(config: Config): Db {
     },
 
     async listTrades(input) {
-      // §12.59 server-side sort: `sort` was validated against the shared allowlist
+      // server-side sort: `sort` was validated against the shared allowlist
       // by the route, then mapped to a FIXED column here (never interpolated).
       const col = TRADE_SORT_COLUMNS[input.sort];
       const where: string[] = ["token_address = $1"];
@@ -430,7 +430,7 @@ export function createBunDb(config: Config): Db {
     },
 
     async getHolders(input) {
-      // §12.59 server-side sort + keyset. Rank (ROW_NUMBER over the WHOLE token,
+      // server-side sort + keyset. Rank (ROW_NUMBER over the WHOLE token,
       // balance DESC) and the label CASE are materialized in a CTE so a page
       // sorted by address/label still carries the true balance rank, and the
       // outer keyset/ORDER BY reference them by name. `sort` is pre-validated;
@@ -522,7 +522,7 @@ export function createBunDb(config: Config): Db {
       return rows[0] ? str(rows[0].lp_token_id) : null;
     },
 
-    // ── portfolio (spec §5.4) ─────────────────────────────────────────────────
+    // ── portfolio ─────────────────────────────────────────────────
     async getAddressPnl(address) {
       const rows = (await ro.unsafe(
         `SELECT address, first_seen_at, last_active_at, trade_count, tokens_created,
@@ -600,7 +600,7 @@ export function createBunDb(config: Config): Db {
     },
 
     async listCreatedTokens(input) {
-      // Listing-gated like /tokens: hidden creations are excluded (§8.4). Ordered
+      // Listing-gated like /tokens: hidden creations are excluded. Ordered
       // newest-first with (created_at, address) keyset — stable under new launches.
       const where: string[] = ["t.creator = $1", "(m.visibility IS DISTINCT FROM 'hidden')"];
       const params: unknown[] = [input.address];
@@ -616,7 +616,7 @@ export function createBunDb(config: Config): Db {
       return rows.map(mapTokenList);
     },
 
-    // ── internal dashboard (D-4; api.md §3.7) — read-only, advisory §8.5 ─────
+    // ── internal dashboard (D-4; api.md) — read-only, advisory ─────
     async getTokenFlowStats(token) {
       const rows = (await ro.unsafe(
         `SELECT token_address, organic_holder_pct_low, organic_holder_pct_high,
@@ -637,7 +637,7 @@ export function createBunDb(config: Config): Db {
     },
 
     async getTokenFlagSummary(token) {
-      // Flagged = current holders (balance > 0) with ≥1 §8.5 label. Two boring
+      // Flagged = current holders (balance > 0) with ≥1 label. Two boring
       // aggregate queries (totals, then per-flag via unnest) — the flagged-holder
       // population per token is small, and both stay on `ro`.
       const [totals, perFlag] = await Promise.all([
@@ -671,9 +671,9 @@ export function createBunDb(config: Config): Db {
     },
 
     async listCompetitorSnapshots(input) {
-      // Newest first, keyset (captured_at, source) DESC (api.md §3.7). Rows are
+      // Newest first, keyset (captured_at, source) DESC (api.md). Rows are
       // shared CompetitorSnapshotRow verbatim — source + captured_at NOT NULL by
-      // table constraint (§2: never a fabricated metric; empty while the source
+      // table constraint (: never a fabricated metric; empty while the source
       // is unconfigured).
       const where: string[] = [];
       const params: unknown[] = [];
@@ -723,7 +723,7 @@ export function createBunDb(config: Config): Db {
     },
 
     async getCreatorClaimable(creator) {
-      // RO read of the Ponder-managed `creator_claimable` roll-up (spec §12.63).
+      // RO read of the Ponder-managed `creator_claimable` roll-up.
       // NUMERIC(78,0) columns arrive as strings → kept as wei decimal strings;
       // last_claim_at (bigint) → number|null; updated_at text passthrough.
       const rows = (await ro.unsafe(
@@ -746,7 +746,7 @@ export function createBunDb(config: Config): Db {
     },
 
     async getCreatorTokenClaimable(creator, token) {
-      // RO read of the Ponder-managed `creator_token_claimable` roll-up (§12.69).
+      // RO read of the Ponder-managed `creator_token_claimable` roll-up.
       // NUMERIC(78,0) columns arrive as strings → kept as wei decimal strings;
       // last_claim_at (bigint) → number|null; updated_at text passthrough.
       const rows = (await ro.unsafe(

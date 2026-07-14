@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Button } from "@/shared/ui";
 
 /**
- * Token Detail 404 (§5.2 "Token not found on ROBBED_" + Blockscout link). The
+ * Token Detail 404 ("Token not found on ROBBED_" + Blockscout link). The
  * address echo/link is intentionally omitted here because `notFound()` does not
  * carry params; the global message + Discover link is the safe minimal state.
  */

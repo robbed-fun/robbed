@@ -1,5 +1,5 @@
 /**
- * §12.55 chain-identity gate — the ratified multi-env mechanism, exercised
+ * chain-identity gate — the ratified multi-env mechanism, exercised
  * end-to-end at the unit level:
  *   (a) INDEXER_CHAIN_ID selects, never defines — must resolve in the shared
  *       deployment registry; NO default chain id exists.
@@ -44,7 +44,7 @@ afterEach(() => {
   saved.clear();
 });
 
-describe("§12.55(a)+(b) static half — explicit selection, registry-validated, no default", () => {
+describe("+(b) static half — explicit selection, registry-validated, no default", () => {
   it("throws when INDEXER_CHAIN_ID is unset (no default chain id exists)", () => {
     expect(() => loadConfig()).toThrow(/INDEXER_CHAIN_ID/);
   });
@@ -60,7 +60,7 @@ describe("§12.55(a)+(b) static half — explicit selection, registry-validated,
   });
 });
 
-describe("§12.55 known limit — 4663 registry entry is a mainnet-fork artifact", () => {
+describe(" known limit — 4663 registry entry is a mainnet-fork artifact", () => {
   it("refuses INDEXER_CHAIN_ID=4663 without the LOCAL-fork opt-in", () => {
     process.env.INDEXER_CHAIN_ID = "4663";
     expect(() => loadConfig()).toThrow(/forbidden outside a LOCAL fork stack/);
@@ -78,7 +78,7 @@ describe("§12.55 known limit — 4663 registry entry is a mainnet-fork artifact
   });
 });
 
-describe("§12.55(c) — chain-dependent addresses resolve from the registry entry", () => {
+describe(" — chain-dependent addresses resolve from the registry entry", () => {
   it("46630 resolves the TESTNET external set (never the mainnet constants)", () => {
     process.env.INDEXER_CHAIN_ID = "46630";
     const config = loadConfig();
@@ -119,7 +119,7 @@ describe("§12.55(c) — chain-dependent addresses resolve from the registry ent
   });
 });
 
-describe("§12.55(b) live half — assertRuntime(expected chain id)", () => {
+describe(" live half — assertRuntime(expected chain id)", () => {
   const okDb: SqlQueryable = {
     query: async () => ({ rows: [{ ok: 1 }] }),
   };

@@ -5,14 +5,14 @@ const PNG = Buffer.from(
   "base64",
 );
 
-// @flow:ERR-6a — Metadata hash mismatch: client re-verify blocks signing (§12.19)
+// @flow:ERR-6a — Metadata hash mismatch: client re-verify blocks signing
 // assertable-layers: UI   (N/A on-chain/indexed: signing blocked → no tx — waiver)
 test(
   "ERR-6a a tampered API metadataHash blocks signing before any tx is broadcast",
   { tag: ["@flow:ERR-6a", "@layer:ui"] },
   async ({ page }) => {
     // Tamper the API's metadata response so its hash disagrees with the client's
-    // own canonicalize+keccak (the §12.19 normative pre-sign re-verification).
+    // own canonicalize+keccak (the normative pre-sign re-verification).
     await page.route("**/v1/metadata", async (route) => {
       const res = await route.fetch();
       const json = await res.json();

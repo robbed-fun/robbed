@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { PnlRange } from "@/entities/portfolio";
 
 /**
- * `PnlRange` renders the API's `EthPnlRange | null` HONESTLY (§5.2 — no false
+ * `PnlRange` renders the API's `EthPnlRange | null` HONESTLY (— no false
  * precision): null → placeholder (not "0"), exact → a single signed value, a
  * true range → `low…high`, and the tone is committed only when the range shares
  * a sign.

@@ -2,7 +2,7 @@ import * as React from "react";
 
 import { cn } from "@/shared/lib/utils";
 
-/** Vendored shadcn/ui Card (new-york) — code we own (§12.24). Dense p-3 default. */
+/** Vendored shadcn/ui Card (new-york) — code we own. Dense p-3 default. */
 function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div

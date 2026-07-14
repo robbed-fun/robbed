@@ -2,8 +2,8 @@ import { CHAIN_ID } from "@robbed/shared";
 import { getDeployment } from "@robbed/shared/addresses";
 
 /**
- * Centralised env access (spec §2/§9). Every RPC/API/WS endpoint and config
- * value comes from env — NEVER inlined. No market metric ever lives here (§2).
+ * Centralised env access. Every RPC/API/WS endpoint and config
+ * value comes from env — NEVER inlined. No market metric ever lives here.
  *
  * `NEXT_PUBLIC_*` are inlined by Next at build; we read them through this module
  * so a missing var fails loudly in one place instead of silently `undefined`.
@@ -48,13 +48,13 @@ function required(
 
 export const env = {
   /**
-   * Target chain id for THIS build — §12.55 chain-identity pattern applied to
+   * Target chain id for THIS build — chain-identity pattern applied to
    * the web (mirror of the indexer's `INDEXER_CHAIN_ID`): the env var SELECTS a
    * chain, it never DEFINES chain facts. The value must resolve in the shared
    * deployment registry (`getDeployment`, packages/shared addresses.ts) — an
    * unknown id throws, so nothing can be invented via env. Unset ⇒ the
    * compile-time `CHAIN_ID` (mainnet 4663, @robbed/shared) — prod/local builds
-   * are unchanged. A per-target build compiles exactly ONE chain (§12.55: "per-
+   * are unchanged. A per-target build compiles exactly ONE chain (: "per-
    * target product builds may still compile a single chain id"): the testnet
    * stack (docker-compose.testnet.yml web) injects NEXT_PUBLIC_CHAIN_ID=46630.
    * Deliberately NOT using the `required(...)` build-phase placeholder: a SET-
@@ -69,7 +69,7 @@ export const env = {
       throw new Error(
         `[robbed/web] NEXT_PUBLIC_CHAIN_ID=${raw} has no entry in the shared deployment ` +
           `registry (@robbed/shared ROBBED_DEPLOYMENTS). The env var selects a chain; the ` +
-          `registry defines it (spec §12.55) — run the deploy + codegen for that chain first.`,
+          `registry defines it — run the deploy + codegen for that chain first.`,
       );
     }
     return parsed;
@@ -88,7 +88,7 @@ export const env = {
       "https://api.invalid",
     ).replace(/\/$/, ""),
   /**
-   * Data-plane REST base with SPLIT-HORIZON resolution (web.md §2.3) — the ONE
+   * Data-plane REST base with SPLIT-HORIZON resolution (web.md) — the ONE
    * resolution point every REST transport (`shared/api`, `entities/portfolio/
    * api`) must call instead of `apiBaseUrl()`.
    *
@@ -145,7 +145,7 @@ export const env = {
       .filter((a) => a.length > 0),
   /**
    * web-10 / M3-10: large-value disclosure threshold, ETH-denominated, as a
-   * DECIMAL STRING (never a JS number literal in code, §2). Architect-owned
+   * DECIMAL STRING (never a JS number literal in code). Architect-owned
    * config; returns null until furnished so callers degrade gracefully.
    */
   largeValueEthThreshold: () =>

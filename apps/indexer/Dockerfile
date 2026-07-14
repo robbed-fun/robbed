@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# ROBBED_ indexer image — Ponder (spec §8: "Ponder runs in a Node container").
+# ROBBED_ indexer image — Ponder ("Ponder runs in a Node container").
 # Build context = REPO ROOT (so pnpm-lock.yaml + pnpm-workspace.yaml + the
 # `@robbed/shared` workspace package resolve for `workspace:*`).
 #   docker build -f apps/indexer/Dockerfile -t robbed-indexer .
@@ -72,7 +72,7 @@ RUN INDEXER_RPC_HTTP="$CODEGEN_RPC_HTTP" \
 RUN pnpm --filter @robbed/indexer --prod --legacy deploy /out
 
 # ── runtime: Node 22 (Ponder's runtime) + bun binary for the TS side-scripts ──
-# Ponder itself runs under NODE (spec §8). `bun` is copied in ONLY to execute the
+# Ponder itself runs under NODE. `bun` is copied in ONLY to execute the
 # TypeScript offchain scripts (scripts/migrate.ts, scripts/rebuild.ts) — the same
 # `bun run` the package.json scripts + dev compose use. This does not change the
 # indexer's runtime (Ponder = Node); it avoids a fragile TS loader for two scripts.

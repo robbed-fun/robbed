@@ -1,13 +1,13 @@
 /**
- * Launch form validation (§5.3, §12.30). ALL field constraints come from the
+ * Launch form validation. ALL field constraints come from the
  * FROZEN `@robbed/shared` schemas — the byte-length limits (name ≤32 B, ticker
  * ≤10 B, description ≤500), which are the drift-sensitive part that must match
  * the API + the on-chain gate, are NEVER redeclared here. We `.pick()` them off
  * `metadataRequestSchema` so the exact same `byteBoundedString` refinements run
- * client-side; the API re-validates and is the authority (web.md §3.3).
+ * client-side; the API re-validates and is the authority (web.md).
  *
  * The only additive rules are UX guards that do not touch the hash commitment:
- *   - links must be `https:` (the API also enforces this — api.md §6.4);
+ * - links must be `https:` (the API also enforces this — api.md);
  *   - the image is a `File` (not part of the metadata JSON — it is uploaded first
  *     and only its content-addressed hash enters the document), size ≤4 MB;
  *   - the optional initial buy is a non-negative ETH decimal.
@@ -41,7 +41,7 @@ export const launchTextSchema = metadataRequestSchema
 
 export type LaunchTextValues = z.infer<typeof launchTextSchema>;
 
-/** Allowed upload MIME types (spec §5.3: jpg/png/webp/gif; the API re-encodes). */
+/** Allowed upload MIME types (jpg/png/webp/gif; the API re-encodes). */
 export const ACCEPTED_IMAGE_MIME = [
   "image/jpeg",
   "image/png",
@@ -51,7 +51,7 @@ export const ACCEPTED_IMAGE_MIME = [
 
 /**
  * Pre-upload client image gate (UX only — the API MIME-sniffs + re-encodes, spec
- * §12.19). Returns an error string or `null`. Size limit is the shared
+ * ). Returns an error string or `null`. Size limit is the shared
  * `MAX_IMAGE_BYTES`, never an inline number.
  */
 export function validateImageFile(file: File | null): string | null {
@@ -72,7 +72,7 @@ export type InitialBuyParse =
 /**
  * Parse the optional initial-buy ETH amount. Empty ⇒ 0 (no initial buy). The
  * value is ETH the creator will spend inside the same `createToken` tx — never a
- * market metric, so no constant is involved (§2).
+ * market metric, so no constant is involved.
  */
 export function parseInitialBuyEth(raw: string): InitialBuyParse {
   const trimmed = raw.trim();

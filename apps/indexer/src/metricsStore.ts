@@ -61,7 +61,7 @@ export function createPgMetricsStore(pool: Pool, schema: string): MetricsStore {
       const metadataMismatch = await countOr0(
         `SELECT count(*) FROM metadata_verifications WHERE status = 'mismatch'`,
       );
-      // 2% fee ceiling (§6.4): fee_eth / eth_amount > MAX_TRADE_FEE_BPS/10000.
+      // 2% fee ceiling : fee_eth / eth_amount > MAX_TRADE_FEE_BPS/10000.
       const tradeFeeCeilingBreaches = await countOr0(
         `SELECT count(*) FROM ${sc}.trades
           WHERE venue = 'curve' AND eth_amount > 0

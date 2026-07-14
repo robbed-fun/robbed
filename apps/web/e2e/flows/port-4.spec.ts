@@ -7,7 +7,7 @@ import {
   test,
 } from "../harness";
 
-// @flow:PORT-4 — Disconnected: connect-wallet empty state (§12.50a / catalog §3b)
+// @flow:PORT-4 — Disconnected: connect-wallet empty state (/ catalog)
 // assertable-layers: UI only   (no subject → no request → nothing indexed/on-chain — waiver)
 test(
   "PORT-4 disconnected /portfolio shows the connect prompt, issues no request, and connects in place",

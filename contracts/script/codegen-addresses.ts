@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * M1-14 — deploy-time addresses codegen (architecture.md §4; contracts.md §7.2).
+ * M1-14 — deploy-time addresses codegen (architecture.md; contracts.md).
  *
  * DEPLOY-time (NOT compilation-time) leg: after `forge script script/Deploy.s.sol
  * --broadcast`, the deploy script writes a self-describing per-chain artifact to
@@ -12,7 +12,7 @@
  *                                                `getDeployment(chainId)` helper
  *                                                (indexer config + web import it)
  *
- * NOT a codegen target (since the I-5/§12.55 split): apps/web/src/shared/config/
+ * NOT a codegen target (since the I-5 split) apps/web/src/shared/config
  * addresses.ts is HAND-AUTHORED derivation logic (env-selected chain target via
  * `env.chainId()`, the NEXT_PUBLIC_E2E_* fork-address override seam, registry-
  * derived V3/WETH exports) that IMPORTS the generated map. Codegen never writes
@@ -21,7 +21,7 @@
  *
  * Owned by the contracts pipeline (generated artifact), lives under packages/shared
  * per the anti-drift rule — the exact same ownership model as the compilation-time
- * `codegen-abi.ts` (architecture.md §4). Distinct from that leg: this one needs a
+ * `codegen-abi.ts` (architecture.md). Distinct from that leg: this one needs a
  * broadcast, so it reads deploy artifacts, not `contracts/out`.
  *
  * Re-runnable (idempotent):  bun contracts/script/codegen-addresses.ts
@@ -60,7 +60,7 @@ type Artifact = {
   router: string;
   v3Migrator: string;
   lpFeeVault: string;
-  // §12.63 pull-payment CreatorVault. OPTIONAL + additive: v1 artifacts predate it, so it is NOT in
+  // pull-payment CreatorVault. OPTIONAL + additive: v1 artifacts predate it, so it is NOT in
   // the required ADDR_KEYS set (that would break older deployments); validated + emitted only when
   // a creator-fee deploy artifact carries it.
   creatorVault?: string;
@@ -102,16 +102,16 @@ const ADDR_KEYS: (keyof Artifact)[] = [
   "swapRouter02",
   "quoterV2",
 ];
-// ── §12.55 / T-5 registry-mode invariant (fail-closed) ───────────────────────
-// The registry is the thing downstream services (indexer §12.55 chain-identity
+// ── / T-5 registry-mode invariant (fail-closed) ───────────────────────
+// The registry is the thing downstream services (indexer chain-identity
 // gate) assert against, so codegen is the last line that can refuse to MINT a
 // bad `mode:"live"` entry. Two rules, both fail the whole codegen loudly:
 //   1. Only chain 4663 may ever be `mode:"live"` (mainnet is the sole live chain);
 //      46630 is `testnet`, 31337 is `local`, a 4663 fork is `fork`.
 //   2. A `live` entry may NOT carry a well-known ANVIL dev-account treasury — that
-//      is exactly the fork-artifact-mislabeled-live defect §12.55 flagged (the old
+// is exactly the fork-artifact-mislabeled-live defect flagged (the old
 //      4663.json had the anvil account-1 treasury under `mode:"live"`). A real
-//      Phase-B treasury is a Gnosis Safe (§6.6), never a deterministic dev key.
+// Phase-B treasury is a Gnosis Safe, never a deterministic dev key.
 // Together with Deploy.s.sol's fail-safe live-affirmation (decision #5), a fork
 // run cannot produce a `mode:"live"` 4663 registry entry through this pipeline.
 const VALID_MODES = new Set(["local", "testnet", "live", "fork"]);
@@ -134,7 +134,7 @@ for (const f of files) {
       process.exit(1);
     }
   }
-  // §12.63 optional creatorVault: absent on v1 artifacts (fine); if present it must be a valid addr.
+  // optional creatorVault: absent on v1 artifacts (fine); if present it must be a valid addr.
   if (a.creatorVault !== undefined && !isAddress(a.creatorVault)) {
     console.error(`[codegen-addresses] ${f}: creatorVault present but not a valid address: ${String(a.creatorVault)}`);
     process.exit(1);
@@ -144,13 +144,13 @@ for (const f of files) {
     process.exit(1);
   }
   if (a.mode === "live" && a.chainId !== LIVE_CHAIN_ID) {
-    console.error(`[codegen-addresses] ${f}: mode:"live" is only valid for chain ${LIVE_CHAIN_ID}, got ${a.chainId} (§12.55).`);
+    console.error(`[codegen-addresses] ${f}: mode:"live" is only valid for chain ${LIVE_CHAIN_ID}, got ${a.chainId} ().`);
     process.exit(1);
   }
   if (a.mode === "live" && ANVIL_DEV_ACCOUNTS.has(a.treasury.toLowerCase())) {
     console.error(
       `[codegen-addresses] ${f}: mode:"live" with an anvil dev-account treasury ${a.treasury} — this is a ` +
-        `mainnet-FORK artifact mislabeled live (§12.55). A real deploy sets ROBBED_DEPLOY_ENV=mainnet and a ` +
+        `mainnet-FORK artifact mislabeled live. A real deploy sets ROBBED_DEPLOY_ENV=mainnet and a ` +
         `Gnosis Safe treasury; a fork run yields mode:"fork". Refusing to mint a false-live registry entry.`,
     );
     process.exit(1);
@@ -198,7 +198,7 @@ const sharedBanner = `/**
  *    bun contracts/script/codegen-addresses.ts
  *
  *  Deploy-time codegen (needs a broadcast) — the addresses seam of architecture.md
- *  §4: contracts-pipeline-owned, lives in packages/shared, consumed by the indexer
+ * : contracts-pipeline-owned, lives in packages/shared, consumed by the indexer
  *  config and web \`shared/config/addresses.ts\`. Every consumer selects ITS OWN
  *  chain via \`getDeployment(chainId)\`; local (31337 smoke), testnet (46630) and
  *  live (4663) entries coexist here.
@@ -209,17 +209,17 @@ import type { Address } from "viem";
 /**
  * A 4663 \`fork\` is a mainnet-FORK pipeline run (anvil --fork-url): same chainid as
  * \`live\` but deliberately NOT live so a fork can never masquerade as a real mainnet
- * deployment (§12.55). Consumers that require a canonical mainnet entry MUST assert
+ * deployment. Consumers that require a canonical mainnet entry MUST assert
  * \`mode === "live"\`; the indexer's chain-identity gate does exactly this.
  */
 export type DeploymentMode = "local" | "testnet" | "live" | "fork";
 
-/** The six-contract robbed topology + treasury for one chain (spec §6, §6.6). */
+/** The six-contract robbed topology + treasury for one chain. */
 export interface Deployment {
   chainId: number;
   mode: DeploymentMode;
   deployedAt: number;
-  /** The four singletons (§6) + the treasury Safe (§6.6). */
+  /** The four singletons + the treasury Safe. */
   robbed: {
     curveFactory: Address;
     router: Address;
@@ -227,7 +227,7 @@ export interface Deployment {
     lpFeeVault: Address;
     treasury: Address;
     /**
-     * The Phase-2 pull-payment CreatorVault (spec §7 / §12.63). OPTIONAL +
+     * The Phase-2 pull-payment CreatorVault. OPTIONAL +
      * additive: absent on every v1 deployment (no vault exists until a
      * creator-fee factory is deployed), so the existing entries below stay valid
      * against this shape. Once a creator-fee deploy artifact carries it, codegen
@@ -239,7 +239,7 @@ export interface Deployment {
      */
     creatorVault?: Address;
   };
-  /** Canonical externals wired at deploy (§12.28): WETH + the four Uniswap V3 addrs. */
+  /** Canonical externals wired at deploy : WETH + the four Uniswap V3 addrs. */
   external: {
     weth: Address;
     v3Factory: Address;
@@ -247,7 +247,7 @@ export interface Deployment {
     swapRouter02: Address;
     quoterV2: Address;
   };
-  /** The deploy-time canary launch (§7.2 step 6) — informational; not a user token. */
+  /** The deploy-time canary launch (step 6) — informational; not a user token. */
   canary: { token: Address; curve: Address };
 }
 `;
@@ -275,7 +275,7 @@ mkdirSync(dirname(sharedAddrFile), { recursive: true });
 writeFileSync(sharedAddrFile, sharedBody);
 console.log(`[codegen-addresses] wrote ${sharedAddrFile} (${artifacts.length} chain(s): ${artifacts.map((a) => a.chainId).join(", ")})`);
 
-// NOTE (I-5/§12.55 split): apps/web/src/shared/config/addresses.ts is intentionally
+// NOTE (I-5 split) apps/web/src/shared/config/addresses.ts is intentionally
 // NOT emitted here. It is hand-authored derivation logic (e2e fork-address override,
 // env-selected chain target, registry-derived V3/WETH) importing the generated map
 // above — regenerating it here once clobbered those seams. Codegen owns data only.

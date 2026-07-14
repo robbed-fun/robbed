@@ -1,5 +1,5 @@
 /**
- * Metadata verification suite (indexer.md §6, spec §8.3; M2-7). Covers the
+ * Metadata verification suite (indexer.md, M2-7). Covers the
  * match / mismatch / unfetched verdicts, the backoff + re-verify schedule, the
  * control:reverify seam, and a MUTATION GUARD proving the suite fails if the
  * byte-comparison is stubbed out (never `match` without a real compare).
@@ -81,13 +81,13 @@ describe("decideVerification — the three verdicts", () => {
   });
 });
 
-// ── display-field extraction (§6.1 step 5 → offchain sidecar per §7.3 OI-11) ─
+// ── display-field extraction (step 5 → offchain sidecar per OI-11) ─
 
 describe("display fields extracted from fetched metadata JSON", () => {
   it("match: display carries imageUrl (+ optional description/links)", () => {
     const out = decideVerification({ ok: true, bytes: bytesOf(0) }, FIX.hash);
     expect(out.display).toEqual({
-      imageUrl: "https://cdn.hoodpad.example/images/0xabc.webp",
+      imageUrl: "https://cdn.robbed.example/images/0xabc.webp",
       description: null,
       links: null,
     });
@@ -97,19 +97,19 @@ describe("display fields extracted from fetched metadata JSON", () => {
     const full = METADATA_GOLDEN_FIXTURES[1]!;
     const out = decideVerification({ ok: true, bytes: bytesOf(1) }, full.hash);
     expect(out.status).toBe("match");
-    expect(out.display?.imageUrl).toBe("https://cdn.hoodpad.example/images/0xdef.webp");
+    expect(out.display?.imageUrl).toBe("https://cdn.robbed.example/images/0xdef.webp");
     expect(out.display?.description).toBe("A token for the hood.");
     expect(out.display?.links).toEqual({
-      x: "https://x.com/hoodpad",
-      website: "https://hoodpad.example",
-      telegram: "https://t.me/hoodpad",
+      x: "https://x.com/robbed",
+      website: "https://robbed.example",
+      telegram: "https://t.me/robbed",
     });
   });
 
-  it("mismatch STILL extracts display (content shown, badged — §3.1/§6.1 step 5)", () => {
+  it("mismatch STILL extracts display (content shown, badged — step 5)", () => {
     const out = decideVerification({ ok: true, bytes: bytesOf(0) }, `0x${"00".repeat(32)}`);
     expect(out.status).toBe("mismatch");
-    expect(out.display?.imageUrl).toBe("https://cdn.hoodpad.example/images/0xabc.webp");
+    expect(out.display?.imageUrl).toBe("https://cdn.robbed.example/images/0xabc.webp");
   });
 
   it("failed fetch → display null (store must preserve previous values)", () => {

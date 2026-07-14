@@ -4,9 +4,9 @@ import { MonoLabel } from "./MonoText";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Standalone reusable keyset pager (§12.59). Business-agnostic: it renders Prev /
+ * Standalone reusable keyset pager. Business-agnostic: it renders Prev /
  * Next affordances and calls back — it NEVER sees or parses the opaque cursor (the
- * caller's `useCursorStack` owns that; §12.59 note 1). The common `DataTable`
+ * caller's `useCursorStack` owns that; note 1). The common `DataTable`
  * integrates this, and any other paged surface can render it directly.
  *
  * Single-page tables render nothing (no `hasPrev`/`hasNext`) so an un-paginated

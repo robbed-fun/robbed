@@ -23,10 +23,10 @@ import {IWETH9} from "src/interfaces/external/IWETH9.sol";
 import {TestConstants} from "test/harness/TestConstants.sol";
 import {PoolGriefer} from "test/harness/PoolGriefer.sol";
 
-/// @title Gate-6 economic red-team on the LIVE Robinhood Chain fork (spec §10 gate 6, §2.2)
+/// @title Gate-6 economic red-team on the LIVE Robinhood Chain fork (gate 6)
 /// @notice ADDED BY robbed-security. Read-only audit; TEST ADDITION ONLY — no production-code edit.
 ///         Live-chain confirmation of the deterministic gate-6 sims (`test/economic/*`): the same
-///         adversary patterns against the REAL §12.28 Uniswap V3 Factory/NPM and REAL WETH
+/// adversary patterns against the REAL Uniswap V3 Factory/NPM and REAL WETH
 ///         0x0Bd7..AD73, using the PRODUCTION Router/Migrator/Vault. Env-gated on ROBINHOOD_RPC_URL
 ///         (skips cleanly under the default profile). Run:
 ///         `FOUNDRY_PROFILE=fork ROBINHOOD_RPC_URL=https://rpc.mainnet.chain.robinhood.com forge test

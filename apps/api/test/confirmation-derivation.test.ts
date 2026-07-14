@@ -1,5 +1,5 @@
 /**
- * Read-derivation of `confirmation_state` (OI-11 / spec §12.48c, indexer.md §5).
+ * Read-derivation of `confirmation_state` (OI-11 /, indexer.md).
  * There is no stored per-row column on Ponder tables; the API derives the tier
  * from the watermark sidecar in TWO places that must agree with the ONE shared
  * rule (`stateForBlock`): the TS projection (`projectConfirmation`) and the SQL

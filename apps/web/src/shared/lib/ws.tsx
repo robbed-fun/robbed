@@ -16,9 +16,9 @@ import { env } from "./env";
 import { WsClient, type WsHandler, type WsLike, type WsStatus } from "./ws-client";
 
 /**
- * React binding for the multiplexed `WsClient` (web.md §2.5). Provides:
+ * React binding for the multiplexed `WsClient` (web.md). Provides:
  *   - `useWsChannel(channel, handler)` — ref-counted subscription
- *   - `useConfirmationWatermarks()`   — live safe/finalized blocks (§12.20)
+ * - `useConfirmationWatermarks()` — live safe/finalized blocks
  *   - `useWsStatus()`                 — drives the "Live updates degraded" banner
  *
  * One socket per app; the client is created once and connected for the tree's
@@ -40,7 +40,7 @@ export function WsProvider({
   seedWatermarks,
 }: {
   children: React.ReactNode;
-  /** Optional SSR seed from GET /v1/confirmations (spec §12.20). */
+  /** Optional SSR seed from GET /v1/confirmations. */
   seedWatermarks?: ConfirmationWatermarks;
 }) {
   const queryClient = useQueryClient();
@@ -117,7 +117,7 @@ const EMPTY_WATERMARKS: ConfirmationWatermarks = Object.freeze({
   finalizedBlock: 0,
 });
 
-/** Live confirmation watermark (safe/finalized blocks) — spec §12.20. */
+/** Live confirmation watermark (safe/finalized blocks) —. */
 export function useConfirmationWatermarks(): ConfirmationWatermarks {
   const client = useWsClient();
   return useSyncExternalStore(

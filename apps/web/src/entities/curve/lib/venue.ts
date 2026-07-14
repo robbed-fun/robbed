@@ -1,10 +1,10 @@
 import type { TokenDetail } from "@robbed/shared";
 
 /**
- * Venue selection for the invisible venue switch (§5.2, web.md §3.2).
+ * Venue selection for the invisible venue switch (web.md).
  *
  * The engine is chosen by the INDEXED `status` field (`curve | graduating |
- * graduated`, derived per indexer.md §3.2) — NEVER a user choice, never a client
+ * graduated`, derived per indexer.md) — NEVER a user choice, never a client
  * heuristic. Pure functions so both the TradeWidget (feature) and any status pill
  * read the same rules (proven in tests/venue.test.ts).
  */
@@ -17,9 +17,9 @@ export function venueForStatus(status: TokenStatus): CurveVenue {
 }
 
 /**
- * The `ReadyToGraduate` interstitial (§12.12): the curve is locked at threshold
+ * The `ReadyToGraduate` interstitial : the curve is locked at threshold
  * pending the permissionless `graduate()` — BOTH directions lock. This is a
- * deterministic, permissionlessly-exitable protocol state, NOT a pause (§6.5);
+ * deterministic, permissionlessly-exitable protocol state, NOT a pause;
  * copy must never call it "paused".
  */
 export function isGraduatingLock(status: TokenStatus): boolean {

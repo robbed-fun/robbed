@@ -1,6 +1,6 @@
 # ROBBED_ — Pump.fun-style launchpad on Robinhood Chain
 
-Source of truth: `docs/spec.md` (v1.2). When code and spec disagree, the spec wins; when the spec is silent, ask or record the decision in §12/§13. Contributor process (PR flow, test tiers, validate.sh): `docs/CONTRIBUTING.md`.
+Source of truth: `README.md` + the developer docs under `docs/developers/**` (and the user docs under `docs/users/**`). When code and docs disagree, the docs win; when the docs are silent or self-contradictory, never self-resolve — ask, or record the decision in the design decisions log in `docs/developers/`. Contributor process (PR flow, test tiers, validate.sh): `docs/CONTRIBUTING.md`.
 
 This file is the map. Depth lives beside the code: **every workspace below has its own `CLAUDE.md`** (loaded when you work in that subtree), and policy lives in **`.claude/rules/`** — `spec-authority` + `no-market-metrics` are always on; `solidity-orbit` (contracts), `lp-copy` (web/shared/docs), `anti-drift` (apps/packages), and `docs-placement` (any `*.md`) load with the files they govern. Rule violations are bugs, not style — write-time enforcement is in `.claude/hooks/` (hard-rule grep + forge fmt on write, secret/destructive-command guard, touched-workspace typecheck on stop). Never create plans/trackers/status/progress md files anywhere (docs-placement rule; doc-check enforces).
 
@@ -17,9 +17,9 @@ This file is the map. Depth lives beside the code: **every workspace below has i
 | `packages/shared/` | THE home of cross-service types/schemas/ABIs (Zod-first) + workspace config | robbed-shared |
 | `tools/` | m0 parameter notebook, deploy/Safe tooling, localstack, OG | robbed-architect |
 
-Cross-cutting agents: **robbed-architect** (spec interpretation, decision arbitration, authoring `.claude/` assets — agents/skills/commands go through it) and **robbed-security** (spec §10 gate sign-off; adversarial — it refutes, never fixes).
+Cross-cutting agents: **robbed-architect** (docs interpretation, decision arbitration, authoring `.claude/` assets — agents/skills/commands go through it) and **robbed-security** (security-gate sign-off; adversarial — it refutes, never fixes).
 
-Monorepo: **pnpm workspaces** (one `pnpm-lock.yaml`, `workspace:*` internal deps, catalogs for shared lib versions); **Bun stays the runtime and test runner** (§8/§9).
+Monorepo: **pnpm workspaces** (one `pnpm-lock.yaml`, `workspace:*` internal deps, catalogs for shared lib versions); **Bun stays the runtime and test runner** (see `docs/developers/architecture.md`).
 
 ## Golden commands
 
@@ -32,12 +32,12 @@ Monorepo: **pnpm workspaces** (one `pnpm-lock.yaml`, `workspace:*` internal deps
 - Gas token ETH; ~100ms blocks; single FCFS sequencer — priority fees do not jump the queue. Explorer: robinhoodchain.blockscout.com.
 - WETH: `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73`
 - Uniswap v2 Factory `0x8bceaa40b9acdfaedf85adf4ff01f5ad6517937f`, v2 Router02 `0x89e5db8b5aa49aa85ac63f691524311aeb649eba`
-- **Uniswap v3 confirmed on 4663 (§12.28)** — Factory `0x1f7d7550B1b028f7571E69A784071F0205FD2EfA`, NonfungiblePositionManager `0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3`, SwapRouter02 `0xcaf681a66d020601342297493863e78c959e5cb2`, QuoterV2 `0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7`. Trade fee stays 1%.
-- Confirmation tiers everywhere in UX: soft-confirmed → posted-to-L1 → finalized (§2.1).
+- **Uniswap v3 confirmed on 4663** (decision recorded in the design decisions log in `docs/developers/`) — Factory `0x1f7d7550B1b028f7571E69A784071F0205FD2EfA`, NonfungiblePositionManager `0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3`, SwapRouter02 `0xcaf681a66d020601342297493863e78c959e5cb2`, QuoterV2 `0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7`. Trade fee stays 1%.
+- Confirmation tiers everywhere in UX: soft-confirmed → posted-to-L1 → finalized (see `docs/developers/architecture.md`).
 
 ## Milestones & gates
 
-M0 parameter notebook → M1 contracts + gates 1–4 → M2 indexer/API → M3 frontend → M4 gates 5–8 → M5 caps lift. All 10 security gates (spec §10) are required before caps lift. Portfolio/creator-fees/4337 are Phase 2 — but schema tracks `creator` per token and `creatorFeeBps` (hardcoded 0) from day 1.
+M0 parameter notebook → M1 contracts + gates 1–4 → M2 indexer/API → M3 frontend → M4 gates 5–8 → M5 caps lift. All 10 security gates (documented in `docs/developers/threat-model.md`) are required before caps lift. Portfolio/creator-fees/4337 are Phase 2 — but schema tracks `creator` per token and `creatorFeeBps` (hardcoded 0) from day 1.
 
 ## MCP (`.mcp.json`, committed)
 

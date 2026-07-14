@@ -16,7 +16,7 @@ import { tokenCard } from "./fixtures";
 
 /**
  * Event-tape domain model (Discover, ROBBED_ redesign). Proves the tape wires
- * LIVE indexer/WS data and never fabricates aggregates (§2):
+ * LIVE indexer/WS data and never fabricates aggregates :
  *  - a trade event carries ONLY its indexer-supplied `ethAmount` — no mcap/Δ%;
  *  - mcap/Δ% are resolved from the token registry by reference;
  *  - filter tabs partition events by kind; the buffer prepends + caps.
@@ -68,7 +68,7 @@ function graduated(over: Partial<WsGraduatedData> = {}): WsGraduatedData {
   };
 }
 
-describe("event-tape model — §2 no fabricated aggregates", () => {
+describe("event-tape model — no fabricated aggregates", () => {
   it("maps a buy trade to a BUY event carrying only the indexer ethAmount", () => {
     const e = tradeToEvent(trade({ isBuy: true }), 1);
     expect(e.kind).toBe("buy");

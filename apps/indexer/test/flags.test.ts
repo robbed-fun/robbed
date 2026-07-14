@@ -1,5 +1,5 @@
 /**
- * §8.5 bot/farm heuristics suite (indexer.md §8.5/§9.1, spec §8.5; M2-13).
+ * bot/farm heuristics suite (indexer.md, M2-13).
  * Drives the PURE `runFlowAnalysis` + per-heuristic classifiers — the same code
  * the flow job runs. Advisory ONLY: this suite asserts labels + organic ranges,
  * and that no export gates a trade/listing (there is no such code path).
@@ -161,7 +161,7 @@ describe("arb/exit (heuristic 5)", () => {
   });
 });
 
-// ── Organic-holder % as a RANGE (§5.2 no false precision) ───────────────────
+// ── Organic-holder % as a RANGE (no false precision) ───────────────────
 
 describe("organic-holder % is a range", () => {
   it("low counts every flag; high counts only strong flags (farm/wash)", () => {
@@ -225,8 +225,8 @@ describe("funder-cluster vol share", () => {
 
 // ── Config, not literals ────────────────────────────────────────────────────
 
-describe("thresholds are config (spec §8.5 defaults, env-overridable)", () => {
-  it("defaults match spec §8.5 v1", () => {
+describe("thresholds are config (defaults, env-overridable)", () => {
+  it("defaults match v1", () => {
     const t = loadFlowThresholds({});
     expect(t.funderMinWallets).toBe(20);
     expect(t.microTransferWei).toBe(1_000_000_000_000_000n);

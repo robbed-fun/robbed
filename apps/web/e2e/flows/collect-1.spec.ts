@@ -16,7 +16,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:COLLECT-1 — LP fee sweep · tx `collect(tokenId)` (§6.3/§6.6)
+// @flow:COLLECT-1 — LP fee sweep · tx `collect(tokenId)`
 // assertable-layers: on-chain · indexed   (N/A UI: no v1 page surface — waiver)
 test(
   "COLLECT-1 permissionless LPFeeVault.collect routes fees to the fixed treasury",
@@ -55,7 +55,7 @@ test(
       const receipt = await publicClient.waitForTransactionReceipt({ hash: collectHash });
       expect(receipt.status).toBe("success");
       const treasuryAfter = await publicClient.getBalance({ address: ROLES.treasury.address });
-      // Fees route to the fixed treasury; principal is never withdrawn (§6.3).
+      // Fees route to the fixed treasury; principal is never withdrawn.
       expect(treasuryAfter >= treasuryBefore).toBe(true);
     });
 

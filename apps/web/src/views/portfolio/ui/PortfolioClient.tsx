@@ -16,10 +16,10 @@ import { PortfolioSummaryHeader } from "./PortfolioSummaryHeader";
  * an explicit `?address=` (viewing someone else) takes precedence, else the
  * connected wallet. With neither, the page is a connect prompt — Portfolio is
  * inherently wallet-scoped, so there is nothing to fetch until an address exists
- * (api.md §3.4a: any address resolves to at worst an EMPTY portfolio, so a
+ * (api.md : any address resolves to at worst an EMPTY portfolio, so a
  * connected-but-never-traded wallet still renders fully).
  *
- * DECISION (hoodpad-frontend): tab state is local (not URL) — the three tabs are
+ * DECISION (robbed-frontend): tab state is local (not URL) — the three tabs are
  * a view-local switch, and the address (the shareable unit) already lives in the
  * route/query. `TabBar`/`Tab` are the shared terminal atoms (read-only).
  */

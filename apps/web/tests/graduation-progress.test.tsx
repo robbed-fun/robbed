@@ -7,7 +7,7 @@ import { GraduationProgress } from "@/shared/ui";
  * GraduationProgress — the shared presentational graduation indicator used by the
  * Discover card (compact) and the token-detail SafetyStrip (full). It performs no
  * fetch / on-chain read; every value arrives via props (the graduation threshold
- * included — never hardcoded, spec §2). These prove: pct + a11y progressbar, the
+ * included — never hardcoded). These prove: pct + a11y progressbar, the
  * three `tokenStatusSchema` states, and the full-vs-compact rendering contract.
  */
 
@@ -80,7 +80,7 @@ describe("GraduationProgress", () => {
     });
   });
 
-  describe("graduating — §12.12 ready-to-graduate lock window", () => {
+  describe("graduating — ready-to-graduate lock window", () => {
     it("shows the Graduating pill (compact)", () => {
       render(
         <GraduationProgress variant="compact" status="graduating" progressPct={99} />,

@@ -4,7 +4,7 @@ import { formatUsd } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * USD figure that ALWAYS discloses its source + timestamp (spec §2). Never a
+ * USD figure that ALWAYS discloses its source + timestamp. Never a
  * bare/constant USD number — `formatUsd` throws without a live
  * `{ usd, ethUsd, asOf }` snapshot (proven by tests/format.test.ts), so a
  * hardcoded market metric can never reach the DOM. The source/asOf disclosure is

@@ -83,7 +83,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("curve BUY carries an explicit pre-estimated gas limit (§ fix)", () => {
+describe("curve BUY carries an explicit pre-estimated gas limit (fix)", () => {
   it("estimates node-side, then writes buy with gas = 2× the estimate", async () => {
     m.estimateContractGas.mockResolvedValue(233_000n);
     const { result } = renderHook(() => useTradeSubmit(tokenDetail({ status: "curve" })));
@@ -201,8 +201,11 @@ describe("a genuine estimate revert is surfaced, not swallowed", () => {
 
     // The write NEVER happened — we didn't blindly proceed past the revert.
     expect(m.writeContractAsync).not.toHaveBeenCalled();
-    // The user sees WHY (mapped from the shortMessage), not MetaMask's opaque copy.
-    expect(result.current.error).toBe("Price moved past your slippage — retry.");
+    // The user sees WHY: the central humanizer maps the V3 "too little received"
+    // require-string (via the reason fallback) to the slippage message.
+    expect(result.current.error).toBe(
+      "Price moved past your slippage — retry, or raise your slippage tolerance.",
+    );
     // The optimistic row is rolled back (it never reached chain).
     expect(m.optimistic.reject).toHaveBeenCalledTimes(1);
     expect(m.optimistic.attachHash).not.toHaveBeenCalled();

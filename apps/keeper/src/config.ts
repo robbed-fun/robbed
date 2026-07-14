@@ -28,7 +28,7 @@ const schema = z.object({
   // Balance watch: warn when balance < MULTIPLE × (typicalGraduateGas × gasPrice).
   KEEPER_BALANCE_POLL_MS: z.coerce.number().int().positive().default(60_000),
   KEEPER_BALANCE_WARN_MULTIPLE: z.coerce.number().int().positive().default(20),
-  // §12.62 fork-measured worst case ≈817,845; MIGRATION_GAS_ESTIMATE=1.5M is the
+  // fork-measured worst case ≈817,845; MIGRATION_GAS_ESTIMATE=1.5M is the
   // documented headroom figure used for the balance threshold (NOT the tx gas —
   // that is estimated live per-curve; this only sizes the low-balance alert).
   KEEPER_TYPICAL_GRADUATE_GAS: z.coerce.bigint().positive().default(1_500_000n),

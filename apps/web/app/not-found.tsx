@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Button } from "@/shared/ui";
 
-/** Global 404 boundary (web.md §2.1). */
+/** Global 404 boundary (web.md). */
 export default function NotFound() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 px-4 text-center">

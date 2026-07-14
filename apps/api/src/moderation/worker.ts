@@ -1,5 +1,5 @@
 /**
- * Moderation worker — the X-10 `TokenCreated` observation seam (§4.4). The API
+ * Moderation worker — the X-10 `TokenCreated` observation seam. The API
  * has NO chain subscription and a read-only DB role on indexer tables, so it
  * cannot watch `TokenCreated` directly. The indexer already publishes `launch`
  * on `global:launches`; this worker subscribes, and per launch: runs the token-

@@ -1,12 +1,12 @@
 /**
- * Top-holders table (§5.2/§12.58) — SERVER-side sorted + keyset-paginated
- * (§12.59). `?sort` comes from the shared closed allowlist (`holderListQuerySchema`
+ * Top-holders table — SERVER-side sorted + keyset-paginated
+ *. `?sort` comes from the shared closed allowlist (`holderListQuerySchema`
  * → 400 on anything else — the ORDER BY security boundary): rank/amount/percent →
  * balance, address → holder, label → a deterministic role/flag CASE. First page
  * (default limit) is the top-N view. Every row carries its true balance-desc
  * `rank` (ROW_NUMBER over the whole token) plus the creator/curve/lp_pool/vault
  * flags and v1.2 advisory `botFlags`/`clusterId` from indexer `address_flags`
- * (computed at query time — indexer.md §3.6). Uniform `{ items, nextCursor }`.
+ * (computed at query time — indexer.md). Uniform `{ items, nextCursor }`.
  */
 import { Hono } from "hono";
 import { addressSchema, holderListQuerySchema, paginatedHoldersResponseSchema } from "@robbed/shared";

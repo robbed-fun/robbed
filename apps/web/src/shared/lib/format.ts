@@ -2,12 +2,12 @@ import { formatEther, formatUnits, getAddress } from "viem";
 import type { UsdValue } from "@robbed/shared";
 
 /**
- * Display formatting (web.md §7). NO market metric is ever inlined here (§2);
+ * Display formatting (web.md). NO market metric is ever inlined here;
  * these are pure formatters over live values. USD is renderable ONLY with a live
  * `{ usd, ethUsd, asOf }` object — `formatUsd` throws otherwise, so a bare USD
  * figure can never reach the DOM (proven by tests/format.test.ts).
  *
- * WAVE-1 fidelity contract (basis: the ratified redesign, spec §12.50, sampled 2026-07-11):
+ * WAVE-1 fidelity contract (basis: the ratified redesign, sampled 2026-07-11):
  * - ETH amounts are ZERO-PADDED to a fixed decimal count, never trimmed —
  *   the mockup tape reads "0.4200 ETH" / "1.2000 ETH", the portfolio reads
  *   "1.40 ETH" (2 dec). Callers pick the count via `decimals` (default 4).
@@ -164,7 +164,7 @@ export function shortAddress(address: string): string {
 }
 
 /**
- * Render a USD figure — ONLY from a live snapshot object (§2). There is no code
+ * Render a USD figure — ONLY from a live snapshot object. There is no code
  * path that produces a USD string without `{ usd, ethUsd, asOf }`; callers that
  * lack it must show the ETH denomination instead. Returns the figure plus the
  * source/timestamp the UI must disclose on hover.
@@ -178,13 +178,13 @@ export function formatUsd(value: UsdValue | null | undefined): {
   if (!value || value.usd === undefined || value.asOf === undefined) {
     throw new Error(
       "[robbed/web] formatUsd requires a live { usd, ethUsd, asOf } snapshot — " +
-        "USD is never rendered without a source + timestamp (spec §2).",
+        "USD is never rendered without a source + timestamp.",
     );
   }
   const usdNum = Number(value.usd);
   // Full precision, NOT compact — the value is rendered VERBATIM from the indexer
   // payload so the exact figure the user sees is the exact figure the indexer
-  // priced (§2 source-fidelity; asserted by tests/discover-card.test.tsx).
+  // priced (source-fidelity; asserted by tests/discover-card.test.tsx).
   const text = Number.isFinite(usdNum)
     ? new Intl.NumberFormat("en-US", {
         style: "currency",

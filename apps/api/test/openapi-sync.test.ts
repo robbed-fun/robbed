@@ -29,7 +29,7 @@ const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete", "head", "
  * Deliberate Hono-path → documented-path aliases. ONLY entry: the OG card
  * route matches `/v1/og/:file` at runtime (accepts `{address}` and
  * `{address}.png`), while the contract documents the canonical
- * `/v1/og/{address}.png` form (api.md §3.5a).
+ * `/v1/og/{address}.png` form (api.md).
  */
 const ALIASES: Record<string, string> = {
   "/v1/og/{file}": "/v1/og/{address}.png",

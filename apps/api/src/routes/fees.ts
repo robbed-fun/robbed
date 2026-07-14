@@ -1,5 +1,5 @@
 /**
- * Treasury fee dashboard (§6.4, api.md §3.4). `collected` sums indexed
+ * Treasury fee dashboard (api.md). `collected` sums indexed
  * `fee_collections`; `uncollected` is a COLD, 60s-cached NPM `tokensOwed` RPC
  * read behind the `UncollectedFeesReader` interface — deliberately kept out of
  * the WS/publish hot path (the <500ms budget is a hot-path constraint; the

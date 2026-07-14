@@ -1,5 +1,5 @@
 /**
- * §8.4 STRUCTURAL guarantee: no API path can mutate or depend on mutating chain
+ * STRUCTURAL guarantee: no API path can mutate or depend on mutating chain
  * state. This test scans the whole `src/` tree and asserts that NO chain-write /
  * signer / wallet primitive is imported anywhere — moderation gates listing
  * visibility only. If someone later imports a wallet client into a route, this
@@ -38,7 +38,7 @@ const FORBIDDEN = [
   "pauseCreates",
 ];
 
-describe("route inventory — no chain-write capability (§8.4)", () => {
+describe("route inventory — no chain-write capability ", () => {
   for (const token of FORBIDDEN) {
     it(`does not reference \`${token}\` anywhere in src/`, () => {
       const hits = corpus.filter((c) => c.text.includes(token)).map((c) => c.f);

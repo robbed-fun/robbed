@@ -1,6 +1,6 @@
 /**
- * lib/curve.ts — virtual-reserve constant-product math (spec §6.2, Gnad math hardened)
- * and the M0 constants solver (spec §6.4 targets, §12.11 net-of-fee threshold).
+ * lib/curve.ts — virtual-reserve constant-product math (Gnad math hardened)
+ * and the M0 constants solver (targets, net-of-fee threshold).
  *
  * All quantities are wei-scale bigints (both ETH and token use 18 decimals, so a
  * price "ETH per token" is numerically identical as a wei/wei ratio).
@@ -9,12 +9,12 @@
  * Let T = total supply, S = curve supply, L = LP tranche (S + L = T),
  * p = graduation spot price (ETH-wei per token-wei, as ratio pNum/pDen),
  * F = flat graduation fee, R = graduation caller reward,
- * G = GRADUATION_ETH (net-of-trade-fee real reserves, §12.11).
+ * G = GRADUATION_ETH (net-of-trade-fee real reserves).
  *
- * Buy:  tokensOut = vT − k/(vE + ethInNet),  k = vE·vT   (§6.2)
+ * Buy: tokensOut = vT − k/(vE + ethInNet), k = vE·vT
  * Sell: ethOutNet = vE − k/(vT + tokensIn)               (inverse)
  * The 1% trade fee is taken on the ETH leg BEFORE curve math, so G counts
- * net ETH — this matches resolved decision §12.11 (threshold = net-of-fee
+ * net ETH — this matches resolved decision (threshold = net-of-fee
  * real reserves, i.e. exactly what is available to fund the LP + grad fee).
  *
  * Constraints:
@@ -31,7 +31,7 @@
  *        vE0 = p · (L + f)² / (2S − T − f)
  *        G   = p · (L + f)
  * With F = R = 0 this reduces to vT0 = S²/(2S−T) ≈ 1.0731 × 10⁹ tokens for the
- * §6.4 pump.fun split — reproducing pump.fun's published 1.073B virtual token
+ * pump.fun split — reproducing pump.fun's published 1.073B virtual token
  * reserve, which confirms the closure is the pump.fun-parity one.
  */
 
@@ -43,7 +43,7 @@ export interface CurveTargets {
   curveSupplyWei: bigint;
   lpTrancheWei: bigint;
   /**
-   * Flat graduation fee, wei — COST-BASED (spec §12.26): sized to ≈ V3-migration
+   * Flat graduation fee, wei — COST-BASED : sized to ≈ V3-migration
    * gas × gasPrice × thin margin in derive.ts. NOT a %-of-raise and never a
    * hardcoded USD figure. Because it is a flat constant (independent of the
    * realized raise G), constraint (c) reduces to G = p·L + F + R.
@@ -57,8 +57,8 @@ export interface CurveConstants {
   virtualEthWei: bigint;
   virtualTokenWei: bigint;
   k: bigint;
-  graduationEthWei: bigint; // net-of-trade-fee real reserves at graduation (§12.11)
-  graduationFeeWei: bigint; // flat, deducted from G at graduation (§6.3 step 1)
+  graduationEthWei: bigint; // net-of-trade-fee real reserves at graduation
+  graduationFeeWei: bigint; // flat, deducted from G at graduation (step 1)
   callerRewardWei: bigint;
   ethToLpWei: bigint; // G − F − R : WETH leg of the full-range mint
   feeTokensWei: bigint; // f = (F+R)/p
@@ -73,7 +73,7 @@ export function solveCurveConstants(t: CurveTargets): CurveConstants {
 
   // p·L (value of LP tranche at graduation price)
   const pL = (num * L) / den;
-  // Cost-based flat graduation fee (§12.26): F is a fixed wei constant, so
+  // Cost-based flat graduation fee : F is a fixed wei constant, so
   // constraint (c) G − F − R = p·L solves directly, G = p·L + F + R.
   const F = t.graduationFeeWei;
   const G = pL + F + t.callerRewardWei;
@@ -94,7 +94,7 @@ export function solveCurveConstants(t: CurveTargets): CurveConstants {
   // the clamped final buy can never oversell the curve). Wei-level shift only.
   const gExact = k / (vT0 - S) - vE0;
   if (gExact <= 0n) throw new Error("infeasible: non-positive graduation threshold");
-  // Flat cost-based fee is a constant, not re-derived from the realized raise (§12.26).
+  // Flat cost-based fee is a constant, not re-derived from the realized raise.
   const fExact = F;
   const ethToLpExact = gExact - fExact - t.callerRewardWei;
   if (ethToLpExact <= 0n) throw new Error("infeasible: graduation fee + caller reward exceed net raise");
@@ -149,7 +149,7 @@ export interface SimResult {
   buys: number;
   sells: number;
   graduated: boolean;
-  realEthWei: bigint; // net reserves at end (== G on graduation, §12.11 clamp)
+  realEthWei: bigint; // net reserves at end (== G on graduation, clamp)
   grossEthInWei: bigint; // total gross ETH spent by buyers (incl. 1% fee)
   tradeFeesWei: bigint; // accumulated 1% ETH-leg fees (both directions)
   tokensSoldWei: bigint;
@@ -160,12 +160,12 @@ export interface SimResult {
 }
 
 /**
- * Round-trip validation (m0-notebook §Validation): buy the full curve in
+ * Round-trip validation (m0-notebook Validation) buy the full curve in
  * randomized fuzzed chunks (with occasional sells), assert:
  *  - k = vE·vT never decreases,
  *  - reserves never go negative, curve never oversells CURVE_SUPPLY,
  *  - graduation triggers exactly when net reserves hit G (final buy clamped,
- *    excess refunded — §12.11),
+ * excess refunded —),
  *  - terminal spot price matches the target graduation price.
  */
 export function simulateFullCurve(
@@ -220,7 +220,7 @@ export function simulateFullCurve(
       let net = gross - fee;
       const needed = G - realEth;
       if (net >= needed) {
-        // §12.11: final buy clamped to land exactly on the threshold; excess refunded.
+        // : final buy clamped to land exactly on the threshold; excess refunded.
         net = needed;
         fee = ceilDiv(net * tradeFeeBps, BPS - tradeFeeBps); // fee on the used portion
         gross = net + fee;

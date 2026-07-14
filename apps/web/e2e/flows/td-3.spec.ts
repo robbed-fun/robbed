@@ -16,7 +16,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:TD-3 — Sell pre-grad (curve) · tx type `sell` (§5.2/§6.5)
+// @flow:TD-3 — Sell pre-grad (curve) · tx type `sell`
 // assertable-layers: on-chain · indexed · UI
 test(
   "TD-3 curve sell (never gated by any pause flag) reconciles to indexed truth",
@@ -34,7 +34,7 @@ test(
       await sel.sellTab(page).click();
       await sel.maxButton(page).click();
       await sel.submitTrade(page).click();
-      // §12.56: soft-confirmed chip removed — prove the optimistic row via the feed row.
+      // : soft-confirmed chip removed — prove the optimistic row via the feed row.
       await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 10_000 });
     });
 

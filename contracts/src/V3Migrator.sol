@@ -28,20 +28,20 @@ import {
     InsufficientLiquidityMinted
 } from "./errors/Errors.sol";
 
-/// @title V3Migrator — graduation executor, Option B (spec §6.3, §6.3.2, §12.1, §12.11, §12.13;
-///        contracts.md §2.5, §3.4)
+/// @title V3Migrator — graduation executor, Option B (,
+/// contracts.md)
 /// @notice Ownerless, stateless-per-token executor. Owns two jobs: (1) create + initialize the
 ///         token/WETH 1% V3 pool at the deterministic graduation price at token-CREATION time
-///         (`initializePool`, the pre-seed defense §6.3.2); (2) at graduation (`migrate`), read the
+/// (`initializePool`, the pre-seed defense); (2) at graduation (`migrate`), read the
 ///         pool's live `slot0`, ARB the price back to target using curve inventory in a bounded loop
 ///         — reverting rather than ever minting into a hostile ratio — then mint a full-range LP
 ///         position (LP tranche + raised WETH) whose NFT goes to the {LPFeeVault}, and register the
-///         graduating curve's creator with that vault (§12.69 — binds the post-graduation 50/50 fee
+/// graduating curve's creator with that vault (— binds the post-graduation 50/50 fee
 ///         split's creator beneficiary; see decision #6). Implements `IUniswapV3SwapCallback` so the
-///         arb-back needs NO external SwapRouter. LP copy (§12.14 as amended by §12.69): "LP principal
+/// arb-back needs NO external SwapRouter. LP copy (as amended by) "LP principal
 ///         permanently locked; trading fees split between treasury and creator" — never "burned".
 ///
-/// @dev Load-bearing engineering decisions (recorded for the hoodpad-security gate):
+/// @dev Load-bearing engineering decisions (recorded for the robbed-security gate):
 ///
 ///      1. **Reverting-treasury CANNOT lock graduation (TM-T1, graduation-fee leg).** The flat
 ///         graduation fee AND the residual WETH dust are paid to the treasury as **WETH via
@@ -50,7 +50,7 @@ import {
 ///         hostile/mispointed `treasury` (threat-model UM-1/UM-2) can never revert it and can never
 ///         freeze `graduate()`. This is the guarantee-preserving alternative to a native-ETH
 ///         pull-accumulator: it needs no extra state or function, pays the treasury AT graduation
-///         (not later), and changes no product guarantee (fee still → treasury first, §6.3 step 1).
+/// (not later), and changes no product guarantee (fee still → treasury first, step 1).
 ///         The only native-ETH send in the whole graduation flow is the curve's CALLER_REWARD to
 ///         `graduate()`'s caller — if that caller rejects ETH only THEIR attempt reverts; anyone
 ///         else may retry (handled in {BondingCurve.graduate}). No treasury-lock vector remains.
@@ -68,14 +68,14 @@ import {
 ///             dust + `LP_TOKEN_TRANCHE · slippageBps`). PRIOR BUG: the floor was the full
 ///             `LP_TOKEN_TRANCHE`, but the curve forwards ≈ exactly `LP_TOKEN_TRANCHE` at graduation
 ///             (rounding favours the curve → only dust above), so a token-overpriced pool gave
-///             `budget ≈ 0 → ArbBudgetExceeded`, freezing the curve in `ReadyToGraduate` (§12.12)
+/// `budget ≈ 0 → ArbBudgetExceeded`, freezing the curve in `ReadyToGraduate`
 ///             while the attacker kept a withdrawable position — the token side could NOT self-correct
 ///             even within tolerance. Fixed to mirror the WETH leg below.
 ///           • **WETH leg** (pool token-underpriced → buy token with WETH to push price up): the
 ///             mint's WETH requirement is the FULL `wethForMint`; the arb may spend at most
 ///             `MIGRATION_SLIPPAGE_BPS` of it (`wethArbBudget = wethForMint · slippageBps / 1e4`).
 ///         Both legs bound the position's under-funding on their side — hence the $69k parity
-///         (§12.11) — to `MIGRATION_SLIPPAGE_BPS`. The mint reads the LIVE (arb-adjusted) balances as
+/// — to `MIGRATION_SLIPPAGE_BPS`. The mint reads the LIVE (arb-adjusted) balances as
 ///         its `amountDesired` on BOTH sides; whichever side the arb reduced becomes the binding side
 ///         at the fixed target ratio, and the mint's `amount0Min`/`amount1Min` (each = the PRE-arb
 ///         `LP_TOKEN_TRANCHE` / `wethForMint` × `(1 − slippageBps)`) INDEPENDENTLY re-enforce the
@@ -83,10 +83,10 @@ import {
 ///         depth). When the needed leg's budget is exhausted while still off-target →
 ///         `ArbBudgetExceeded`; when iterations run out still off-target → `PoolPriceUnrecoverable`.
 ///         Both revert the whole `graduate()`, leaving the curve `ReadyToGraduate` and permissionlessly
-///         retriable — never a hostile mint (spec §6.3.2). Residual mispricing BEYOND the
+/// retriable — never a hostile mint. Residual mispricing BEYOND the
 ///         slippage-recoverable range still reverts (retriable once the pool corrects); fully closing
 ///         that frozen window is the UM-2 caps-lift disposition (gate-6 cost proof or an escape hatch
-///         that would touch the §12.12 two-way lock) — escalated to the architect, NOT decided here.
+/// that would touch the two-way lock) — escalated to the architect, NOT decided here.
 ///         Alternatives weighed: (a) a single shared budget — rejected, it lets one leg silently drain
 ///         the other's mint floor; (b) a dedicated `maxWethArbBps`/`maxTokenArbBps` immutable pair —
 ///         folded into the single `MIGRATION_SLIPPAGE_BPS` since all express the same value-skew
@@ -117,7 +117,7 @@ import {
 ///         donation-inflated `wethForMint` demanded `≈ (W* + donation)·(1 − MIGRATION_SLIPPAGE_BPS)`,
 ///         which `NPM.mint` cannot deposit once `donation > W*·bps/(1−bps)` (~0.08 ETH on the
 ///         fixture) → "Price slippage check" revert → `graduate()` reverts → curve permanently frozen
-///         in `ReadyToGraduate` (both directions locked, §12.12). Fix: anchor `amount1Min` to
+/// in `ReadyToGraduate` (both directions locked). Fix: anchor `amount1Min` to
 ///         `min(wethForMint, W*)·(1 − bps)` (== `W*·(1 − bps)` whenever a donation is present), so the
 ///         floor is invariant to donations and the surplus surfaces as WETH dust to the treasury
 ///         (already the `_settleDust` design intent). `amountDesired` stays the LIVE balance on both
@@ -132,9 +132,9 @@ import {
 ///         — anchored to the FIXED `lpTranche`). Proven by the F-1 unit regression (`Migrator.t.sol`,
 ///         scanning 0.08–1.0 ETH donations) + the gate-3 fork lifecycle's above-threshold donation.
 ///
-///      6. **Creator registration at graduation (§12.69 — post-graduation 50/50 fee split).** The
+/// 6. **Creator registration at graduation (post-graduation 50/50 fee split).** The
 ///         graduated LP position's post-graduation V3 fees split 50/50 treasury/creator at
-///         `LPFeeVault.collect()`, so the vault must know each `tokenId`'s creator. §12.69(B) ratified
+/// `LPFeeVault.collect()`, so the vault must know each `tokenId`'s creator. ratified
 ///         passing `abi.encode(creator)` through `safeTransferFrom` into the vault's
 ///         `onERC721Received`. VERIFIED against the real v3-periphery `NonfungiblePositionManager`
 ///         (github.com/Uniswap/v3-periphery `mint`): it mints via `_mint` (NOT `_safeMint`), so
@@ -144,14 +144,14 @@ import {
 ///         calling curve's immutable (`IBondingCurve(msg.sender).creator()` — authoritative, snapshot
 ///         at birth) and calls `vault.registerCreator(tokenId, creator)` in this same graduation tx.
 ///         Set-once + migrator-gated (the vault authenticates `msg.sender == factory.migrator()`), so
-///         it is unspoofable and captured at the authoritative moment (§12.69(B) properties intact,
-///         mechanism swapped for one that actually works — the §12.69(B) transfer-data spec text is
+/// it is unspoofable and captured at the authoritative moment (properties intact,
+/// mechanism swapped for one that actually works — the transfer-data spec text is
 ///         flagged to the architect as non-functional against this NPM).
 contract V3Migrator is IV3Migrator {
     using SafeERC20 for IERC20;
 
     uint256 private constant BPS = 10_000;
-    /// @dev "Burn" sink for residual token dust — LaunchToken has no burn fn (spec §12.13).
+    /// @dev "Burn" sink for residual token dust — LaunchToken has no burn fn.
     address private constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
     // ─────────────────────────────── Immutables ────────────────────────────────
@@ -183,7 +183,7 @@ contract V3Migrator is IV3Migrator {
     uint16 public immutable override MIGRATION_SLIPPAGE_BPS;
 
     /// @inheritdoc IV3Migrator
-    uint24 public constant override FEE_TIER = 10_000; // 1% tier (spec §12.1)
+    uint24 public constant override FEE_TIER = 10_000; // 1% tier
     /// @inheritdoc IV3Migrator
     int24 public constant override TICK_LOWER = -887_200; // full range at spacing 200
     /// @inheritdoc IV3Migrator
@@ -198,12 +198,12 @@ contract V3Migrator is IV3Migrator {
     // ─────────────────────────── Construction config ───────────────────────────
 
     /// @notice Deploy-time configuration. Every market-dependent value originates from
-    ///         `tools/m0/out/constants.json` via the deploy script — never inlined (spec §2, §6.4).
-    ///         V3 addresses are the §12.28-confirmed registry values (never invented).
+    /// `tools/m0/out/constants.json` via the deploy script — never inlined.
+    /// V3 addresses are the -confirmed registry values (never invented).
     struct MigratorInit {
         address factory; // ROBBED_ CurveFactory
-        address v3Factory; // Uniswap V3 Factory (§12.28)
-        address positionManager; // NonfungiblePositionManager (§12.28)
+        address v3Factory; // Uniswap V3 Factory
+        address positionManager; // NonfungiblePositionManager
         address weth; // canonical WETH
         address vault; // LPFeeVault
         uint160 sqrtPriceToken0X96; // graduation price, launch token = token0 (M0)
@@ -243,7 +243,7 @@ contract V3Migrator is IV3Migrator {
     /// @dev onlyFactory. Idempotent: `createAndInitializePoolIfNecessary` no-ops if the pool is
     ///      already initialized. If an attacker pre-created/initialized the pool at a hostile price
     ///      the init is skipped (`preExisting = true`) — tolerated by design because `migrate` never
-    ///      trusts `slot0` and always arbs it back (defense in depth, spec §6.3.2).
+    /// trusts `slot0` and always arbs it back (defense in depth).
     function initializePool(address token) external override returns (address pool) {
         if (msg.sender != factory) revert NotFactory();
         address weth_ = weth;
@@ -275,7 +275,7 @@ contract V3Migrator is IV3Migrator {
         uint256 lpTranche;
         uint256 gradFee;
         address treasury;
-        // §12.69: the graduating curve's creator, read from the calling curve's immutable at migrate
+        // : the graduating curve's creator, read from the calling curve's immutable at migrate
         // time and registered with the vault right after the mint so post-graduation V3 fees split
         // 50/50 treasury/creator at collect(). Authoritative source (the curve snapshots it at birth).
         address creator;
@@ -284,7 +284,7 @@ contract V3Migrator is IV3Migrator {
     /// @inheritdoc IV3Migrator
     /// @dev onlyCurve. Receives the curve's ENTIRE ETH balance minus caller-reward/accruedFees (as
     ///      `msg.value`) and, before this call, the curve's ENTIRE token balance. Full sequence in
-    ///      contracts.md §3.4. Any revert here propagates to `graduate()`, leaving the curve
+    /// contracts.md. Any revert here propagates to `graduate()`, leaving the curve
     ///      `ReadyToGraduate` (retriable) — NEVER a hostile mint.
     function migrate(address token) external payable override returns (uint256 tokenId, uint128 liquidity) {
         if (!ICurveFactory(factory).isCurve(msg.sender)) revert NotCurve();
@@ -292,7 +292,7 @@ contract V3Migrator is IV3Migrator {
         Ctx memory c;
         c.token = token;
         c.treasury = ICurveFactory(factory).treasury();
-        c.creator = IBondingCurve(msg.sender).creator(); // §12.69 post-grad fee-split beneficiary
+        c.creator = IBondingCurve(msg.sender).creator(); // post-grad fee-split beneficiary
         c.tokenIsToken0 = token < weth;
         c.targetSqrt = c.tokenIsToken0 ? SQRT_PRICE_TOKEN0_X96 : SQRT_PRICE_TOKEN1_X96;
         c.targetTick = c.tokenIsToken0 ? TARGET_TICK_TOKEN0 : TARGET_TICK_TOKEN1;
@@ -307,7 +307,7 @@ contract V3Migrator is IV3Migrator {
         // Wrap the whole raise to WETH up front. The graduation fee is then paid in WETH, which has
         // no recipient callback — a hostile treasury cannot revert it (TM-T1, decision #1).
         IWETH9(weth).deposit{value: msg.value}();
-        if (c.gradFee != 0) IERC20(weth).safeTransfer(c.treasury, c.gradFee); // → treasury FIRST (§6.3 step 1)
+        if (c.gradFee != 0) IERC20(weth).safeTransfer(c.treasury, c.gradFee); // → treasury FIRST (step 1)
         // `wethForMint = W* + donation`: `msg.value == GRADUATION_ETH + donation − CALLER_REWARD`
         // (BondingCurve.graduate forwards `balance − fee escrows`, donations included), minus gradFee.
         c.wethForMint = msg.value - c.gradFee;
@@ -361,7 +361,7 @@ contract V3Migrator is IV3Migrator {
             // graduation — where the curve forwards ≈ exactly `LP_TOKEN_TRANCHE` (rounding favours the
             // curve, leaving only dust above) — a token-overpriced pool gave `budget ≈ 0`, reverted
             // `ArbBudgetExceeded`, and FROZE the curve in `ReadyToGraduate` (both directions locked,
-            // §12.12) while the attacker held a withdrawable concentrated-LP position (UM-2 realised).
+            // ) while the attacker held a withdrawable concentrated-LP position (UM-2 realised).
             // Fix: mirror the WETH leg — allow the arb to draw the token balance DOWN to the
             // slippage-bounded mint floor `lpTranche·(1 − slippageBps)`, i.e. spend at most
             // dust + `lpTranche·slippageBps`, exactly as the WETH leg may spend `wethForMint·
@@ -390,7 +390,7 @@ contract V3Migrator is IV3Migrator {
 
     /// @dev Mint the full-range LP position (recipient = vault), then split residuals. Emit values
     ///      live in this memory struct (not on the stack) so the 11-field `Graduated` log stays
-    ///      within the stack limit under the single non-viaIR 0.8.35 pin (spec §6.7).
+    /// within the stack limit under the single non-viaIR 0.8.35 pin.
     struct MintLocals {
         address token0;
         address token1;
@@ -417,7 +417,7 @@ contract V3Migrator is IV3Migrator {
         // the verified target price the pool ratio is fixed, so whichever side the arb REDUCED becomes
         // the binding side and only its paired counterpart is pulled; the surplus side's leftover is
         // burned/sent-to-treasury in `_settleDust` (so donated tokens are never deposited into the LP,
-        // spec §3.4 step 8). Uniswap docs (mint guide) confirm only the ratio-required amounts (≤
+        // step 8). Uniswap docs (mint guide) confirm only the ratio-required amounts (≤
         // desired) transfer.
         uint256 tokenBal = IERC20(c.token).balanceOf(address(this)); // fee-and-arb-adjusted
         uint256 wethBal = IERC20(weth_).balanceOf(address(this)); // fee-and-arb-adjusted
@@ -433,7 +433,7 @@ contract V3Migrator is IV3Migrator {
         // treasury (see `_settleDust`). Anchoring `wethMin` to `wethForMint` instead demanded the mint
         // deposit ≈ `(W* + donation)·(1−bps)` WETH — unachievable once `donation > W*·bps/(1−bps)`
         // (~0.08 ETH on the M0 fixture) — so `NPM.mint` reverted "Price slippage check", `graduate()`
-        // reverted, and the curve froze in `ReadyToGraduate` (§12.12). `Math.min` floors cleanly at
+        // reverted, and the curve froze in `ReadyToGraduate`. `Math.min` floors cleanly at
         // `W*·(1−bps)` whenever a donation is present (`wethForMint ≥ W*`), and degrades to the old
         // `wethForMint·(1−bps)` in the (unreachable) `wethForMint < W*` case — the universally correct
         // WETH floor. The token leg stays anchored to the FIXED `lpTranche` (already donation-invariant:
@@ -457,9 +457,9 @@ contract V3Migrator is IV3Migrator {
         _mint(m);
         if (m.liquidity == 0) revert InsufficientLiquidityMinted();
 
-        // §12.69: bind the post-graduation fee-split beneficiary. The NFT was just minted to the vault
+        // : bind the post-graduation fee-split beneficiary. The NFT was just minted to the vault
         // (recipient = vault); NPM `mint` uses `_mint` (not `_safeMint`), so `onERC721Received` never
-        // fired and the §12.69(B) transfer-data mechanism cannot apply (verified against v3-periphery,
+        // fired and the transfer-data mechanism cannot apply (verified against v3-periphery,
         // decision #6). The migrator instead explicitly registers `tokenId → creator` with the vault,
         // in this same graduation tx, set-once and migrator-gated (the vault checks
         // `msg.sender == factory.migrator()`). This is atomic with the mint: any position ever held by
@@ -516,7 +516,7 @@ contract V3Migrator is IV3Migrator {
     }
 
     /// @dev Isolated so the 11-field `Graduated` log sees only the two memory pointers on the stack
-    ///      (keeps the emit within the stack limit under the non-viaIR pin, spec §6.7).
+    /// (keeps the emit within the stack limit under the non-viaIR pin).
     function _emitGraduated(Ctx memory c, MintLocals memory m) private {
         emit Graduated(
             c.token,

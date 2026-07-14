@@ -1,10 +1,10 @@
 /**
- * Hono app assembly (api.md §2). Wires cross-cutting middleware (rate limiting
- * per route class §6.3, central error→envelope handler, 404), then mounts every
+ * Hono app assembly (api.md). Wires cross-cutting middleware (rate limiting
+ * per route class, central error→envelope handler, 404), then mounts every
  * route group. All response DTOs are the frozen `@robbed/shared` schemas.
  *
  * NO chain-write capability is importable from any route — the route-inventory
- * test (route-inventory.test.ts) asserts this structurally (§8.4).
+ * test (route-inventory.test.ts) asserts this structurally.
  */
 import { Hono } from "hono";
 import { getConnInfo } from "hono/bun";
@@ -49,18 +49,18 @@ export function createApp(deps: AppDeps) {
     now: deps.now,
   };
 
-  // ── CORS — public /v1 surface only (api.md §6.1) ──────────────────────────
+  // ── CORS — public /v1 surface only (api.md) ──────────────────────────
   // BEFORE the rate limiters: preflights are answered here (204, no rate
   // budget) and 429s on actual requests still carry CORS headers. The
   // middleware itself skips /v1/admin/*; /internal/* never mounts it.
   app.use("/v1/*", publicCors(deps.config.corsAllowedOrigins));
 
-  // ── rate limits per route class (§6.3) ────────────────────────────────────
+  // ── rate limits per route class ────────────────────────────────────
   app.use("/v1/uploads/*", rateLimit(rlDeps, ROUTE_LIMITS.uploadsHour, ROUTE_LIMITS.uploadsMin));
   app.use("/v1/metadata", rateLimit(rlDeps, ROUTE_LIMITS.metadata));
   app.use("/v1/search", rateLimit(rlDeps, ROUTE_LIMITS.search));
   app.use("/v1/admin/*", rateLimit(rlDeps, ROUTE_LIMITS.admin));
-  // Internal dashboard (api.md §3.7) — admin-SIWE-gated, same limit class.
+  // Internal dashboard (api.md) — admin-SIWE-gated, same limit class.
   app.use("/internal/*", rateLimit(rlDeps, ROUTE_LIMITS.admin));
   // Reads: everything else under /v1 except health probes (never rate-limited).
   const reads = rateLimit(rlDeps, ROUTE_LIMITS.reads);

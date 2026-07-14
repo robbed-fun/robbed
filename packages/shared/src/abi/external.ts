@@ -6,13 +6,13 @@
  * transcribed VERBATIM from the official artifact JSON (src/abi/QuoterV2.json /
  * SwapRouter02.json / AggregatorV3Interface.json — the pinned sources, kept
  * alongside as the drift anchors). The deployed addresses these bind to live in
- * constants.ts (UNISWAP_V3, spec §12.28; CHAINLINK_ETH_USD_PROXY_4663, §12.51).
+ * constants.ts (UNISWAP_V3, CHAINLINK_ETH_USD_PROXY_4663).
  *
  * Consumers: the frontend previews swaps via QuoterV2 (quoteExactInputSingle
  * /quoteExactOutputSingle) and executes them via SwapRouter02 (exactInputSingle
  * /exactOutputSingle, + multicall/unwrapWETH9/refundETH for the native-ETH leg)
- * — the M3-5 post-grad venue switch; the indexer's §3.9 ETH/USD poller reads
- * the Chainlink feed via aggregatorV3Abi (§12.51).
+ * — the M3-5 post-grad venue switch; the indexer's ETH/USD poller reads
+ * the Chainlink feed via aggregatorV3Abi.
  *
  * `as const` is mandatory: viem/wagmi infer literal arg/return types only from
  * const ABIs, never from a plain JSON import which widens to `string`
@@ -347,13 +347,13 @@ export const swapRouter02Abi = [
 
 /**
  * Minimal Chainlink AggregatorV3Interface fragment — exactly the three views
- * the §12.51 ETH/USD poller needs (`description`/`decimals` for the mandatory
+ * the ETH/USD poller needs (`description`/`decimals` for the mandatory
  * fail-closed startup assertions, `latestRoundData` for the staleness-checked
  * read). Transcribed VERBATIM from the published @chainlink/contracts
  * AggregatorV3Interface artifact (pinned drift anchor:
  * src/abi/AggregatorV3Interface.json; shape re-verified against
  * docs.chain.link/data-feeds/api-reference, 2026-07-11). Adopted from the
- * indexer's local copy per the anti-drift rule (indexer.md §3.9 flag) — the
+ * indexer's local copy per the anti-drift rule (indexer.md flag) — the
  * feed address is constants.ts CHAINLINK_ETH_USD_PROXY_4663.
  */
 export const aggregatorV3Abi = [

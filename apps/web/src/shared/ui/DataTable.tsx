@@ -29,17 +29,17 @@ import { Pagination, type PaginationControls } from "./Pagination";
  * - `autoReset*` is disabled here so a data swap never triggers an internal
  *   state reset → render loop (these tables don't page/expand on data change).
  *
- * SERVER-SIDE ONLY (§12.59): `manualSorting` is on — the table NEVER client-sorts.
+ * SERVER-SIDE ONLY : `manualSorting` is on — the table NEVER client-sorts.
  * Column headers dispatch a `?sort=&dir=` refetch via `meta` (TableSortMeta);
  * pagination is keyset over an opaque cursor. Both are threaded through, not owned
  * here — the caller's `useCursorStack` + query own the data.
  *
- * §12.60 CONVENTION: the optional `tableLabel` (a titled header/caption region)
+ * CONVENTION: the optional `tableLabel` (a titled header/caption region)
  * and the integrated `Pagination` mean every titled, paged table on token-detail
  * (Top Holders, trade feed) and elsewhere renders its chrome through ONE component.
  */
 
-/** Titled-table wrapper (§12.60 `TableLabel`). Also exported standalone. */
+/** Titled-table wrapper (`TableLabel`). Also exported standalone. */
 export function TableLabel({
   title,
   right,
@@ -103,11 +103,11 @@ export function DataTable<T>({
   empty?: ReactNode;
   className?: string;
   "aria-label"?: string;
-  /** Titled wrapper (§12.60). */
+  /** Titled wrapper. */
   tableLabel?: { title: ReactNode; right?: ReactNode };
   /** Server-sort context threaded to header cells (TableSortMeta). */
   meta?: TableSortMeta<string>;
-  /** Integrated keyset pager (§12.59) — rendered below the rows when present. */
+  /** Integrated keyset pager — rendered below the rows when present. */
   pagination?: PaginationControls & { className?: string };
 }) {
   const table = useReactTable({
@@ -115,7 +115,7 @@ export function DataTable<T>({
     columns,
     getCoreRowModel: getCoreRowModel(),
     getRowId,
-    // Server-authoritative order (§12.59): the table renders the returned order
+    // Server-authoritative order : the table renders the returned order
     // and never client-sorts; header clicks refetch via `meta.onSort`.
     manualSorting: true,
     // Defensive: a data swap must never reset internal state → re-render loop.

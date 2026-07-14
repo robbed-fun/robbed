@@ -3,8 +3,8 @@ import { shortAddress } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Address rendered as a Blockscout link (spec §5.2 verify affordances). Uses the
- * chain-config explorer builder — no explorer origin is ever inlined (§2/§9).
+ * Address rendered as a Blockscout link (verify affordances). Uses the
+ * chain-config explorer builder — no explorer origin is ever inlined.
  * External anchors are always `rel="noopener noreferrer"` (threat-model UM-5).
  */
 export function AddressLink({

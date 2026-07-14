@@ -1,5 +1,5 @@
 /**
- * DB row shapes (indexer.md §3 / §8.5). Interfaces are compile-time only, so
+ * DB row shapes (indexer.md). Interfaces are compile-time only, so
  * these fixtures lock the field sets (typecheck is the real guard, `tsc
  * --noEmit`); the runtime asserts guard against accidental key drops.
  */
@@ -18,7 +18,7 @@ import type {
 const ADDR = "0x" + "ab".repeat(20);
 const TX = "0x" + "12".repeat(32);
 
-describe("transfers row (X-5 — sixth event family, sole balance truth §12.16)", () => {
+describe("transfers row (X-5 — sixth event family, sole balance truth)", () => {
   it("carries the (tx,log) dedup anchor + Transfer fields", () => {
     const row: TransferRow = {
       id: `${TX}-4`,
@@ -37,7 +37,7 @@ describe("transfers row (X-5 — sixth event family, sole balance truth §12.16)
   });
 });
 
-describe("Portfolio rows (spec §5.4; balances = holding, address_pnl = roll-up)", () => {
+describe("Portfolio rows (balances = holding, address_pnl = roll-up)", () => {
   it("BalanceRow IS the per-token holding (balance + cost-basis accumulators)", () => {
     const row: BalanceRow = {
       token_address: ADDR,
@@ -75,7 +75,7 @@ describe("Portfolio rows (spec §5.4; balances = holding, address_pnl = roll-up)
   });
 });
 
-describe("creator-fee claim projection (spec §7 / §12.63 — CreatorClaimableRow)", () => {
+describe("creator-fee claim projection (CreatorClaimableRow)", () => {
   it("is the per-creator pull-payment roll-up (accrued/claimed/claimable, vault)", () => {
     const row: CreatorClaimableRow = {
       creator: ADDR,
@@ -99,7 +99,7 @@ describe("creator-fee claim projection (spec §7 / §12.63 — CreatorClaimableR
   });
 });
 
-describe("post-grad creator split projection (spec §12.69 — CreatorTokenClaimableRow)", () => {
+describe("post-grad creator split projection (CreatorTokenClaimableRow)", () => {
   it("is the per-(creator,ERC20) single-asset roll-up (token ∈ {launchToken, WETH})", () => {
     const row: CreatorTokenClaimableRow = {
       creator: ADDR,
@@ -124,7 +124,7 @@ describe("post-grad creator split projection (spec §12.69 — CreatorTokenClaim
   });
 });
 
-describe("§8.5 offchain rows (bot/farm heuristics; competitor snapshots)", () => {
+describe(" offchain rows (bot/farm heuristics; competitor snapshots)", () => {
   it("address_flags uses the shared BotFlag vocabulary", () => {
     const row: AddressFlagsRow = {
       address: ADDR,
@@ -148,7 +148,7 @@ describe("§8.5 offchain rows (bot/farm heuristics; competitor snapshots)", () =
     expect(row.organic_holder_pct_high).toBeGreaterThan(row.organic_holder_pct_low);
   });
 
-  it("competitor_snapshots is source+timestamped (never hardcoded, §2)", () => {
+  it("competitor_snapshots is source+timestamped (never hardcoded)", () => {
     const row: CompetitorSnapshotRow = {
       source: "dune:query/1234567",
       captured_at: "2026-07-10T00:00:00Z",

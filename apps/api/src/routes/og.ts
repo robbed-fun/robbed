@@ -1,5 +1,5 @@
 /**
- * OG share-card endpoint (api.md §3; spec §5.2 Trust/share card). Renders the
+ * OG share-card endpoint (api.md; Trust/share card). Renders the
  * ROBBED_ terminal card for a token as image/png 1200×630 and caches it in R2.
  *
  * MOVED OFF THE EDGE WORKER (task): `apps/web` previously rendered OG via

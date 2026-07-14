@@ -7,7 +7,7 @@ import { tokenCard } from "./fixtures";
  * EventTape render (Discover, ROBBED_ redesign). WS is mocked (the live streams
  * are proven separately in event-tape.test.ts); this asserts the SKIN + wiring:
  * the LIVE dot, the filter tabs, colored SIDE cells, and that mcap/Δ% come from
- * the registry — an unknown-token row shows "—", never an invented figure (§2).
+ * the registry — an unknown-token row shows "—", never an invented figure.
  */
 vi.mock("@/shared/lib/ws", () => ({ useWsChannel: () => {} }));
 
@@ -17,7 +17,7 @@ afterEach(cleanup);
 
 const now = Math.floor(Date.now() / 1000);
 
-describe("EventTape — §5.1 live tape skin", () => {
+describe("EventTape — live tape skin", () => {
   it("seeds real LAUNCH rows from the registry and shows the LIVE dot", () => {
     render(
       <EventTape

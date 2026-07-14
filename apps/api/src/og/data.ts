@@ -2,7 +2,7 @@
  * Assemble the OG card's live data straight from the indexer DB (no HTTP hop —
  * this runs inside the API that owns the read model). Reuses the SAME `toTokenCard`
  * projection the REST API serves, so the share image can never drift from the
- * token page. Every metric is live (§2: no hardcoded price/mcap/USD; USD carries
+ * token page. Every metric is live (: no hardcoded price/mcap/USD; USD carries
  * its `asOf` from the ETH/USD snapshot). Returns `null` for an unknown token so
  * the route answers 404.
  */
@@ -96,7 +96,7 @@ function trimZeros(s: string): string {
 }
 
 /**
- * USD mirror with source timestamp (§2). `null` when there is no usable ETH/USD
+ * USD mirror with source timestamp. `null` when there is no usable ETH/USD
  * snapshot (ethUsd ≤ 0 ⇒ the epoch-zero placeholder): the card then shows the
  * ETH figure alone rather than fabricating a USD value.
  */

@@ -1,14 +1,14 @@
 /**
- * address_pnl scheduled roll-up job (spec §5.4 portfolio; db-rows `AddressPnlRow`).
+ * address_pnl scheduled roll-up job (portfolio; db-rows `AddressPnlRow`).
  *
  * A wall-clock `setInterval` side-process (same pattern as the confirmation
- * tracker / metadata verifier / §8.5 flow job) that periodically recomputes the
+ * tracker / metadata verifier / flow job) that periodically recomputes the
  * per-address portfolio roll-up from `trades`+`transfers`+`tokens` via the pure
  * `rollUpAddressPnl`, then TRUNCATE+re-inserts `address_pnl`. Advisory / read-only
- * — nothing here gates a trade, listing, or any chain interaction (§8.4).
+ * — nothing here gates a trade, listing, or any chain interaction.
  *
  * Decide-it-yourself: periodic wall-clock cadence (default 60s, like the
- * volume_eth_24h decay / flow job, §4.4) rather than a Ponder block-interval
+ * volume_eth_24h decay / flow job) rather than a Ponder block-interval
  * source — `address_pnl` is a derived, rebuildable side table that never needs
  * per-block freshness (wallet ETH + unrealized PnL are computed live at the API
  * layer; only the realized roll-up is materialized), and a timer is the boring
@@ -17,7 +17,7 @@
 import { rollUpAddressPnl } from "./compute";
 import type { PnlStore } from "./store";
 
-/** Default cadence (ms) — periodic derive, not hot-path (§4.4). */
+/** Default cadence (ms) — periodic derive, not hot-path. */
 export const PNL_JOB_INTERVAL_MS = 60_000;
 
 export interface PnlJobDeps {

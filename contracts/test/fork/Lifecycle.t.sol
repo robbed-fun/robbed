@@ -26,13 +26,13 @@ import {TestConstants} from "test/harness/TestConstants.sol";
 import {PoolGriefer} from "test/harness/PoolGriefer.sol";
 
 /// @title Gate-3 fork tests — full lifecycle against live Robinhood Chain (chain ID 4663)
-///        (spec §10 gate 3; contracts.md §6 "Gate 3 — fork tests"; plan M1-12)
+/// (gate 3; contracts.md "Gate 3 — fork tests"; plan M1-12)
 /// @notice Run: `FOUNDRY_PROFILE=fork ROBINHOOD_RPC_URL=https://rpc.mainnet.chain.robinhood.com
 ///         forge test`. Skips cleanly when the env var is unset (the default-profile suite keeps
 ///         its two skips). Uses the PRODUCTION contracts end to end — real {Router} (not the unit
-///         TestRouter), real {V3Migrator}/{LPFeeVault} — against the REAL §12.28 Uniswap V3
+/// TestRouter), real {V3Migrator}/{LPFeeVault} — against the REAL Uniswap V3
 ///         Factory/NPM deployments and the REAL canonical WETH `0x0Bd7…AD73`, all read from
-///         `tools/m0/out/constants.json` `external` (never invented; contracts.md §6 gate 3).
+/// `tools/m0/out/constants.json` `external` (never invented; contracts.md gate 3).
 ///
 /// @dev Implementation decisions recorded (per the research→decide→record→verify loop):
 ///
@@ -41,7 +41,7 @@ import {PoolGriefer} from "test/harness/PoolGriefer.sol";
 ///         deterministic AND lets Foundry's RPC cache absorb repeat runs — essential against the
 ///         rate-limited public endpoint (Foundry Book: fork state at a pinned block is cached;
 ///         "latest" re-fetches every run). The pin is a chain HEIGHT recorded at authoring time,
-///         not a market metric (§2 concerns prices/volumes, not block heights).
+/// not a market metric (concerns prices/volumes, not block heights).
 ///
 ///      2. **Real-ArbSys smoke goes through `vm.rpc("eth_call", …)`, not a direct call.**
 ///         Arbitrum precompiles are implemented by ArbOS in the node, NOT as EVM bytecode:
@@ -64,11 +64,11 @@ import {PoolGriefer} from "test/harness/PoolGriefer.sol";
 ///         `test/unit/MigratorArbBackKill.t.sol` (recoverable token-leg grief: 900k-token band at
 ///         target+400..+2400, price pushed ~7% off) — those exact magnitudes were validated
 ///         against the REAL vendored v3-core bytecode in gate 2, so stage 5 exercises the arb-back
-///         against real tick math with a known-recoverable scenario (§6.3.2 liveness + defense).
+/// against real tick math with a known-recoverable scenario (liveness + defense).
 contract LifecycleForkTest is Test {
     // ─────────────────────────────── chain facts ───────────────────────────────
 
-    /// @notice Canonical WETH on Robinhood Chain (spec §2 chain facts; CLAUDE.md).
+    /// @notice Canonical WETH on Robinhood Chain (chain facts; CLAUDE.md).
     address internal constant WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
 
     uint256 internal constant CHAIN_ID = 4663;
@@ -142,7 +142,7 @@ contract LifecycleForkTest is Test {
 
     // ═══════════════════════════ GATE-3 LIFECYCLE ══════════════════════════════
     // create → trade → pollute → graduate (arb-back vs real tick math) → V3 swaps → collect,
-    // against the real V3 Factory/NPM and real WETH 0x0Bd7…AD73 (contracts.md §6 gate 3).
+    // against the real V3 Factory/NPM and real WETH 0x0Bd7…AD73 (contracts.md gate 3).
 
     function test_fork_fullLifecycle() public {
         if (!forked) vm.skip(true);
@@ -157,16 +157,16 @@ contract LifecycleForkTest is Test {
         _stage7_collectToTreasury();
     }
 
-    // ═══════════════ GATE-3 §12.63: HOSTILE CREATOR NEVER FREEZES SELLS ═════════════
+    // ═══════════════ GATE-3 : HOSTILE CREATOR NEVER FREEZES SELLS ═════════════
     // Live-chain mirror of _tmT1_sellClearsWhileTreasuryReverts, for the Phase-2 creator leg.
 
-    /// @notice Deploys a creator-fee-enabled stack (creatorFeeBps = 50, the ratified §12.63 testnet
+    /// @notice Deploys a creator-fee-enabled stack (creatorFeeBps = 50, the ratified testnet
     ///         placeholder) + a CreatorVault, creates a token whose creator address is then etched
     ///         with reverting bytecode (the same technique the treasury TM-T1 fork test uses), and
     ///         proves against the REAL chain that: a buy and a sell both clear (fees accrue
     ///         in-contract, no creator/vault call on the trade path); `sweepCreatorFees()` always
     ///         lands the escrow in the vault; and the hostile creator's own `claim` reverts in
-    ///         isolation (retriable) — freezing nothing but its own revenue. Uses the real §12.28 V3
+    /// isolation (retriable) — freezing nothing but its own revenue. Uses the real V3
     ///         pool-init at create and the real ArbSys/timestamp clock.
     function test_fork_hostileCreatorNeverFreezesSells() public {
         if (!forked) vm.skip(true);
@@ -232,12 +232,12 @@ contract LifecycleForkTest is Test {
         assertEq(cVault.balanceOf(hostile), escrow, "claim revert must preserve the vault balance");
     }
 
-    // ── Stage 0: config from tools/m0/out/constants.json + §12.28 runtime asserts ──
+    // ── Stage 0: config from tools/m0/out/constants.json + runtime asserts ──
 
     function _stage0_configAndRuntimeAsserts() internal {
         string memory json = vm.readFile("../tools/m0/out/constants.json");
 
-        // `external` addresses — registry-sourced (§12.28), never invented (contracts.md O-4).
+        // `external` addresses — registry-sourced, never invented (contracts.md O-4).
         assertEq(vm.parseJsonAddress(json, ".external.weth"), WETH, "constants.json WETH != canonical 0x0Bd7..AD73");
         v3FactoryAddr = vm.parseJsonAddress(json, ".external.v3Factory");
         npmAddr = vm.parseJsonAddress(json, ".external.positionManager");
@@ -262,7 +262,7 @@ contract LifecycleForkTest is Test {
             "M0 drift: early cap"
         );
 
-        // V3 runtime sanity assertions (contracts.md §7.2, spec §12.28) against the LIVE chain:
+        // V3 runtime sanity assertions (contracts.md) against the LIVE chain:
         // fail closed if the registry addresses are wrong for 4663.
         assertEq(IUniswapV3Factory(v3FactoryAddr).feeAmountTickSpacing(10_000), 200, "live V3: 1% tier spacing != 200");
         assertEq(INonfungiblePositionManager(npmAddr).factory(), v3FactoryAddr, "live NPM.factory() mismatch");
@@ -270,10 +270,10 @@ contract LifecycleForkTest is Test {
         assertTrue(WETH.code.length > 0, "canonical WETH has no code on fork");
     }
 
-    // ── Stage 1: deploy the production stack (deploy order contracts.md §7.2) ──
+    // ── Stage 1: deploy the production stack (deploy order contracts.md) ──
 
     function _stage1_deployStack() internal {
-        // Creator-fee generation order (§12.69): factory → CreatorVault → LPFeeVault(factory) →
+        // Creator-fee generation order : factory → CreatorVault → LPFeeVault(factory) →
         // migrator → router, then the four one-time setters.
         factory = new CurveFactory(TestConstants.factoryInit(treasury, safeOwner)); // WETH = canonical
         creatorVault = new CreatorVault(address(factory));
@@ -290,7 +290,7 @@ contract LifecycleForkTest is Test {
         vm.stopPrank();
     }
 
-    // ── Stage 2: create — TokenCreated + pre-seed defense on the REAL pool (§6.3.2) ──
+    // ── Stage 2: create — TokenCreated + pre-seed defense on the REAL pool ──
 
     function _stage2_createAndAssertPreSeed() internal {
         uint256 creationFee = factory.creationFee();
@@ -306,7 +306,7 @@ contract LifecycleForkTest is Test {
         curve = BondingCurve(payable(c));
         tokenIs0 = t < WETH;
 
-        // TokenCreated(…, metadataHash, metadataUri, pool) emitted by the factory (spec §12.15).
+        // TokenCreated(…, metadataHash, metadataUri, pool) emitted by the factory.
         Vm.Log memory created = _findLog(address(factory), TOKEN_CREATED_TOPIC);
         assertEq(address(uint160(uint256(created.topics[1]))), t, "TokenCreated.token");
         assertEq(address(uint160(uint256(created.topics[2]))), c, "TokenCreated.curve");
@@ -317,7 +317,7 @@ contract LifecycleForkTest is Test {
         assertEq(token.metadataHash(), META_HASH, "token.metadataHash commitment");
 
         // Pool exists on the REAL v3Factory and is initialized at the deterministic graduation
-        // price for this ordering (pre-seed defense, spec §6.3.2).
+        // price for this ordering (pre-seed defense).
         pool = IUniswapV3Factory(v3FactoryAddr).getPool(t, WETH, migrator.FEE_TIER());
         assertTrue(pool != address(0), "pool not created on real V3 factory");
         assertEq(emittedPool, pool, "TokenCreated.pool");
@@ -332,7 +332,7 @@ contract LifecycleForkTest is Test {
     // ── Stage 3: trades via the production Router — anti-sniper, fees, k, reserves ──
 
     function _stage3_tradeSequence() internal {
-        // Anti-sniper window is OPEN at creation (timestamp-based, spec §12.18 — the live chain's
+        // Anti-sniper window is OPEN at creation (timestamp-based, — the live chain's
         // clock; never a block-height opcode): an over-cap gross buy must revert.
         uint256 cap = uint256(curve.MAX_EARLY_BUY());
         vm.deal(alice, cap + 2 ether);
@@ -355,7 +355,7 @@ contract LifecycleForkTest is Test {
         uint256 bobOut = router.buy{value: 1 ether}(address(token), bob, 0, block.timestamp);
         assertEq(token.balanceOf(bob), bobOut, "buy recipient credit");
 
-        // Sell half of bob's tokens back — never pausable, fee accrues in-contract (§6.5/§12.25).
+        // Sell half of bob's tokens back — never pausable, fee accrues in-contract.
         (uint256 quotedEth, uint256 quotedFee) = router.quoteSell(address(token), bobOut / 2);
         feesBefore = curve.accruedFees();
         uint256 bobEthBefore = bob.balance;
@@ -374,16 +374,16 @@ contract LifecycleForkTest is Test {
         assertGe(vE * vT, vE0 * vT0, "k decreased across fork trade sequence");
         assertGt(realToken, 0, "curve sold out prematurely");
 
-        // Curve solvency snapshot: balance covers reserves + fee escrow (§12.25).
+        // Curve solvency snapshot: balance covers reserves + fee escrow.
         (,, uint256 realEth,) = curve.reserves();
         assertGe(address(curve).balance, realEth + curve.accruedFees(), "solvency violated");
     }
 
-    // ── TM-T1 (§12.25): a hostile/reverting treasury can never freeze a curve sell ──
+    // ── TM-T1 : a hostile/reverting treasury can never freeze a curve sell ──
 
     /// @notice Live-conditions proof of the no-pause-authority guarantee's treasury leg (CLAUDE.md
     ///         hard rule; threat-model TM-T1): trade fees accrue in-contract and are NEVER pushed to
-    ///         the treasury on any trade path (§12.25), so a treasury pointed at a reverting contract
+    /// the treasury on any trade path, so a treasury pointed at a reverting contract
     ///         — an owner/compromised-signer griefing vector — cannot block exits. We etch code that
     ///         reverts on ANY call at the live treasury address, then a curve SELL must still clear,
     ///         crediting the seller and accruing the fee in-contract; a BUY likewise clears. The
@@ -444,7 +444,7 @@ contract LifecycleForkTest is Test {
         router.buy{value: 0.1 ether}(address(token), address(g), 0, block.timestamp);
         require(token.balanceOf(address(g)) >= 900_000e18, "griefer under-funded");
 
-        // (a) donations — inert in V3, must not skew the mint (§6.3.2 fuzz row 6's fork echo).
+        // (a) donations — inert in V3, must not skew the mint (fuzz row 6's fork echo).
         g.grief_donate(address(token), 1000e18);
         g.grief_donate(WETH, 0.005 ether);
 
@@ -480,7 +480,7 @@ contract LifecycleForkTest is Test {
         assertEq(aliceBefore - alice.balance, acceptedEthGross, "clamp refund not returned to payer");
         assertEq(uint8(curve.phase()), uint8(IBondingCurve.Phase.ReadyToGraduate), "not ReadyToGraduate");
 
-        // §12.12 two-way lock: both directions revert pending permissionless graduate().
+        // two-way lock: both directions revert pending permissionless graduate().
         vm.deal(bob, 1 ether);
         vm.prank(bob);
         vm.expectRevert(NotTrading.selector);
@@ -499,20 +499,20 @@ contract LifecycleForkTest is Test {
         vm.recordLogs();
         vm.prank(grad);
         curve.graduate();
-        // §12.26/§12.34 gas evidence — graduate()+V3 migration through the WORST-CASE arb-back loop
+        // gas evidence — graduate()+V3 migration through the WORST-CASE arb-back loop
         // (stage 4 polluted the pool), the conservative upper bound the caller reward must cover.
         uint256 graduateGasPolluted = vm.lastCallGas().gasTotalUsed;
         console2.log("[fork][gas] graduate()+V3 migration (WITH arb-back, polluted pool):", graduateGasPolluted);
         assertEq(grad.balance - gradEthBefore, curve.CALLER_REWARD(), "caller reward not paid");
         assertEq(uint8(curve.phase()), uint8(IBondingCurve.Phase.Graduated), "phase not Graduated");
 
-        // Arb-back landed inside tolerance against REAL tick math before minting (§6.3.2).
+        // Arb-back landed inside tolerance against REAL tick math before minting.
         (, int24 tick,,,,,) = IUniswapV3Pool(pool).slot0();
         int24 tol = migrator.TOLERANCE_TICKS();
         assertTrue(tick >= _targetTick() - tol && tick <= _targetTick() + tol, "minted outside tolerance");
         assertGt(IUniswapV3Pool(pool).liquidity(), 0, "no liquidity in range post-mint");
 
-        // Graduated event → LP NFT custody, fee-first, dust split (§6.3, §12.13).
+        // Graduated event → LP NFT custody, fee-first, dust split.
         Vm.Log memory gl = _findLog(address(migrator), GRADUATED_TOPIC);
         assertEq(address(uint160(uint256(gl.topics[1]))), address(token), "Graduated.token");
         assertEq(address(uint160(uint256(gl.topics[2]))), pool, "Graduated.pool");
@@ -528,7 +528,7 @@ contract LifecycleForkTest is Test {
         assertEq(token.balanceOf(DEAD), tokensBurned, "token dust not burned to dEaD");
         assertGt(wethInPos, 0, "no WETH in LP position");
 
-        // Post-graduation curve holds zero value beyond the still-claimable fee escrow (§12.25):
+        // Post-graduation curve holds zero value beyond the still-claimable fee escrow :
         assertEq(token.balanceOf(address(curve)), 0, "curve retained tokens");
         assertEq(address(curve).balance, curve.accruedFees(), "curve ETH beyond fee escrow");
         uint256 fees = curve.accruedFees();
@@ -568,10 +568,10 @@ contract LifecycleForkTest is Test {
         }
     }
 
-    // ── Stage 7: permissionless collect() → 50/50 split; creator pulls its cut (§6.3.4, §12.69) ──
+    // ── Stage 7: permissionless collect() → 50/50 split; creator pulls its cut ──
 
     function _stage7_collectToTreasury() internal {
-        // The migrator registered the position's creator at graduation (§12.69(B)).
+        // The migrator registered the position's creator at graduation.
         assertEq(vault.creatorOf(gradTokenId), creator, "collect: creator not registered for the position");
 
         uint256 treasuryWethBefore = IERC20(WETH).balanceOf(treasury);
@@ -584,7 +584,7 @@ contract LifecycleForkTest is Test {
         assertGt(wethFees, 0, "no WETH fees accrued to the LP position");
         assertGt(tokenFees, 0, "no token fees accrued to the LP position");
 
-        // §12.69: 50/50 split, exact to the wei on BOTH legs; treasury keeps the odd wei (treasury-first).
+        // : 50/50 split, exact to the wei on BOTH legs; treasury keeps the odd wei (treasury-first).
         uint256 wethCreator = (wethFees * vault.creatorLpShareBps()) / 10_000;
         uint256 wethTreasury = wethFees - wethCreator;
         uint256 tokenCreator = (tokenFees * vault.creatorLpShareBps()) / 10_000;
@@ -608,17 +608,17 @@ contract LifecycleForkTest is Test {
         assertEq(token.balanceOf(creator) - creatorTokenBefore, tokenCreator, "creator did not receive token cut");
     }
 
-    // ═════════════════════════ REAL-GAS MEASUREMENT (§12.26/§12.34) ═════════════════════════
+    // ═════════════════════════ REAL-GAS MEASUREMENT ═════════════════════════
     // The M1 re-validation obligation the M0 constants carry (graduationFeeModel.status +
     // reviewRequired callerReward row): the cost-based graduation fee and the ≥10×-graduate()-gas
     // caller-reward floor must be re-measured against REAL gas. Testnet is faucet-limited, so this
-    // is the live-conditions measurement, taken through the real §12.28 V3 factory/NPM on a fork of
+    // is the live-conditions measurement, taken through the real V3 factory/NPM on a fork of
     // 4663 at the LATEST block. It emits the numbers via console2 (`forge test -vv`); tools/m0 folds
     // them (plus a fresh live `eth_gasPrice`) into constants.json — no bytecode changes.
 
     /// @notice Self-contained CLEAN-path gas: create → representative buy → clamped fill →
     ///         graduate()+V3 migration with the pre-seed pool still exactly at target (no arb-back,
-    ///         the typical case). This is the cost basis the §12.26 graduation fee is sized against;
+    /// the typical case). This is the cost basis the graduation fee is sized against;
     ///         the polluted (arb-back) upper bound is logged by {test_fork_fullLifecycle}.
     function test_fork_lifecycleGas() public {
         if (!forked) vm.skip(true);
@@ -673,7 +673,7 @@ contract LifecycleForkTest is Test {
             "[fork][gas] full lifecycle create+buy+sell+graduate:", createGas + buyGas + sellGas + graduateGasClean
         );
         // forkBlock: the pinned height, or 0 when ROBINHOOD_FORK_BLOCK=0 selected LATEST (never
-        // read via block.number — that is an L1 estimate on Orbit, §2).
+        // read via block.number — that is an L1 estimate on Orbit).
         console2.log("[fork][gas] fork block pin (0 = latest):", forkBlock);
 
         // Sanity floors: the clean migration is a real, non-trivial cost (guards a silent regression
@@ -684,7 +684,7 @@ contract LifecycleForkTest is Test {
 
     // ═══════════════════════════ REAL-ARBSYS SMOKE ═════════════════════════════
 
-    /// @notice Real-ArbSys smoke (contracts.md §6 gate 3): `arbBlockNumber()` served by the LIVE
+    /// @notice Real-ArbSys smoke (contracts.md gate 3) `arbBlockNumber()` served by the LIVE
     ///         ArbOS node via `vm.rpc` — non-zero, ≥ the pinned fork height, and monotonic. See
     ///         decision #2 for why a direct in-fork call cannot exercise the real precompile.
     function test_fork_arbSysSmoke() public {
@@ -697,7 +697,7 @@ contract LifecycleForkTest is Test {
         uint256 first = _arbBlockNumberLive();
         assertGt(first, 0, "gate 3: arbBlockNumber() must be non-zero on the live chain");
         // On an Orbit chain arbBlockNumber IS the L2 height, so live-latest ≥ our pinned height —
-        // ties the precompile's semantics to the chain the fork was taken from (spec §2).
+        // ties the precompile's semantics to the chain the fork was taken from.
         if (forkBlock != 0) assertGe(first, forkBlock, "arbBlockNumber below the pinned fork height");
 
         uint256 second = _arbBlockNumberLive();

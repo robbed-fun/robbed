@@ -3,7 +3,7 @@ import * as React from "react";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Vendored shadcn/ui Textarea — code we own (§12.24), restyled to the ROBBED_
+ * Vendored shadcn/ui Textarea — code we own, restyled to the ROBBED_
  * terminal tokens (Phase F): square, hairline border, mono 13px, faint
  * placeholder (matches the mockup's DESCRIPTION field).
  */

@@ -1,8 +1,8 @@
 /**
  * TokenListRow → `TokenCard` (frozen shared DTO). Status is DERIVED, not stored
- * (indexer.md §3.2): `graduated` → graduated; `real_eth ≥ graduation_eth` and
- * not yet graduated → the §12.12 lock window `graduating`; else `curve`. mcap USD
- * is computed at request time from the ETH/USD snapshot — never a constant (§2).
+ * (indexer.md) `graduated` → graduated; `real_eth ≥ graduation_eth` and
+ * not yet graduated → the lock window `graduating`; else `curve`. mcap USD
+ * is computed at request time from the ETH/USD snapshot — never a constant.
  */
 import { computeChange24hPct, type TokenCard } from "@robbed/shared";
 import type { ConfirmationWatermarksRow } from "@robbed/shared";
@@ -27,7 +27,7 @@ function mcapEthFloat(row: TokenListRow): number {
 }
 
 /**
- * mcap in ETH as a wei decimal string (spec §2 ETH-first; mcapEth refinement ratified 2026-07-10) — the ETH-first
+ * mcap in ETH as a wei decimal string (ETH-first; mcapEth refinement ratified 2026-07-10) — the ETH-first
  * source for OG/cards so no client-side `usd / ethUsd` divide is needed. Computed
  * in integer space to avoid float loss on the >2^53 wei product:
  *   mcapWei = round(price × 1e18) [wei/token] × totalSupply(wei) / 1e18.
@@ -55,10 +55,10 @@ export function toTokenCard(
     createdAt: row.created_at,
     priceEth: row.last_price_eth,
     mcap: usdFromEthFloat(mcapEthFloat(row), snap, nowMs),
-    // ETH-first mcap source (§2): OG/cards render from this, USD derives from it.
+    // ETH-first mcap source : OG/cards render from this, USD derives from it.
     mcapEth: mcapEthWei(row),
     progressPct: progressFraction(row.real_eth_reserves, row.graduation_eth),
-    // §12.40e via the ONE shared resolver, over the batched 24h anchor. Absent
+    // via the ONE shared resolver, over the batched 24h anchor. Absent
     // anchor (no trades / not fetched) → 0 per the spec's no-trades rule.
     change24hPct: computeChange24hPct({
       nowSec: Math.floor(nowMs / 1000),

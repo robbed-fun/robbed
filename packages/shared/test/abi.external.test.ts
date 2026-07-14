@@ -8,7 +8,7 @@
  *  1. const ↔ JSON drift — the exported `as const` copy must deep-equal the JSON
  *     artifact (so hand-edits to either are caught).
  *  2. surface drift — the exact function set the services wire (M3-5 post-grad
- *     routing; §12.51 ETH/USD poller) is frozen; adding/removing one is a
+ * routing; ETH/USD poller) is frozen; adding/removing one is a
  *     deliberate change, not silent.
  */
 import { describe, expect, it } from "bun:test";
@@ -40,9 +40,9 @@ describe("external ABIs are byte-identical to the pinned JSON artifacts", () => 
   });
 });
 
-describe("AggregatorV3Interface — the §12.51 ETH/USD poller read surface", () => {
+describe("AggregatorV3Interface — the ETH/USD poller read surface", () => {
   const fns = aggregatorFns.filter((x) => x.type === "function");
-  it("exposes exactly the three §12.51 views (frozen — adopted from the indexer local copy)", () => {
+  it("exposes exactly the three views (frozen — adopted from the indexer local copy)", () => {
     expect(fns.map(sigOf).sort()).toEqual(["decimals()", "description()", "latestRoundData()"]);
     for (const fn of fns) expect(fn.stateMutability).toBe("view");
   });

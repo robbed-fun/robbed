@@ -1,9 +1,9 @@
--- 0005 — [offchain] §8.5 bot/farm SQL views (M2-13). CREATE OR REPLACE VIEWs
+-- 0005 — [offchain] bot/farm SQL views (M2-13). CREATE OR REPLACE VIEWs
 -- over the Ponder-managed `trades` + `transfers` tables that gather the raw
 -- aggregates the PURE `runFlowAnalysis` (src/flags/heuristics.ts) consumes. The
 -- threshold logic lives in TS (config, not literals); these views only shape the
 -- data with window functions. ADVISORY / labeling only — never gate chain state
--- (§8.4/§8.5). Rebuildable from raw events (§4.4).
+--. Rebuildable from raw events.
 --
 -- Views are created in the CURRENT search_path (the Ponder schema, since they
 -- reference the Ponder tables), applied AFTER `ponder start` builds those tables
@@ -61,7 +61,7 @@ JOIN transfers xf
 ORDER BY tr.token_address, tr.trader, tr.block_number, tr.log_index;
 
 -- Heuristic 4 data — per (token, address) curve buy/sell/fee totals (wash-loop +
--- organic-volume). Only curve legs count toward organic volume (§8.5.2).
+-- organic-volume). Only curve legs count toward organic volume.
 CREATE OR REPLACE VIEW flow_trade_agg AS
 SELECT tr.token_address AS token,
        tr.trader        AS address,
@@ -85,7 +85,7 @@ GROUP BY tr.trader, tr.block_number
 HAVING COUNT(DISTINCT tr.token_address) >= 2;
 
 -- Cluster-share data — per (token, address) trailing-24h curve volume, measured
--- against each token's most-recent trade (matches the §4.4 volume_eth_24h anchor:
+-- against each token's most-recent trade (matches the volume_eth_24h anchor:
 -- window is relative to the token's latest activity, not wall-clock now, so it is
 -- deterministic and rebuildable). Feeds the gate-7 funder-cluster vol share.
 CREATE OR REPLACE VIEW flow_cluster_vol_24h AS
@@ -103,7 +103,7 @@ WHERE tr.venue = 'curve'
 GROUP BY tr.token_address, tr.trader;
 
 -- Holder data — current positive holders per token (organic-holder %). The zero
--- address is excluded upstream (balances never tracks it, indexer.md §3.6).
+-- address is excluded upstream (balances never tracks it, indexer.md).
 CREATE OR REPLACE VIEW flow_holders AS
 SELECT token_address AS token, holder
 FROM balances

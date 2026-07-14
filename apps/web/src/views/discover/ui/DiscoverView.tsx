@@ -7,17 +7,17 @@ import { TrendingCarousel } from "@/widgets/trending-carousel";
 import { getTokens } from "@/shared/api";
 
 /**
- * Discover `/` (§5.1) — ROBBED_ terminal redesign (spec §12.50, panel "2d").
+ * Discover `/` — ROBBED_ terminal redesign (panel "2d").
  *
  * The screen is a single dense terminal panel: a TRENDING carousel over a live
  * event tape. Both hang off the indexer's `/v1/tokens` projection fetched
  * server-side (short `revalidate`, ~5s) so the page paints with real content
  * before the WS streams hydrate the tape.
  *
- * DECISIONS (hoodpad-frontend; basis recorded):
+ * DECISIONS (robbed-frontend; basis recorded):
  * - Two isolated fetches via `Promise.allSettled` so a TRENDING failure never
- *   blanks the tape and vice versa (§5.1 error isolation). `volume24h` drives
- *   TRENDING ("by 24h volume", API-owned order — §12.22); `newest` seeds the
+ * blanks the tape and vice versa (error isolation). `volume24h` drives
+ * TRENDING ("by 24h volume", API-owned order); `newest` seeds the
  *   tape's LAUNCH snapshot + the enrichment registry. The two lists are merged
  *   (deduped) for the tape so a trade on a trending-but-not-newest token still
  *   resolves its name/mcap/Δ% (never fabricated — see event-tape/model).

@@ -1,7 +1,7 @@
 import type { TokenDetail, WsMessage } from "@robbed/shared";
 
 /**
- * Pure reconciliation rules for the LIVE token status (TD-6; §5.2/§12.12).
+ * Pure reconciliation rules for the LIVE token status (TD-6).
  * Extracted from the `useLiveTokenDetail` hook so the venue-flip decisions are
  * unit-testable without a WebSocket or React tree (tests/token-live.test.ts);
  * the hook applies these to the TanStack Query cache and then re-validates
@@ -9,7 +9,7 @@ import type { TokenDetail, WsMessage } from "@robbed/shared";
  */
 
 /**
- * Apply a WS `graduated` signal to the cached TokenDetail: the §12.12
+ * Apply a WS `graduated` signal to the cached TokenDetail: the
  * graduating lock (or the curve venue) gives way to the V3 venue. The patch is
  * an optimistic cache write — the caller MUST also invalidate the token query so
  * the indexed row (graduatedAt, final pool state, …) replaces it.
@@ -27,7 +27,7 @@ export function applyGraduated(detail: TokenDetail, pool: string): TokenDetail {
  * Defense-in-depth: a trade that reports `venue: "v3"` while we still render a
  * curve/graduating venue implies graduation already happened (e.g. the
  * `graduated` event raced a reconnect). Never contradict the indexed stream —
- * reconcile the status to it (§2.1).
+ * reconcile the status to it.
  */
 export function tradeImpliesGraduation(
   detail: TokenDetail | undefined,
@@ -51,7 +51,7 @@ export function tradeImpliesGraduation(
  * True ONLY for a curve trade against a not-yet-graduated token. It excludes:
  * - a graduated token (`graduated` latch OR `status === "graduated"`) — post-grad
  *   the bonding cell reads a terminal "Graduated" verdict; the curve is retired
- *   (§12.12) and progress must NOT regress (monotonic-graduation rule, §2.1);
+ * and progress must NOT regress (monotonic-graduation rule);
  * - a v3 trade that `tradeImpliesGraduation` already routes to the immediate,
  *   un-throttled venue-reconciliation invalidate — so the two paths never
  *   double-fire on the same message.
@@ -59,7 +59,7 @@ export function tradeImpliesGraduation(
  * The trade WS payload (`wsTradeDataSchema`) carries no post-trade reserves, so
  * the caller cannot recompute `progressPct` client-side without curve math that
  * would drift from indexed truth — it invalidates → REST refetch instead (the
- * optimistic patch is never the final word; §2.1). Extracted here so the rule is
+ * optimistic patch is never the final word;). Extracted here so the rule is
  * unit-testable without a WebSocket or React tree (tests/token-live.test.ts).
  */
 export function tradeMovesBondingProgress(

@@ -5,15 +5,15 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Vendored shadcn/ui Button (new-york, Tailwind v4) — code we own (§12.24),
- * restyled to the ROBBED_ terminal skin (Phase F; ratified redesign samples, spec §12.50):
+ * Vendored shadcn/ui Button (new-york, Tailwind v4) — code we own,
+ * restyled to the ROBBED_ terminal skin (Phase F; ratified redesign samples):
  * square corners, mono, weight 500/600. Variant → mockup mapping:
  *   default — solid green with near-black text (LAUNCH TOKEN / BUY HCAT;
  *             bg-primary is the green accent token post-redesign)
  *   outline — GREEN outline, transparent fill (the header's `+ CREATE`;
  *             sampled: 1px #4ADE80 border, green 12px text, pad 7px 14px)
  *   ghost   — borderless muted → text on hover
- * Styling routes ONLY through design tokens; no raw color values (web.md §7).
+ * Styling routes ONLY through design tokens; no raw color values (web.md).
  * buy/sell variants are token-backed trade actions (buy == default green).
  */
 const buttonVariants = cva(

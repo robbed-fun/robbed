@@ -10,10 +10,10 @@ import { candleWindow } from "@/widgets/price-chart";
 import { TokenDetailClient } from "./TokenDetailClient";
 
 /**
- * Token Detail `/t/[address]` screen (§5.2). SERVER component: fetches the token
+ * Token Detail `/t/[address]` screen. SERVER component: fetches the token
  * summary + first page of trades/holders/candles server-side and renders the
  * meaningful above-the-fold header (name/ticker/mcap/progress/status) without any
- * client JS — the SSR pitch requirement (spec §5.2). The interactive widgets
+ * client JS — the SSR pitch requirement. The interactive widgets
  * hydrate as one client island (`TokenDetailClient`) from that `initialData`.
  *
  * The per-token OG `<meta>` tags auto-wire from the sibling `opengraph-image.tsx`
@@ -22,7 +22,7 @@ import { TokenDetailClient } from "./TokenDetailClient";
  * A 404 from the token endpoint → `notFound()` (segment `not-found.tsx`). Every
  * secondary fetch is isolated (`allSettled`): a failed trades/holders/candles
  * fetch degrades that island to its own empty/loading state; it never blanks the
- * page (web.md §3.2 states).
+ * page (web.md states).
  */
 export default async function TokenDetailView({ address }: { address: string }) {
   const lower = address.toLowerCase();
@@ -45,7 +45,7 @@ export default async function TokenDetailView({ address }: { address: string }) 
     getCandles(lower, interval, win, { revalidate: 5 }),
   ]);
 
-  // §12.59: /trades + /holders return the shared `Paginated<T>` `{ items,
+  // : /trades + /holders return the shared `Paginated<T>` `{ items,
   // nextCursor }` envelope. The default (page-1) window seeds the client island.
   const initialTrades = tradesR.status === "fulfilled" ? tradesR.value.items : undefined;
   const initialHolders = holdersR.status === "fulfilled" ? holdersR.value : undefined;

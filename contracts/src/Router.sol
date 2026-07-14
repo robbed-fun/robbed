@@ -20,24 +20,24 @@ import {
     EthTransferFailed
 } from "./errors/Errors.sol";
 
-/// @title Router — single user entrypoint for ROBBED_ (spec §6.5, §7; contracts.md §2.4)
+/// @title Router — single user entrypoint for ROBBED_ (contracts.md)
 /// @notice Thin by design: deadline + pause guards + fund plumbing + permit. ALL economics live in
 ///         the {BondingCurve}; the Router computes NO fee and takes NO caller-supplied fee (spec
-///         §4.1). It has no owner and holds no persistent ETH — every value path is forwarded to a
+/// ). It has no owner and holds no persistent ETH — every value path is forwarded to a
 ///         curve (or, for the creation fee, straight to the live treasury) within the same call.
 ///
-/// @dev Load-bearing engineering decisions (recorded for the hoodpad-security gate):
+/// @dev Load-bearing engineering decisions (recorded for the robbed-security gate):
 ///
-///      1. **Provably pause-free sell path (spec §6.5, THE headline guarantee).** `sell` /
+/// 1. **Provably pause-free sell path (THE headline guarantee).** `sell` /
 ///         `sellWithPermit` read NO pause flag — grep this contract: the tokens `pauseBuys` /
 ///         `pauseCreates` / `CreatesPaused` / `BuysPaused` appear ONLY inside `createToken` /
 ///         `buy`, never on a sell path, and the curve's `sell` reads no factory pause state either
-///         (see {BondingCurve}). Combined with the §12.25 pull-payment model (no trade path calls
+/// (see {BondingCurve}). Combined with the pull-payment model (no trade path calls
 ///         the treasury), a seller can always exit regardless of admin action or a hostile treasury.
 ///         Proven end-to-end by the Router pause-matrix test (both pauses on + reverting treasury).
 ///
-///      2. **Deadline on EVERY trade path, including the permit variant (spec §6.5, hard rule
-///         §10).** A `checkDeadline` modifier fronts `createToken`, `buy`, `sell` AND
+/// 2. **Deadline on EVERY trade path, including the permit variant (, hard rule
+/// ).** A `checkDeadline` modifier fronts `createToken`, `buy`, `sell` AND
 ///         `sellWithPermit`. For `sellWithPermit` the deadline is enforced INDEPENDENTLY of the
 ///         EIP-2612 permit: the try/catch tolerates a front-run permit (proceed on a pre-existing
 ///         allowance), which would otherwise let a stale-but-still-approved sell bypass a
@@ -66,8 +66,8 @@ contract Router is IRouter, ReentrancyGuard {
         factoryContract = factory_;
     }
 
-    /// @notice Reverts once the block timestamp passes `deadline` (spec §6.5). Timestamp-based —
-    ///         never the L1-estimating block-height opcode (spec §2).
+    /// @notice Reverts once the block timestamp passes `deadline`. Timestamp-based —
+    /// never the L1-estimating block-height opcode.
     modifier checkDeadline(uint256 deadline) {
         if (block.timestamp > deadline) revert DeadlineExpired();
         _;
@@ -107,7 +107,7 @@ contract Router is IRouter, ReentrancyGuard {
         (token, curve) = _deploy(name, symbol, metadataHash, metadataUri);
 
         // Creation fee → live treasury. This is NOT a trade path: it runs only on create, never on
-        // buy/sell, so it cannot become a sell-freeze vector (spec §6.5 / §12.25).
+        // buy/sell, so it cannot become a sell-freeze vector.
         uint256 creationFee = factoryContract.creationFee();
         if (creationFee != 0) _sendEth(factoryContract.treasury(), creationFee);
 
@@ -129,7 +129,7 @@ contract Router is IRouter, ReentrancyGuard {
     }
 
     /// @dev Validate `msg.value` against the live creation fee and return the leftover initial-buy
-    ///      amount. A slippage floor with no actual buy is a caller error (§5.3 anti-self-snipe).
+    /// amount. A slippage floor with no actual buy is a caller error (anti-self-snipe).
     function _splitCreateValue(uint256 minTokensOut) private view returns (uint256 initialBuy) {
         uint256 creationFee = factoryContract.creationFee();
         if (msg.value < creationFee) revert InvalidMsgValue();
@@ -151,7 +151,7 @@ contract Router is IRouter, ReentrancyGuard {
         if (factoryContract.pauseBuys()) revert BuysPaused();
         if (recipient == address(0)) revert ZeroAddress();
         address curve = _curveOf(token);
-        // refundTo = msg.sender (the payer) receives any graduation-clamp refund (contracts.md §2.4).
+        // refundTo = msg.sender (the payer) receives any graduation-clamp refund (contracts.md).
         (tokensOut,,) = IBondingCurve(curve).buy{value: msg.value}(msg.sender, recipient, msg.sender, minTokensOut);
     }
 
@@ -171,7 +171,7 @@ contract Router is IRouter, ReentrancyGuard {
     /// @inheritdoc IRouter
     /// @dev Also pause-free. The trade deadline is enforced by `checkDeadline` INDEPENDENTLY of the
     ///      permit (decision #2). The permit is best-effort (try/catch) so a front-run permit that
-    ///      already set the allowance does not brick the sell (spec §5.7).
+    /// already set the allowance does not brick the sell.
     function sellWithPermit(
         address token,
         uint256 tokenAmount,
@@ -232,7 +232,7 @@ contract Router is IRouter, ReentrancyGuard {
         if (curve == address(0)) revert UnknownToken();
     }
 
-    /// @dev Low-level ETH send with a typed revert (spec §5.4 — custom errors, no revert strings).
+    /// @dev Low-level ETH send with a typed revert (custom errors, no revert strings).
     ///      Used only for the creation fee (never on a trade path).
     function _sendEth(address to, uint256 amount) private {
         (bool ok,) = to.call{value: amount}("");

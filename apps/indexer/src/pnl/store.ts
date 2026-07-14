@@ -3,14 +3,14 @@
  * that module stays DB-free and fully unit-testable. Here live the two
  * side-effecting boundaries: reading the `pnl_*` views (0007_address_pnl_views
  * .sql) into a `PnlInput`, and writing the results into `address_pnl` (the
- * offchain, indexer-owned side table, §3.11-style / 0006).
+ * offchain, indexer-owned side table, -style / 0006).
  *
  * Writes are a TRUNCATE + re-insert inside one transaction: the table is DERIVED
- * and fully rebuildable from `trades`+`transfers`+`tokens` (§4.4), so recomputing
+ * and fully rebuildable from `trades`+`transfers`+`tokens`, so recomputing
  * the whole set each run is the boring, can't-silently-corrupt option (a stale
  * roll-up can never linger). This recompute IS the address_pnl rebuild path —
  * there is no incremental writer to drift from. Advisory / read-only — never
- * gates chain state (§8.4).
+ * gates chain state.
  */
 import { Pool, type PoolClient } from "pg";
 import type { AddressPnlComputed, PnlInput } from "./compute";
@@ -79,7 +79,7 @@ export function createPgPnlStore(pool: Pool, schema: string): PnlStore {
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
-        // address_pnl lives in stable `public` (search_path-independent, §7.3).
+        // address_pnl lives in stable `public` (search_path-independent).
         await client.query("TRUNCATE address_pnl");
         for (const r of rows) {
           await client.query(

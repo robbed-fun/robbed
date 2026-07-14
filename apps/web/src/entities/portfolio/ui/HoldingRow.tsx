@@ -32,9 +32,9 @@ import { PnlRange } from "./PnlRange";
  *           components (per the redesign's "table → cards/scroll" mobile rule).
  *
  * Every metric is a SUPPLIED indexer value; `priceEth`/`valueEth`/`value`/
- * `unrealizedPnl` render their nullable/range forms honestly (§2, §5.2) — an
+ * `unrealizedPnl` render their nullable/range forms honestly — an
  * unpriceable holding shows an em-dash, never a fabricated number. USD, when
- * present, is surfaced via `UsdAmount` (live source + timestamp, §2).
+ * present, is surfaced via `UsdAmount` (live source + timestamp).
  */
 
 /** Shared grid template so the row and the table header stay column-aligned.

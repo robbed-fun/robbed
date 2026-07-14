@@ -1,9 +1,9 @@
 /**
- * Post-graduation creator-fee split roll-up — PURE aggregation logic (spec §12.69).
+ * Post-graduation creator-fee split roll-up — PURE aggregation logic.
  *
- * The §12.68 pre-grad creator leg (native ETH, `creatorClaimable.ts`) has a
+ * The pre-grad creator leg (native ETH, `creatorClaimable.ts`) has a
  * POST-GRAD half: the graduated V3 pool's 1% fees are split 50/50 creator/treasury
- * at `LPFeeVault.collect(tokenId)`. Custody is Option B (§12.69(C), LANDED): the
+ * at `LPFeeVault.collect(tokenId)`. Custody is Option B (LANDED) the
  * creator share is credited in the pull-payment `CreatorVault` as a per-`(creator,
  * ERC20-token)` balance via `depositERC20(creator, token, share)`, where `token` is
  * a graduated LAUNCH TOKEN (sell-leg) or canonical WETH (buy-leg) — NOT unwrapped to

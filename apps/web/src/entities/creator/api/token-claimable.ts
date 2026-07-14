@@ -7,7 +7,7 @@ import { ApiError, apiGet } from "@/shared/api";
 import { qk } from "@/shared/lib/query-keys";
 
 /**
- * Post-graduation creator LP-fee claimable rows (spec §12.69). Each row is one
+ * Post-graduation creator LP-fee claimable rows. Each row is one
  * per-`(creator, ERC20-token)` bucket — a graduated launch-token leg or the
  * aggregated WETH leg — served by the endpoint robbed-indexer is adding, which
  * serves the shared `creatorTokenClaimableSchema`. The array response is COMPOSED
@@ -15,7 +15,7 @@ import { qk } from "@/shared/lib/query-keys";
  * rule 2): the authoritative wire shape stays `CreatorTokenClaimable`.
  *
  * GAP / DOC-LOCKSTEP (reported to robbed-indexer + architect): the endpoint PATH
- * and its `openapi.yaml` entry are not yet ratified (api.md §3 addition). This
+ * and its `openapi.yaml` entry are not yet ratified (api.md addition). This
  * targets the plausible `GET /v1/creators/:address/token-claimable`. A missing
  * route (404) or a creator who never accrued surfaces as `null` — NEVER an error
  * the widget must special-case — so the on-chain `tokenBalanceOf` fallback

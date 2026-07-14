@@ -4,7 +4,7 @@
  * Owner: robbed-contracts (tooling only — touches no contracts/src, no apps).
  *
  * Creates a treasury Safe using the CANONICAL Safe v1.4.1 contracts — never a
- * bespoke multisig (spec §6.6). Spec §12.52 confirms the canonical v1.4.1 set
+ * bespoke multisig. confirms the canonical v1.4.1 set
  * exists on BOTH Robinhood mainnet 4663 and testnet 46630 (safe-deployments
  * lists 46630 "canonical"; ProxyFactory + SafeL2 singleton re-verified live),
  * so the local anvil fork of 4663 carries it too — fully live-testable.
@@ -27,7 +27,7 @@
  * the same owners/threshold/saltNonce reverts ("Create2 call failed"); bump
  * SALT_NONCE (default: Date.now()) for a fresh address.
  *
- * Canonical v1.4.1 addresses (identical across canonical chains; spec §12.52 +
+ * Canonical v1.4.1 addresses (identical across canonical chains; +
  * safe-global/safe-deployments src/assets/v1.4.1/*.json, verified 2026-07-11);
  * env-overridable but NEVER invented — code presence + singleton VERSION()
  * are asserted live before any tx:
@@ -35,7 +35,7 @@
  *   SafeL2 singleton              0x29fcB43b46531BcA003ddC8FCB67FFE91900C762
  *   CompatibilityFallbackHandler  0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99
  * (SafeL2 — not Safe — per Safe's own guidance for L2 chains: it emits the
- * events the Safe{Wallet} indexer needs; same core logic, spec §12.52 set.)
+ * events the Safe{Wallet} indexer needs; same core logic, set.)
  *
  * Chain guard: refuses to run unless chainid ∈ {4663, 46630, 31337} — Robinhood
  * mainnet/its local fork, Robinhood testnet, plain anvil. Ethereum mainnet and
@@ -80,7 +80,7 @@ const { privateKeyToAccount } = viemAccounts;
 type Address = `0x${string}`;
 type Hex = `0x${string}`;
 
-// ── canonical Safe v1.4.1 set (spec §12.52; safe-deployments "canonical") ────
+// ── canonical Safe v1.4.1 set (safe-deployments "canonical") ────
 const CANONICAL = {
   proxyFactory: "0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67",
   safeL2Singleton: "0x29fcB43b46531BcA003ddC8FCB67FFE91900C762",
@@ -193,7 +193,7 @@ async function main(): Promise<void> {
       die(
         `no code at ${label} ${addr} on chain ${chainId} — the canonical Safe ` +
           `v1.4.1 set is not deployed here (on plain anvil 31337 you must deploy ` +
-          `or fork it first; on 4663/46630 this contradicts spec §12.52 — investigate)`,
+          `or fork it first; on 4663/46630 this contradicts — investigate)`,
       );
     }
   }
@@ -283,7 +283,7 @@ async function main(): Promise<void> {
   console.log("");
   log(
     `record this address as the treasury (constants file \`treasurySafe\` / env) ` +
-      `per docs/developers/runbooks/testnet.md §6 — the deploy fails closed without it`,
+      `per docs/developers/runbooks/testnet.md — the deploy fails closed without it`,
   );
 }
 

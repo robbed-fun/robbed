@@ -1,7 +1,7 @@
 /**
  * Next route file for Create `/create` — ROUTING ONLY (FSD Next.js guide).
  * Renamed from `/launch` by the ROBBED_ redesign (user-directed; deviation
- * recorded for §12 — `/launch` redirects here via next.config). Screen
+ * recorded for — `/launch` redirects here via next.config). Screen
  * composition + the entire launch flow live in the `views/create` slice.
  */
 import type { Metadata } from "next";

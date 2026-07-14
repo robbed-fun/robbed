@@ -1,7 +1,7 @@
 /**
  * Per-request projection context: the confirmation watermarks + latest ETH/USD
  * snapshot, fetched once and threaded into every DTO projection so
- * `confirmationState` (§2.1) and USD (§2) are recomputed freshly and never a
+ * `confirmationState` and USD are recomputed freshly and never a
  * constant. Two cheap singleton reads shared across all rows in a response.
  */
 import type { ConfirmationWatermarksRow } from "@robbed/shared";

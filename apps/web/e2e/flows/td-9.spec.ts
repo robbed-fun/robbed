@@ -15,9 +15,9 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:TD-9 — Live trade feed: tier upgrades, soft-confirmed CHIP removed (§12.56)
-// AMENDED 2026-07-12: §12.56 removes the visible "Soft-confirmed" chip; the tier
-// machinery (reconcile + §12.20 watermark) is unchanged. A fresh row shows NO
+// @flow:TD-9 — Live trade feed: tier upgrades, soft-confirmed CHIP removed
+// AMENDED 2026-07-12: removes the visible "Soft-confirmed" chip; the tier
+// machinery (reconcile + watermark) is unchanged. A fresh row shows NO
 // settlement chip; only posted-to-L1 / finalized surface. Layers unchanged.
 // assertable-layers: on-chain · indexed · UI
 test(
@@ -43,11 +43,11 @@ test(
     });
 
     await assertUi("row appears with NO soft-confirmed chip; never unqualified-final", async () => {
-      // The trade row lands in the feed (§12.56: proven by the row, not a chip).
+      // The trade row lands in the feed (proven by the row, not a chip).
       await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 15_000 });
-      // §12.56: the removed "Soft-confirmed" chip must NOT render anywhere.
+      // : the removed "Soft-confirmed" chip must NOT render anywhere.
       await expect(page.getByText(copy.softConfirmed)).toHaveCount(0);
-      // Advance the chain so the O(1) watermark can upgrade held rows (§12.20).
+      // Advance the chain so the O(1) watermark can upgrade held rows.
       await mine(5);
       // Posted/finalized may surface once the watermark passes; a soft-confirmed
       // row must never have rendered as a bare "confirmed"/"final".

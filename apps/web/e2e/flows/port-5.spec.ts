@@ -21,7 +21,7 @@ import {
 
 const PAGE_SIZE = 50; // the UI's fixed cursor page size (views/portfolio queries.ts)
 
-// @flow:PORT-5 — Cursor pagination (load-more) on the list tabs (§12.50a / catalog §3b)
+// @flow:PORT-5 — Cursor pagination (load-more) on the list tabs (/ catalog)
 // assertable-layers: indexed · UI   (pure indexer-read paging, no chain surface — waiver)
 test(
   "PORT-5 ACTIVITY paginates: 50-row page + Load more appends, then the button disappears",

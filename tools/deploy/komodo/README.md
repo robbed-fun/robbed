@@ -1,7 +1,7 @@
 # ROBBED_ backend — Komodo Stack (`tools/deploy/komodo/`)
 
 Git-synced infra-as-code for the **backend** half of the hosting split
-(spec **§12.45**, `docs/developers/runbooks/docker.md` (Komodo backend stack)). The
+(spec ****, `docs/developers/runbooks/docker.md` (Komodo backend stack)). The
 frontend deploys separately to **Cloudflare Workers** (Part B) — there is **no
 `web` service and no web Dockerfile here**.
 
@@ -31,7 +31,7 @@ build with **context = repo root** so `pnpm-lock.yaml` + `packages/shared`
 ## Entrypoint strategy (two API processes, one image)
 
 The API ships **two entrypoints** — HTTP (`src/index.ts`) and WS fanout
-(`src/ws.ts`). One image, two compose services (spec §8 co-location for the
+(`src/ws.ts`). One image, two compose services (co-location for the
 <500ms budget):
 
 - `api` service → the image's default `CMD` (`bun run src/index.ts`), `API_PORT` 3001.
@@ -45,7 +45,7 @@ Dockerfile supports it, but the two-services-one-image model is the default.)
 The **indexer** entrypoint runs the idempotent offchain `migrate` (creates the
 watermarks / eth_usd / metadata_verifications sidecar tables and runs the
 fail-closed asserts: `pg_trgm` present + RPC chain id == 4663) **then**
-`ponder start`. Ponder runs under **Node** (spec §8); a `bun` binary is present
+`ponder start`. Ponder runs under **Node**; a `bun` binary is present
 only to execute the two TypeScript side-scripts (`migrate` / `rebuild`).
 
 ### One operational nuance: the pg_trgm search GIN indexes
@@ -62,20 +62,20 @@ docker compose -p <project> exec indexer bun run scripts/migrate.ts
 ```
 
 Search still functions before the GIN index exists (sequential scan); the index
-only accelerates `pg_trgm` lookups (§5.1).
+only accelerates `pg_trgm` lookups.
 
 ## Per-env config (testnet / production)
 
 `stack.toml` maps `docs/developers/runbooks/env-inventory.md` onto the two envs
-(environments.md §2, task E-4):
+(environments.md, task E-4):
 
 - **testnet** (`robbed-backend-testnet`): chain 46630-shape, `MODERATION_ALLOW_STUBS=true`,
-  `CORS_ALLOWED_ORIGINS=https://testnet.robbed.fun`, no fees/legal (Phase A, §14).
+  `CORS_ALLOWED_ORIGINS=https://testnet.robbed.fun`, no fees/legal (Phase A).
   V3/WETH addresses come from the **testnet deploy artifact** (never assume the
   4663 constants exist on testnet — the indexer asserts at startup, fails closed).
 - **production** (`robbed-backend-production`): chain 4663, `MODERATION_ALLOW_STUBS=false`,
-  `CORS_ALLOWED_ORIGINS=https://robbed.fun`, V3/WETH = the §12.28 constants (inline,
-  still asserted at startup). **Gate-G-A-gated (§14) — do not deploy until G-A passes.**
+  `CORS_ALLOWED_ORIGINS=https://robbed.fun`, V3/WETH = the constants (inline,
+  still asserted at startup). **Gate-G-A-gated — do not deploy until G-A passes.**
 
 ### Secrets — nothing committed here
 
@@ -85,7 +85,7 @@ per env, before deploy (names ⇄ `env-inventory.md`): `*_POSTGRES_PASSWORD`,
 `*_INDEXER_RPC_HTTP/WS`, the contract addresses, `*_SESSION_SECRET`,
 `*_ADMIN_ALLOWLIST`, `R2_ENDPOINT`, `*_R2_ACCESS_KEY_ID`, `*_R2_SECRET_ACCESS_KEY`,
 `*_R2_PUBLIC_BASE_URL`, and (prod) the `*_MODERATION_*_VENDOR_*` keys (OI-A7,
-§13). Non-secret CONFIG (bucket `robbed-assets`, public R2 account id per §12.45,
+). Non-secret CONFIG (bucket `robbed-assets`, public R2 account id per,
 ports) is inline. `compose.yaml` additionally uses `${VAR:?...}` so a missing
 required value **fails `docker compose config`** rather than silently starting
 mis-wired.
@@ -101,7 +101,7 @@ mis-wired.
    advancing (`/ready` 200 after backfill); WS handshake + sub/unsub; `/metrics`
    on `METRICS_PORT` (9464) exposes the gate-7 series.
 5. Point the Workers frontend `NEXT_PUBLIC_*` at this Stack's public API/WS
-   endpoints (behind TLS/CDN; environments.md §3/§4).
+   endpoints (behind TLS/CDN; environments.md).
 
 ## Local static validation (no daemon needed)
 
@@ -115,4 +115,4 @@ docker compose -f tools/deploy/komodo/compose.yaml config
 
 Beta caps (O-10), Safe signers / `ADMIN_ALLOWLIST` prod values (O-6/OI-A8),
 moderation vendor (OI-A7), `ETH_USD_SOURCE_URL` Chainlink-vs-fallback (OI-6),
-DNS / custom domains (environments.md §4) — all §13 / owner tasks, not this Stack.
+DNS / custom domains (environments.md) — all / owner tasks, not this Stack.

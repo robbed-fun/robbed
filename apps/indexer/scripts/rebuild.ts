@@ -1,5 +1,5 @@
 /**
- * Derived-table rebuild (indexer.md §4.4, M2-5 sub-task 5h) — the reorg
+ * Derived-table rebuild (indexer.md, M2-5 sub-task 5h) — the reorg
  * deep-recovery path and CI byte-equality check.
  *
  * Candles, `balances`, and the denormalized `tokens` counters (last_price_eth,

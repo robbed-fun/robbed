@@ -4,12 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Toaster, toast, useToast } from "@/shared/ui";
 
 /**
- * Toaster + imperative `toast()` API (§5.3 launch feedback). The store is a
+ * Toaster + imperative `toast()` API (launch feedback). The store is a
  * module singleton, so `toast.dismiss()` resets it between tests.
  *
  * Covers the contract the LaunchForm relies on: error → assertive `alert`,
  * success/info → polite `status`, manual close, auto-dismiss, sticky (duration 0),
- * id-dedupe, and token-only styling (no raw color — web.md §7).
+ * id-dedupe, and token-only styling (no raw color — web.md).
  */
 afterEach(() => {
   act(() => toast.dismiss());

@@ -15,7 +15,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:PORT-1 — Connected-wallet portfolio: summary header + holdings (§12.50a / catalog §3b)
+// @flow:PORT-1 — Connected-wallet portfolio: summary header + holdings (/ catalog)
 // assertable-layers: indexed · UI   (read-only page, no transaction — waiver)
 test(
   "PORT-1 connected portfolio renders summary header + HOLDINGS from the indexed roll-up",

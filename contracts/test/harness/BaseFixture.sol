@@ -17,7 +17,7 @@ import {MockArbSys} from "test/mocks/MockArbSys.sol";
 /// @title BaseFixture — shared deploy + trade helpers for the M1-7/M1-8 unit suites
 /// @notice Wires CurveFactory + MockMigrator (sink) + TestRouter exactly as the invariant handler
 ///         does, and exposes `_create`/`_buy`/`_sell` helpers. Mirrors the M0 economics via
-///         {TestConstants} (no inlined market metrics — spec §2/§6.4).
+/// {TestConstants} (no inlined market metrics).
 abstract contract BaseFixture is Test {
     CurveFactory internal factory;
     TestRouter internal router;

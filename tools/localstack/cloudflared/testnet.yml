@@ -28,7 +28,7 @@
 #
 # Supersedes the host systemd user unit cloudflared-robbed-testnet.service
 # (~/.cloudflared/robbed-testnet.yml) — decommissioned once this connector verified serving.
-# Account: 0b1b0b8753489a11d35ee922961f6b72 (spec §12.45)
+# Account: 0b1b0b8753489a11d35ee922961f6b72
 
 tunnel: 15ec4e57-6998-4da2-8a5b-ca45c10eecba
 credentials-file: /etc/cloudflared/creds.json

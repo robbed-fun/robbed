@@ -1,5 +1,5 @@
 /**
- * STRUCTURAL guarantee (indexer.md §8.3, api.md §6.5): the WS fanout module is
+ * STRUCTURAL guarantee (indexer.md, api.md) the WS fanout module is
  * on the <500ms hot path and must never touch the database — truth is served by
  * REST, WS is freshness only. If someone later wires a DB client into the fanout
  * tier this fails at CI before it can ship.

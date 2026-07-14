@@ -1,5 +1,5 @@
 /**
- * Creator-fee claimable endpoint (spec §7 / §12.63). GET /v1/creators/:address/
+ * Creator-fee claimable endpoint. GET /v1/creators/:address
  * claimable: accrued/claimed from the roll-up, live balanceOf as authoritative
  * claimable (with mirror fallback), vault resolution (row → config → 404), and
  * USD computed at request time.
@@ -55,7 +55,7 @@ describe("GET /v1/creators/:address/claimable", () => {
     expect(body.totalAccruedEth).toBe((5n * 10n ** 18n).toString());
     expect(body.totalClaimedEth).toBe((2n * 10n ** 18n).toString());
     expect(body.asOf).toBeTruthy();
-    // USD computed at request time from the eth/usd snapshot (§2), never constant.
+    // USD computed at request time from the eth/usd snapshot, never constant.
     expect(body.claimable.ethUsd).toBe("2000"); // FakeDb snapshot price
   });
 

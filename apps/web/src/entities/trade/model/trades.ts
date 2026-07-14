@@ -1,5 +1,5 @@
 /**
- * Optimistic trade lifecycle reducer (M3-7 · web.md §4 · spec §2.1/§12.20).
+ * Optimistic trade lifecycle reducer (M3-7 · web.md ·).
  *
  * PURE, framework-agnostic core — no React, no viem runtime, no network. It is
  * the single state machine every trade surface (TradeWidget result, TradeFeed
@@ -7,7 +7,7 @@
  * `lib/use-optimistic-trades.tsx`; keeping this file pure means it is trivially
  * unit-testable (tests/trade-reducer.test.ts) and SSR-safe.
  *
- * The §4 state machine (node names preserved as `TradeDisplayState`):
+ * The state machine (node names preserved as `TradeDisplayState`):
  *
  *   submitted ──reject──▶ removed
  *      │ txHash
@@ -19,7 +19,7 @@
  *      │ WS/REST `trade` with matching txHash
  *      ▼
  *   indexed:soft-confirmed           (RECONCILED — amounts/price REPLACED by indexed truth)
- *      │ O(1) `confirmations` watermark broadcast (§12.20): blockNumber ≤ safeBlock ⇒ posted;
+ * │ O(1) `confirmations` watermark broadcast : blockNumber ≤ safeBlock ⇒ posted;
  *      │ ≤ finalizedBlock ⇒ finalized. Derived LOCALLY from the watermark + the trade's
  *      │ INDEXED block — never a per-row WS message.
  *      ▼
@@ -37,7 +37,7 @@
  *      row (with a `justUpdated` shimmer) and is never deleted; the only removal
  *      is an in-wallet reject (which never reached chain).
  *
- * DECISIONS (hoodpad-frontend; basis recorded inline — see report):
+ * DECISIONS (robbed-frontend; basis recorded inline — see report):
  * - Reconciliation key is `txHash` ONLY. The indexed `TradeRow`/`WsTradeData`
  *   carry NO `nonce` (packages/shared api-types.ts / ws-messages.ts), so the
  *   spec's "fallback sender+nonce" can never key a WS/REST reconcile — it is
@@ -51,7 +51,7 @@
  *   This is the strict reading of rule 2 ("never trust self") + rule 3 ("never
  *   final while soft-confirmed") — an optimistic entry can only ever sit at
  *   `soft_confirmed`, regardless of how far the watermark has advanced.
- * - Silence windows (web.md §4.5/§4.4): WS_SILENCE_MS = 10s (badge gains
+ * - Silence windows (web.md) WS_SILENCE_MS = 10s (badge gains
  *   "awaiting index", REST poll starts), ABSENCE_ERROR_MS = 30s (escalate to
  *   `failed` ONLY after an indexer-confirmed empty `GET /v1/trades/:txHash`).
  *   The reducer only flips these flags on `tick`/`rest-heal`; the actual timer
@@ -64,7 +64,7 @@ import {
   upgradeConfirmationState,
 } from "@robbed/shared";
 
-// ── Tunables (web.md §4.4/§4.5) ─────────────────────────────────────────────
+// ── Tunables (web.md) ─────────────────────────────────────────────
 
 /** WS silence before a soft-confirmed row shows "awaiting index" + REST poll starts. */
 export const WS_SILENCE_MS = 10_000;
@@ -75,7 +75,7 @@ export const JUST_UPDATED_MS = 1_200;
 
 // ── Public types ────────────────────────────────────────────────────────────
 
-/** Coarse lifecycle (internal); the §4 display node is derived, see `tradeDisplayState`. */
+/** Coarse lifecycle (internal); the display node is derived, see `tradeDisplayState`. */
 export type TradeLifecycle =
   | "submitted" // sent to wallet, no txHash yet
   | "pending" // txHash known, awaiting RPC receipt
@@ -84,7 +84,7 @@ export type TradeLifecycle =
   | "rejected" // rejected in-wallet (never reached chain)
   | "absent"; // indexer-confirmed absent past ABSENCE_ERROR_MS
 
-/** §4 node names, exactly. This is what the UI badge + tests key off. */
+/** node names, exactly. This is what the UI badge + tests key off. */
 export type TradeDisplayState =
   | "submitted"
   | "optimistic:pending"
@@ -190,7 +190,7 @@ export type TradeAction =
   | { type: "ws-trade"; row: IndexedTradeLike; now?: number }
   /** GET /v1/trades/:txHash result (REST-heal). Empty `rows` = indexer-confirmed absence. */
   | { type: "rest-heal"; txHash: string; rows: readonly IndexedTradeLike[]; now?: number }
-  /** O(1) confirmations watermark broadcast (§12.20) — upgrade every held row locally. */
+  /** O(1) confirmations watermark broadcast — upgrade every held row locally. */
   | { type: "watermark"; watermarks: ConfirmationWatermarks }
   /** Drives the silence timers + shimmer expiry. */
   | { type: "tick"; now: number };
@@ -210,7 +210,7 @@ function deriveTier(t: TrackedTrade, w: ConfirmationWatermarks): ConfirmationSta
   return upgradeConfirmationState(t.confirmationState, stateForBlock(t.blockNumber, w));
 }
 
-/** Map internal lifecycle + tier → the §4 display node. */
+/** Map internal lifecycle + tier → the display node. */
 export function tradeDisplayState(t: TrackedTrade): TradeDisplayState {
   switch (t.lifecycle) {
     case "submitted":
@@ -394,7 +394,7 @@ export function tradesReducer(state: TradesState, action: TradeAction): TradesSt
     }
 
     case "watermark": {
-      // O(1) upgrade of every held row (§12.20). Only reconciled rows move.
+      // O(1) upgrade of every held row. Only reconciled rows move.
       let mutated = false;
       const byId: Record<string, TrackedTrade> = { ...state.byId };
       const next = { ...state, watermarks: action.watermarks };

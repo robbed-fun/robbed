@@ -1,10 +1,10 @@
 /**
  * Auto-moderation vendor interfaces + stub implementations + prod boot guard
- * (§4.3; OI-A7 vendor selection OPEN §13). Vendor undecided, so the pipeline is
+ * (OI-A7 vendor selection OPEN). Vendor undecided, so the pipeline is
  * built against interfaces; stubs ship for local/test; PRODUCTION REFUSES TO
  * BOOT on stubs unless `MODERATION_ALLOW_STUBS=true` (logged loudly).
  *
- * NOTE for hoodpad-shared: api.md §4.3 mentions these interfaces "in
+ * NOTE for robbed-shared: api.md mentions these interfaces "in
  * packages/shared", but ONLY the API service runs moderation — no cross-service
  * consumer exists — so they live here. Flag if central placement is desired.
  */
@@ -48,7 +48,7 @@ export function stubVendors(): ModerationVendors {
 }
 
 /**
- * Boot guard (§4.3): in production, refuse to start on stub vendors unless the
+ * Boot guard : in production, refuse to start on stub vendors unless the
  * capped-beta escape hatch is explicitly set. Throws (fail-closed) otherwise.
  */
 export function assertVendorsBootable(
@@ -60,12 +60,12 @@ export function assertVendorsBootable(
   if (env === "production" && !allowStubs) {
     throw new Error(
       "REFUSING TO BOOT: moderation running on STUB vendors in production. " +
-        "Set MODERATION_ALLOW_STUBS=true only for capped beta (§4.3, OI-A7).",
+        "Set MODERATION_ALLOW_STUBS=true only for capped beta (OI-A7).",
     );
   }
   if (vendors.usingStubs) {
     console.warn(
-      "[moderation] WARNING: using STUB moderation vendors — NOT for real users (§4.3, OI-A7).",
+      "[moderation] WARNING: using STUB moderation vendors — NOT for real users (OI-A7).",
     );
   }
 }

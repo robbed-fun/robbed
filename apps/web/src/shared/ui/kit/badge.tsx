@@ -5,8 +5,8 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Vendored shadcn/ui Badge (new-york) — code we own (§12.24). The confirmation
- * tier variants (soft-confirmed/posted/finalized, §2.1) are token-backed here so
+ * Vendored shadcn/ui Badge (new-york) — code we own. The confirmation
+ * tier variants (soft-confirmed/posted/finalized) are token-backed here so
  * ConfirmationBadge (M3-7) composes them without new color values.
  */
 const badgeVariants = cva(

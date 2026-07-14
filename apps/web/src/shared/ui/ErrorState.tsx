@@ -4,7 +4,7 @@ import { Button } from "./kit/button";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Inline error with retry (§5.1: "retry per section — hero failure must not
+ * Inline error with retry (: "retry per section — hero failure must not
  * blank the grid and vice versa"). Section-scoped, never a full-page blank.
  */
 export function ErrorState({

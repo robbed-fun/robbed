@@ -13,7 +13,7 @@ import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
 import {IUniswapV3Pool} from "src/interfaces/external/IUniswapV3Pool.sol";
 import {ArbBudgetExceeded, PoolPriceUnrecoverable} from "src/errors/Errors.sol";
 
-/// @title Gate-6 UM-2 Part-2 grief-lock COST BOUND — the caps-lift decision evidence (spec §10 gate
+/// @title Gate-6 UM-2 Part-2 grief-lock COST BOUND — the caps-lift decision evidence (gate
 ///        6; threat-model UM-2 / M-10-A Part-2 / R6)
 /// @notice ADDED BY robbed-security. Read-only audit; TEST ADDITION ONLY — no production-code edit.
 ///         Deterministic, non-fork measurement against the REAL vendored Uniswap V3 core+periphery

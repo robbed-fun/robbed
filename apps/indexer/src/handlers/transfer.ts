@@ -1,6 +1,6 @@
 /**
  * LaunchToken Transfer handler — the SOLE source of balance truth (indexer.md
- * §3.6, M2-5 sub-task 5f; spec §12.16, X-5).
+ *, M2-5 sub-task 5f; X-5).
  *
  * The emitting contract IS the token (`event.log.address`), so no lookup is
  * needed. The `transfers` row (keyed on the (tx,log) id) is the dedup anchor:

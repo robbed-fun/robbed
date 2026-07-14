@@ -1,6 +1,6 @@
 /**
  * readCurveImmutables — per-curve on-chain read of BondingCurve immutables
- * (§12.38/§12.40d). Verifies the reader maps each immutable to the token-row
+ *. Verifies the reader maps each immutable to the token-row
  * field and that `trade_fee_bps` is a non-null number sourced from THIS curve's
  * `TRADE_FEE_BPS` (not the factory config).
  */
@@ -32,7 +32,7 @@ function stubClient(values: Record<string, bigint | number>): {
 
 const CURVE = "0xAbCdef0123456789abcdef0123456789ABCDEF01";
 
-describe("readCurveImmutables (§12.40d per-curve read)", () => {
+describe("readCurveImmutables (per-curve read)", () => {
   it("maps each immutable to its struct field", async () => {
     const { client } = stubClient({
       VIRTUAL_ETH_0: 30n * 10n ** 18n,
@@ -41,7 +41,7 @@ describe("readCurveImmutables (§12.40d per-curve read)", () => {
       LP_TOKEN_TRANCHE: 200_000_000n * 10n ** 18n,
       GRADUATION_ETH: 85n * 10n ** 18n,
       TRADE_FEE_BPS: 100,
-      CREATOR_FEE_BPS: 50, // §12.63 creator-fee split
+      CREATOR_FEE_BPS: 50, // creator-fee split
     });
 
     const c = await readCurveImmutables(client, CURVE);
@@ -52,10 +52,10 @@ describe("readCurveImmutables (§12.40d per-curve read)", () => {
     expect(c.lpTokenTranche).toBe(200_000_000n * 10n ** 18n);
     expect(c.graduationEth).toBe(85n * 10n ** 18n);
     expect(c.tradeFeeBps).toBe(100);
-    expect(c.creatorFeeBps).toBe(50); // §7 / §12.63 per-token creator fee snapshot
+    expect(c.creatorFeeBps).toBe(50); // per-token creator fee snapshot
   });
 
-  it("defaults creator_fee_bps to 0 when CREATOR_FEE_BPS reverts (v1 curve, §12.63)", async () => {
+  it("defaults creator_fee_bps to 0 when CREATOR_FEE_BPS reverts (v1 curve)", async () => {
     // A v1 curve predates the creator-fee leg — its CREATOR_FEE_BPS call reverts.
     // The read must degrade to 0 (v1 value) WITHOUT failing token creation, so the
     // six core immutables still map. The stub throws on the unknown function.
@@ -102,7 +102,7 @@ describe("readCurveImmutables (§12.40d per-curve read)", () => {
     expect(typeof c.tradeFeeBps).toBe("number");
   });
 
-  it("reads from the lowercased curve address (§3 address convention)", async () => {
+  it("reads from the lowercased curve address (address convention)", async () => {
     const { client, calls } = stubClient({
       VIRTUAL_ETH_0: 1n,
       VIRTUAL_TOKEN_0: 1n,
@@ -114,7 +114,7 @@ describe("readCurveImmutables (§12.40d per-curve read)", () => {
     await readCurveImmutables(client, CURVE);
     for (const call of calls) expect(call.address).toBe(CURVE.toLowerCase());
     // A curve created under a prior fee is read from ITS curve, so the fee is
-    // per-token — never the factory config (§12.40d divergence handling).
+    // per-token — never the factory config (divergence handling).
     expect(calls.some((c) => c.functionName === "TRADE_FEE_BPS")).toBe(true);
   });
 });

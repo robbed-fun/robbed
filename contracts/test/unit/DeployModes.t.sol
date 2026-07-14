@@ -27,7 +27,7 @@ contract DeployHarness is Deploy {
     }
 
     /// @dev The exact `run()` step-0 mode resolution → artifact `mode` string. This is the single
-    ///      value the addresses codegen + the §12.55 indexer chain-identity gate assert against.
+    /// value the addresses codegen + the indexer chain-identity gate assert against.
     function resolveModeString() external returns (string memory) {
         mode = _selectMode(block.chainid, _isMainnetAffirmed());
         return _modeString();
@@ -88,11 +88,11 @@ contract DeployModesTest is Test {
     // `vm.readFile` uses for the real `../tools/m0/out/…` defaults.
     string internal constant FIXTURE = "test/fixtures/deploy/constants.testnet-mode.json";
     string internal constant FIXTURE_ZERO_TREASURY = "test/fixtures/deploy/constants.testnet-zerotreasury.json";
-    // The real dev-fork constants (chainId 4663, canonical WETH/§12.28 externals, anvil-1 treasury
+    // The real dev-fork constants (chainId 4663, canonical WETH externals, anvil-1 treasury
     // stand-in) the docker `deploychain` one-shot feeds a FORK run — used to prove a fork resolves.
     string internal constant FORK_FIXTURE = "../tools/localstack/constants.fork.json";
 
-    // §12.28 mainnet facts — the sentinels in the fixture must NOT be these (proves no hardcodes).
+    // mainnet facts — the sentinels in the fixture must NOT be these (proves no hardcodes).
     address internal constant MAINNET_WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
     address internal constant MAINNET_V3_FACTORY = 0x1f7d7550B1b028f7571E69A784071F0205FD2EfA;
     address internal constant MAINNET_NPM = 0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3;
@@ -111,7 +111,7 @@ contract DeployModesTest is Test {
     // ── (a) mode selection ────────────────────────────────────────────────────
 
     function test_selectMode_fourWaySplit() public view {
-        // 4663 is LIVE only when affirmed; the default (unaffirmed) is FORK — decision #5, §12.55.
+        // 4663 is LIVE only when affirmed; the default (unaffirmed) is FORK — decision #5.
         assertEq(uint256(harness.selectMode(4663, true)), uint256(Deploy.Mode.Live), "4663 affirmed -> live");
         assertEq(uint256(harness.selectMode(4663, false)), uint256(Deploy.Mode.Fork), "4663 default -> fork");
         // 46630/31337/1 ignore the affirmation entirely.
@@ -120,19 +120,19 @@ contract DeployModesTest is Test {
         assertEq(uint256(harness.selectMode(31_337, false)), uint256(Deploy.Mode.Local), "31337 -> local");
         assertEq(uint256(harness.selectMode(31_337, true)), uint256(Deploy.Mode.Local), "31337 affirmed -> local");
         assertEq(uint256(harness.selectMode(1, false)), uint256(Deploy.Mode.Local), "1 -> local");
-        // 46646 is the WRONG testnet id printed by some third-party lists (testnet.md §1) — it must
+        // 46646 is the WRONG testnet id printed by some third-party lists (testnet.md) — it must
         // NOT be treated as the testnet; it falls through to local, where the very first public-RPC
         // interaction (mock V3 deploy against a remote chain) fails rather than deploying wrongly.
         assertEq(uint256(harness.selectMode(46_646, false)), uint256(Deploy.Mode.Local), "46646 stays non-testnet");
     }
 
-    // ── (a2) §12.55 / T-5: a FORK run can never produce a mode:"live" 4663 artifact ──
+    // ── (a2) / T-5: a FORK run can never produce a mode:"live" 4663 artifact ──
 
-    /// @notice The core §12.55 guarantee at its source (the mode is minted by Deploy.s.sol): a
+    /// @notice The core guarantee at its source (the mode is minted by Deploy.s.sol) a
     ///         chain-4663 run WITHOUT the explicit `ROBBED_DEPLOY_ENV=mainnet` affirmation resolves
     ///         to `mode:"fork"`, never `"live"`. Fail-safe by omission — forgetting the flag (or any
     ///         fork pipeline that never sets it) yields "fork", so the mainnet-fork-mislabeled-live
-    ///         defect that motivated §12.55 cannot recur through this pipeline.
+    /// defect that motivated cannot recur through this pipeline.
     function test_forkRun_4663_modeIsForkNeverLive() public {
         vm.chainId(4663);
         harness.setAffirm(false); // a fork run: no mainnet affirmation
@@ -224,7 +224,7 @@ contract DeployModesTest is Test {
         assertEq(quoterV2, 0x5555555555555555555555555555555555555555, "quoterV2 from external");
         assertEq(treasury, 0x6666666666666666666666666666666666666666, "treasury from external.treasurySafe");
 
-        // …and provably NOT the §12.28 mainnet literals (no hardcoded fallback path exists).
+        // …and provably NOT the mainnet literals (no hardcoded fallback path exists).
         assertTrue(weth != MAINNET_WETH, "testnet weth must not fall back to the 4663 literal");
         assertTrue(v3Factory != MAINNET_V3_FACTORY, "testnet v3Factory must not fall back to the 4663 literal");
         assertTrue(npm != MAINNET_NPM, "testnet NPM must not fall back to the 4663 literal");

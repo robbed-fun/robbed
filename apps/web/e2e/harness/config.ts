@@ -8,7 +8,7 @@
  *
  * This file lives under `apps/web/e2e/**`, which the M3-9 copy-lint `walk()`
  * explicitly skips, so the well-known public anvil dev keys/addresses here do
- * NOT trip the §2 address-literal grep. They are anvil's deterministic dev
+ * NOT trip the address-literal grep. They are anvil's deterministic dev
  * accounts (Foundry docs), funded + unlocked on the fork — not secrets.
  */
 

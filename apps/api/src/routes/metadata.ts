@@ -1,10 +1,10 @@
 /**
- * POST /v1/metadata — canonicalize + hash + publish (§8.3, §12.19, api.md §3.2).
+ * POST /v1/metadata — canonicalize + hash + publish (api.md).
  * Server builds the fixed field set + version tag, runs THE shared
  * `canonicalizeMetadata` (byte-identical to client + indexer), keccak256-hashes,
  * and PUTs `metadata/{hash}.json` (content-addressed). Text moderation +
  * impersonation run but NEVER block the response (moderation gates listing, not
- * creation — §8.4; the user always sends the tx). The client re-verifies the
+ * creation —; the user always sends the tx). The client re-verifies the
  * returned hash before signing (normative for M3).
  */
 import { Hono } from "hono";
@@ -22,7 +22,7 @@ import { ok } from "../lib/envelope";
 import { parseJson } from "../lib/validate";
 import { matchImpersonation } from "../moderation/impersonation";
 
-/** https-only scheme allowlist (UM-5, §6.4) — reject javascript:/data:/http:. */
+/** https-only scheme allowlist (UM-5) — reject javascript:/data:/http:. */
 function assertHttpsLinks(links: Record<string, string | undefined> | undefined) {
   if (!links) return;
   for (const [key, value] of Object.entries(links)) {
@@ -70,13 +70,13 @@ export function metadataRoutes(deps: AppDeps) {
     await deps.storage.putMetadata(hash, canonicalJson);
 
     // Non-blocking impersonation record (early, advisory; the launch worker
-    // re-checks the on-chain name/ticker at TokenCreated — §4.4/X-10). Cached by
+    // re-checks the on-chain name/ticker at TokenCreated — /X-10). Cached by
     // metadata hash for later linking; failure here never fails the response.
     try {
       const imp = matchImpersonation(req.name, req.ticker, deps.watchlist);
       await deps.redis.set(`metamod:${hash}`, JSON.stringify(imp), { exSeconds: 24 * 60 * 60 });
     } catch {
-      /* advisory only — never blocks (§8.4) */
+      /* advisory only — never blocks */
     }
 
     const resp = metadataResponseSchema.parse({

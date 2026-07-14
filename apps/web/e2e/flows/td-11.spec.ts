@@ -9,7 +9,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:TD-11 — Token info, Blockscout links, creator profile (§5.2)
+// @flow:TD-11 — Token info, Blockscout links, creator profile
 // assertable-layers: indexed · UI   (N/A on-chain: display of indexer metadata — waiver)
 test(
   "TD-11 token info renders description, https-only links and Blockscout links",
@@ -39,7 +39,7 @@ test(
         (t) => Boolean(t?.address && t?.creator && t?.description),
         { label: "token info + fetched description indexed", timeoutMs: 180_000, intervalMs: 3_000 },
       );
-      // The DTO's creator is an OBJECT ({ address, tokensCreated }) — api.md §3.4.
+      // The DTO's creator is an OBJECT ({ address, tokensCreated }) — api.md.
       expect(t.creator.address ?? t.creator).toMatch(/^0x[0-9a-fA-F]{40}$/);
       expect(t.description).toContain("TD-11 e2e flow");
     });

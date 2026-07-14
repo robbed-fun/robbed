@@ -1,5 +1,5 @@
 /**
- * V3 Swap handler — graduated pools only (indexer.md §3.4, M2-5 sub-task 5d).
+ * V3 Swap handler — graduated pools only (indexer.md, M2-5 sub-task 5d).
  *
  * Inserts a `trades` row (`venue='v3'`, `fee_eth=0`) into the SAME unified table
  * as curve trades → venue-continuous candles by construction. Price via X-2
@@ -111,7 +111,7 @@ ponder.on("UniswapV3Pool:Swap", async ({ event, context }) => {
   });
 
   // Redis publish — same unified `trade`/`candle` messages as the curve venue
-  // (venue-continuous by construction, §4.3), fire-and-forget, no DB read.
+  // (venue-continuous by construction), fire-and-forget, no DB read.
   publishTrade({
     token: grad.tokenAddress,
     trader,
@@ -127,7 +127,7 @@ ponder.on("UniswapV3Pool:Swap", async ({ event, context }) => {
     blockTimestamp: Number(ts),
     confirmationState: "soft_confirmed",
   });
-  // Gate-7 (§9.4): observe publish→head latency, realtime only (backfill excluded).
+  // Gate-7 : observe publish→head latency, realtime only (backfill excluded).
   if (publishGate.enabled) observePublishToHeadMs(Date.now() - Number(ts) * 1000);
   for (const c of candleRows) {
     publishCandle({

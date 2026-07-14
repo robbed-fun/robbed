@@ -9,10 +9,10 @@ import { buildV3QuoteRequest } from "../lib/v3";
 import type { TradeSide } from "./quote";
 
 /**
- * Live Uniswap V3 quote for the post-graduation venue (§5.2 invisible venue
+ * Live Uniswap V3 quote for the post-graduation venue (invisible venue
  * switch, M3-5). The QuoterV2 `quoteExactInputSingle` is a REVERT-QUOTER
  * (nonpayable) — it must be run through `simulateContract`, NOT `readContract`
- * (§12.28). wagmi's `useSimulateContract` does exactly that and returns the
+ *. wagmi's `useSimulateContract` does exactly that and returns the
  * decoded outputs on `data.result` (wagmi.sh/react/api/hooks/useSimulateContract,
  * verified 2026-07-10); `result[0]` is `amountOut`.
  *

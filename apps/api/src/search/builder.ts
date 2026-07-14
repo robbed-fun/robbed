@@ -1,5 +1,5 @@
 /**
- * Search query builder (§5.1, api.md §3.3; §12.22 formulas as config). PURE and
+ * Search query builder (api.md; formulas as config). PURE and
  * unit-tested without a DB: given a query string it produces the parameterized
  * SQL + params and a `mode` discriminator. One endpoint covers all four fields
  * (name, ticker, contract address, creator address).
@@ -13,8 +13,8 @@
  *     volume_eth_24h DESC`, filtered to a similarity floor.
  *
  * Both modes exclude hidden listings (`visibility IS DISTINCT FROM 'hidden'` so
- * tokens with no moderation row — NULL — remain listed, §12.21). The caller runs
- * the query under `SET LOCAL statement_timeout` (search DoS guard, api.md §6.4).
+ * tokens with no moderation row — NULL — remain listed). The caller runs
+ * the query under `SET LOCAL statement_timeout` (search DoS guard, api.md).
  */
 import type { RankingConfig } from "../config/ranking";
 import type { RawQuery } from "../lib/db";
@@ -25,7 +25,7 @@ export type SearchMode = "address" | "similarity";
 /**
  * All four card-projection columns + moderation join, shared by both modes.
  * `confirmation_state` is read-derived from the watermark sidecar (OI-11 /
- * §12.48c — no stored column on Ponder tables). Display fields (image/
+ * — no stored column on Ponder tables). Display fields (image
  * description/links) are read-derived the same way, from the verifier's
  * `metadata_verifications` sidecar columns (0008) — see db.bun.ts.
  */

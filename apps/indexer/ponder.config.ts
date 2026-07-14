@@ -1,28 +1,28 @@
 /**
- * Ponder config (indexer.md §2, §7.4) — the six event families over the FROZEN
+ * Ponder config (indexer.md) — the six event families over the FROZEN
  * ABIs in `@robbed/shared` (`abi/events.ts`). Nothing is re-declared locally.
  *
- * Sources (indexer.md §7.4):
- * - CurveFactory        single source          → TokenCreated (§3.1)
- * - BondingCurve        factory(TokenCreated.curve)  → Trade (§3.2)
- * - LaunchToken         factory(TokenCreated.token)  → Transfer (§3.6, §12.16)
- * - V3Migrator          single source          → Graduated (§3.3)
- * - UniswapV3Pool       factory(Graduated.pool) → Swap (graduated pools only, §3.4)
- * - V3PositionManager   single source          → Collect (§3.5; handler filters
+ * Sources (indexer.md):
+ * - CurveFactory single source → TokenCreated
+ * - BondingCurve factory(TokenCreated.curve) → Trade
+ * - LaunchToken factory(TokenCreated.token) → Transfer
+ * - V3Migrator single source → Graduated
+ * - UniswapV3Pool factory(Graduated.pool) → Swap (graduated pools only)
+ * - V3PositionManager single source → Collect (; handler filters
  *                                                 to known lp_token_ids)
  *
  * `factory({ address, event, parameter })` is the ponder.sh-confirmed mechanism
  * for child contracts; `event.log.address` in the handler identifies the
  * emitting child (used for the curve→token and pool→token joins).
  *
- * Creator-fee leg (§12.63, ADDITIVE): `CreatorFeesSwept` folds into the EXISTING
+ * Creator-fee leg (ADDITIVE) `CreatorFeesSwept` folds into the EXISTING
  * BondingCurve source (ABI merge below), and — ONLY when the optional
  * `config.creatorVault` resolves (absent on v1 deployments) — a NEW `CreatorVault`
  * single source is registered for `CreatorFeeDeposited` / `CreatorFeeClaimed`. On
  * a treasury-only deployment the vault source is simply omitted, so the indexer
- * runs unchanged (graceful skip — mirrors the §12.55 optional-config gate).
+ * runs unchanged (graceful skip — mirrors the optional-config gate).
  *
- * Post-grad 50/50 split (§12.69, ADDITIVE — gated identically on `config.creatorVault`):
+ * Post-grad 50/50 split (ADDITIVE — gated identically on `config.creatorVault`):
  * the CreatorVault source ABI gains the ERC20 leg (`CreatorTokenDeposited` /
  * `CreatorTokenClaimed`), and a NEW `LPFeeVault` single source is registered for the
  * `FeesSplit` event. Both are present iff the creator-fee generation is deployed
@@ -31,8 +31,8 @@
  *
  * Static startup assertions (WETH, chain 4663, non-zero V3 addrs) run HERE at
  * config load — if they throw, Ponder never starts (fail-closed, indexer.md
- * §2/§11). Curve constants are no longer a startup concern: they are read
- * per-curve from each BondingCurve's immutables at TokenCreated (§12.40d). The
+ * ). Curve constants are no longer a startup concern: they are read
+ * per-curve from each BondingCurve's immutables at TokenCreated. The
  * runtime assertions (pg_trgm, RPC chain id) run in `scripts/migrate.ts` before
  * `ponder start`.
  */
@@ -57,11 +57,11 @@ import { assertStaticConfig } from "./src/assertions";
 const config = loadConfig();
 assertStaticConfig(config);
 
-// CreatorVault (§12.63 + §12.69) — single source at the deployment vault; registered
+// CreatorVault (+) — single source at the deployment vault; registered
 // ONLY when the optional address resolves. The ABI merges the native-ETH leg
 // (`creatorVaultEventsAbi`: CreatorFeeDeposited/Claimed) with the post-grad ERC20 leg
 // (`creatorVaultTokenEventsAbi`: CreatorTokenDeposited/Claimed) — the shared groupings
-// stay separate; merged only here. LPFeeVault (§12.69) — single source for `FeesSplit`,
+// stay separate; merged only here. LPFeeVault — single source for `FeesSplit`,
 // registered under the SAME gate (the split LPFeeVault is the creator-fee generation).
 // Spread into `contracts` so an absent vault leaves both sources (and their handlers,
 // guarded identically) unregistered.
@@ -85,8 +85,8 @@ const creatorFeeContracts = config.creatorVault
 export default createConfig({
   chains: {
     robinhood: {
-      id: config.chainId, // INDEXER_CHAIN_ID: registry-validated + live-RPC-asserted (§12.55(b))
-      // Alchemy WS for realtime (<500ms budget, §8); HTTP for historical backfill.
+      id: config.chainId, // INDEXER_CHAIN_ID: registry-validated + live-RPC-asserted
+      // Alchemy WS for realtime (<500ms budget); HTTP for historical backfill.
       rpc: config.rpcHttp,
       ...(config.rpcWs ? { ws: config.rpcWs } : {}),
     },
@@ -99,7 +99,7 @@ export default createConfig({
       address: config.curveFactory as `0x${string}`,
       startBlock: config.startBlock,
     },
-    // Trade (+ CreatorFeesSwept §12.63) — one BondingCurve per token, discovered
+    // Trade (+ CreatorFeesSwept) — one BondingCurve per token, discovered
     // via TokenCreated.curve. ABI merges the ratified Trade slice with the additive
     // creator-leg event (the shared groupings stay separate; merged only here).
     BondingCurve: {
@@ -148,7 +148,7 @@ export default createConfig({
       address: config.v3PositionManager as `0x${string}`,
       startBlock: config.startBlock,
     },
-    // CreatorVault + LPFeeVault (§12.63/§12.69) — present only on creator-fee
+    // CreatorVault + LPFeeVault — present only on creator-fee
     // deployments (see above); each handler self-guards on the same condition.
     ...creatorFeeContracts,
   },

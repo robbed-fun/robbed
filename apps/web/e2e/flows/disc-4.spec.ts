@@ -11,7 +11,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:DISC-4 — Search (name / ticker / contract / creator) (§5.1)
+// @flow:DISC-4 — Search (name / ticker / contract / creator)
 // assertable-layers: indexed · UI   (N/A on-chain: pure indexer query — waiver)
 test(
   "DISC-4 search returns matches over name/ticker/contract/creator",
@@ -48,7 +48,7 @@ test(
     });
 
     await assertUi("creator deep link /?q=<creator> seeds the header search box", async () => {
-      // §12.50(f): the grid's creator filter is retired — a creator click deep
+      // : the grid's creator filter is retired — a creator click deep
       // links `/?q=<creator>` and the header SearchBox re-seeds from the URL.
       const detail = await api.token(token.token);
       const creator: string = detail?.creator?.address ?? detail?.creator;

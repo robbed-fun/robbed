@@ -1,5 +1,5 @@
 {
-  "source": "Curated seed list — top-asset tickers (major-cap crypto) + Robinhood Stock Tokens. Refresh >= monthly per spec §12.23/OI-A9. NOT market metrics (§2): these are trademark/ticker strings, not prices or volumes.",
+  "source": "Curated seed list — top-asset tickers (major-cap crypto) + Robinhood Stock Tokens. Refresh >= monthly per /OI-A9. NOT market metrics : these are trademark/ticker strings, not prices or volumes.",
   "capturedAt": "2026-07-10",
   "updatedAt": "2026-07-10",
   "entries": [

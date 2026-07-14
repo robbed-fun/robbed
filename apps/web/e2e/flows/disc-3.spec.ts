@@ -12,8 +12,8 @@ import {
 } from "../harness";
 
 // @flow:DISC-3 — Event tape: seeded snapshot, tab filter, registry-sourced
-// metrics, navigate (§5.1 as amended by §12.50(f) — replaces the retired token
-// grid's sort/filter/paginate surface)
+// metrics, navigate (replaces the retired token grid's sort/filter/paginate
+// surface)
 // assertable-layers: on-chain · indexed · UI
 test(
   "DISC-3 event tape seeds real LAUNCH rows, filters by tab and navigates",
@@ -36,7 +36,7 @@ test(
         (t) => t.address?.toLowerCase() === token.token.toLowerCase(),
       );
       // Tape rows resolve mcap/Δ% from these indexer aggregates by reference —
-      // never client price math, never fabricated (§2).
+      // never client price math, never fabricated.
       for (const field of ["mcapEth", "change24hPct", "creator", "createdAt"]) {
         expect(card).toHaveProperty(field);
       }
@@ -45,7 +45,13 @@ test(
     await assertUi("LAUNCH row paints, tabs filter it, row click navigates", async () => {
       // Discover SSR revalidates ~5s — reload until the seeded LAUNCH row paints.
       await page.goto(routes.discover);
-      const row = page.getByRole("link", { name: /Tape Runner/i }).first();
+      // Scope to the event tape (`<section aria-label="Live event tape">`, role
+      // region): the TRENDING carousel above it renders a same-named card
+      // (aria-label "Tape Runner … — rank N") that a page-wide `.first()` would
+      // grab instead — and the carousel is never touched by the tab filter, so
+      // the TRADES-hides assertion below must target the tape's own LAUNCH row.
+      const tape = page.getByRole("region", { name: /live event tape/i });
+      const row = tape.getByRole("link", { name: /Tape Runner/i }).first();
       await expect(async () => {
         await page.reload();
         await expect(row).toBeVisible({ timeout: 2_000 });

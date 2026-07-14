@@ -16,7 +16,7 @@ import {
   warpTime,
 } from "../harness";
 
-// @flow:TD-13 — Token-detail tables: server-side sort + keyset pagination (§12.59)
+// @flow:TD-13 — Token-detail tables: server-side sort + keyset pagination
 // AUTHORED 2026-07-12 — FLAGGED for architect ratification (NEW flow): the redesign's
 // common `DataTable` gives the trade feed + Top Holders tables SERVER-side sort
 // (`?sort=&dir=`, never a client re-rank) and keyset pagination over an opaque,

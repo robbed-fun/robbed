@@ -1,5 +1,5 @@
 /**
- * Idempotency key (indexer.md §7.1, decide-it-yourself "Idempotency dedup key"):
+ * Idempotency key (indexer.md, decide-it-yourself "Idempotency dedup key"):
  * every event row is keyed `(tx_hash, log_index)` as `${txHash}-${logIndex}`.
  * All handlers guard their derived increments on this id so a re-delivered log
  * (reorg replay / restart overlap) is a no-op — it can never double-count.
@@ -8,7 +8,7 @@ export function eventId(txHash: string, logIndex: number): string {
   return `${txHash.toLowerCase()}-${logIndex}`;
 }
 
-/** Lower-cased address (indexer.md §3 conventions: addresses stored lowercase). */
+/** Lower-cased address (indexer.md conventions: addresses stored lowercase). */
 export function lower(addr: string): string {
   return addr.toLowerCase();
 }

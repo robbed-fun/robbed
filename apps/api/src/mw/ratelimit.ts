@@ -1,11 +1,11 @@
 /**
- * Rate limiting (§6.3): per-IP + per-route sliding window → 429 + `Retry-After`.
+ * Rate limiting : per-IP + per-route sliding window → 429 + `Retry-After`.
  *
  * The window MATH is a PURE function (unit-tested for boundary/refill) operating
  * on a timestamp list; the store persists timestamps. An in-memory store ships
  * for dev/test/single-node; a Redis sorted-set store is the multi-node impl.
  *
- * IP source (decide-it-yourself, api.md §5): trust a CONFIGURED trusted-proxy
+ * IP source (decide-it-yourself, api.md) trust a CONFIGURED trusted-proxy
  * header (`CF-Connecting-IP`, else rightmost `X-Forwarded-For` hop) — NEVER the
  * client-settable leftmost XFF, the classic bypass. Empty config ⇒ socket peer.
  */
@@ -80,7 +80,7 @@ const RATE_LIMIT_SCALE = Math.max(1, Math.floor(Number(process.env.RATE_LIMIT_SC
 
 const scaled = (limit: number): number => limit * RATE_LIMIT_SCALE;
 
-/** Default per-route limits (api.md §6.3), all overridable. */
+/** Default per-route limits (api.md), all overridable. */
 export const ROUTE_LIMITS = {
   uploadsHour: { name: "uploads_h", limit: scaled(10), windowMs: 60 * 60 * 1000 },
   uploadsMin: { name: "uploads_m", limit: scaled(3), windowMs: 60 * 1000 },
@@ -124,7 +124,7 @@ export function rateLimit(
 ): MiddlewareHandler {
   return async (c, next) => {
     const ip = resolveClientIp(c, deps.trustedHeader, deps.connInfoIp?.(c) ?? null);
-    // Keyed by IP. NOTE: the §6.3 "admin 60/min/session" limit runs here BEFORE
+    // Keyed by IP. NOTE: the "admin 60/min/session" limit runs here BEFORE
     // auth (this mw sits on `/v1/admin/*`), so the admin bucket is effectively
     // per-IP in v1 — a stricter per-session limiter would need to run post-auth.
     const principal = `ip:${ip}`;

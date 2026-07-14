@@ -1,5 +1,5 @@
 /**
- * Cursor keyset pagination (decide-it-yourself, api.md §5): round-trip,
+ * Cursor keyset pagination (decide-it-yourself, api.md) round-trip,
  * tamper→400, limit clamp.
  */
 import { describe, expect, it } from "bun:test";

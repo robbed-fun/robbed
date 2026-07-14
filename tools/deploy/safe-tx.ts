@@ -4,10 +4,10 @@
  * execution tooling). Owner: robbed-contracts (tooling only — touches no
  * contracts/src, no apps).
  *
- * The companion to create-safe.ts: once the 2-of-4 treasury Safe (spec §6.6,
+ * The companion to create-safe.ts: once the 2-of-4 treasury Safe (,
  * O-6) exists, THIS is how signed transactions are built, co-signed on separate
  * machines, and executed. Used for the mainnet ownership handoff (the Safe
- * `acceptOwnership()`s the Ownable2Step CurveFactory, §7.2 step 7) and any
+ * `acceptOwnership()`s the Ownable2Step CurveFactory, step 7) and any
  * later treasury movement. It uses ONLY the canonical Safe v1.4.1 on-chain
  * primitives (`getTransactionHash` / `execTransaction`) — never a bespoke
  * multisig, never the hosted Safe Transaction Service.

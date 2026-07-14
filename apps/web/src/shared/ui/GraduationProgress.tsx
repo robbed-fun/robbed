@@ -6,15 +6,15 @@ import { formatEthFromWei } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * GraduationProgress (§5.1 card / §5.2 token detail) — the ONE presentational
+ * GraduationProgress (card / token detail) — the ONE presentational
  * graduation/venue-lifecycle indicator, shared by the Discover card (compact) and
  * the token-detail SafetyStrip (full).
  *
  * PURELY PRESENTATIONAL: it NEVER fetches or reads on-chain — every value arrives
  * via props so each call site owns its data source (the SafetyStrip feeds it LIVE
- * `useCurveReads` reserves ÷ live threshold per spec §5.2; the card feeds the
+ * `useCurveReads` reserves ÷ live threshold per; the card feeds the
  * indexer's cached `progressPct`). The graduation threshold is NEVER hardcoded —
- * `graduationEth` comes from the caller (spec §2: no inlined market metric).
+ * `graduationEth` comes from the caller (no inlined market metric).
  *
  * PLACEMENT (FSD decision rule): business-agnostic → `shared`. It cannot live in
  * `entities/curve` because it is consumed by BOTH `entities/token/TokenCard` (a
@@ -25,7 +25,7 @@ import { cn } from "@/shared/lib/utils";
  *
  * Status → indicator (`tokenStatusSchema`):
  *   - `graduated`  → a "Graduated" verdict (migrated to Uniswap V3).
- *   - `graduating` → the §12.12 ready-to-graduate / lock-window pill ("Graduating").
+ * - `graduating` → the ready-to-graduate / lock-window pill ("Graduating").
  *   - `curve`      → the in-progress bar + percentage.
  *
  * a11y: the bar is a Radix progressbar (`role="progressbar"` + `aria-valuenow`).
@@ -110,7 +110,7 @@ export function GraduationProgress({
     const grad = toBigintOrNull(graduationEth);
     const dataReady = raised !== null && grad !== null && grad > 0n;
 
-    // Mirrors the SafetyStrip contract EXACTLY (spec §5.2): a settled read with no
+    // Mirrors the SafetyStrip contract EXACTLY : a settled read with no
     // value degrades to "unavailable" — NEVER a cached API value substituted in.
     if (!dataReady) {
       return (

@@ -1,6 +1,6 @@
 /**
  * TradeRowDb → `TradeRow` (frozen shared DTO). Unified curve+v3 projection;
- * `confirmationState` recomputed from the current watermark (api.md §2).
+ * `confirmationState` recomputed from the current watermark (api.md).
  * `price_eth` is the display-only float from post-trade reserves / sqrtPriceX96.
  */
 import type { ConfirmationWatermarksRow, TradeRow, TradeRowDb } from "@robbed/shared";

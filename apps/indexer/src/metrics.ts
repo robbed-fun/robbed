@@ -1,5 +1,5 @@
 /**
- * Gate-7 metric registry + hooks (indexer.md §9.4, spec §10 gate 7; M2-12).
+ * Gate-7 metric registry + hooks (indexer.md, gate 7; M2-12).
  *
  * A tiny, dependency-free Prometheus registry (gauge / counter / histogram) with
  * a text-exposition serializer. PURE and in-process: it imports NO DB client, so
@@ -11,15 +11,15 @@
  * `/metrics` server — no polling, no per-event DB reads.
  *
  * This module EMITS metric hooks only; alert DELIVERY (pager/Alertmanager) is M4
- * (§9.4). Advisory — no metric ever gates chain state (§8.4).
+ *. Advisory — no metric ever gates chain state.
  *
  * Decide-it-yourself:
  *  - **Cluster-share thresholds come from M0 governance** (constants.json
  *    `governance.clusterAlertThresholds`: per-token 25%, platform 10%), surfaced
- *    as env with those defaults — config, not literals (spec §2: these are
+ * as env with those defaults — config, not literals (: these are
  *    governance policy, not market metrics). `evaluateClusterShare` is the pure
  *    comparison the gate-7 breach gauges use; final thresholds + delivery are
- *    tuned with hoodpad-security before beta (constants.json status).
+ *    tuned with robbed-security before beta (constants.json status).
  */
 
 // ── Minimal Prometheus instruments ──────────────────────────────────────────
@@ -100,34 +100,34 @@ class Histogram {
   }
 }
 
-// ── Named gate-7 series (§9.4) — pre-registered so a scrape always shows them ─
+// ── Named gate-7 series — pre-registered so a scrape always shows them ─
 
-/** Publish→head latency (ms); alert p95 > 300ms guards the <500ms budget (§8.3). */
+/** Publish→head latency (ms); alert p95 > 300ms guards the <500ms budget. */
 const wsPublishToHeadMs = new Histogram(
   "ws_publish_to_head_ms",
   "Latency from block/head to Redis publish, milliseconds (guards the <500ms budget).",
   [10, 50, 100, 200, 300, 500, 1000, 2000],
 );
-/** Chain head vs last indexed event (seconds); alert > 10s (§9.4). */
+/** Chain head vs last indexed event (seconds); alert > 10s. */
 const indexerHeadLagSeconds = new Gauge("indexer_head_lag_seconds", "Seconds between chain head and the last indexed event.");
-/** L2 blocks between head and the L1-posted / finalized watermarks (§9.4). */
+/** L2 blocks between head and the L1-posted / finalized watermarks. */
 const confirmationSafeLagBlocks = new Gauge("confirmation_safe_lag_blocks", "L2 blocks between head and the L1-posted (safe) watermark.");
 const confirmationFinalizedLagBlocks = new Gauge("confirmation_finalized_lag_blocks", "L2 blocks between head and the finalized watermark.");
-/** Metadata verification counts (§9.4 — mismatch > 0 pages review). */
+/** Metadata verification counts (mismatch > 0 pages review). */
 const metadataUnfetchedTotal = new Gauge("metadata_unfetched_total", "Tokens whose metadata is still unfetched.");
 const metadataMismatchTotal = new Gauge("metadata_mismatch_total", "Tokens whose metadata hash does not match the on-chain commitment.");
-/** Invariant: a V3 Collect to a non-treasury recipient pages immediately (§9.4). */
+/** Invariant: a V3 Collect to a non-treasury recipient pages immediately. */
 const feeRecipientMismatchTotal = new Counter("fee_recipient_mismatch_total", "V3 Collect events whose recipient != treasury (gate-7 page).");
-/** Invariant: a curve trade whose fee exceeds the 2% ceiling (§6.4). */
+/** Invariant: a curve trade whose fee exceeds the 2% ceiling. */
 const tradeFeeCeilingBreachTotal = new Gauge("trade_fee_ceiling_breach_total", "Curve trades whose fee_eth exceeds 2% of the ETH leg (gate-7 page).");
-/** Invariant: a second Graduated for a token (single-fire violation, gate-2/§9.4). */
+/** Invariant: a second Graduated for a token (single-fire violation, gate-2). */
 const graduationDoubleFireTotal = new Counter("graduation_double_fire_total", "Repeat Graduated events for an already-graduated token (gate-7 page).");
 /** Redis publish failures (self-healing via REST, but tracked). */
 const redisPublishErrorsTotal = new Counter("redis_publish_errors_total", "Fire-and-forget Redis publish failures.");
-/** ETH/USD snapshot age (seconds); alert > 5m — USD goes 'dated', never silent (§2). */
+/** ETH/USD snapshot age (seconds); alert > 5m — USD goes 'dated', never silent. */
 const ethUsdSnapshotAgeSeconds = new Gauge("eth_usd_snapshot_age_seconds", "Age of the latest ETH/USD snapshot, seconds.");
 /**
- * v1.2 funding-cluster vol share (§8.5 / §10 gate-7 amend). `scope="token_max"`
+ * v1.2 funding-cluster vol share (gate-7 amend). `scope="token_max"`
  * = the largest per-token cluster share; `scope="platform"` = platform-wide.
  * The paired `_threshold_pct` and `_breach` gauges encode the M0 governance
  * thresholds (X% per-token, Y% platform) for the M4 alert delivery.

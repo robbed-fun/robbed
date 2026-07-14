@@ -1,5 +1,5 @@
 /**
- * Token-list sort definitions (§5.1 sorts; §12.22 formulas as config). SINGLE
+ * Token-list sort definitions (sorts; formulas as config). SINGLE
  * source for the ORDER BY expression AND the JS cursor-key computation so the
  * keyset cursor (pagination.ts) can never disagree with the DB ordering.
  *
@@ -9,7 +9,7 @@
  *
  * `graduation_eth` is a factory immutable identical across tokens, so `progress`
  * order == `real_eth_reserves` order; `mcap` order == `last_price_eth` order
- * because total supply is fixed (§6.1). trending = vol24h × e^(−age/halflife).
+ * because total supply is fixed. trending = vol24h × e^(−age/halflife).
  */
 import type { TokenListRow } from "../lib/db";
 import type { RankingConfig } from "../config/ranking";

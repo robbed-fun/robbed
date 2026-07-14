@@ -10,7 +10,7 @@ import { CREATOR_VAULT, WETH } from "@/shared/config/addresses";
 import type { CreatorTokenBucket } from "../lib/token-bucket";
 
 /**
- * ON-CHAIN FALLBACK (spec §12.69) for the post-grad creator buckets, used while
+ * ON-CHAIN FALLBACK for the post-grad creator buckets, used while
  * the indexer `token-claimable` endpoint isn't up yet (`useCreatorTokenClaimable`
  * returned `null`). Reads `CreatorVault.tokenBalanceOf(creator, token)` — the
  * value the shared schema documents as AUTHORITATIVE — for the aggregated WETH leg
@@ -23,7 +23,7 @@ import type { CreatorTokenBucket } from "../lib/token-bucket";
  * only when a `CreatorVault` exists on the target chain (`CREATOR_VAULT` defined;
  * v1/treasury-only deployments have none). Zero-balance buckets are dropped by the
  * caller via `hasClaimable`. `claimableUsd` is null here (no ETH/USD source on this
- * path; the API row carries USD for the WETH leg, §2 — never a fabricated figure).
+ * path; the API row carries USD for the WETH leg, — never a fabricated figure).
  */
 export function useOnchainCreatorTokenBuckets({
   creator,

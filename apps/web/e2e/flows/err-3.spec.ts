@@ -16,7 +16,7 @@ import {
   test,
 } from "../harness";
 
-// @flow:ERR-3 — Anti-sniper per-tx cap hit (early window) (§6.5)
+// @flow:ERR-3 — Anti-sniper per-tx cap hit (early window)
 // assertable-layers: on-chain · UI   (N/A indexed: reverted attempt → no Trade — waiver)
 test(
   "ERR-3 an over-cap early buy is prevented in UI and reverts on-chain if forced",

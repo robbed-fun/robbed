@@ -1,5 +1,5 @@
 /**
- * Moderation queue item projection (api.md §3.6): join of `tokens` + the
+ * Moderation queue item projection (api.md) join of `tokens` + the
  * API-owned `moderation_status`. Uses the frozen `moderationQueueItemSchema`.
  */
 import type {
@@ -11,7 +11,7 @@ import type { z } from "zod";
 
 // Derived from the frozen shared schema (single source of truth) — not a
 // redeclared shape. Shared exports the schema but no inferred alias for it;
-// flagged to hoodpad-shared to add `export type ModerationQueueItem` alongside
+// flagged to robbed-shared to add `export type ModerationQueueItem` alongside
 // the other api-types aliases for consistency.
 type ModerationQueueItem = z.infer<typeof moderationQueueItemSchema>;
 

@@ -18,7 +18,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:ERR-4 — Sell stays open while buys paused (§6.5)
+// @flow:ERR-4 — Sell stays open while buys paused
 // assertable-layers: on-chain · indexed · UI  (full 3-layer — the sell must be indexed)
 
 // ALWAYS restore pauseBuys=false even if the test fails mid-way, so this flow can
@@ -51,7 +51,7 @@ test(
       await sel.sellTab(page).click();
       await sel.maxButton(page).click();
       await sel.submitTrade(page).click();
-      // §12.56: soft-confirmed chip removed — prove the sell landed via the feed row.
+      // : soft-confirmed chip removed — prove the sell landed via the feed row.
       await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 15_000 });
     });
 

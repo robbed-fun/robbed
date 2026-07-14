@@ -1,5 +1,5 @@
 /**
- * Trade handler — curve child (indexer.md §3.2, M2-5 sub-task 5b).
+ * Trade handler — curve child (indexer.md, M2-5 sub-task 5b).
  *
  * Inserts a `trades` row (`venue='curve'`), updates live `tokens` state, applies
  * X-4 `real_token_reserves` maintenance, writes ONLY cost-basis columns on
@@ -37,7 +37,7 @@ ponder.on("BondingCurve:Trade", async ({ event, context }) => {
 
   const trader = lower(event.args.trader);
   const isBuy = event.args.isBuy;
-  const ethAmount = event.args.ethAmount; // GROSS (incl. fee, §12.15)
+  const ethAmount = event.args.ethAmount; // GROSS (incl. fee)
   const tokenAmount = event.args.tokenAmount;
   const fee = event.args.fee;
   const virtualEth = event.args.virtualEthReserves;
@@ -69,7 +69,7 @@ ponder.on("BondingCurve:Trade", async ({ event, context }) => {
     realEthReserves: realEth,
     realTokenReserves: isBuy ? row.realTokenReserves - tokenAmount : row.realTokenReserves + tokenAmount,
     lastPriceEth: price,
-    volumeEth24h: row.volumeEth24h + ethAmount, // best-effort live; decay job recomputes (§4.4)
+    volumeEth24h: row.volumeEth24h + ethAmount, // best-effort live; decay job recomputes
     tradeCount: row.tradeCount + 1n,
   }));
 
@@ -106,7 +106,7 @@ ponder.on("BondingCurve:Trade", async ({ event, context }) => {
     logIndex: event.log.logIndex,
   });
 
-  // Redis publish (§8.2) — fire-and-forget, gated to realtime (§9.3), no DB read.
+  // Redis publish — fire-and-forget, gated to realtime, no DB read.
   publishTrade({
     token: tokenAddress,
     trader,
@@ -122,7 +122,7 @@ ponder.on("BondingCurve:Trade", async ({ event, context }) => {
     blockTimestamp: Number(ts),
     confirmationState: "soft_confirmed",
   });
-  // Gate-7 (§9.4): observe publish→head latency, realtime only (backfill excluded).
+  // Gate-7 : observe publish→head latency, realtime only (backfill excluded).
   if (publishGate.enabled) observePublishToHeadMs(Date.now() - Number(ts) * 1000);
   for (const c of candleRows) {
     publishCandle({

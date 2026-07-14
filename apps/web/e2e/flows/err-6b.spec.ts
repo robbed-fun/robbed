@@ -12,9 +12,9 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:ERR-6b — Metadata mismatch verdict (server-side; §8.3)
+// @flow:ERR-6b — Metadata mismatch verdict (server-side)
 //
-// RE-SCOPED 2026-07-13 (USER-DIRECTED §12.57 SafetyStrip removal) — FLAGGED FOR
+// RE-SCOPED 2026-07-13 (USER-DIRECTED SafetyStrip removal) — FLAGGED FOR
 // ARCHITECT RATIFICATION (robbed-e2e; NOT self-ratified):
 //   The metadata-verdict UI surface — the deleted SafetyStrip's `MetadataTick`
 //   red "Metadata MISMATCH" state — no longer exists anywhere on token detail.
@@ -29,7 +29,7 @@ import {
 //   real, never client-overridden) while dropping only the vanished display.
 //
 //   LAYER CHANGE: on-chain · indexed · UI  →  on-chain · indexed (UI waived).
-//   Awaiting robbed-architect §12 ratification (coordinate with the §12.57
+// Awaiting robbed-architect ratification (coordinate with the
 //   amendment removing the SafetyStrip's metadata tick).
 //
 // Fixture: a token whose ON-CHAIN committed metadataHash ≠ the keccak of its

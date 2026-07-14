@@ -6,7 +6,7 @@ import { cn } from "@/shared/lib/utils";
  * TokenAddressLink — a token/creator address rendered short (`0x7fA3…c92E`) as a
  * link to the block-explorer page for that address.
  *
- * The explorer origin is NEVER hardcoded (spec §2 / CLAUDE.md chain-facts): the
+ * The explorer origin is NEVER hardcoded (/ CLAUDE.md chain-facts) the
  * URL is built from the CHAIN CONFIG via `shared/lib/chain`'s `explorer` builder,
  * which reads `robinhoodChain.blockExplorers.default.url` — correct on mainnet
  * (4663) AND testnet (46630) from ONE build-time-selected chain object.

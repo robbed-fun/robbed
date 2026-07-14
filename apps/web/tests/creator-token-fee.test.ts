@@ -10,9 +10,9 @@ import {
 import { isCreatorFeeUpdateFor } from "@/widgets/creator-earnings/model/ws";
 
 /**
- * Post-graduation creator-fee (§12.69) — WS reconcile decision + bucket projection.
+ * Post-graduation creator-fee — WS reconcile decision + bucket projection.
  *
- * The reconcile rule (§2.1/§5): a `creator_fee_split` (accrual) or
+ * The reconcile rule : a `creator_fee_split` (accrual) or
  * `creator_fee_claimed` (payout) for THIS creator must trigger a refetch of the
  * AUTHORITATIVE claimable (reconcile-to-indexed-truth), and an event for ANOTHER
  * creator must NEVER clobber the subject's cache. Proven here on the pure decision
@@ -91,7 +91,7 @@ function feeCollectedMsg(): WsMessage {
   });
 }
 
-describe("isCreatorFeeUpdateFor (WS reconcile decision, §12.69)", () => {
+describe("isCreatorFeeUpdateFor (WS reconcile decision)", () => {
   it("accrual split for THIS creator → refetch authoritative claimable", () => {
     expect(isCreatorFeeUpdateFor(splitMsg(CREATOR), CREATOR)).toBe(true);
   });
@@ -115,7 +115,7 @@ describe("isCreatorFeeUpdateFor (WS reconcile decision, §12.69)", () => {
   });
 });
 
-describe("post-grad bucket projection (§12.69)", () => {
+describe("post-grad bucket projection ", () => {
   const row = (over: Partial<CreatorTokenClaimable>): CreatorTokenClaimable => ({
     creator: CREATOR,
     token: TOKEN,

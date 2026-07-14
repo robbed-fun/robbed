@@ -8,7 +8,7 @@ import {
 } from "@/widgets/price-chart/model/candles";
 
 /**
- * Venue-continuous chart data (§5.2). ONE series across graduation → the frontend
+ * Venue-continuous chart data. ONE series across graduation → the frontend
  * only needs to keep the data ascending + unique (lightweight-charts requires it);
  * the merge of curve + V3 events already happened in the indexer.
  */

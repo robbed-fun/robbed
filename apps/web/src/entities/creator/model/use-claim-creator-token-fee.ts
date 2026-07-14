@@ -16,13 +16,13 @@ import { useConfirmationWatermarks } from "@/shared/lib/ws";
 import { type ClaimState, humanizeClaimError } from "./use-claim-creator-fee";
 
 /**
- * Post-graduation creator-fee CLAIM (spec §12.69) → `CreatorVault.claimERC20(creator,
+ * Post-graduation creator-fee CLAIM → `CreatorVault.claimERC20(creator,
  * token)`, the single-ERC20 analog of the pre-grad `claim(creator)`
  * (`use-claim-creator-fee`). One claim per `(creator, token)` bucket — the
  * aggregated WETH leg or a graduated launch-token leg.
  *
  * It reuses the pre-grad hook's `ClaimState` and the SHARED confirmation TIERS
- * (§2.1/§12.20) verbatim: the tier is derived from the INDEXED block via the live
+ * verbatim: the tier is derived from the INDEXED block via the live
  * `global:confirmations` watermark (`stateForBlock`), never self-reported, so a
  * just-mined claim sits at `soft_confirmed` and is NEVER rendered finalized
  * prematurely — the widget maps this through the same `ConfirmationBadge`.

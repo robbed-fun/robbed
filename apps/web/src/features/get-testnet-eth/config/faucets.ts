@@ -3,7 +3,7 @@ import { getDeployment } from "@robbed/shared/addresses";
 /**
  * Official testnet faucet endpoints — TESTNET-TARGET-ONLY config (FSD slice
  * `config` segment). Values are TRANSCRIBED from official sources, never
- * invented (§2/§13): spec §12.52 + docs/developers/runbooks/testnet.md §1/§3
+ * invented : + docs/developers/runbooks/testnet.md
  * (docs.robinhood.com/chain/connecting + Robinhood support article, retrieved
  * 2026-07-11; Chainlink/QuickNode fallbacks verified to target 46630).
  *
@@ -16,7 +16,7 @@ import { getDeployment } from "@robbed/shared/addresses";
 export interface FaucetLinks {
   /** Official faucet — supports `?address=` prefill (verified live 2026-07-12). */
   official: string;
-  /** Verified fallback faucets targeting the same chain (runbook §3). */
+  /** Verified fallback faucets targeting the same chain (runbook). */
   fallbacks: readonly { label: string; url: string }[];
 }
 

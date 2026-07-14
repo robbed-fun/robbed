@@ -18,7 +18,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:ERR-5 — Sell stays open while treasury reverts (§12.25)
+// @flow:ERR-5 — Sell stays open while treasury reverts
 // assertable-layers: on-chain · indexed · UI  (full 3-layer — the sell must SUCCEED + index)
 
 // ALWAYS restore the treasury to a plain EOA, else the reverting bytecode set by
@@ -37,7 +37,7 @@ test(
     await publicClient.waitForTransactionReceipt({ hash: buyHash });
 
     await assertOnChain("with a reverting treasury sink, the sell still succeeds", async () => {
-      // §12.25: the 1% fee accrues to a pull-payment balance, not pushed inline.
+      // : the 1% fee accrues to a pull-payment balance, not pushed inline.
       await makeTreasuryRevert();
 
       await page.goto(routes.token(token.token));
@@ -45,7 +45,7 @@ test(
       await sel.sellTab(page).click();
       await sel.maxButton(page).click();
       await sel.submitTrade(page).click();
-      // §12.56: soft-confirmed chip removed — prove the sell landed via the feed row.
+      // : soft-confirmed chip removed — prove the sell landed via the feed row.
       await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 15_000 });
     });
 
@@ -62,7 +62,7 @@ test(
     });
 
     await assertUi("the sell row reconciles to indexed truth (never dropped)", async () => {
-      // §12.56: soft-confirmed chip removed — the reconciled row is proven present.
+      // : soft-confirmed chip removed — the reconciled row is proven present.
       await expect(sel.tradeRows(page).first()).toBeVisible();
     });
   },

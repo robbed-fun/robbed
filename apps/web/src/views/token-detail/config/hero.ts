@@ -1,5 +1,5 @@
 /**
- * Fixed Token-Detail hero height (§5.2 layout — 2026-07-12 revision, supersedes
+ * Fixed Token-Detail hero height (layout — 2026-07-12 revision, supersedes
  * the viewport-fill approach).
  *
  * DECISION (robbed-frontend, recorded per web workflow):

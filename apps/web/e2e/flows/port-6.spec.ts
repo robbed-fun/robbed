@@ -14,7 +14,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:PORT-6 — Address-subject variant: viewing an arbitrary wallet (?address=) (§12.50a / catalog §3b)
+// @flow:PORT-6 — Address-subject variant: viewing an arbitrary wallet (?address=) (/ catalog)
 // assertable-layers: indexed · UI   (same read-only reads, different subject — waiver)
 test(
   "PORT-6 ?address= takes precedence, omits '· you', stays read-only, and swaps subjects cleanly",

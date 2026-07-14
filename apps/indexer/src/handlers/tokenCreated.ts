@@ -1,14 +1,14 @@
 /**
- * TokenCreated handler (indexer.md §3.1, M2-5 sub-task 5a).
+ * TokenCreated handler (indexer.md, M2-5 sub-task 5a).
  *
- * Seeds the `tokens` row: `creator` + `creator_fee_bps=0` from day 1 (§7);
+ * Seeds the `tokens` row: `creator` + `creator_fee_bps=0` from day 1;
  * `real_token_reserves = CURVE_SUPPLY` (X-4 seed); virtual reserves, graduation
- * threshold, and the per-token `trade_fee_bps` (§12.40d) all read PER-CURVE from
+ * threshold, and the per-token `trade_fee_bps` all read PER-CURVE from
  * the freshly-deployed `BondingCurve`'s public immutables via viem +
- * `bondingCurveAbi` (spec §12.38; see src/curveReader.ts for why per-curve and
+ * `bondingCurveAbi` (; see src/curveReader.ts for why per-curve and
  * not `config()`). `createToken` is low-frequency, so the bounded read set here
  * is not a hot path. `v3_pool_address` from the event `pool` (the pool is
- * pre-created at creation, §12.15 — but V3 Swap indexing still begins only at
+ * pre-created at creation, — but V3 Swap indexing still begins only at
  * Graduated). Idempotent: a token is created once, dedup by address (the read is
  * skipped entirely on re-delivery of an already-seeded token).
  *
@@ -37,7 +37,7 @@ ponder.on("CurveFactory:TokenCreated", async ({ event, context }) => {
   const existing = await context.db.find(tokens, { address: tokenAddress });
   if (existing) return;
 
-  // Per-curve on-chain read of the deploy immutables (§12.40d) — supersedes the
+  // Per-curve on-chain read of the deploy immutables — supersedes the
   // M2-4 env interim. Virtual reserves, curve supply (X-4 seed), graduation
   // threshold, and the per-token trade fee all come from THIS curve. Event-block
   // read first (Ponder-cached); `latest` fallback for pruned non-archive nodes
@@ -48,11 +48,11 @@ ponder.on("CurveFactory:TokenCreated", async ({ event, context }) => {
     address: tokenAddress,
     curveAddress,
     creator: lower(event.args.creator),
-    // §7 / §12.63: per-token snapshot of the curve's immutable CREATOR_FEE_BPS
+    // : per-token snapshot of the curve's immutable CREATOR_FEE_BPS
     // (read defensively → 0 for v1 curves that predate the leg). Populated from
     // day 1 so the API/UI can show the fee split with no migration.
     creatorFeeBps: curve.creatorFeeBps,
-    tradeFeeBps: curve.tradeFeeBps, // §12.40d: per-token snapshot, Trust-panel source
+    tradeFeeBps: curve.tradeFeeBps, // : per-token snapshot, Trust-panel source
     name: event.args.name,
     ticker: event.args.symbol,
     metadataHash: event.args.metadataHash.toLowerCase(),
@@ -79,7 +79,7 @@ ponder.on("CurveFactory:TokenCreated", async ({ event, context }) => {
     logIndex: event.log.logIndex,
   });
 
-  // Redis publish → Discover launches ticker (§5.1). imageUrl is null until the
+  // Redis publish → Discover launches ticker. imageUrl is null until the
   // metadata verifier (M2-7) fetches it; the launch card renders without it.
   publishLaunch({
     address: tokenAddress,

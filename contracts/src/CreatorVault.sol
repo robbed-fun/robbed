@@ -9,23 +9,23 @@ import {ICreatorVault} from "./interfaces/ICreatorVault.sol";
 import {ICurveFactory} from "./interfaces/ICurveFactory.sol";
 import {ZeroAddress, NotCurve, NotLpFeeVault, EthTransferFailed} from "./errors/Errors.sol";
 
-/// @title CreatorVault — pull-payment escrow for the creator-fee legs (spec §7, §12.63, §12.69)
+/// @title CreatorVault — pull-payment escrow for the creator-fee legs
 /// @notice Per-creator escrow with two pull-payment custody tracks. No owner, no admin withdraw, no
-///         upgrade path, no privileged functions — mirrors the {LPFeeVault} / §12.25 `sweepFees`
+/// upgrade path, no privileged functions — mirrors the {LPFeeVault} / `sweepFees`
 ///         minimalism discipline. Four external state-mutating functions:
-///           • `deposit(creator)`         — curve-only ETH credit (pre-graduation creator leg, §12.63)
+/// • `deposit(creator)` — curve-only ETH credit (pre-graduation creator leg)
 ///           • `claim(creator)`           — permissionless ETH payout to the creator
-///           • `depositERC20(c, tok, amt)`— LPFeeVault-only ERC20 credit (post-graduation split, §12.69)
+/// • `depositERC20(c, tok, amt)`— LPFeeVault-only ERC20 credit (post-graduation split)
 ///           • `claimERC20(c, tok)`       — permissionless ERC20 payout to the creator
 ///         Value leaves ONLY via a `claim*`, and only ever to the address that earned it.
 ///
-/// @dev THE load-bearing property (spec §6.5 "sells always open" / §12.25 / CLAUDE.md hard rule):
+/// @dev THE load-bearing property ("sells always open" / / CLAUDE.md hard rule):
 ///      a hostile/reverting creator address can NEVER freeze a curve buy or sell. Proven by
 ///      construction across three layers:
 ///
 ///      1. **No trade path touches this contract.** The curve accrues the creator-fee leg into its
 ///         own `accruedCreatorFees` accumulator during `buy`/`sell` and makes NO external call for it
-///         (identical discipline to the treasury leg's `accruedFees`, §12.25). Grep {BondingCurve}:
+/// (identical discipline to the treasury leg's `accruedFees`). Grep {BondingCurve}:
 ///         neither `buy` nor `sell` references the vault.
 ///
 ///      2. **The curve→vault push (`deposit`) never calls the creator.** `sweepCreatorFees()` is
@@ -42,7 +42,7 @@ import {ZeroAddress, NotCurve, NotLpFeeVault, EthTransferFailed} from "./errors/
 ///
 ///      - **`deposit` gated to factory-registered curves, `claim` fully permissionless.** Options
 ///        weighed: (a) fully-permissionless `deposit` — rejected: arbitrary donations would break the
-///        "vault balance == Σ swept creator fees, to the wei" exact-accounting invariant (§10 gate 2)
+/// "vault balance == Σ swept creator fees, to the wei" exact-accounting invariant (gate 2)
 ///        and let anyone inflate a creator's balance; (b) curve-gated `deposit` via
 ///        `factory.isCurve(msg.sender)` — CHOSEN: keeps accounting exact and mirrors {LPFeeVault}'s
 ///        NPM-gated `onERC721Received`. The factory reference resolves the factory↔vault deploy cycle
@@ -54,7 +54,7 @@ import {ZeroAddress, NotCurve, NotLpFeeVault, EthTransferFailed} from "./errors/
 ///        `recipient` parameter would let anyone redirect a creator's fees to themselves; rejected.
 ///      - **No `receive()`/`fallback()`.** Every wei enters through `deposit` and is attributed to a
 ///        creator on the way in, so there is never stray, unattributed ETH.
-///      - **ERC20 legs (§12.69) mirror the ETH leg's discipline exactly.** `depositERC20` is gated to
+/// - **ERC20 legs mirror the ETH leg's discipline exactly.** `depositERC20` is gated to
 ///        the factory-registered LPFeeVault (the ERC20 fee source), just as `deposit` is gated to
 ///        factory-registered curves — so the per-`(creator, token)` balance equals the sum of
 ///        collect-routed shares to the wei (exact accounting, no donation pollution). It PULLS via
@@ -95,7 +95,7 @@ contract CreatorVault is ICreatorVault, ReentrancyGuard {
 
     /// @inheritdoc ICreatorVault
     /// @dev CEI: zero the balance before the send; `nonReentrant` for defense-in-depth. A reverting
-    ///      creator bubbles `EthTransferFailed` (custom error, no revert string — spec §6.7) and
+    /// creator bubbles `EthTransferFailed` (custom error, no revert string) and
     ///      leaves the balance restored by the revert, so the claim is retriable once the address is
     ///      fixed. Zero balance is a no-op send (still emits, harmlessly).
     function claim(address creator) external override nonReentrant returns (uint256 amount) {
@@ -109,7 +109,7 @@ contract CreatorVault is ICreatorVault, ReentrancyGuard {
     }
 
     /// @inheritdoc ICreatorVault
-    /// @dev LPFeeVault-only (the post-graduation ERC20 fee source, §12.69). PULLS the exact amount the
+    /// @dev LPFeeVault-only (the post-graduation ERC20 fee source). PULLS the exact amount the
     ///      vault approved via `safeTransferFrom`, then accumulates — cannot revert for a legit vault,
     ///      so a `collect()` split can never be frozen here. Never calls the creator (the creator is
     ///      only ever paid by `claimERC20`), so a hostile creator cannot brick a collect or a trade.

@@ -1,5 +1,5 @@
 /**
- * Graduated handler (indexer.md §3.3, M2-5 sub-task 5c).
+ * Graduated handler (indexer.md, M2-5 sub-task 5c).
  *
  * Inserts the `graduations` row (single-fire per token — dedup on the
  * `token_address` PK, so a second `Graduated` is a no-op), flips `tokens.
@@ -10,7 +10,7 @@
  */
 import { ponder } from "ponder:registry";
 import { graduations, tokens } from "ponder:schema";
-// Chain's WETH from the registry-resolved config (§12.55(c)) — the shared
+// Chain's WETH from the registry-resolved config — the shared
 // WETH_ADDRESS constant is mainnet-only and MUST NOT decide token0 ordering here.
 import { config } from "../runtime";
 import { eventId, lower } from "../ids";
@@ -25,7 +25,7 @@ ponder.on("V3Migrator:Graduated", async ({ event, context }) => {
   // Single-fire: a second Graduated for the same token is a no-op (gate-2).
   const existing = await context.db.find(graduations, { tokenAddress });
   if (existing) {
-    incGraduationDoubleFire(); // gate-7 invariant page (§9.4) — advisory metric only
+    incGraduationDoubleFire(); // gate-7 invariant page — advisory metric only
     return;
   }
 
@@ -60,7 +60,7 @@ ponder.on("V3Migrator:Graduated", async ({ event, context }) => {
     tokenIsToken0: isToken0,
   });
 
-  // Redis publish → Trust panel venue switch (§5.2) + Discover (§5.1).
+  // Redis publish → Trust panel venue switch + Discover.
   publishGraduated({
     token: tokenAddress,
     pool: poolAddress,

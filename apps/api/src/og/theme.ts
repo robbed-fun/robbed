@@ -1,12 +1,12 @@
 /**
- * OG-image palette + canvas dimensions (api.md §3 OG endpoint; spec §5.2 share
+ * OG-image palette + canvas dimensions (api.md OG endpoint; share
  * card). PORTED verbatim from the frontend's `apps/web/src/shared/lib/og/theme.ts`
- * — the ROBBED_ terminal palette sampled from the ratified redesign (spec §12.50) (dark `#0B0D0B`
+ * — the ROBBED_ terminal palette sampled from the ratified redesign (dark `#0B0D0B`
  * canvas, green `#4ADE80` accent, the mono text ramp). The API is now the SINGLE
  * OG renderer (the web copy is being deleted), so this is the one place the OG
  * palette lives; there is no cross-service duplication once the port lands.
  *
- * These are literal render-time colors, NOT market metrics — the §2 "never
+ * These are literal render-time colors, NOT market metrics — the "never
  * hardcode market metrics" rule is about prices/TVL/volumes (which the card pulls
  * live from the indexer), not brand color values.
  */

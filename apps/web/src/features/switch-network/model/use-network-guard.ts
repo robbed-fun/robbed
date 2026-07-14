@@ -42,7 +42,7 @@ export interface NetworkGuard {
   mismatch: boolean;
   /** The wallet's current chain id (undefined when disconnected). */
   walletChainId: number | undefined;
-  /** The app's single target chain (env-selected, §12.55). */
+  /** The app's single target chain (env-selected). */
   targetChain: typeof robinhoodChain;
   /** True while a switch request is awaiting the wallet. */
   isPending: boolean;
@@ -57,7 +57,7 @@ export interface NetworkGuard {
  * Robinhood Chain configured ADDS it on switch — rather than relying only on the
  * connector's implicit 4902 fallback (unreliable across wallets/WC sessions).
  * Built from the single `robinhoodChain` config object so name / RPC / explorer /
- * native currency stay the canonical official values (§2 — never invented). The
+ * native currency stay the canonical official values (never invented). The
  * wagmi/core 2.22 `switchChain` mutation accepts this per-call variable (verified
  * against the installed `@wagmi/core` type). rpcUrls/blockExplorerUrls must be
  * PUBLIC URLs the wallet can reach (they come from the env RPC + Blockscout).

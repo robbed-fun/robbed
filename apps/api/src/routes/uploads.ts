@@ -1,5 +1,5 @@
 /**
- * POST /v1/uploads/image — API-mediated image pipeline (§12.19, api.md §3.1).
+ * POST /v1/uploads/image — API-mediated image pipeline (api.md).
  * Multipart, NOT a browser-direct presign (that would put unmoderated bytes on
  * the CDN). Pipeline: Content-Length + buffered ≤ 4MB cap → magic-byte MIME
  * sniff (never the header) → decode + re-encode (strips EXIF/polyglot) → keccak256

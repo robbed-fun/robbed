@@ -9,14 +9,14 @@ import { describe, expect, it } from "vitest";
  *
  * ONE Vitest suite over the whole `apps/web` (`app/` + `src/`) that folds
  * together every static guardrail the plan books as CI-blocking greps:
- *   - the per-page §8.3 greps (LP verb, exchange/finality framing, USD literals,
+ * - the per-page greps (LP verb, exchange/finality framing, USD literals,
  *     0x address literals, raw color-token bypass), and
- *   - the web.md §8.1 copy table's structural invariant (the LP sentence exists
+ * - the web.md copy table's structural invariant (the LP sentence exists
  *     ONLY via the shared constant), and
  *   - the FSD import-boundary rule (no upward / sibling-slice imports),
  * so a single `bun run test` fails if any is violated. Replaces the former
  * split copy-lint.test.ts + token-lint.test.ts (M3-2/M3-3), same coverage in one
- * suite. Basis: docs/developers/web.md §8.3 + §2.1 (FSD layers); spec §1/§2/§12.14.
+ * suite. Basis: docs/developers/web.md + (FSD layers);.
  *
  * IMPLEMENTATION NOTE: the forbidden phrases are NOT spelled out literally in
  * this file — they are assembled from fragments via `RegExp` so neither this
@@ -60,9 +60,9 @@ const EXCHANGE_FRAMING = new RegExp(
 const USD_LITERAL = /\$[0-9][0-9,.]*[kKmMbB]?/;
 const ADDRESS_LITERAL = /0x[0-9a-fA-F]{40}\b/;
 
-// ── (1) copy rules — spec §1 / §2 / §12.14 ────────────────────────────────────
+// ── (1) copy rules — ────────────────────────────────────
 
-describe("copy-lint · forbidden copy (spec §1/§2/§12.14)", () => {
+describe("copy-lint · forbidden copy ", () => {
   const files = sourceFiles();
 
   it("no forbidden LP verb in any source (CLAUDE.md hard rule)", () => {
@@ -70,12 +70,12 @@ describe("copy-lint · forbidden copy (spec §1/§2/§12.14)", () => {
     expect(hits, `forbidden LP verb in: ${hits.join(", ")}`).toEqual([]);
   });
 
-  it("no exchange / instant-settlement framing (§1)", () => {
+  it("no exchange / instant-settlement framing ", () => {
     const hits = files.filter((f) => EXCHANGE_FRAMING.test(read(f))).map(rel);
     expect(hits, `forbidden framing in: ${hits.join(", ")}`).toEqual([]);
   });
 
-  it("no numeric USD literals in code/copy (§2)", () => {
+  it("no numeric USD literals in code/copy ", () => {
     const hits = files.filter((f) => USD_LITERAL.test(read(f))).map(rel);
     expect(hits, `USD literal in: ${hits.join(", ")}`).toEqual([]);
   });
@@ -97,14 +97,14 @@ describe("copy-lint · forbidden copy (spec §1/§2/§12.14)", () => {
   });
 });
 
-// ── (1b) LP-copy PRESENCE on token detail — §12.14 must-render floor ──────────
-// The §12.14 LP sentence must render on /t/[address]. After both the Trust panel
+// ── (1b) LP-copy PRESENCE on token detail — must-render floor ──────────
+// The LP sentence must render on /t/[address]. After both the Trust panel
 // and (USER-DIRECTED 2026-07-13) the token-detail SafetyStrip were removed, the
 // sentence survives as the single muted `LP_DESTINY_COPY` footnote in TokenInfo.
 // Since the sentence may exist ONLY via the shared constant (rule 1 above),
 // presence is asserted by a token-detail surface REFERENCING that constant.
 
-describe("copy-lint · LP copy PRESENCE on token detail (§12.14 floor)", () => {
+describe("copy-lint · LP copy PRESENCE on token detail (floor)", () => {
   const TD_SURFACES = [join("src", "views", "token-detail")];
   const LP_CONST = /\bLP_(?:DESTINY_COPY|COPY)\b/;
 
@@ -120,12 +120,12 @@ describe("copy-lint · LP copy PRESENCE on token detail (§12.14 floor)", () => 
   });
 });
 
-// ── (2) address literals — spec §9 / web.md §2.3 ──────────────────────────────
+// ── (2) address literals — / web.md ──────────────────────────────
 // Only WETH (in shared/lib/chain.ts, itself sourced from @robbed/shared) and the
 // hand-authored address seam shared/config/addresses.ts (deriving from the
 // generated @robbed/shared map) may carry a 40-hex literal.
 
-describe("copy-lint · no inline address literals (spec §9)", () => {
+describe("copy-lint · no inline address literals ", () => {
   const ADDRESS_EXEMPT = [
     join("shared", "config", "addresses.ts"),
     join("shared", "lib", "chain.ts"),
@@ -140,15 +140,15 @@ describe("copy-lint · no inline address literals (spec §9)", () => {
   });
 });
 
-// ── (3) design-token bypass — spec §12.24 / web.md §7 ─────────────────────────
+// ── (3) design-token bypass — / web.md ─────────────────────────
 // No raw hex/rgb/hsl color or arbitrary color class in UI code. Exempt: the token
 // file (src/app/globals.css), the vendored shadcn kit (src/shared/ui/kit/** — code
 // we own), and the non-presentational plumbing segments (shared/lib|api|config),
 // which legitimately carry hex-like literals that are NOT token bypasses (e.g. a
 // wallet's `iconBackground`, chain metadata). This exemption set is the ratified
-// M3-2 lint's (web.md §8.3 plan note); the lint targets UI, not the data layer.
+// M3-2 lint's (web.md plan note); the lint targets UI, not the data layer.
 
-describe("copy-lint · design-token bypass (spec §12.24)", () => {
+describe("copy-lint · design-token bypass ", () => {
   const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\b(?:rgb|hsl)a?\(|\[(?:#|rgb|hsl)/;
   const COLOR_EXEMPT_SEGMENTS = [
     join("src", "app", "globals.css"),
@@ -174,14 +174,14 @@ describe("copy-lint · design-token bypass (spec §12.24)", () => {
   });
 });
 
-// ── (4) FSD import-boundary — web.md §2.1 (Feature-Sliced Design) ─────────────
+// ── (4) FSD import-boundary — web.md (Feature-Sliced Design) ─────────────
 // Strict downward imports only: app → views → widgets → features → entities →
 // shared. A module may import ONLY from a layer strictly below it; sibling slices
 // on the SAME layer are isolated (cross-slice access is forbidden even via the
 // public barrel). Grep-based check (the plan permits this until the `steiger`
-// FSD linter is wired — web.md §2.1 "Import-boundary linter: TODO").
+// FSD linter is wired — web.md "Import-boundary linter: TODO").
 
-describe("copy-lint · FSD import boundaries (web.md §2.1)", () => {
+describe("copy-lint · FSD import boundaries (web.md)", () => {
   const RANK: Record<string, number> = {
     shared: 0,
     entities: 1,

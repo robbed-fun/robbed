@@ -24,25 +24,25 @@ import {
 } from "./errors/Errors.sol";
 
 /// @title BondingCurve — virtual-reserve constant-product curve with in-contract pull-payment fees
-///        (spec §6.2, §6.4, §6.5, §12.11, §12.12, §12.18, §12.25; contracts.md §2.3, §3.2–3.4)
+/// (contracts.md)
 /// @notice One instance per token, CREATE2-deployed by {CurveFactory} with a constant init-code
 ///         hash (it takes NO constructor args and reads its parameters back from the factory). Holds
 ///         the full 1B supply at birth and every wei of raised ETH. All fees are computed HERE, in
-///         contract — never caller-supplied (spec §4.1). Only the Router may trade; `graduate()`
+/// contract — never caller-supplied. Only the Router may trade; `graduate()`
 ///         and `sweepFees()` are permissionless.
 ///
-/// @dev Three load-bearing engineering decisions (recorded for the hoodpad-security gate):
+/// @dev Three load-bearing engineering decisions (recorded for the robbed-security gate):
 ///
-///      1. **Pull-payment fee escrow (§12.25 — THE mechanism that makes sells unfreezable).**
+/// 1. **Pull-payment fee escrow (THE mechanism that makes sells unfreezable).**
 ///         The treasury ETH-leg fee is added to the `accruedFees` accumulator on both buys and sells
 ///         and is NEVER pushed to the treasury on any trade path. A separate permissionless,
 ///         non-phase-gated `sweepFees()` pulls it to the live treasury. **The Phase-2 creator-fee leg
-///         (spec §7, §12.63) mirrors this discipline EXACTLY:** it is an ADDITIVE second ETH-leg fee
+/// mirrors this discipline EXACTLY:** it is an ADDITIVE second ETH-leg fee
 ///         (`accruedCreatorFees`), taken on both directions under the same ≤2% hard cap
 ///         (`TRADE_FEE_BPS + CREATOR_FEE_BPS ≤ 200`, enforced by the factory), accrued in-contract
 ///         during the trade, and pushed out ONLY by the separate permissionless `sweepCreatorFees()`
 ///         → CreatorVault. No trade path calls the treasury OR the creator OR the vault, so neither a
-///         hostile treasury (§12.25) nor a hostile creator (§12.63) can freeze a buy or a sell. At
+/// hostile treasury nor a hostile creator can freeze a buy or a sell. At
 ///         `CREATOR_FEE_BPS == 0` the creator leg is inert and every path is byte-identical to the
 ///         treasury-only v1. Alternatives weighed:
 ///         (a) push the fee to the treasury inside each trade (the Gnad/original design) — rejected
@@ -51,7 +51,7 @@ import {
 ///         sell-freeze backdoor (threat-model UM-1); (b) push only on buys, accrue on sells —
 ///         rejected as asymmetric and still leaks a treasury dependency into a value path. The
 ///         pull model mirrors the audited `LPFeeVault.collect()` pattern (pull-over-push is the
-///         canonical OZ guidance for untrusted recipients) and is what restores the §6.5 "sells
+/// canonical OZ guidance for untrusted recipients) and is what restores the "sells
 ///         always open" guarantee *by construction*: grep this contract — no trade function calls
 ///         `treasury`. Protected invariant: solvency `balance >= realEthReserves + accruedFees`.
 ///
@@ -63,14 +63,14 @@ import {
 ///         the terminal `NotReady`/`NotTrading` phase check); a re-entrant `sweepFees()` would see
 ///         `accruedFees == 0`. Chosen the storage-based guard over `ReentrancyGuardTransient`
 ///         deliberately: v1 makes no EIP-1153/Cancun availability assumption on ArbOS (foundry.toml
-///         §7.1). A malicious `recipient`/`refundTo` that reverts on receive only reverts THEIR OWN
-///         trade — no shared state is poisoned (spec §5.4).
+/// ). A malicious `recipient`/`refundTo` that reverts on receive only reverts THEIR OWN
+/// trade — no shared state is poisoned.
 ///
 ///      3. **CREATE2 constant-init-code contract with a factory-callback constructor.** No
 ///         constructor args ⇒ the factory can precompute this address and mint the token supply
 ///         here before deployment (see {CurveFactory} decision #1). Immutables are hydrated once
 ///         from `ICurveFactory(msg.sender).curveParameters()` — a snapshot, so a later owner retune
-///         of curve economics cannot touch this live curve (spec §6.4).
+/// of curve economics cannot touch this live curve.
 contract BondingCurve is IBondingCurve, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -124,17 +124,17 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard {
     uint256 internal _realTokenReserves; // tokens still available for sale (init CURVE_SUPPLY)
 
     /// @inheritdoc IBondingCurve
-    uint256 public override accruedFees; // unswept treasury ETH-leg trade fees (§12.25)
+    uint256 public override accruedFees; // unswept treasury ETH-leg trade fees
     /// @inheritdoc IBondingCurve
-    uint256 public override accruedCreatorFees; // unswept creator ETH-leg fees (§7, §12.63)
+    uint256 public override accruedCreatorFees; // unswept creator ETH-leg fees
     /// @inheritdoc IBondingCurve
     Phase public override phase;
 
     // ─────────────────────────────── Constructor ───────────────────────────────
 
     /// @dev No arguments — the factory stages the parameters and this reads them back, keeping the
-    ///      CREATE2 init-code hash constant (contracts.md §2.2). `createdAt`/`EARLY_WINDOW_END` are
-    ///      `block.timestamp`-based (spec §12.18) — NEVER the L1-estimating block-height opcode.
+    /// CREATE2 init-code hash constant (contracts.md). `createdAt`/`EARLY_WINDOW_END` are
+    /// `block.timestamp`-based — NEVER the L1-estimating block-height opcode.
     constructor() {
         factory = msg.sender;
         ICurveFactory.CurveParameters memory p = ICurveFactory(msg.sender).curveParameters();
@@ -160,7 +160,7 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard {
         createdAt = nowTs;
         EARLY_WINDOW_END = nowTs + p.earlyWindowSeconds;
 
-        // Seed reserves. `CREATOR_FEE_BPS` (§7, §12.63) is snapshotted above; at 0 (v1/mainnet) the
+        // Seed reserves. `CREATOR_FEE_BPS` is snapshotted above; at 0 (v1/mainnet) the
         // creator leg is inert and every path is byte-identical to the treasury-only build.
         _virtualEthReserves = p.virtualEth0;
         _virtualTokenReserves = p.virtualToken0;
@@ -183,18 +183,18 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard {
         uint256 grossIn = msg.value;
         if (grossIn == 0) revert ZeroAmount();
 
-        // §12.18 anti-sniper: per-tx gross cap inside the timestamp window (never the height opcode).
+        // anti-sniper: per-tx gross cap inside the timestamp window (never the height opcode).
         if (block.timestamp < EARLY_WINDOW_END && grossIn > MAX_EARLY_BUY) {
             revert EarlyBuyCapExceeded(grossIn, MAX_EARLY_BUY);
         }
 
-        // Two ADDITIVE in-contract ETH-leg fees (spec §4.1 — never caller-supplied): the treasury leg
-        // (`fee` → accruedFees, §12.25) and the Phase-2 creator leg (`creatorFee` → accruedCreatorFees,
-        // §7/§12.63). Both floored independently; `TRADE_FEE_BPS + CREATOR_FEE_BPS ≤ 200` is guaranteed
+        // Two ADDITIVE in-contract ETH-leg fees (never caller-supplied) the treasury leg
+        // (`fee` → accruedFees) and the Phase-2 creator leg (`creatorFee` → accruedCreatorFees,
+        // ). Both floored independently; `TRADE_FEE_BPS + CREATOR_FEE_BPS ≤ 200` is guaranteed
         // by the factory. At CREATOR_FEE_BPS == 0 the creator term is 0 and `net` matches the
         // treasury-only build to the wei. The bps/clamp temporaries are scoped in a block (freed) so
         // this frame stays shallow enough to compile without via-IR (keeps verified bytecode stable,
-        // contracts.md §2.4 / decision-#3 stack-depth management).
+        // contracts.md / decision-#3 stack-depth management).
         uint256 net;
         uint256 refund;
         uint256 creatorFee;
@@ -205,7 +205,7 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard {
             creatorFee = (grossIn * cBps) / BPS_DENOMINATOR;
             net = grossIn - fee - creatorFee;
 
-            // §12.11 graduation-boundary clamp: a buy may not push net real reserves past GRADUATION_ETH.
+            // graduation-boundary clamp: a buy may not push net real reserves past GRADUATION_ETH.
             uint256 remaining = GRADUATION_ETH - _realEthReserves; // > 0 while Trading (see below)
             if (net > remaining) {
                 net = remaining;
@@ -219,7 +219,7 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard {
                 // At cBps == 0 (single floor) acceptedEthGross <= grossIn is provable, so this is a
                 // no-op there — byte-identical to the treasury-only clamp.
                 if (acceptedEthGross > grossIn) acceptedEthGross = grossIn;
-                uint256 totalFee = acceptedEthGross - net; // exact-fee-on-clamp definition (§12.11)
+                uint256 totalFee = acceptedEthGross - net; // exact-fee-on-clamp definition
                 // Split the clamp residual proportionally by bps so treasury + creator == totalFee to
                 // the wei (net + fee + creatorFee == acceptedEthGross exactly). At cBps == 0 →
                 // creatorFee 0, fee == totalFee: identical to the single-leg clamp. `totBps == 0` guard
@@ -251,10 +251,10 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard {
         _virtualTokenReserves -= tokensOut;
         _realEthReserves = newRealEth;
         _realTokenReserves = realTok - tokensOut;
-        accruedFees += fee; // NO treasury push (§12.25)
-        accruedCreatorFees += creatorFee; // NO creator/vault push on the trade path (§12.63)
+        accruedFees += fee; // NO treasury push
+        accruedCreatorFees += creatorFee; // NO creator/vault push on the trade path
         bool crossed = newRealEth == GRADUATION_ETH;
-        if (crossed) phase = Phase.ReadyToGraduate; // two-way lock (§12.12)
+        if (crossed) phase = Phase.ReadyToGraduate; // two-way lock
 
         // ── Interactions: refund → refundTo, tokens → recipient. No treasury call. ──
         if (refund != 0) _sendEth(refundTo, refund);
@@ -268,7 +268,7 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard {
 
     /// @inheritdoc IBondingCurve
     /// @dev NO pause flag is read on this path and NO treasury call is made — sells are unfreezable
-    ///      by construction (spec §6.5, §12.25). The Router has already moved `tokenAmount` into
+    /// by construction. The Router has already moved `tokenAmount` into
     ///      this curve before calling.
     function sell(address trader, address recipient, uint256 tokenAmount, uint256 minEthOut)
         external
@@ -281,7 +281,7 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard {
         if (tokenAmount == 0) revert ZeroAmount();
 
         uint256 ethOutGross = CurveMath.sellEthOut(_virtualEthReserves, _virtualTokenReserves, tokenAmount);
-        // Both ETH-leg fees taken on the sell side too (spec §6.2 "both directions"). Treasury leg
+        // Both ETH-leg fees taken on the sell side too ("both directions"). Treasury leg
         // (`fee`) and creator leg (`creatorFee`) floored independently; net is what the seller keeps.
         // At CREATOR_FEE_BPS == 0 → creatorFee 0, ethOut == ethOutGross - fee: identical to v1.
         fee = (ethOutGross * TRADE_FEE_BPS) / BPS_DENOMINATOR;
@@ -296,10 +296,10 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard {
         _virtualEthReserves -= ethOutGross;
         _realTokenReserves += tokenAmount;
         _realEthReserves -= ethOutGross;
-        accruedFees += fee; // NO treasury push (§12.25)
-        accruedCreatorFees += creatorFee; // NO creator/vault push on the trade path (§12.63)
+        accruedFees += fee; // NO treasury push
+        accruedCreatorFees += creatorFee; // NO creator/vault push on the trade path
 
-        // Curve ETH exits the global beta-cap sum; negative delta NEVER reverts (contracts.md §5.3).
+        // Curve ETH exits the global beta-cap sum; negative delta NEVER reverts (contracts.md).
         ICurveFactory(factory).recordEthDelta(-int256(ethOutGross));
 
         // ── Interaction: pay the seller net. No treasury call. ──
@@ -310,7 +310,7 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard {
         );
     }
 
-    // ─────────────────────────── Fee escrow (§12.25) ────────────────────────────
+    // ─────────────────────────── Fee escrow ────────────────────────────
 
     /// @inheritdoc IBondingCurve
     function sweepFees() external override nonReentrant returns (uint256 swept) {
@@ -362,13 +362,13 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard {
         t.safeTransfer(migrator, t.balanceOf(address(this)));
 
         // Entire ETH balance MINUS both unswept fee escrows (treasury leg withheld for sweepFees
-        // §12.25; creator leg withheld for sweepCreatorFees §12.63) → migrator. Solvency guarantees
+        //; creator leg withheld for sweepCreatorFees) → migrator. Solvency guarantees
         // balance >= accruedFees + accruedCreatorFees, so this cannot underflow; it leaves the curve
         // holding exactly the two escrows, each drained to 0 by its permissionless sweep → the
-        // post-graduation "zero value" invariant (unswept fees excluded, §12.25/§12.63).
+        // post-graduation "zero value" invariant (unswept fees excluded).
         uint256 ethForMigrator = address(this).balance - accruedFees - accruedCreatorFees;
         IV3Migrator(migrator).migrate{value: ethForMigrator}(token);
-        // `Graduated` is emitted by the migrator (canonical event home, contracts.md §2.5).
+        // `Graduated` is emitted by the migrator (canonical event home, contracts.md).
     }
 
     // ──────────────────────────────── Views ────────────────────────────────────
@@ -430,13 +430,13 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard {
 
     // ─────────────────────────────── Internal ──────────────────────────────────
 
-    /// @dev Low-level ETH send with a typed revert (spec §5.4 — custom errors, no revert strings).
+    /// @dev Low-level ETH send with a typed revert (custom errors, no revert strings).
     function _sendEth(address to, uint256 amount) private {
         (bool ok,) = to.call{value: amount}("");
         if (!ok) revert EthTransferFailed();
     }
 
-    /// @notice Accepts ETH donations (spec §5.7). Never credited to reserves: pre-graduation
+    /// @notice Accepts ETH donations. Never credited to reserves: pre-graduation
     ///         donations are swept into the migrator at graduation; the solvency invariant uses
     ///         `>=`, so a donation only ever widens the balance/reserve gap. Empty body, no phase
     ///         read — a post-graduation donation is inert (not extractable, not swept).

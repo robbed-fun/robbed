@@ -17,7 +17,7 @@ import {
   warpTime,
 } from "../harness";
 
-// @flow:ERR-1 — Slippage revert (buy or sell) (§5.2)
+// @flow:ERR-1 — Slippage revert (buy or sell)
 // assertable-layers: on-chain · UI   (N/A indexed: reverted tx → no Trade — waiver)
 test(
   "ERR-1 a buy under the min-received guard reverts and never promotes an optimistic row",

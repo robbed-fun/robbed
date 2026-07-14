@@ -1,4 +1,4 @@
-/** WS message envelope + per-type schemas (indexer.md §8.2). */
+/** WS message envelope + per-type schemas (indexer.md). */
 import { describe, expect, it } from "bun:test";
 import {
   wsClientOpSchema,
@@ -61,7 +61,7 @@ describe("envelope { v:1, type, channel, seq, ts, data }", () => {
   });
 });
 
-describe("per-type payloads (indexer.md §8.2)", () => {
+describe("per-type payloads (indexer.md)", () => {
   const base = { v: 1, seq: 1, ts: 1767950000000 };
 
   it("candle", () => {
@@ -78,7 +78,7 @@ describe("per-type payloads (indexer.md §8.2)", () => {
     expect(wsMessageSchema.safeParse(msg).success).toBe(true);
     expect(
       wsMessageSchema.safeParse({ ...msg, data: { ...msg.data, interval: "30s" } }).success,
-    ).toBe(false); // not in the ratified §12.17 set
+    ).toBe(false); // not in the ratified set
   });
 
   it("launch (token card projection)", () => {
@@ -105,7 +105,7 @@ describe("per-type payloads (indexer.md §8.2)", () => {
     expect(wsMessageSchema.safeParse(msg).success).toBe(true);
   });
 
-  it("confirmations watermark + reorg (spec §12.20; indexer.md §5.3)", () => {
+  it("confirmations watermark + reorg (indexer.md)", () => {
     expect(
       wsMessageSchema.safeParse({
         ...base, type: "confirmations", channel: "global:confirmations",
@@ -157,7 +157,7 @@ describe("per-type payloads (indexer.md §8.2)", () => {
     ).toBe(false);
   });
 
-  it("creator_fee_split parses (§12.69 post-grad 50/50) — both beneficiaries, both legs", () => {
+  it("creator_fee_split parses (post-grad 50/50) — both beneficiaries, both legs", () => {
     const msg = {
       ...base, type: "creator_fee_split", channel: `token:${ADDR}:events`,
       data: {
@@ -175,7 +175,7 @@ describe("per-type payloads (indexer.md §8.2)", () => {
     ).toBe(false);
   });
 
-  it("creator_fee_claimed parses (§12.69 post-grad claim) — single ERC20 payout", () => {
+  it("creator_fee_claimed parses (post-grad claim) — single ERC20 payout", () => {
     const msg = {
       ...base, type: "creator_fee_claimed", channel: `token:${ADDR}:events`,
       data: {
@@ -200,7 +200,7 @@ describe("per-type payloads (indexer.md §8.2)", () => {
   });
 });
 
-describe("client ops (sub/unsub/ping only — api.md §6.5)", () => {
+describe("client ops (sub/unsub/ping only — api.md)", () => {
   it("accepts sub/unsub with channel and bare ping", () => {
     expect(wsClientOpSchema.safeParse({ op: "sub", channel: "global:trades" }).success).toBe(true);
     expect(wsClientOpSchema.safeParse({ op: "unsub", channel: `token:${ADDR}:trades` }).success).toBe(true);

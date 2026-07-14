@@ -10,28 +10,9 @@
  *  a. links     — every relative markdown link/image in *.md (repo root +
  *                 docs/**) resolves to an existing file, and its #anchor (if
  *                 any) to a real heading (GitHub slug rules).
- *  b. spec-ref  — every §N / §N.M / §N.M.K reference in docs/** resolves to a
- *                 section that exists. Valid targets: numbered headings in
- *                 docs/spec.md plus numbered list items scoped under them
- *                 (so §12.15 = decision 15 under "## 12", §6.3.2 = step 2
- *                 under "### 6.3"). Docs also use § for their OWN sections
- *                 ("see §3.4 of this doc") and for other docs named on the
- *                 same line ("contracts.md §2.3/§2.4"), so a bare reference
- *                 is accepted if it exists in the spec OR the containing file
- *                 OR any doc mentioned (by basename, with or without .md)
- *                 earlier in the same line. A reference immediately preceded
- *                 by "<name>.md" is resolved strictly against that named doc;
- *                 if a bare basename ever matches more than one known
- *                 location, the ref is accepted when it resolves in ANY
- *                 candidate — basename collisions must not manufacture false
- *                 positives (basenames are unique by policy since 2026-07-12;
- *                 defense-in-depth, see docs/README.md). One immediately
- *                 preceded by the word "spec" resolves strictly against
- *                 docs/spec.md.
- *                 Limitation (deliberate, to keep false positives near
- *                 zero): a bare ref that is broken as a spec ref but happens
- *                 to exist under a doc name mentioned anywhere on the line —
- *                 or as a local section — is not flagged.
+ *  b. (removed)  — the old "spec-ref" gate resolved section-number references
+ *                 against the retired spec doc. The design docs cross-link
+ *                 by markdown anchor (covered by check a).
  *  c. lp-copy   — canonical LP sentence. Any line in docs/** or README.md
  *                 that starts the sentence ("LP principal permanently
  *                 locked") must carry the full canonical body; and the burn
@@ -65,7 +46,7 @@
  *                      /(implementation-plan|progress|status-report|standup|
  *                      roadmap-tracker)/i anywhere outside .claude/;
  *                 (h2) every *.md under docs/ must be in the sanctioned set —
- *                      docs-root allowlist (README/spec/CONTRIBUTING/SECURITY)
+ *                      docs-root allowlist (README/CONTRIBUTING/SECURITY)
  *                      or a sanctioned subdir (users/, developers/ — the latter
  *                      includes developers/runbooks/);
  *                 (h3) machine-consumed files must exist at the exact paths
@@ -176,8 +157,8 @@ function parseMd(path: string): MdFile {
     });
 
   // headings -> slugs + numbered sections; numbered list items under the
-  // deepest numbered heading extend the section set (spec §12 decisions,
-  // §6.3 graduation steps, ...)
+  // deepest numbered heading extend the section set (numbered decisions,
+  // graduation steps, ...)
   const slugs = new Set<string>();
   const looseSlugs = new Set<string>();
   const taken = new Map<string, number>();
@@ -202,10 +183,10 @@ function parseMd(path: string): MdFile {
         for (let k = 1; k < parts.length; k++) sections.add(parts.slice(0, k).join("."));
       } else if (level <= currentNumLevel) {
         // unnumbered heading at the same or shallower depth ends the numbered
-        // scope; a DEEPER unnumbered heading (e.g. spec §12's "### Integration-
+        // scope; a DEEPER unnumbered heading (e.g. a numbered section's "### Integration-
         // seam reconciliation sweep" inside "## 12. Resolved Decisions") is a
         // visual grouping — numbered list items after it still belong to the
-        // enclosing numbered section (§12.38–§12.50).
+        // enclosing numbered section.
         currentNum = null;
         currentNumLevel = 0;
       }
@@ -222,10 +203,7 @@ function parseMd(path: string): MdFile {
 const mdFiles = new Map<string, MdFile>();
 for (const p of allMd) mdFiles.set(p, parseMd(p));
 
-const SPEC_PATH = join(ROOT, "docs/spec.md");
-const spec = mdFiles.get(SPEC_PATH);
-
-// strip inline code spans so `[x]` / `§y` inside backticks can't confuse the
+// strip inline code spans so `[x]` inside backticks can't confuse the
 // line-level regexes (positions preserved by padding with spaces)
 function stripInlineCode(line: string): string {
   return line.replace(/`[^`]*`/g, (m) => " ".repeat(m.length));
@@ -273,78 +251,8 @@ for (const f of mdFiles.values()) {
   }
 }
 
-// ── check b: § references in docs/** ─────────────────────────────────────────
-
-const SECREF_RE = /§\s?(\d+(?:\.\d+)*)/g;
-
-// All docs a name could denote. Basenames are unique by policy since the
-// 2026-07-12 docs refactor, but if a bare basename ever collides again the
-// caller accepts a ref that resolves in ANY candidate so collisions don't
-// manufacture false positives (same near-zero-FP stance as the bare-ref
-// limitation above).
-function findNamedDocs(name: string, fromDir: string): MdFile[] {
-  const candidates = new Set([
-    resolve(fromDir, name),
-    join(ROOT, name),
-    join(ROOT, "docs", name),
-    join(ROOT, "docs", "users", name),
-    join(ROOT, "docs", "developers", name),
-  ]);
-  const out: MdFile[] = [];
-  for (const c of candidates) {
-    if (mdFiles.has(c)) out.push(mdFiles.get(c)!);
-    else if (existsSync(c) && c.endsWith(".md")) out.push(parseMd(c));
-  }
-  return out; // empty: named doc we can't locate — stay silent
-}
-
-// doc tokens ("contracts.md", "contracts", "architecture", ...) -> files, so
-// "contracts.md §2.3/§2.4" and "architecture.md §6" resolve against the doc
-// named on the line even when the ref itself isn't adjacent to the name
-const docByToken = new Map<string, MdFile[]>();
-for (const f of mdFiles.values()) {
-  const base = basename(f.path).toLowerCase();
-  for (const t of [base, base.replace(/\.md$/, "")]) {
-    docByToken.set(t, [...(docByToken.get(t) ?? []), f]);
-  }
-}
-const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const docTokenRes = [...docByToken.keys()].map(
-  (t) => [new RegExp(`(?:^|[^\\w.-])${escapeRe(t)}(?![\\w-])`, "i"), docByToken.get(t)!] as const,
-);
-
-for (const f of mdFiles.values()) {
-  if (!rel(f.path).startsWith("docs/")) continue;
-  for (let i = 0; i < f.lines.length; i++) {
-    const line = f.lines[i]; // fenced lines included: § refs in code comments are real refs
-    if (!line.includes("§")) continue;
-    let lineDocs: MdFile[] | null = null; // lazily computed
-    for (const m of line.matchAll(SECREF_RE)) {
-      const ref = m[1];
-      const before = line.slice(Math.max(0, m.index! - 40), m.index!);
-      const named = before.match(/([\w./-]+\.md)[`'")\]]*[\s(]*$/);
-      let ok: boolean;
-      let where: string;
-      if (named && basename(named[1]) !== "spec.md") {
-        const docs = findNamedDocs(named[1], dirname(f.path));
-        if (docs.length === 0) continue;
-        ok = docs.some((d) => d.sections.has(ref));
-        where = named[1];
-      } else if (named || /\bspec['’s]*[\s:(]*$/i.test(before)) {
-        ok = spec?.sections.has(ref) ?? true;
-        where = "docs/spec.md";
-      } else {
-        ok = (spec?.sections.has(ref) ?? true) || f.sections.has(ref);
-        if (!ok) {
-          lineDocs ??= docTokenRes.filter(([re]) => re.test(line)).flatMap(([, docs]) => docs);
-          ok = lineDocs.some((d) => d.sections.has(ref));
-        }
-        where = "docs/spec.md (or this file / a doc named on the line)";
-      }
-      if (!ok) report(rel(f.path), i + 1, "spec-ref", `§${ref} does not resolve to any section of ${where}`);
-    }
-  }
-}
+// (check b "spec-ref" removed with the spec retirement — section-number
+//  references are no longer used anywhere; the design docs cross-link by anchor.)
 
 // ── check c: canonical LP sentence + burn-in-LP-context heuristic ────────────
 
@@ -476,7 +384,7 @@ for (const p of walkMd(ROOT, [])) {
 
 // h2. Every *.md under docs/ must be in the sanctioned set (docs/README.md map).
 const DOCS_ROOT_MD_ALLOWLIST = new Set([
-  "README.md", "spec.md", "CONTRIBUTING.md", "SECURITY.md",
+  "README.md", "CONTRIBUTING.md", "SECURITY.md",
 ]);
 const DOCS_SANCTIONED_SUBDIRS = new Set(["users", "developers"]);
 for (const p of docsMd) {
@@ -492,7 +400,6 @@ for (const p of docsMd) {
 // h3. Machine-consumed files must exist where their consumer scripts point —
 // a move without re-pointing fails HERE with a named error, not silently.
 const MACHINE_CONSUMED: [string, string][] = [
-  ["docs/spec.md", "scripts/doc-check.ts spec-ref resolution (SPEC_PATH)"],
   ["docs/developers/runbooks/env-inventory.md", "scripts/env-sync-check.ts (env-sync gate)"],
   ["apps/web/e2e/user-flows.md", "scripts/e2e-coverage.ts (e2e coverage gate CATALOG)"],
   ["apps/web/e2e/user-flows-waivers.md", "scripts/e2e-coverage.ts (e2e coverage gate WAIVERS)"],

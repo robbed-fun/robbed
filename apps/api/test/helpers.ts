@@ -63,7 +63,7 @@ export function fixtureToken(overrides: Partial<TokenDetailRow> = {}): TokenDeta
     curve_address: TEST_CURVE,
     creator: TEST_CREATOR,
     creator_fee_bps: 0,
-    trade_fee_bps: 100, // §12.40d per-curve snapshot (Trust/card fee source)
+    trade_fee_bps: 100, // per-curve snapshot (Trust/card fee source)
     name: "Test Token",
     ticker: "TEST",
     metadata_hash: "0x" + "ab".repeat(32),
@@ -233,7 +233,7 @@ export class FakeDb implements Db {
   };
   tokens = new Map<string, TokenDetailRow>();
   moderation = new Map<string, ModerationStatusRow>();
-  // ── portfolio fixtures (spec §5.4) ──
+  // ── portfolio fixtures ──
   pnl = new Map<string, AddressPnlRow>();
   holdings = new Map<string, PortfolioHoldingRow[]>();
   addressTrades: TradeRowDb[] = [];
@@ -366,12 +366,12 @@ export class FakeDb implements Db {
   async getLpTokenId(a: string) {
     return this.tokens.get(a)?.lp_token_id ?? null;
   }
-  // ── creator-fee claimable (§12.63) ──
+  // ── creator-fee claimable ──
   creatorClaimable = new Map<string, CreatorClaimableRow>();
   async getCreatorClaimable(creator: string): Promise<CreatorClaimableRow | null> {
     return this.creatorClaimable.get(creator) ?? null;
   }
-  // ── post-grad split roll-up (§12.69) — keyed `${creator}:${token}` ──
+  // ── post-grad split roll-up — keyed `${creator}:${token}` ──
   creatorTokenClaimable = new Map<string, CreatorTokenClaimableRow>();
   async getCreatorTokenClaimable(
     creator: string,
@@ -414,7 +414,7 @@ export class FakeDb implements Db {
       treasuryFeesCollectedWeth: "0",
     };
   }
-  // ── internal dashboard fixtures (D-4; api.md §3.7) ──
+  // ── internal dashboard fixtures (D-4; api.md) ──
   flowStats = new Map<string, TokenFlowStatsRow>();
   flagSummaries = new Map<string, TokenFlagSummary>();
   competitorSnapshots: CompetitorSnapshotRow[] = [];
@@ -549,10 +549,10 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     databaseUrlRo: "",
     databaseUrlRw: "",
     adminAllowlist: new Set<string>(),
-    // Public-CORS allowlist (api.md §6.1) — cors.test.ts uses this origin.
+    // Public-CORS allowlist (api.md) — cors.test.ts uses this origin.
     corsAllowedOrigins: new Set<string>(["https://web.test"]),
-    creatorVaultAddress: undefined, // §12.63 — overridden per creator-fee test
-    wethAddress: undefined, // §12.69 — overridden per WETH-leg claim test
+    creatorVaultAddress: undefined, // — overridden per creator-fee test
+    wethAddress: undefined, // — overridden per WETH-leg claim test
     ...overrides,
   } as Config;
 }

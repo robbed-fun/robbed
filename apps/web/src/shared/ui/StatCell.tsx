@@ -5,7 +5,7 @@ import { cn } from "@/shared/lib/utils";
  * Labelled stat cell (ROBBED_ Phase F) — the mockup's PRICE/VOL 24H/MCAP/…
  * header cells and the portfolio TOTAL VALUE row: faint 11px uppercase label
  * over a 12–15px value. Values are SUPPLIED (indexer/on-chain) — never computed
- * here (§2).
+ * here.
  */
 export function StatCell({
   label,

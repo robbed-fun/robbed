@@ -14,10 +14,10 @@ import {
 } from "../model/steps";
 
 /**
- * Post-submit stepper (§5.3: "form → upload/pin → sign → live"). The soft-confirmed
+ * Post-submit stepper ("form → upload/pin → sign → live"). The soft-confirmed
  * tier is shown via the SHARED `ConfirmationBadge` (driven by the optimistic
  * reducer's display state) so the launch tx renders the exact same confirmation
- * semantics as every trade — never an unqualified "confirmed" (§2.1).
+ * semantics as every trade — never an unqualified "confirmed".
  */
 export function LaunchProgress({
   step,

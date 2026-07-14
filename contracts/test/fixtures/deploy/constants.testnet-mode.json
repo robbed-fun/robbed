@@ -3,7 +3,7 @@
   "notes": [
     "TEST FIXTURE (unit/DeployModes.t.sol) — NOT a real constants file and never a deploy input.",
     "Curve/fee economics copied from the canonical M0 output so Deploy._consistencyChecks passes.",
-    "external.* are SENTINEL addresses (0x1111…, 0x2222…, …) deliberately different from every §12.28 mainnet address — the tests assert Deploy._resolveExternals returns EXACTLY these values, proving testnet-mode externals come from the constants file, never from hardcodes."
+    "external.* are SENTINEL addresses (0x1111…, 0x2222…, …) deliberately different from every mainnet address — the tests assert Deploy._resolveExternals returns EXACTLY these values, proving testnet-mode externals come from the constants file, never from hardcodes."
   ],
   "curve": {
     "virtualEthWei": "2852303954560041089",

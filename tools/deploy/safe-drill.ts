@@ -5,7 +5,7 @@
  *
  * Proves the ENTIRE 2-of-4 treasury-Safe workflow byte-for-byte on a local
  * anvil FORK of Robinhood mainnet (chain 4663), which carries the canonical
- * Safe v1.4.1 set (spec §6.6 / §12.52). This is the dress rehearsal for the
+ * Safe v1.4.1 set. This is the dress rehearsal for the
  * mainnet O-6 ceremony (Phases 3–5): every step here runs against the exact
  * on-chain Safe primitives the mainnet run will use — only the signers (dev
  * keys → real hardware) and the executor (dev EOA → funded mainnet EOA) change.

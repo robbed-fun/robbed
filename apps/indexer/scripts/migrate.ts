@@ -1,5 +1,5 @@
 /**
- * Offchain migration runner + runtime startup assertions (indexer.md §2, §7.3).
+ * Offchain migration runner + runtime startup assertions (indexer.md).
  *
  * Thin CLI over the SINGLE migration implementation in
  * `src/offchainMigrations.ts` (also applied at indexer sidecar boot — the
@@ -44,7 +44,7 @@ async function main(): Promise<void> {
       client.release();
     }
 
-    console.log(`[migrate] running runtime assertions (pg_trgm, live chain id == INDEXER_CHAIN_ID=${config.chainId} — §12.55(b))…`);
+    console.log(`[migrate] running runtime assertions (pg_trgm, live chain id == INDEXER_CHAIN_ID=${config.chainId})…`);
     const rpc = createPublicClient({ transport: http(config.rpcHttp) });
     await assertRuntime(pool, rpc, config.chainId);
     console.log("[migrate] OK");

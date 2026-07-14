@@ -1,9 +1,9 @@
 /**
- * Trade-fee split presentation (§7 / §12.63). The on-chain trade fee is the SUM
+ * Trade-fee split presentation. The on-chain trade fee is the SUM
  * of two bps components — the TREASURY portion (`BondingCurve.TRADE_FEE_BPS`,
  * `FactoryConfig.tradeFeeBps`) and the CREATOR portion
  * (`BondingCurve.CREATOR_FEE_BPS`, `FactoryConfig.creatorFeeBps`) — bounded by
- * `MAX_TRADE_FEE_BPS`. Both are read LIVE (never hardcoded, §2); this is pure
+ * `MAX_TRADE_FEE_BPS`. Both are read LIVE (never hardcoded); this is pure
  * presentation over whatever the caller read.
  *
  * Single source so the SafetyStrip split and the /create "you earn N%" line can

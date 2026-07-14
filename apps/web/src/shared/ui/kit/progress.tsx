@@ -6,8 +6,8 @@ import * as ProgressPrimitive from "@radix-ui/react-progress";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Vendored shadcn/ui Progress (new-york, Radix) — code we own (§12.24).
- * Used by the graduation ProgressBar (§5.1/§5.2). Indicator color is token-backed
+ * Vendored shadcn/ui Progress (new-york, Radix) — code we own.
+ * Used by the graduation ProgressBar. Indicator color is token-backed
  * (bg-primary); callers may override to buy/etc via className, never raw hex.
  */
 function Progress({

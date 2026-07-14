@@ -15,7 +15,7 @@ import {V3Assertions} from "../../script/lib/V3Assertions.sol";
 ///      `assertV3Wiring` reverts → the `test_correctWiring_passes` case fails → the mutant is KILLED.
 contract MockV3Factory {
     int24 internal immutable _tickSpacing;
-    /// @dev The only fee tier this mock treats as enabled — the §12.1/§12.28 1% graduation tier.
+    /// @dev The only fee tier this mock treats as enabled — the 1% graduation tier.
     uint24 internal constant ENABLED_FEE = 10_000;
 
     constructor(int24 tickSpacing_) {
@@ -47,12 +47,12 @@ contract V3AssertHarness {
     }
 }
 
-/// @title V3AssertionsTest — proves the deploy-time V3 runtime assertions (contracts.md §7.2, §12.28)
+/// @title V3AssertionsTest — proves the deploy-time V3 runtime assertions (contracts.md)
 /// @notice Exercises the helper against mocked returns: the all-correct case passes, and each of the
 ///         three wrong-address/wrong-config cases reverts with its specific custom error. This is the
 ///         standalone proof that M1-14's `Deploy.s.sol` canary will fail closed on a wrong 4663 address.
 contract V3AssertionsTest is Test {
-    /// @dev Canonical WETH9 on chain 4663 (spec §12.28 / CLAUDE.md chain facts).
+    /// @dev Canonical WETH9 on chain 4663 (/ CLAUDE.md chain facts).
     address internal constant WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
 
     V3AssertHarness internal harness;

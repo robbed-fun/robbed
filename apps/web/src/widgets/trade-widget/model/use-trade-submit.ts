@@ -3,15 +3,10 @@
 import { launchTokenAbi, routerAbi } from "@robbed/shared/abi";
 import type { TokenDetail } from "@robbed/shared";
 import { useCallback, useState } from "react";
-import {
-  BaseError,
-  ContractFunctionRevertedError,
-  maxUint256,
-  type Abi,
-  type Address,
-} from "viem";
+import { maxUint256, type Abi, type Address } from "viem";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 
+import { humanizeContractError } from "@/shared/lib/humanize-contract-error";
 import { useOptimisticTradesContext } from "@/entities/trade";
 import {
   type CurveVenue,
@@ -24,7 +19,7 @@ import {
 import { ROBBED, V3, requireAddress } from "@/shared/config/addresses";
 
 /**
- * Trade submission → optimistic lifecycle wiring for BOTH venues (§4, §5.2). The
+ * Trade submission → optimistic lifecycle wiring for BOTH venues. The
  * INVISIBLE VENUE SWITCH is honoured here: the engine is chosen by the indexed
  * `status` (never a user choice) —
  *   curve/graduating → Router.buy/sell (curve, `routerAbi`)
@@ -34,16 +29,16 @@ import { ROBBED, V3, requireAddress } from "@/shared/config/addresses";
  * receipt) is IDENTICAL across the seam, so the trade feed badges the same way
  * pre- and post-graduation.
  *
- * SELL IS NEVER GATED (§6.5/§12.25): this hook reads NO pause flag on any path,
+ * SELL IS NEVER GATED : this hook reads NO pause flag on any path,
  * for either venue; the Buy-tab pause gate lives entirely in the UI's
- * `usePauseBuys`, never here. Post-graduation has no pause authority at all (§6.5).
+ * `usePauseBuys`, never here. Post-graduation has no pause authority at all.
  *
  * DECISIONS (robbed-frontend):
  * - Curve sells use approve-then-sell when the router allowance is short;
  *   `sellWithPermit` (one signature) is a deferred EIP-2612 optimization.
  * - V3 sells approve the SwapRouter02 (not the robbed router) then swap token→ETH
  *   via `multicall([exactInputSingle→router, unwrapWETH9(minEthOut, user)])` — the
- *   native-ETH leg the shared periphery subset exists for (§12.28). V3 buys send
+ * native-ETH leg the shared periphery subset exists for. V3 buys send
  *   native ETH as `value` (SwapRouter02 wraps it); no allowance needed.
  * - The DEADLINE is recomputed HERE from the CHAIN's latest block timestamp
  *   (`computeChainDeadline`), fresh at submit time — never from the quote and
@@ -64,7 +59,7 @@ import { ROBBED, V3, requireAddress } from "@/shared/config/addresses";
  *   this chain, so the 2× buffer (mirrors the deploy's 2× posture, covers an L1
  *   component that rises between estimate and execution) is free. If the estimate
  *   THROWS it is a genuine revert (slippage/deadline) — we do NOT swallow it; it
- *   propagates to the `humanizeError` path so the user sees WHY (docs verified via
+ *   propagates to the `humanizeContractError` path so the user sees WHY (docs verified via
  *   context7/viem+wagmi 2026-07-13).
  */
 
@@ -106,7 +101,7 @@ export function useTradeSubmit(token: TokenDetail): {
           : `${Date.now()}-${Math.random()}`;
       const minOut = applySlippageFloor(expectedOut, slippageBps);
 
-      // Immediate optimistic row (§4 rule 1). Values are our estimate until the
+      // Immediate optimistic row (rule 1). Values are our estimate until the
       // indexed WS trade reconciles them.
       optimistic.submit({
         id,
@@ -148,9 +143,16 @@ export function useTradeSubmit(token: TokenDetail): {
         );
       } catch (e) {
         // In-wallet rejection / broadcast failure → remove the optimistic row
-        // (it never reached chain) and surface the reason (§4).
+        // (it never reached chain) and surface the reason via the central
+        // humanizer (decodes by merged-ABI error name — so a nested curve error
+        // surfaces, never a bare selector). Trade keeps its "refresh the quote"
+        // deadline nuance via the per-error override.
         optimistic.reject(id);
-        setError(humanizeError(e));
+        setError(
+          humanizeContractError(e, {
+            overrides: { DeadlineExpired: "Trade deadline expired — refresh the quote." },
+          }),
+        );
       } finally {
         setSubmitting(false);
       }
@@ -203,7 +205,7 @@ interface EstimateGasParams {
  * include the ArbOS L1-data-fee component the wallet can't estimate), then we return
  * `estimate * 2` capped at the ceiling so the caller can pass an explicit `gas` and
  * the wallet skips its own (failing) estimation. A REVERTING call throws here — the
- * caller must let it propagate to `humanizeError`, never swallow it. `undefined`
+ * caller must let it propagate to `humanizeContractError`, never swallow it. `undefined`
  * (no publicClient) falls back to wallet estimation.
  */
 async function estimateBufferedGas(
@@ -223,7 +225,7 @@ async function submitCurve(a: VenueSubmitArgs): Promise<`0x${string}`> {
   const router = requireAddress(ROBBED.router, "router");
   if (a.side === "buy") {
     // Pre-estimate node-side so the wallet skips its own (failing) estimation; a
-    // genuine revert throws here and propagates to humanizeError (see DECISIONS).
+    // genuine revert throws here and propagates to humanizeContractError (see DECISIONS).
     const gas = await estimateBufferedGas(a.publicClient, {
       address: router,
       abi: routerAbi,
@@ -266,7 +268,7 @@ async function submitCurve(a: VenueSubmitArgs): Promise<`0x${string}`> {
   });
 }
 
-/** V3 venue: SwapRouter02 exact-input, deadline-wrapped in multicall (§12.28). */
+/** V3 venue: SwapRouter02 exact-input, deadline-wrapped in multicall. */
 async function submitV3(a: VenueSubmitArgs): Promise<`0x${string}`> {
   if (a.side === "sell") {
     // Native-ETH sell needs the token approved to the SwapRouter02.
@@ -288,7 +290,7 @@ async function submitV3(a: VenueSubmitArgs): Promise<`0x${string}`> {
     deadline: a.deadline,
   });
   // Pre-estimate node-side so the wallet skips its own (failing) estimation; a
-  // genuine revert throws here and propagates to humanizeError (see DECISIONS).
+  // genuine revert throws here and propagates to humanizeContractError (see DECISIONS).
   const gas = await estimateBufferedGas(a.publicClient, {
     address: req.address,
     abi: req.abi,
@@ -341,47 +343,4 @@ async function ensureAllowance(args: {
     gas,
   });
   await publicClient.waitForTransactionReceipt({ hash });
-}
-
-/**
- * The DECODED custom-error name of a reverted call (e.g. "DeadlineExpired",
- * "SlippageExceeded"), or undefined for a non-revert failure. Must be used
- * INSTEAD of substring-matching the message: viem's verbose message embeds the
- * function signature (buy/sell carry a `deadline` param), so a naive `/deadline/i`
- * test matches EVERY trade revert and mislabels unrelated failures as a deadline.
- */
-function decodedErrorName(e: unknown): string | undefined {
-  if (!(e instanceof BaseError)) return undefined;
-  const revert = e.walk((err) => err instanceof ContractFunctionRevertedError);
-  if (revert instanceof ContractFunctionRevertedError) {
-    return revert.data?.errorName ?? revert.reason ?? undefined;
-  }
-  return undefined;
-}
-
-function humanizeError(e: unknown): string {
-  // A pre-estimate revert surfaces as a viem BaseError; prefer its `shortMessage`
-  // (the decoded revert reason) over the verbose full message so the user sees WHY
-  // — the fix's whole point vs MetaMask's opaque "Network fee unavailable".
-  const short = e instanceof BaseError ? e.shortMessage : undefined;
-  const full = e instanceof Error ? e.message : String(e);
-  const errorName = decodedErrorName(e);
-  if (/user rejected|denied|rejected the request/i.test(short ?? full)) {
-    return "Transaction rejected in wallet.";
-  }
-  // Match the DECODED error name (or the Orbit "transaction too old" node text) —
-  // never a bare "deadline"/"expired" substring of the signature dump.
-  if (errorName === "DeadlineExpired" || /transaction too old/i.test(short ?? "")) {
-    return "Trade deadline expired — refresh the quote.";
-  }
-  if (
-    errorName === "SlippageExceeded" ||
-    /Too little received|Too much requested/i.test(short ?? "")
-  ) {
-    return "Price moved past your slippage — retry.";
-  }
-  // Otherwise surface the REAL reason — decoded error name if we have one, else
-  // the concise shortMessage. No more masking every failure as a deadline problem.
-  const surfaced = errorName ?? short ?? full;
-  return surfaced.length > 160 ? `${surfaced.slice(0, 157)}…` : surfaced;
 }

@@ -1,6 +1,6 @@
 # Testnet lifecycle record — Robinhood Chain testnet (chain 46630)
 
-Referenced by `docs/developers/runbooks/testnet.md` §7 (T-4/T-5 lifecycle exercise → gates G-7/G-8). This is
+Referenced by `docs/developers/runbooks/testnet.md` section 7 (T-4/T-5 lifecycle exercise → gates G-7/G-8). This is
 the **durable, tx-hash-level record** of the on-chain activity exercised on the live testnet, so the
 verification survives the ephemeral indexer DB (which re-backfills from the deploy block on every
 stack rebuild).
@@ -16,7 +16,7 @@ stack rebuild).
 - **Evidence method:** all hashes/amounts below were read **directly from the chain** via
   `cast logs` (`eth_getLogs` — pruning-immune, independent of the indexer), decoding the canonical
   `@robbed/shared` `TokenCreated`/`Trade` events. Nothing here is transcribed from a mutable off-chain
-  store (spec §2 — no fabricated data; source is the chain itself, verified 2026-07-12).
+  store (section 2 — no fabricated data; source is the chain itself, verified 2026-07-12).
 
 ---
 
@@ -30,7 +30,7 @@ stack rebuild).
 | **Creation tx** | **`0x6d01bd5c1cb94ebaad693b6183f46310d4b833e905f4e175551db7c80523f757`** |
 | Block | 89683169 |
 | metadataHash (on-chain commitment) | `0x0c323deca072784ea53847660a63328c528ebfc37a064e96ef7b03b83cfdf3ad` |
-| Metadata verification | **`match`** — verifier canonicalized the R2 JSON, `keccak256` == the on-chain hash byte-for-byte (§8.3) |
+| Metadata verification | **`match`** — verifier canonicalized the R2 JSON, `keccak256` == the on-chain hash byte-for-byte (section 8.3) |
 
 The creation tx also carries the creator's **initial buy** (see Trade #1 below — same tx hash).
 
@@ -51,9 +51,9 @@ Read from the `Trade` events emitted by the BondingCurve `0x91b0b2d6…`. `ethAm
 | 6 | SELL | `0xf69bcedd819a67718b4247cb1d0889a05921e92b9caf82ade84996a1a771ecbb` | 89683639 | 0.002670 | 0.00002670 | **100** |
 
 **Fee invariant confirmed on the live chain:** every trade — buys AND the sell — charges exactly
-**100 bps = 1%** (spec §12.25 / CLAUDE.md). Total fee accrued over the six trades ≈ **0.0001077 ETH**.
+**100 bps = 1%** (D-25 / CLAUDE.md). Total fee accrued over the six trades ≈ **0.0001077 ETH**.
 
-**Fee custody (spec §12.25 / §6.5).** Trade fees never push ETH to the treasury at trade time: the 1%
+**Fee custody (D-25 / section 6.5).** Trade fees never push ETH to the treasury at trade time: the 1%
 accrues **in-contract** and is withdrawn to the fixed treasury Safe
 `0x4ae5b5Ae7D2edd7A2d43054246D6aaAcAAFC1000` by the permissionless, non-phase-gated `sweepFees()`, so
 a hostile/reverting treasury can never freeze sells. (A `sweepFees()` sweep was not exercised in this

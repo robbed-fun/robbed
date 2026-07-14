@@ -1,14 +1,14 @@
 /**
- * Postgres concrete for the §8.5 bot/farm job (M2-13). Kept OUT of
+ * Postgres concrete for the bot/farm job (M2-13). Kept OUT of
  * `heuristics.ts` so that module stays DB-free and fully unit-testable. Here live
  * the two side-effecting boundaries: reading the `flow_*` views (0005_flow_views
  * .sql) into a `FlowInput`, and writing the results into `address_flags` +
- * `token_flow_stats` (the two offchain, indexer-owned side tables, §3.11/§8.5.2).
+ * `token_flow_stats` (the two offchain, indexer-owned side tables).
  *
  * Writes are a TRUNCATE + re-insert inside one transaction: the tables are
- * DERIVED and fully rebuildable from `trades`+`transfers` (§4.4), so recomputing
+ * DERIVED and fully rebuildable from `trades`+`transfers`, so recomputing
  * the whole set each run is the boring, can't-silently-corrupt option (a stale
- * flag can never linger). Advisory only — never gates chain state (§8.4/§8.5).
+ * flag can never linger). Advisory only — never gates chain state.
  */
 import { Pool, type PoolClient } from "pg";
 import type { IndexerConfig } from "../config";
@@ -29,7 +29,7 @@ export function buildOwnContractWhitelist(config: IndexerConfig): Set<string> {
   push(config.migrator);
   push(config.v3Factory);
   push(config.v3PositionManager);
-  // Chain's SwapRouter02 from the registry-resolved config (§12.55(c)) — the
+  // Chain's SwapRouter02 from the registry-resolved config — the
   // shared UNISWAP_V3 constant is mainnet-only.
   push(config.swapRouter02);
   return set;
@@ -105,7 +105,7 @@ export function createPgFlowStore(pool: Pool, schema: string): FlowStore {
       try {
         await client.query("BEGIN");
         // address_flags + token_flow_stats live in stable `public` (no schema
-        // prefix needed — they are search_path-independent side tables, §7.3).
+        // prefix needed — they are search_path-independent side tables).
         await client.query("TRUNCATE address_flags");
         for (const af of result.addressFlags) {
           await client.query(

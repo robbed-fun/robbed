@@ -11,7 +11,7 @@
  * version I could not fully pin (docs-first: the api/index.ts + graphql
  * composition for 0.16.6 was not confirmable, so I did not hijack that server).
  *
- * FLAGGED for hoodpad-architect (cross-service): this exposes `/metrics` on
+ * FLAGGED for robbed-architect (cross-service): this exposes `/metrics` on
  * `METRICS_PORT` (default 9464), NOT the API's `API_PORT`. The gate-7 series that
  * are genuinely in-process (publish latency, confirmation lag, invariant
  * counters, cluster share) can only be scraped from the indexer process; the

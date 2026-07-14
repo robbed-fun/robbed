@@ -6,8 +6,8 @@ import { useReadContract } from "wagmi";
 import { ROBBED, isPlaceholder } from "@/shared/config/addresses";
 
 /**
- * Live `pauseBuys` read from the CurveFactory config (§6.5). This ONLY ever gates
- * the BUY tab — the sell path must never read it (spec §6.5/§12.25: "sells always
+ * Live `pauseBuys` read from the CurveFactory config. This ONLY ever gates
+ * the BUY tab — the sell path must never read it (: "sells always
  * open", no flag can block a curve sell). Keeping this in its own hook makes the
  * boundary explicit and grep-auditable: the Sell UI never imports it.
  *

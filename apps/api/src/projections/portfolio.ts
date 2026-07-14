@@ -1,27 +1,27 @@
 /**
- * Portfolio projections (spec §5.4; api.md §3) — `PortfolioHolding` +
- * `PortfolioSummary` from the frozen `@robbed/shared` DTOs. ETH-first (§2):
+ * Portfolio projections (api.md) — `PortfolioHolding` +
+ * `PortfolioSummary` from the frozen `@robbed/shared` DTOs. ETH-first :
  * value/PnL are wei decimal strings; USD mirrors derive at request time from the
  * ETH/USD snapshot (`usdFromWei`), never a constant. Balances are Transfer-truth
- * (§12.16 / X-4/X-5); price/value are computed READ-TIME (no stored USD).
+ * (/ X-4/X-5); price/value are computed READ-TIME (no stored USD).
  *
  * ── Read-time pricing (why curve-quote, not last_price × qty) ────────────────
  * A holding's `valueEth` is the LIQUIDATION value: what the curve would actually
  * pay to sell the whole balance now — `previewSell` from `@robbed/shared`
  * curve-quote over the live virtual reserves (fee-inclusive, rounds toward the
- * curve; contracts.md §2.3). That is the honest, no-false-precision number (§5.2)
+ * curve; contracts.md). That is the honest, no-false-precision number
  * and it can't overstate. `priceEth` is the display-only spot float
  * (`tokens.last_price_eth`, venue-continuous across graduation). Both are `null`
  * when the token has NEVER traded (`last_price_eth == null`) — the indexer can't
  * price it, so we don't guess. For a GRADUATED token the curve is drained, so
  * curve-quote no longer applies; we mark-to-spot (`last_price × balance`).
  *
- * ── Unrealized PnL as a RANGE (no false precision, §5.2) ─────────────────────
+ * ── Unrealized PnL as a RANGE (no false precision) ─────────────────────
  * point = liquidationValue − remainingCostBasis, where
  *   remainingCostBasis = total_eth_in · min(balance, tokensBought) / tokensBought
  * (average cost on the still-held qty; tokens acquired purely by transfer-in carry
  * no basis). `null` when there is NO cost basis at all (tokensBought == 0).
- *  - curve-only token (basis EXACT, §12.16) → low == high == point, `exact`.
+ * - curve-only token (basis EXACT) → low == high == point, `exact`.
  *  - graduated token (basis best-effort — V3 legs, OI-5) → `estimated`, bracketed
  *    between the trusted recorded basis (low = value − basis) and a discarded
  *    basis (high = value). This mirrors the indexer realized-range "discard-vs-
@@ -86,7 +86,7 @@ export function unrealizedFor(
 ): EthPnlRange | null {
   if (valueEth == null) return null;
   const bought = BigInt(row.total_bought_tokens || "0");
-  if (bought <= 0n) return null; // pure transfer-in — no basis (§5.2)
+  if (bought <= 0n) return null; // pure transfer-in — no basis
   const bal = BigInt(row.balance || "0");
   const ethIn = BigInt(row.total_eth_in || "0");
   const remainingTokens = bal < bought ? bal : bought;
@@ -118,7 +118,7 @@ export function toPortfolioHolding(
 
 /**
  * All-time PnL ("LOOT") = realized (materialized `address_pnl` range) + unrealized
- * (summed live over holdings). null when NO cost basis exists anywhere (§5.2).
+ * (summed live over holdings). null when NO cost basis exists anywhere.
  * Component-wise range add; confidence downgrades to 'estimated' if any component
  * is estimated.
  */
@@ -158,7 +158,7 @@ export function toPortfolioSummary(input: {
    * `address_pnl.trade_count`, which lags by up to one roll-up interval and is
    * 0 on a fresh DB before the job's first tick (PORT-1). firstSeenAt /
    * tokensCreated / realized PnL below remain roll-up-sourced (advisory
-   * latency ≤ PNL_JOB_INTERVAL_MS, default 60s — api.md §3.4a).
+   * latency ≤ PNL_JOB_INTERVAL_MS, default 60s — api.md).
    */
   tradeCount: number;
   holdings: PortfolioHoldingRow[];

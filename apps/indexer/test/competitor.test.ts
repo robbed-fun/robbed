@@ -1,6 +1,6 @@
 /**
- * hood.fun competitor snapshot suite (indexer.md §8.5.3, spec §3/§14; M2-14).
- * Asserts snapshots are SOURCE + TIMESTAMPED (never a hardcoded metric, §2), a
+ * hood.fun competitor snapshot suite (indexer.md, M2-14).
+ * Asserts snapshots are SOURCE + TIMESTAMPED (never a hardcoded metric), a
  * dated row is produced from an injected source, and an unconfigured source
  * writes nothing (never fabricates a number).
  */
@@ -39,7 +39,7 @@ describe("buildCompetitorSnapshot — source + timestamped", () => {
     expect(row.visible_volume_eth).toBe("123456789000000000000");
   });
 
-  it("rejects an empty source (never a hardcoded metric, §2)", () => {
+  it("rejects an empty source (never a hardcoded metric)", () => {
     expect(() =>
       buildCompetitorSnapshot("", fixedNow().toISOString(), {
         tokensPerDay: 1,

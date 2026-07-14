@@ -1,19 +1,19 @@
 /**
- * Internal dashboard endpoints (D-4 — spec §12.54; api.md §3.7; M2-13 /
+ * Internal dashboard endpoints (D-4 —; api.md; M2-13 /
  * M2-14; Gate G-A.1/G-A.2). Thin, READ-ONLY, admin-SIWE-gated (the same
  * `requireAdmin` session as /v1/admin/* — chosen over internal-network gating
  * per D-4 "least new surface": the session mechanism already exists, network
  * topology is deployment-owned). GET-only → no CSRF (CSRF guards mutations).
  *
- * ADVISORY ONLY, binding (§8.4/§8.5): everything served here is labeling /
+ * ADVISORY ONLY, binding : everything served here is labeling /
  * telemetry. It never gates chain state, listing, or any user path — there is
  * no write, no chain primitive, nothing downstream keys off it except the
  * internal ops dashboard and Gate G-A evidence.
  *
- * DTO disposition (api.md §3.7): both composite response shapes are built
+ * DTO disposition (api.md) both composite response shapes are built
  * entirely from shared primitives (`organicFlowSchema` via buildOrganic,
  * `BotFlag`, `CompetitorSnapshotRow`) and typed API-locally — single consumer,
- * §12.40c precedent — pending robbed-shared's ratify-or-bless call (flagged in
+ * precedent — pending robbed-shared's ratify-or-bless call (flagged in
  * the W3 report). Nothing shared is redeclared.
  */
 import { Hono } from "hono";
@@ -33,14 +33,14 @@ import { clampLimit, decodeCursor, encodeCursor } from "../lib/pagination";
 import { parse, parseQuery } from "../lib/validate";
 import { buildOrganic } from "../projections/trust";
 
-// Route-local query/param zod only (existing convention; api.md §3.7).
+// Route-local query/param zod only (existing convention; api.md).
 const flowParamSchema = z.object({ address: addressSchema });
 const snapshotsQuerySchema = z.object({
   cursor: z.string().optional(),
   limit: z.string().optional(),
 });
 
-/** api.md §3.7 — API-local composite (single consumer; §12.40c precedent). */
+/** api.md — API-local composite (single consumer; precedent). */
 interface InternalFlowResponse {
   token: string;
   /** Shared organicFlowSchema object — SAME projection as the Trust panel. */
@@ -72,7 +72,7 @@ export function internalRoutes(deps: AppDeps) {
     ) as Record<BotFlag, number>;
     const body: InternalFlowResponse = {
       token: address,
-      // null until the §8.5 job computes token_flow_stats — never fabricated.
+      // null until the job computes token_flow_stats — never fabricated.
       organic: buildOrganic(flow),
       flagged: {
         holders: summary.flaggedHolders,
@@ -100,7 +100,7 @@ export function internalRoutes(deps: AppDeps) {
       hasMore && last
         ? encodeCursor(deps.config.SESSION_SECRET, { k: last.captured_at, i: last.source })
         : null;
-    // Rows are shared CompetitorSnapshotRow VERBATIM — §2 discipline: source +
+    // Rows are shared CompetitorSnapshotRow VERBATIM — discipline: source +
     // captured_at always present (NOT NULL); empty page while unconfigured.
     return ok(c, { snapshots: page, nextCursor });
   });

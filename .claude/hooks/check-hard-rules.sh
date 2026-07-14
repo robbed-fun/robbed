@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# robbed hard-rule enforcement (CLAUDE.md / docs/spec.md).
+# robbed hard-rule enforcement (CLAUDE.md / docs/developers/**).
 # PostToolUse hook for Write|Edit|MultiEdit: greps the just-written file for
 # spec violations. Exit 2 blocks the result and feeds the message back to the
 # agent; exit 0 passes. High-precision rules only — anything fuzzy belongs in
@@ -26,35 +26,35 @@ err() { echo "SPEC VIOLATION: $1" >&2; fail=1; }
 
 case "$file" in
   *.sol)
-    # Mocks/test harnesses are the one tolerated home for block.number (spec §2 note)
+    # Mocks/test harnesses are the one tolerated home for block.number (Orbit chain semantics; docs/developers/architecture.md)
     case "$file" in
       */test/*|*Mock*) : ;;
       *)
         if grep -qE '\bblock\.number\b' "$file"; then
-          err "block.number in $file — forbidden on Orbit (spec §2, §6.5). Use ArbSys(address(100)).arbBlockNumber() or block.timestamp."
+          err "block.number in $file — forbidden on Orbit (docs/developers/architecture.md, contracts.md). Use ArbSys(address(100)).arbBlockNumber() or block.timestamp."
         fi
         ;;
     esac
     if grep -qE 'pragma solidity\s*(\^|>|<|~)' "$file"; then
-      err "pragma version range in $file — exact single pin required (spec §6.7), e.g. 'pragma solidity 0.8.35;'"
+      err "pragma version range in $file — exact single pin required (docs/developers/contracts.md), e.g. 'pragma solidity 0.8.35;'"
     fi
     if grep -qE 'SPDX-License-Identifier:\s*UNLICENSED' "$file"; then
-      err "UNLICENSED in $file — repo is MIT (spec §4.1, §6.7)"
+      err "UNLICENSED in $file — repo is MIT (docs/developers/contracts.md)"
     fi
     if grep -qiE '\bpause(d)?Sell|sellsPaused|whenSellsNotPaused' "$file"; then
-      err "sell-pause pattern in $file — sells can never be pausable (spec §6.5, §12.12)"
+      err "sell-pause pattern in $file — sells can never be pausable (docs/developers/contracts.md)"
     fi
     ;;
 esac
 
-# User-facing / shared code: LP copy and positioning language (spec §1, §5.2/§5.3, §12.14)
+# User-facing / shared code: LP copy and positioning language (docs/developers/web.md, README.md)
 case "$file" in
   */apps/web/*|*/packages/shared/*)
     if grep -qiE '(LP|liquidity)[^.]{0,60}burn|burn[^.]{0,60}\b(LP|liquidity)\b' "$file"; then
-      err "'burned' used in LP context in $file — canonical copy is 'LP principal permanently locked; trading fees claimable by treasury.' (spec §12.14)"
+      err "'burned' used in LP context in $file — canonical copy is 'LP principal permanently locked; trading fees claimable by treasury.' (docs/developers/contracts.md; lp-copy rule)"
     fi
     if grep -qiE 'order[- ]?book' "$file"; then
-      err "order-book claim in $file — product is an AMM with soft confirmations, never an order book (spec §1)"
+      err "order-book claim in $file — product is an AMM with soft confirmations, never an order book (README.md)"
     fi
     ;;
 esac

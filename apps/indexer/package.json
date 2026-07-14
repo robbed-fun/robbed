@@ -3,7 +3,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "ROBBED_ indexer — Ponder → Postgres (+pg_trgm) + Redis pub/sub → Bun WS (spec §8). M2-4 (config+schema) / M2-5 (handlers + unified trades + candles + rebuild).",
+  "description": "ROBBED_ indexer — Ponder → Postgres (+pg_trgm) + Redis pub/sub → Bun WS. M2-4 (config+schema) / M2-5 (handlers + unified trades + candles + rebuild).",
   "scripts": {
     "dev": "ponder dev",
     "start": "ponder start",

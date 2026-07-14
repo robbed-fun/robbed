@@ -1,5 +1,5 @@
 /**
- * Public-surface CORS (api.md §6.1; mw/cors.ts). Asserts the four normative
+ * Public-surface CORS (api.md; mw/cors.ts). Asserts the four normative
  * behaviors empirically (never trusted from docs):
  *  1. OPTIONS preflight succeeds on the browser-POSTed routes (uploads,
  *     metadata) — the pre-fix behavior was a 404 (no OPTIONS routes), which
@@ -93,7 +93,7 @@ describe("CORS — actual requests on the public surface", () => {
   });
 });
 
-describe("CORS — SIWE cookie surface stays same-origin only (api.md §6.1 scoping)", () => {
+describe("CORS — SIWE cookie surface stays same-origin only (api.md scoping)", () => {
   it("/v1/admin/* is never opened: preflight gets no CORS headers", async () => {
     const res = await preflight("/v1/admin/login", ALLOWED);
     // No OPTIONS route + middleware skips ⇒ the 404 handler, with NO allow-origin.

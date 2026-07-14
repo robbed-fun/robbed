@@ -7,7 +7,7 @@ import { pnlTone, signedEth } from "../lib/format";
 
 /**
  * PnL display for an `EthPnlRange | null` (mockup: the PNL column + LOOT ALL-TIME
- * cell). Renders the API's shape HONESTLY (§5.2 — no false precision):
+ * cell). Renders the API's shape HONESTLY (no false precision):
  *   - `null` (no cost basis)        → faint placeholder, NOT a "0" gain.
  *   - `low === high` (exact/known)  → a single signed value `+0.62`.
  *   - a true range                  → `low…high` (`+0.50…+0.70`).

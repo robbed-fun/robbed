@@ -2,7 +2,7 @@
   "name": "@robbed/shared",
   "private": true,
   "license": "MIT",
-  "description": "ROBBED_ shared cross-service contract: canonical event ABIs, wire schemas (zod), confirmation-state enum, WS channels/messages, REST DTO types, canonical metadata JSON + keccak256 hashing (spec §8, §8.3, §12.15-12.20).",
+  "description": "ROBBED_ shared cross-service contract: canonical event ABIs, wire schemas (zod), confirmation-state enum, WS channels/messages, REST DTO types, canonical metadata JSON + keccak256 hashing.",
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",

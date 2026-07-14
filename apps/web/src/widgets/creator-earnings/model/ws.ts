@@ -2,7 +2,7 @@ import type { WsMessage } from "@robbed/shared";
 
 /**
  * Pure reconcile decision for the post-graduation creator-fee WS types (spec
- * §12.69): `creator_fee_split` (accrual changed at `LPFeeVault.collect()`) and
+ * ) `creator_fee_split` (accrual changed at `LPFeeVault.collect()`) and
  * `creator_fee_claimed` (a bucket was pulled). Returns TRUE only when the message
  * concerns THIS creator.
  *

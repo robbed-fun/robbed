@@ -1,12 +1,12 @@
 /**
- * address_pnl roll-up — PURE compute (spec §5.4; api.md §3 portfolio;
+ * address_pnl roll-up — PURE compute (; api.md portfolio;
  * db-rows.ts `AddressPnlRow`). DB-free and fully unit-testable: the single source
  * of the realized-PnL range math. `src/pnl/store.ts` runs the 0007 views to
  * gather the aggregates below, calls `rollUpAddressPnl`, and TRUNCATE+re-inserts
- * `address_pnl`. Rebuildable from `trades`+`transfers` (§4.4).
+ * `address_pnl`. Rebuildable from `trades`+`transfers`.
  *
  * ADVISORY / read-only — nothing here gates a trade, listing, or chain state
- * (§8.4). Outputs are RANGES (§5.2 forbids false precision).
+ *. Outputs are RANGES (forbids false precision).
  *
  * ── Realized-PnL model (decide-it-yourself; basis recorded) ──────────────────
  * Average-cost realized PnL per (address, token) over the CLOSED (matched) leg:
@@ -19,7 +19,7 @@
  *
  * ── The RANGE (why realized is `low`..`high`, not a point) ───────────────────
  * V3 legs' cost basis is best-effort — the `Swap.recipient` is often a router,
- * not the EOA (spec §12.16 OI-5) — so the ETH-in/out attributed to V3 buys/sells
+ * not the EOA (OI-5) — so the ETH-in/out attributed to V3 buys/sells
  * can be wrong. Rather than invent a numeric error width (itself false precision),
  * the band brackets the two extreme interpretations of the V3 legs:
  *   • `curveRealized` = realized counting CURVE legs only (V3 attribution DISCARDED)
@@ -27,7 +27,7 @@
  *   low = min(curveRealized, fullRealized), high = max(...)
  * Curve-only addresses have no V3 leg ⇒ curve == full ⇒ low == high, `exact`.
  * Any V3 leg ⇒ `estimated`. No cost basis anywhere ⇒ `pnl_confidence = null`
- * (and low == high == 0), so the API surfaces `pnlAllTime = null` (§5.2).
+ * (and low == high == 0), so the API surfaces `pnlAllTime = null`.
  */
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";

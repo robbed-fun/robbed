@@ -127,7 +127,7 @@ export interface SqlPool {
  * should never hit transient failures — Ponder just used the same DB — but a
  * few retries cost nothing). NEVER throws into the indexing pipeline: exhausted
  * retries log loudly and return false (search falls back to un-indexed scans;
- * the pnl/flow job tick errors keep the failure visible, §9.4).
+ * the pnl/flow job tick errors keep the failure visible).
  */
 export async function applyMigrationsAtBoot(
   pool: SqlPool,

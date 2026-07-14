@@ -1,26 +1,26 @@
 /**
- * Per-curve immutable reader (spec §12.38/§12.40d; indexer.md §3.1).
+ * Per-curve immutable reader (indexer.md).
  *
  * At `TokenCreated` the indexer reads the freshly-deployed `BondingCurve`'s
  * public immutables straight from chain via viem + the shared `bondingCurveAbi`.
  * This supersedes the M2-4 env interim (`CURVE_SUPPLY_WEI` &c.) now that the
  * read-ABI is in `@robbed/shared/abi` (const-asserted).
  *
- * Why per-curve and NOT `CurveFactory.config()` (the M1-3b / §12.40 #39
+ * Why per-curve and NOT `CurveFactory.config()` (the M1-3b / #39
  * divergence): the five curve-shape values (`VIRTUAL_ETH_0`, `VIRTUAL_TOKEN_0`,
  * `CURVE_SUPPLY`, `LP_TOKEN_TRANCHE`, `GRADUATION_ETH`) are `internal immutable`
  * on `CurveFactory` and are NOT surfaced by `config()`; `FactoryConfig` only
  * carries the *factory-current* defaults that govern FUTURE curves. Likewise
  * `TRADE_FEE_BPS` on an older curve differs from the factory's live
  * `tradeFeeBps` after any `setTradeFeeBps` — so the per-token fee MUST come from
- * the curve, never the factory (§12.40d). Reading each curve is the only
+ * the curve, never the factory. Reading each curve is the only
  * correct source for a curve created under prior parameters.
  *
- * Cost: `createToken` is low-frequency (not a hot path, §12.40d), so a bounded
+ * Cost: `createToken` is low-frequency (not a hot path), so a bounded
  * set of `readContract` calls per creation is acceptable. We use individual
  * reads (Promise.all) rather than `multicall` deliberately: viem `multicall`
  * requires a Multicall3 deployment at the canonical address, whose presence on
- * chain 4663 is unverified (§13). Individual `readContract` calls have no such
+ * chain 4663 is unverified. Individual `readContract` calls have no such
  * dependency and cannot silently return a wrong/aggregated value — the boring,
  * can't-corrupt-derived-data choice. Ponder's client caches + dedupes RPC
  * responses at the event's block, so re-delivery/reorg re-reads are cheap.
@@ -69,10 +69,10 @@ export interface CurveImmutables {
   lpTokenTranche: bigint;
   /** ETH raised threshold that triggers graduation → `tokens.graduation_eth`. */
   graduationEth: bigint;
-  /** Per-token trade fee (bps) → `tokens.trade_fee_bps` (§12.40d Trust source). */
+  /** Per-token trade fee (bps) → `tokens.trade_fee_bps` (Trust source). */
   tradeFeeBps: number;
   /**
-   * Per-token creator fee (bps) → `tokens.creator_fee_bps` (§7 / §12.63). Read
+   * Per-token creator fee (bps) → `tokens.creator_fee_bps`. Read
    * DEFENSIVELY (0 on any failure): a v1 curve predates `CREATOR_FEE_BPS` and its
    * `eth_call` reverts, which must NOT fail token creation — 0 is the v1 value.
    */
@@ -90,7 +90,7 @@ const CURVE_DEFAULTS = {
   LP_TOKEN_TRANCHE: 0n,
   GRADUATION_ETH: 0n,
   TRADE_FEE_BPS: 0,
-  // §12.63: 0 is ALSO the correct value for a v1 curve whose bytecode lacks the
+  // : 0 is ALSO the correct value for a v1 curve whose bytecode lacks the
   // `CREATOR_FEE_BPS` leg (its call reverts — a non-pruned error, defaulted to 0).
   CREATOR_FEE_BPS: 0,
 } as const;
@@ -146,7 +146,7 @@ export async function readCurveImmutables(
       read("LP_TOKEN_TRANCHE", asBigint, CURVE_DEFAULTS.LP_TOKEN_TRANCHE),
       read("GRADUATION_ETH", asBigint, CURVE_DEFAULTS.GRADUATION_ETH),
       read("TRADE_FEE_BPS", asNumber, CURVE_DEFAULTS.TRADE_FEE_BPS),
-      // §12.63 creator fee — same resilient path: a v1 curve's revert is a
+      // creator fee — same resilient path: a v1 curve's revert is a
       // non-pruned error → default 0 (its correct value); a pruned node degrades
       // to `latest` like the others.
       read("CREATOR_FEE_BPS", asNumber, CURVE_DEFAULTS.CREATOR_FEE_BPS),

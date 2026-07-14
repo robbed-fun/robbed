@@ -1,6 +1,6 @@
 /**
  * Public API for the `creator` entity (FSD reference/public-api) — the
- * creator-fee domain (§7 / §12.63 / §12.69): claimable reads (pre-grad ETH leg +
+ * creator-fee domain : claimable reads (pre-grad ETH leg +
  * post-grad per-`(creator, ERC20)` legs) + the two CLAIM tx models.
  *
  * The CLAIM UI (with the shared ConfirmationBadge) lives in

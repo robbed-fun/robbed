@@ -1,5 +1,5 @@
 /**
- * Creator-fee claimable roll-up — PURE ledger math (spec §7 / §12.63).
+ * Creator-fee claimable roll-up — PURE ledger math.
  * Accrual (sweep), claim reduces claimable, deposit corroborates the vault
  * without double-counting, and the claimable floor.
  */

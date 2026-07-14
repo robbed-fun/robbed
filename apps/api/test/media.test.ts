@@ -1,5 +1,5 @@
 /**
- * M2-10 image pipeline (§12.19, §8.4): magic-byte sniff + hostile-fixture upload
+ * M2-10 image pipeline : magic-byte sniff + hostile-fixture upload
  * behavior (oversized, wrong-magic, decode-bomb/decode-fail) + content-addressed
  * idempotent write. Uses fake storage/reencoder (sharp not required for logic).
  */

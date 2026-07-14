@@ -30,7 +30,7 @@ describe("meta + health", () => {
     expect(res.status).toBe(200);
     expect((await readJson(res)).data.checks).toEqual({ db: true, redis: true, r2: true });
   });
-  it("readyz 503 is the STANDARD error envelope with upstream_unavailable (api.md §3.5 normative)", async () => {
+  it("readyz 503 is the STANDARD error envelope with upstream_unavailable (api.md normative)", async () => {
     const deps = makeTestDeps();
     deps.db.ping = async () => {
       throw new Error("db down");

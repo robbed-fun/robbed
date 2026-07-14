@@ -21,10 +21,10 @@ import {V3Assertions} from "./lib/V3Assertions.sol";
 import {MockWETH9} from "test/mocks/MockWETH9.sol";
 
 /// @title Deploy — ROBBED_ deploy script + constants loader + canary smoke (M1-14)
-/// @notice One script drives every environment (contracts.md §7.2): it reads EVERY market-dependent
-///         parameter from `tools/m0/out/constants.json` (spec §2/§6.4 — nothing inlined), runs the
-///         §12.28 V3 runtime sanity assertions + the absolute canonical-WETH require (F-2), deploys
-///         the six-contract topology in §7.2 order (1) LPFeeVault → (2) CurveFactory →
+/// @notice One script drives every environment (contracts.md) it reads EVERY market-dependent
+/// parameter from `tools/m0/out/constants.json` (nothing inlined), runs the
+/// V3 runtime sanity assertions + the absolute canonical-WETH require (F-2), deploys
+/// the six-contract topology in order (1) LPFeeVault → (2) CurveFactory →
 ///         (3) V3Migrator → (4) Router → (5) one-time setters → (6) canary create+buy, writes a
 ///         self-describing deploy artifact (`deployments/<chainId>.json`) for the addresses codegen,
 ///         and (public modes only) hands ownership to the treasury Safe (Ownable2Step step 7).
@@ -41,20 +41,20 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 ///          (anvil `--fork-url`, the docker `deploychain` one-shot / I-2 dev stack). Same 4663
 ///          chainid and the same external-address + F-2 canonical-WETH discipline as LIVE, but the
 ///          keyless anvil signer fallback is allowed and the artifact is labeled `mode:"fork"` so a
-///          fork pipeline can NEVER produce a `mode:"live"` 4663 registry entry (§12.55 / T-5). A
+/// fork pipeline can NEVER produce a `mode:"live"` 4663 registry entry (/ T-5). A
 ///          real deploy later overwrites `4663.json` with `mode:"live"`.
 ///        - TESTNET (`block.chainid == 46630`, official Robinhood Chain testnet — chain id per
-///          docs.robinhood.com/chain/connecting, recorded in docs/developers/runbooks/testnet.md §1): public-
+/// docs.robinhood.com/chain/connecting, recorded in docs/developers/runbooks/testnet.md) public-
 ///          chain discipline, exactly like LIVE — a real `DEPLOYER_PRIVATE_KEY` is REQUIRED (the
 ///          anvil account-0 fallback is local-only, never on ANY public chain), ALL external
 ///          addresses (WETH, V3 factory/NPM/router/quoter, treasury Safe) come from the constants
 ///          file's `external.*` (default `../tools/m0/out/constants.testnet.json`, the T-1 derive
-///          output — ZERO testnet addresses are hardcoded here), the §12.28 V3 runtime assertions
+/// output — ZERO testnet addresses are hardcoded here), the V3 runtime assertions
 ///          + the O-6 `TreasurySafeUnset` guard run unchanged, and ownership is handed to the
 ///          (dev-signer) treasury Safe. The ONLY live-mode check skipped is the F-2 canonical-WETH
 ///          literal — `0x0Bd7…AD73` is a chain-4663 fact; testnet WETH is whatever the Phase-T
 ///          inventory recorded in the constants file (wrong values still fail `assertV3Wiring`).
-///        - LOCAL smoke (any other chain id, e.g. anvil 31337): the canonical §12.28 addresses have
+/// - LOCAL smoke (any other chain id, e.g. anvil 31337) the canonical addresses have
 ///          NO code on a fresh anvil, so we deploy the REAL precompiled Uniswap V3 core+periphery
 ///          bytecode + a MockWETH9 locally (the M1-10 {V3Fixture} pattern) and point the stack at
 ///          them — so `V3Assertions.assertV3Wiring` runs against a genuinely live local V3 and the
@@ -80,50 +80,50 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 ///           explicit key.
 ///        4. Public modes cross-check `constants.chainId == block.chainid` (`ConstantsChainIdMismatch`)
 ///           so mainnet constants can never be broadcast to testnet or vice versa — the constants
-///           file is the single source of externals (§2/§6.4), so a chain/file mix-up must fail
+/// file is the single source of externals, so a chain/file mix-up must fail
 ///           closed BEFORE any spend. Local mode skips it (the 31337 smoke legitimately reuses the
 ///           4663-derived economics; a 4663 fork loads the fork fixture whose `chainId` is 4663 too).
 ///        5. FORK vs LIVE split of chain 4663 is an env AFFIRMATION (`ROBBED_DEPLOY_ENV == "mainnet"`),
-///           fail-SAFE by construction — §12.55 / the T-5 chain-identity gate. Options weighed:
+/// fail-SAFE by construction — / the T-5 chain-identity gate. Options weighed:
 ///           (a) auto-detect a fork in-EVM — REJECTED: no cheatcode/opcode distinguishes a fork of
 ///           4663 from real 4663 (both report chainid 4663, `arbBlockNumber`/`block.timestamp` track
-///           the forked chain), the exact ambiguity §12.55 records; (b) treat 4663 as live by default
+/// the forked chain), the exact ambiguity records; (b) treat 4663 as live by default
 ///           and require a `ROBBED_FORK` opt-OUT — REJECTED: fail-DANGEROUS (forgetting the flag mints
-///           a false `mode:"live"` fork artifact, precisely the defect that motivated §12.55, whose
+/// a false `mode:"live"` fork artifact, precisely the defect that motivated, whose
 ///           anvil-treasury `4663.json` was already mislabeled `live`); (c) CHOSEN: live is opt-IN via
 ///           an explicit affirmation, so the default 4663 run is a `Fork` and only a deliberate
 ///           `ROBBED_DEPLOY_ENV=mainnet` produces a `mode:"live"` canonical entry. The dangerous state
 ///           requires affirmative intent; the common (fork) path is safe by omission. Basis: Foundry
-///           `vm.envOr` (getfoundry.sh cheatcodes); protects the §12.55 registry-mode invariant.
+/// `vm.envOr` (getfoundry.sh cheatcodes); protects the registry-mode invariant.
 ///           The label is the sole distinguisher — the fork artifact still lands at `4663.json` (a
 ///           real deploy overwrites it) because the LOCAL fork stack's indexer resolves its externals
 ///           from the `"4663"` registry entry, so that key must exist; `mode:"fork"` keeps it
 ///           unambiguous and lets the indexer assert `mode == "live"` for a genuine mainnet entry.
 contract Deploy is Script {
-    /// @notice Canonical WETH9 on chain 4663 (CLAUDE.md / spec §12.28). The ONLY address literal
+    /// @notice Canonical WETH9 on chain 4663 (CLAUDE.md /). The ONLY address literal
     ///         allowed in the codebase; asserted equal to `constants.json.external.weth` on live.
     address internal constant CANONICAL_WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
 
-    /// @notice Canonical Uniswap V3 Factory on chain 4663 (spec §12.28, confirmed on-chain). Asserted
+    /// @notice Canonical Uniswap V3 Factory on chain 4663 (confirmed on-chain). Asserted
     ///         equal to the resolved `external.v3Factory` on Live AND Fork, mirroring the WETH literal
     ///         (F-2): a wrong registry value fails closed pre-broadcast, in addition to the runtime
     ///         `V3Assertions.assertV3Wiring` behavioural checks.
     address internal constant CANONICAL_V3_FACTORY = 0x1f7d7550B1b028f7571E69A784071F0205FD2EfA;
 
-    /// @notice Canonical NonfungiblePositionManager on chain 4663 (spec §12.28, confirmed on-chain).
+    /// @notice Canonical NonfungiblePositionManager on chain 4663 (confirmed on-chain).
     ///         Asserted equal to the resolved `external.positionManager` on Live AND Fork (F-2 mirror).
     address internal constant CANONICAL_NPM = 0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3;
 
-    /// @notice The production chain id (spec §2).
+    /// @notice The production chain id.
     uint256 internal constant LIVE_CHAIN_ID = 4663;
 
     /// @notice The OFFICIAL Robinhood Chain testnet id — docs.robinhood.com/chain/connecting,
-    ///         recorded in docs/developers/runbooks/testnet.md §1 (beware: some third-party lists print 46646).
+    /// recorded in docs/developers/runbooks/testnet.md (beware: some third-party lists print 46646).
     ///         Selects TESTNET mode: public-chain discipline (real key, constants-file externals,
     ///         fail-closed treasury), minus only the F-2 canonical-WETH literal (a 4663-only fact).
     uint256 internal constant TESTNET_CHAIN_ID = 46_630;
 
-    /// @notice The 1% V3 fee tier used for graduation pools (spec §12.1) — canary pool lookup.
+    /// @notice The 1% V3 fee tier used for graduation pools — canary pool lookup.
     uint24 internal constant FEE_TIER = 10_000;
 
     /// @notice PUBLIC, well-known anvil account-0 private key (printed by `anvil` on boot; NOT a
@@ -134,7 +134,7 @@ contract Deploy is Script {
     ///         graduation/mint path never reads it). Mirrors {V3Fixture}.
     address internal constant NPM_DESCRIPTOR = 0x000000000000000000000000000000000000bEEF;
 
-    // ── deploy-tooling custom errors (never revert strings — spec §6.7) ──
+    // ── deploy-tooling custom errors (never revert strings) ──
     error MissingDeployerKey();
     error TreasurySafeUnset();
     error ConstantsChainIdMismatch(uint256 chainId, uint256 declaredChainId);
@@ -154,7 +154,7 @@ contract Deploy is Script {
     ///         affirmation (decision #5). `Live` and `Testnet` are the PUBLIC modes (identical
     ///         discipline except the F-2 canonical-WETH literal); `Fork` is a chain-4663 MAINNET-FORK
     ///         run (anvil `--fork-url`) — same chainid as `Live` but deliberately NOT `Live` so a
-    ///         fork pipeline can never mint a `mode:"live"` registry entry (§12.55); `Local` is the
+    /// fork pipeline can never mint a `mode:"live"` registry entry; `Local` is the
     ///         keyless anvil smoke with a locally-deployed V3 + MockWETH9. New variants are appended
     ///         so the existing enum ordinals (and the unit suite that pins them) stay stable.
     enum Mode {
@@ -205,12 +205,12 @@ contract Deploy is Script {
 
         _resolveExternals(); // live/testnet: read `external.*`; local: deploy real V3 + MockWETH9
 
-        // 2. §12.28 V3 runtime sanity (all modes) + F-2 canonical-WETH. Enforced on `Live` AND
+        // 2. V3 runtime sanity (all modes) + F-2 canonical-WETH. Enforced on `Live` AND
         //    `Fork`: a real fork of chain 4663 carries the genuine `0x0Bd7…AD73` WETH (and the
         //    dev-fork constants fixture records it), so the literal check catches a misconfigured
         //    fork exactly as it would a mainnet deploy. Skipped only for `Testnet`/`Local`.
         V3Assertions.assertV3Wiring(v3Factory, npm, weth);
-        // §12.28 canonical-address literals — Live AND Fork only (a real fork of 4663 carries the
+        // canonical-address literals — Live AND Fork only (a real fork of 4663 carries the
         // genuine registry deployments; Testnet/Local use different chains). Mirrors the F-2 WETH
         // literal: a wrong `external.v3Factory`/`external.positionManager` in the constants file fails
         // closed pre-broadcast, layered ON TOP of the behavioural `assertV3Wiring` above.
@@ -220,14 +220,14 @@ contract Deploy is Script {
             if (npm != CANONICAL_NPM) revert PositionManagerMismatch(CANONICAL_NPM, npm);
         }
 
-        // 3. Deploy topology in contracts.md §7.2 order.
+        // 3. Deploy topology in contracts.md order.
         _deployTopology();
 
-        // 4. Canary create + tiny buy — proves the wired stack works end-to-end (§7.2 step 6).
+        // 4. Canary create + tiny buy — proves the wired stack works end-to-end (step 6).
         _canary();
 
         // 5. Ownership handoff (public modes): Ownable2Step — not live until the Safe accepts
-        //    (§7.2 #7; testnet exercises the same handoff against the dev-signer Safe, T-2).
+        // (#7; testnet exercises the same handoff against the dev-signer Safe, T-2).
         if (mode != Mode.Local) {
             factory.transferOwnership(treasury);
             console2.log("[deploy] ownership transfer initiated -> Safe (must acceptOwnership):", treasury);
@@ -235,13 +235,13 @@ contract Deploy is Script {
 
         vm.stopBroadcast();
 
-        // 6. Emit the deploy artifact the addresses codegen consumes (architecture.md §4).
+        // 6. Emit the deploy artifact the addresses codegen consumes (architecture.md).
         _writeArtifact();
 
         _logVerifyHints();
     }
 
-    /// @dev Chain-id → mode (decision #2 + #5): 46630 testnet (official id — testnet.md §1), 4663
+    /// @dev Chain-id → mode (decision #2 + #5) 46630 testnet (official id — testnet.md), 4663
     ///      MAINNET which is `Live` ONLY when the deploy is explicitly affirmed as a real Phase-B
     ///      broadcast (`mainnetAffirmed`) and otherwise a `Fork` (a mainnet-fork run shares the 4663
     ///      chainid but must never be labeled `live`), anything else local anvil smoke. Pure: the
@@ -258,7 +258,7 @@ contract Deploy is Script {
     ///         DANGEROUS state (`mode:"live"`, canonical registry entry) is opt-in and requires a
     ///         deliberate env affirmation, so forgetting the flag — or any mainnet-FORK pipeline that
     ///         simply never sets it — yields `Mode.Fork` and a `mode:"fork"` artifact, never a
-    ///         false-live 4663 registry entry (§12.55 / the T-5 chain-identity gate). `virtual` so
+    /// false-live 4663 registry entry (/ the T-5 chain-identity gate). `virtual` so
     ///         the unit harness can pin the affirmation without racing on process-global env state.
     function _isMainnetAffirmed() internal view virtual returns (bool) {
         return keccak256(bytes(vm.envOr("ROBBED_DEPLOY_ENV", string("")))) == keccak256(bytes("mainnet"));
@@ -295,7 +295,7 @@ contract Deploy is Script {
 
     /// @dev Loader-level consistency assertions mirroring the invariants `constants.json` documents
     ///      (reviewRequired / derivation): the supply split reconstructs the fixed 1e27 total
-    ///      (spec §6.4), and graduation stays fundable at the fee ceilings (contracts.md F-3). The
+    ///, and graduation stays fundable at the fee ceilings (contracts.md F-3). The
     ///      factory constructor re-checks both by construction; doing it here fails a bad constants
     ///      file loudly, pre-broadcast, with a deploy-specific error.
     function _consistencyChecks() internal view {
@@ -311,7 +311,7 @@ contract Deploy is Script {
         // Beta caps must clear the graduation threshold, or graduation is UNREACHABLE (the cap binds
         // before real reserves reach GRADUATION_ETH). Mirrors the factory constructor's
         // `_requireCapsReachGraduation`; fails a bad constants file loudly, pre-broadcast, with a
-        // deploy-specific error (config-discipline finding, guards §12.11). `globalEthCap` bounds the
+        // deploy-specific error (config-discipline finding, guards). `globalEthCap` bounds the
         // SUM across curves, so it too must clear the single-curve threshold for ANY curve to graduate.
         uint256 perTokenEthCap = vm.parseJsonUint(cj, ".beta.perTokenEthCapWei");
         uint256 globalEthCap = vm.parseJsonUint(cj, ".beta.globalEthCapWei");
@@ -319,11 +319,11 @@ contract Deploy is Script {
         if (globalEthCap < graduationEth) revert CapBelowGraduation(globalEthCap, graduationEth);
 
         // Gate-4 mutation-disposition calibration pin (reports/mutation/README.md, "L362/L363" DID
-        // rows): the §6.3.2 amount-min floor `(1 − migrationSlippageBps/1e4)` must cover the worst
+        // rows) the amount-min floor `(1 − migrationSlippageBps/1e4)` must cover the worst
         // amount skew the ±toleranceTicks final-price band (V3Migrator L255) admits, i.e.
         //   1.0001^toleranceTicks × (1 − migrationSlippageBps/1e4) ≤ 1.
-        // A §12.32/§12.33 beta retune past this bound would (a) let the L362/L363 mins bite INSIDE
-        // the tolerance band — an NPM amount-min revert after the L255 check passed, a §12.12
+        // A beta retune past this bound would (a) let the L362/L363 mins bite INSIDE
+        // the tolerance band — an NPM amount-min revert after the L255 check passed, a
         // ReadyToGraduate liveness risk — and (b) silently invalidate the gate-4 disposition of the
         // 14 min-weakening mutants (equivalent-in-reachable-states only under this relation). Fail
         // the retuned deploy closed here (script-side only — no production bytecode change);
@@ -340,7 +340,7 @@ contract Deploy is Script {
     /// @dev 1e18 fixed point ("WAD") + bps denominator for the calibration relation below.
     uint256 internal constant WAD = 1e18;
     uint256 internal constant BPS_DENOM = 10_000;
-    /// @dev 1.0001 in WAD — the v3-core tick base (price ratio per tick; Uniswap v3 whitepaper §6.1).
+    /// @dev 1.0001 in WAD — the v3-core tick base (price ratio per tick; Uniswap v3 whitepaper).
     uint256 internal constant TICK_BASE_WAD = 1.0001e18;
 
     /// @notice TRUE iff `1.0001^toleranceTicks × (1 − migrationSlippageBps/1e4) ≤ 1` — the relation
@@ -359,7 +359,7 @@ contract Deploy is Script {
     ///       comparison would need a bps square root; (3) CHOSEN: round-UP binary exponentiation in
     ///       WAD. Round-up is one-sided-safe: pass ⇒ the true relation holds (upward bias ≤ 1 wei
     ///       per multiply — +12 wei at T=100 vs a true margin of ~5.08e13 wei). Nonsense
-    ///       calibrations fail closed: negative tolerance / slippage ≥ 100% (a zero §6.3.2 min
+    /// calibrations fail closed: negative tolerance / slippage ≥ 100% (a zero min
     ///       floor) return false; astronomic tolerances (≳3e5 ticks) revert on checked overflow.
     function _minFloorCoversToleranceBand(int24 toleranceTicks, uint16 migrationSlippageBps)
         internal
@@ -388,7 +388,7 @@ contract Deploy is Script {
         }
     }
 
-    /// @dev Build the factory init struct straight from `constants.json` (nothing inlined — §6.4).
+    /// @dev Build the factory init struct straight from `constants.json` (nothing inlined).
     function _factoryInit() internal view returns (CurveFactory.FactoryInit memory p) {
         p.weth = weth;
         p.treasury = treasury;
@@ -399,8 +399,8 @@ contract Deploy is Script {
         p.lpTranche = vm.parseJsonUint(cj, ".curve.lpTrancheWei");
         p.graduationEth = vm.parseJsonUint(cj, ".curve.graduationEthWei");
         p.tradeFeeBps = uint16(vm.parseJsonUint(cj, ".fees.tradeFeeBps"));
-        // Creator-fee leg (spec §7, §12.63) — read from constants, NEVER inlined (spec §2/§6.4).
-        // Mainnet `constants.json` = 0 (Phase-2 disabled until a §12.62 re-derivation); testnet
+        // Creator-fee leg — read from constants, NEVER inlined.
+        // Mainnet `constants.json` = 0 (Phase-2 disabled until a re-derivation); testnet
         // `constants.testnet.json` = the ratified 50 (treasury 100 + creator 50 = 150 ≤ 200 cap).
         p.creatorFeeBps = uint16(vm.parseJsonUint(cj, ".fees.creatorFeeBps"));
         p.creationFee = vm.parseJsonUint(cj, ".fees.creationFeeWei");
@@ -435,7 +435,7 @@ contract Deploy is Script {
 
     /// @dev Resolve WETH + the four V3 externals + treasury. PUBLIC modes (live AND testnet) read
     ///      every one of them from the constants file's `external.*` — zero hardcoded per-chain
-    ///      addresses in Solidity (spec §2/§6.4; testnet values land there via the T-1
+    /// addresses in Solidity (; testnet values land there via the T-1
     ///      `external.testnet.json` fixture → `derive --network=testnet`) — and enforce the O-6
     ///      non-zero-Safe guard. LOCAL deploys real V3 core+periphery bytecode + MockWETH9 and uses
     ///      the deployer as the (dev EOA) treasury.
@@ -448,7 +448,7 @@ contract Deploy is Script {
             v3Factory = vm.parseJsonAddress(cj, ".external.v3Factory");
             npm = vm.parseJsonAddress(cj, ".external.positionManager");
             treasury = vm.parseJsonAddress(cj, ".external.treasurySafe");
-            if (treasury == address(0)) revert TreasurySafeUnset(); // O-6 fail-closed (spec §13)
+            if (treasury == address(0)) revert TreasurySafeUnset(); // O-6 fail-closed
         } else {
             weth = address(new MockWETH9());
             (v3Factory, npm) = _deployLocalV3(weth);
@@ -476,36 +476,36 @@ contract Deploy is Script {
 
     // ──────────────────────────── deploy topology ──────────────────────────────
 
-    /// @dev §7.2 order (creator-fee generation, §12.69): (1) factory → (2) CreatorVault (needs the
+    /// @dev order (creator-fee generation) (1) factory → (2) CreatorVault (needs the
     ///      factory address) → (3) LPFeeVault (needs the factory — reads its live creatorVault sink +
     ///      migrator registration authority; treasury still frozen forever) → (4) migrator (needs the
     ///      vault) → (5) router → (6) one-time setters (migrator/router/creatorVault/lpFeeVault). The
     ///      LPFeeVault↔migrator and CreatorVault↔LPFeeVault cycles resolve via the factory's
     ///      one-time-setter pattern (the vaults read `factory.migrator()`/`factory.lpFeeVault()` live,
-    ///      each immutable-by-convention once set). Topology is immutable after the setters (spec §6).
+    /// each immutable-by-convention once set). Topology is immutable after the setters.
     function _deployTopology() internal {
         factory = new CurveFactory(_factoryInit()); // 1
-        creatorVault = new CreatorVault(address(factory)); // 2 — pull-payment creator-fee sink (§12.63/§12.69)
-        vault = new LPFeeVault(npm, treasury, address(factory)); // 3 — creator-aware LP fee vault (§12.69)
+        creatorVault = new CreatorVault(address(factory)); // 2 — pull-payment creator-fee sink
+        vault = new LPFeeVault(npm, treasury, address(factory)); // 3 — creator-aware LP fee vault
         migrator = new V3Migrator(_migratorInit()); // 4 (reads address(vault))
         router = new Router(ICurveFactory(address(factory))); // 5
         factory.setMigrator(address(migrator)); // 6
         factory.setRouter(address(router));
         factory.setCreatorVault(address(creatorVault));
-        factory.setLpFeeVault(address(vault)); // §12.69: gate CreatorVault.depositERC20 to this vault
+        factory.setLpFeeVault(address(vault)); // : gate CreatorVault.depositERC20 to this vault
     }
 
     // ─────────────────────────────── canary smoke ──────────────────────────────
 
     /// @dev Create a canary launch through the real Router path (+ a tiny initial buy) and assert
     ///      (a) tokens were minted to the buyer and (b) the V3 pool was pre-initialized at the
-    ///      deterministic graduation price for the correct token ordering (spec §6.3.2). Proves the
+    /// deterministic graduation price for the correct token ordering. Proves the
     ///      whole wired stack — factory CREATE2, token mint, pool pre-seed, curve buy — is live.
     function _canary() internal {
         uint256 creationFee = factory.creationFee();
         // Anti-sniper-safe canary buy: capped to the LIVE per-tx early cap instead of a bare
         // 0.001-ether literal. The canary create+buy is atomic, so it always executes INSIDE the
-        // §12.18 early window; under the TESTNET small-G constants (M0_TESTNET_GRADUATION_ETH)
+        // early window; under the TESTNET small-G constants (M0_TESTNET_GRADUATION_ETH)
         // maxEarlyBuyWei = 2.5% of a faucet-scale G (0.000125 ETH) sits BELOW the old literal, which
         // made the whole deploy revert EarlyBuyCapExceeded on the T-1 dry-run (2026-07-13). `== cap`
         // is admissible (BondingCurve only rejects grossIn > MAX_EARLY_BUY); a zero cap would brick
@@ -524,7 +524,7 @@ contract Deploy is Script {
         canaryCurve = curve;
         if (tokensOut == 0) revert CanaryNoTokensOut();
 
-        // Pool pre-initialized at the target graduation price (§6.3.2 pre-seed defence).
+        // Pool pre-initialized at the target graduation price (pre-seed defence).
         address pool = IUniswapV3Factory(v3Factory).getPool(token, weth, FEE_TIER);
         (uint160 sqrtP,,,,,,) = IUniswapV3Pool(pool).slot0();
         if (sqrtP == 0) revert CanaryPoolUninitialized(pool);
@@ -571,7 +571,7 @@ contract Deploy is Script {
 
     /// @dev Artifact `mode` label (consumed by the addresses codegen + the testnet.env emitter).
     ///      A 4663 FORK run resolves to `"fork"` — the single, authoritative distinguisher between a
-    ///      mainnet-fork artifact and a real Phase-B deploy (§12.55): the codegen/registry and the
+    /// mainnet-fork artifact and a real Phase-B deploy : the codegen/registry and the
     ///      indexer assert `mode == "live"` for a canonical mainnet entry, so a fork can never
     ///      masquerade as live even though it shares the 4663 chainid.
     function _modeString() internal view returns (string memory) {
@@ -582,7 +582,7 @@ contract Deploy is Script {
     }
 
     /// @dev Blockscout verification is env-gated (M1-2 / Phase-T, O-5); print the exact command per
-    ///      contracts.md §7.2 step 8 rather than run it here (verification needs a public repo +
+    /// contracts.md step 8 rather than run it here (verification needs a public repo +
     ///      settled bytecode). Documented, not executed. Testnet additionally points at the
     ///      testnet.env emitter (docker-compose.testnet.yml contract — docs/developers/runbooks/docker.md).
     function _logVerifyHints() internal view {

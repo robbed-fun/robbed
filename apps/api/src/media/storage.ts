@@ -1,9 +1,9 @@
 /**
  * Object storage boundary (R2 in prod, minio in dev/CI — same S3 API). Behind an
  * INTERFACE so route tests inject an in-memory fake. The concrete impl uses
- * Bun's native `S3Client` (no extra dependency; §8 "R2 presigned upload" is
+ * Bun's native `S3Client` (no extra dependency; "R2 presigned upload" is
  * satisfied on the API→R2 leg with server credentials — never a browser-direct
- * presign of unmoderated bytes, api.md §3.1/§12.19).
+ * presign of unmoderated bytes, api.md).
  *
  * Objects are CONTENT-ADDRESSED → writes are idempotent and dedupe:
  *   images/{keccak256}.webp   metadata/{hash}.json
@@ -18,7 +18,7 @@ export interface Storage {
   putImage(keccak: string, bytes: Uint8Array): Promise<void>;
   putMetadata(hash: string, json: string): Promise<void>;
   imageExists(keccak: string): Promise<boolean>;
-  // ── OG card cache (api.md §3 OG endpoint) ──────────────────────────────────
+  // ── OG card cache (api.md OG endpoint) ──────────────────────────────────
   ogKey(address: string, version: string): string;
   ogUrl(address: string, version: string): string;
   putOg(address: string, version: string, bytes: Uint8Array): Promise<void>;

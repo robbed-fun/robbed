@@ -43,26 +43,26 @@ import { isLargeValueWei, largeValueThresholdWei } from "../model/large-value";
 import { formatReceiveTokenAmount } from "../lib/format-receive";
 
 /**
- * Buy/Sell widget with the INVISIBLE VENUE SWITCH (§5.2) — ROBBED_ terminal skin
- * (redesign mockup, spec §12.50 — "2a" trade panel). One design, two engines, selected by the
+ * Buy/Sell widget with the INVISIBLE VENUE SWITCH — ROBBED_ terminal skin
+ * (redesign mockup, — "2a" trade panel). One design, two engines, selected by the
  * indexed `status` — never a user choice:
  *   status=curve/graduating → curve engine (Router.buy/sell, on-chain quote)
  *   status=graduated        → Uniswap V3 engine
  *
  * INVARIANTS enforced here (proven in tests/trade-widget-gating.test.tsx):
- * - SELL TAB IS NEVER GATED by any pause flag (§6.5/§12.25). `usePauseBuys` is
+ * - SELL TAB IS NEVER GATED by any pause flag. `usePauseBuys` is
  *   read ONLY for the Buy tab; the Sell tab never imports/consults it. When buys
  *   are paused the Buy inputs disable with the exact "selling remains open" copy
  *   while Sell stays fully live.
- * - The §12.12 "Graduating…" interstitial locks BOTH sides (deterministic
+ * - The "Graduating…" interstitial locks BOTH sides (deterministic
  *   protocol state) — copy never says "paused".
  * - Anti-sniper: inside the early window the per-tx buy cap is surfaced up-front
- *   (§6.5) rather than letting the tx revert.
- * - Slippage default 2%, deadline on every trade (§5.2).
+ * rather than letting the tx revert.
+ * - Slippage default 2%, deadline on every trade.
  *
- * FOLDED-IN (§12.47, task B): when a trade's ETH notional ≥
+ * FOLDED-IN (task B) when a trade's ETH notional ≥
  * `NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD` (default 1.0 ETH) the widget surfaces
- * the extra confirmation-tier disclosure (§2.1) — large-value displays must
+ * the extra confirmation-tier disclosure — large-value displays must
  * disclose the posted/finalized tiers, not just soft-confirmed.
  */
 export function TradeWidget({ token }: { token: TokenDetail }) {
@@ -91,7 +91,7 @@ function CurveVenue({
   const { submit, isSubmitting, error } = useTradeSubmit(token);
 
   // Pause state gates the BUY tab ONLY. `buyPaused` is defined with a `side ===
-  // "buy"` guard, so the Sell path can never be disabled by it (§6.5/§12.25):
+  // "buy"` guard, so the Sell path can never be disabled by it :
   // when the Sell tab is active this is always false regardless of pauseBuys.
   const { pauseBuys } = usePauseBuys();
   const buyPaused = side === "buy" && pauseBuys === true;
@@ -118,7 +118,7 @@ function CurveVenue({
     [side, amountWei, quote, reads],
   );
 
-  // §12.47: ETH notional = the ETH leg — the input for a buy, the expected ETH
+  // : ETH notional = the ETH leg — the input for a buy, the expected ETH
   // out for a sell.
   const ethNotionalWei = side === "buy" ? amountWei : (quote?.amountOut ?? null);
 
@@ -154,7 +154,7 @@ function CurveVenue({
         />
 
         {/* Buy-only pause gate. The Sell tab never renders this and its enable/
-            submit logic never reads pauseBuys (§6.5/§12.25). */}
+            submit logic never reads pauseBuys. */}
         {buyPaused && (
           <p className="border-l-2 border-soft-confirmed bg-soft-confirmed/10 px-2 py-1.5 text-xs text-soft-confirmed">
             Buying is temporarily paused — selling remains open.
@@ -375,7 +375,7 @@ function ReceiveBox({
  * `Price impact` / `Fee` (plain "1%") / `Max slippage` — 11.5px muted rows,
  * 7px gap, hairline top border, 12px top padding. The slippage row IS the
  * interactive control (spec: configurable slippage + a deadline on every trade
- * §5.2): the label→value row keeps the mockup's third-row read, and the preset
+ * ) the label→value row keeps the mockup's third-row read, and the preset
  * chips wrap onto their own line under it (review fix — the merged single row
  * overflowed the 320px rail). `Min received` stays as a fourth row — the spec
  * requires the minTokensOut floor to be communicated.
@@ -392,7 +392,7 @@ function InfoRows({
 }: {
   side: TradeSide;
   feeLabel: string;
-  /** Live curve creator-fee bps (§12.68/§12.69) — a faint venue-invariant note
+  /** Live curve creator-fee bps — a faint venue-invariant note
    *  appears under the Fee row when > 0. Omitted (undefined) on the V3 path. */
   creatorFeeBps?: number | null;
   minOut: bigint | null;
@@ -414,10 +414,10 @@ function InfoRows({
       <Row label="Fee">
         <span className="tabular-nums">{feeLabel}</span>
       </Row>
-      {/* Creator-fee disclosure (§12.68/§12.69): the creator earns this live-read
+      {/* Creator-fee disclosure : the creator earns this live-read
           % of every trade, VENUE-INVARIANT — the same rate on the curve and, after
           graduation, on Uniswap V3 (the 50/50 LP-fee split). Read from the curve,
-          never an inlined knob (§2). */}
+          never an inlined knob. */}
       {creatorFeeBps != null && creatorFeeBps > 0 && (
         <p className="text-2xs leading-relaxed text-faint">
           incl. {formatBpsPercent(creatorFeeBps)} to the creator — before &amp; after
@@ -426,7 +426,7 @@ function InfoRows({
       )}
       {/* Review fix (2026-07-11): the merged label+chips+value+deadline row
           overflowed the 320px rail. The mockup's three-row read is preserved —
-          "Max slippage" stays a label→value row (value + §5.2 deadline
+          "Max slippage" stays a label→value row (value + deadline
           disclosure); the preset chips wrap DELIBERATELY onto their own
           right-aligned line beneath it. */}
       <div className="flex flex-col gap-1.5">
@@ -435,7 +435,7 @@ function InfoRows({
             <span className={cn("tabular-nums", slippageWarn && "text-soft-confirmed")}>
               {(slippageBps / 100).toFixed(1)}%
             </span>
-            {/* §5.2: the deadline on every trade stays disclosed. Copy is derived
+            {/* : the deadline on every trade stays disclosed. Copy is derived
                 from the constant so it never drifts from the shipped window. */}
             <span className="text-faint">· deadline {DEFAULT_DEADLINE_MINUTES}m</span>
           </span>
@@ -477,12 +477,12 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 /**
- * §12.47 large-value disclosure. Above the ETH threshold, a trade's confirmation
+ * large-value disclosure. Above the ETH threshold, a trade's confirmation
  * tiers matter: the sequencer includes it NOW, then it posts to L1, then it
  * finalizes — settlement finality follows L1 posting on this single-sequencer L2.
  * We surface that here rather than implying instant settlement.
  *
- * §12.56: this KEEPS the posted-to-L1 / finalized escalation (the whole point of
+ * : this KEEPS the posted-to-L1 / finalized escalation (the whole point of
  * the disclosure) but drops the "soft-confirmed" chip framing — it now leads with
  * "wait for posted/finalized", not a soft-confirmed label.
  */
@@ -560,7 +560,7 @@ function GraduatingInterstitial() {
   return (
     <div className="border border-soft-confirmed/40 bg-soft-confirmed/10 p-3 text-center">
       <div className="mb-1 flex justify-center">
-        {/* Mixed-case textContent (CSS uppercases visually) — the §12.12 copy
+        {/* Mixed-case textContent (CSS uppercases visually) — the copy
             contract asserts on the literal "Graduating to Uniswap V3". */}
         <SideBadge side="graduate" label="Graduating to Uniswap V3…" />
       </div>
@@ -574,16 +574,16 @@ function GraduatingInterstitial() {
 }
 
 /**
- * Post-graduation venue (§5.2 invisible switch). The engine is selected purely by
+ * Post-graduation venue (invisible switch). The engine is selected purely by
  * the indexed `status` — the user never chose it — and the widget UX is the SAME
  * Buy/Sell design as the curve; only the engine underneath differs (M3-5).
  *
  * Quotes come from the Uniswap QuoterV2 REVERT-QUOTER via `useV3Quote`
- * (`useSimulateContract`, never `readContract` — §12.28); execution routes through
+ * (`useSimulateContract`, never `readContract`); execution routes through
  * SwapRouter02 in `useTradeSubmit` (exactInputSingle + multicall/unwrapWETH9 for
  * the native-ETH leg). Slippage default 2% + deadline apply on every trade.
  *
- * SELL IS NEVER GATED: post-graduation has NO pause authority (§6.5), so this
+ * SELL IS NEVER GATED: post-graduation has NO pause authority, so this
  * venue consults no pause flag at all — both Buy and Sell are always live.
  */
 function V3Venue({ token }: { token: TokenDetail }) {
@@ -678,7 +678,7 @@ function parseAmount(side: TradeSide, raw: string): bigint | null {
 
 /** bps → plain "1%" / "1.5%" fee value (mockup row `Fee  1%` — no suffix; the
  *  Trust panel carries the "curve fee → treasury" sourcing detail). Rendered from
- *  the on-chain value, never a copy literal (§2); `null` (read pending) → "—". */
+ * the on-chain value, never a copy literal; `null` (read pending) → "—". */
 function feeLabelFromBps(bps: number | null): string {
   if (bps === null) return "—";
   const pct = bps / 100;

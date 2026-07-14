@@ -10,14 +10,14 @@ import {LaunchToken} from "src/LaunchToken.sol";
 import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
 import {EarlyBuyCapExceeded, SlippageExceeded} from "src/errors/Errors.sol";
 
-/// @title Gate-6 economic red-team — curve-side adversary sims under FCFS (spec §10 gate 6, §2.2)
+/// @title Gate-6 economic red-team — curve-side adversary sims under FCFS (gate 6)
 /// @notice ADDED BY robbed-security for the gate-6 run (read-only audit; test-additions only, no
 ///         production-code edits). Deterministic, non-fork mirror of the fork suite
 ///         `test/fork/EconRedTeam.t.sol` — the numbers below are curve-math facts independent of the
 ///         V3 venue, so they are proven here fast/deterministically and re-confirmed on the live
 ///         fork. Everything is measured against the REAL M0 economics ({TestConstants}).
 ///
-///         Adversary patterns (§2.2 observed bot fleet, priced under FCFS — priority fees do NOT
+/// Adversary patterns (observed bot fleet, priced under FCFS — priority fees do NOT
 ///         reorder, so the only front-run vector is arrival-order/latency, never a gas bid):
 ///           1. Sniper: single-tx cap engages; single-actor multi-tx AND multi-wallet bypass cost.
 ///           2. Sandwich: worst-case (attacker wins ordering) profit bound + victim-slippage floor.
@@ -30,7 +30,7 @@ contract CurveEconRedTeam is BaseFixture {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 1. SNIPER — anti-sniper guard (§12.18) is a PER-TX gross cap inside a
+    // 1. SNIPER — anti-sniper guard is a PER-TX gross cap inside a
     //    timestamp window. Quantify what it does and does not stop under FCFS.
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -55,7 +55,7 @@ contract CurveEconRedTeam is BaseFixture {
     /// @notice THE bypass quantification. A SINGLE EOA sweeps the whole curve to graduation inside
     ///         the early window using only <=cap chunks — the guard has NO per-actor / per-block
     ///         cumulative accounting, so chunking defeats it at ~zero marginal cost (same total fee,
-    ///         same price impact as one atomic sweep). This is the §6.5-acknowledged bypass, now
+    /// same price impact as one atomic sweep). This is the -acknowledged bypass, now
     ///         priced: the guard blunts a single ATOMIC sweep only.
     function test_sniper_singleActor_multiTx_bypassCost() public {
         (LaunchToken token, BondingCurve curve) = _create();
@@ -98,9 +98,9 @@ contract CurveEconRedTeam is BaseFixture {
         // (chunks-1) extra txs — economically negligible for a funded operator.
     }
 
-    /// @notice Multi-wallet variant (shared gas funder, §2.2): N wallets each buy <=cap. Same total
+    /// @notice Multi-wallet variant (shared gas funder) N wallets each buy <=cap. Same total
     ///         acquisition, same fee, same price impact as the single-actor chunked sweep — the only
-    ///         added cost over chunking is funding N wallets. Confirms §6.5's multi-wallet
+    /// added cost over chunking is funding N wallets. Confirms 's multi-wallet
     ///         acknowledgment and prices it: near-zero marginal cost.
     function test_sniper_multiWallet_sharedFunder_bypassCost() public {
         (LaunchToken token, BondingCurve curve) = _create();
@@ -215,7 +215,7 @@ contract CurveEconRedTeam is BaseFixture {
     /// @notice One buy->sell round trip loses ~2% of notional to the in-contract fee (1% each leg)
     ///         plus curve-favoring rounding; the curve captures it as `accruedFees`. Quantifies the
     ///         cost to wash a unit of volume — the economic reason wash-to-trend is a continuous
-    ///         bleed (indexer §8.5 additionally flags round-trip clusters out of organic metrics).
+    /// bleed (indexer additionally flags round-trip clusters out of organic metrics).
     function test_wash_roundTrip_feeBleed() public {
         (LaunchToken token, BondingCurve curve) = _create();
         vm.warp(uint256(curve.EARLY_WINDOW_END()));

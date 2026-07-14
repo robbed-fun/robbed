@@ -31,20 +31,20 @@ import { useWsChannel } from "@/shared/lib/ws";
 import { isCreatorFeeUpdateFor } from "../model/ws";
 
 /**
- * Creator earnings widget (§7 / §12.63 / §12.69) — rendered on the Portfolio
+ * Creator earnings widget — rendered on the Portfolio
  * CREATED tab for the CONNECTED user's OWN address only (`isSelf`). It surfaces
  * BOTH legs of the venue-invariant 0.5% creator fee:
  *
  *  - PRE-GRAD (curve, native ETH): `CreatorVault.claim(creator)` — the live
- *    `balanceOf` roll-up (`useCreatorClaimable`), unchanged from §12.63.
- *  - POST-GRAD (V3 LP fees, §12.69): per-`(creator, ERC20)` buckets — the
+ * `balanceOf` roll-up (`useCreatorClaimable`), unchanged from.
+ * - POST-GRAD (V3 LP fees) per-`(creator, ERC20)` buckets — the
  *    aggregated WETH leg + each graduated launch-token leg — each pulled with
  *    `CreatorVault.claimERC20(creator, token)`. Buckets come from the indexer
  *    `token-claimable` endpoint (AUTHORITATIVE), falling back to on-chain
  *    `tokenBalanceOf` (over the creator's graduated tokens) until that lands.
  *
  * Every claim surfaces the shared confirmation TIERS via the reused
- * `ConfirmationBadge` (never final while soft-confirmed, §2.1/§12.56).
+ * `ConfirmationBadge` (never final while soft-confirmed).
  *
  * LIVE: it subscribes to each graduated token's `:events` channel and refetches
  * the authoritative claimable on a `creator_fee_split` / `creator_fee_claimed`
@@ -65,7 +65,7 @@ export function CreatorEarningsPanel({
 }) {
   const ethLeg = useCreatorClaimable(isSelf ? address : undefined);
 
-  // Post-grad buckets: API first (§12.69), on-chain tokenBalanceOf fallback in dev.
+  // Post-grad buckets: API first, on-chain tokenBalanceOf fallback in dev.
   const tokenApi = useCreatorTokenClaimable(isSelf ? address : undefined);
   const apiUp = tokenApi.isSuccess && tokenApi.data !== null;
 
@@ -162,7 +162,7 @@ function CreatorFeeEventsSubscription({
 }
 
 /**
- * Pre-graduation ETH leg (curve fee, §12.63) — the live `claim(creator)` roll-up.
+ * Pre-graduation ETH leg (curve fee) — the live `claim(creator)` roll-up.
  * A section within the panel (no own border/margins), labelled to make the
  * venue-invariant "0.5% before AND after graduation" story legible next to the
  * post-grad buckets below it.
@@ -239,7 +239,7 @@ function EthLegCard({
 }
 
 /**
- * Post-grad per-`(creator, ERC20)` bucket (§12.69) — the WETH leg or a graduated
+ * Post-grad per-`(creator, ERC20)` bucket — the WETH leg or a graduated
  * launch-token leg, each pulled with its own `claimERC20(creator, token)` tx and
  * its own confirmation-tier badge. Zero-balance buckets never reach here (filtered
  * by `hasClaimable`).
@@ -311,7 +311,7 @@ function TokenBucketRow({
   );
 }
 
-/** Claim tx phase → the shared §4 display node (reuses the trade badge). */
+/** Claim tx phase → the shared display node (reuses the trade badge). */
 export function claimDisplayState(state: ClaimState): TradeDisplayState | null {
   switch (state.phase) {
     case "idle":
@@ -324,7 +324,7 @@ export function claimDisplayState(state: ClaimState): TradeDisplayState | null {
       return "failed";
     case "confirmed":
       // Tier from the indexed block via the watermark — soft-confirmed shows no
-      // chip (§12.56); posted/finalized surface the shared badge.
+      // chip; posted/finalized surface the shared badge.
       return state.confirmationState
         ? displayStateForIndexed(state.confirmationState)
         : "optimistic:soft-confirmed";

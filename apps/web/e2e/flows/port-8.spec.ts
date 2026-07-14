@@ -8,7 +8,7 @@ import {
   test,
 } from "../harness";
 
-// @flow:PORT-8 — Portfolio read failure → per-region error state + retry (§12.50a / catalog §3b)
+// @flow:PORT-8 — Portfolio read failure → per-region error state + retry (/ catalog)
 // assertable-layers: UI only   (an injected failure has no indexed/on-chain leg — waiver)
 test(
   "PORT-8 failing portfolio reads degrade per-region with a working Retry — never page-blank",
@@ -35,7 +35,7 @@ test(
       await page.route(summaryOnly, failWith);
       await page.goto(portfolio.route(subject.address));
       await expect(page.getByText(portfolioCopy.summaryError)).toBeVisible();
-      // No fabricated substitutes: the stat cells are absent while failing (§2).
+      // No fabricated substitutes: the stat cells are absent while failing.
       await expect(page.getByText(/total value/i)).toHaveCount(0);
       // Independence: HOLDINGS still loads (rows or its EMPTY state — never its error).
       await expect(portfolio.holdingsTab(page)).toBeVisible();

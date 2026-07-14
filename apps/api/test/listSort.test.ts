@@ -1,5 +1,5 @@
 /**
- * §12.59 server-side sort primitives (lib/listSort.ts): the allowlist→column map
+ * server-side sort primitives (lib/listSort.ts) the allowlist→column map
  * IS the ORDER BY security boundary, the keyset SQL fragments compose sort with
  * pagination, and the cursor-key extractors + label ranking are single-sourced so
  * the real SQL (db.bun.ts) and the test fake (helpers.ts) cannot drift.
@@ -54,7 +54,7 @@ describe("allowlist → fixed column map (the ORDER BY security boundary)", () =
   it("maps every HOLDER_SORT_FIELDS member; rank/amount/percent share balance::numeric", () => {
     for (const f of HOLDER_SORT_FIELDS) expect(HOLDER_SORT_COLUMNS[f]).toBeDefined();
     expect(Object.keys(HOLDER_SORT_COLUMNS).sort()).toEqual([...HOLDER_SORT_FIELDS].sort());
-    // one physical key for the three balance-backed columns (§12.59 note)
+    // one physical key for the three balance-backed columns (note)
     expect(HOLDER_SORT_COLUMNS.rank.expr).toBe("balance::numeric");
     expect(HOLDER_SORT_COLUMNS.amount.expr).toBe("balance::numeric");
     expect(HOLDER_SORT_COLUMNS.percent.expr).toBe("balance::numeric");
@@ -117,7 +117,7 @@ describe("cursor-key extractors (k transport form matches the SQL column)", () =
   });
 });
 
-describe("holderLabelRank — deterministic role/flag ordering (§12.58)", () => {
+describe("holderLabelRank — deterministic role/flag ordering ", () => {
   const special = {
     creator: "0x" + "c1".repeat(20),
     curve: "0x" + "c2".repeat(20),

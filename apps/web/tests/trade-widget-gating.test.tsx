@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { tokenDetail } from "./fixtures";
 
 /**
- * TradeWidget invariants (§5.2/§6.5/§12.25). The load-bearing product guarantee:
+ * TradeWidget invariants. The load-bearing product guarantee:
  * the SELL path is NEVER gated by any pause flag. When `pauseBuys` is set, the
  * Buy tab disables with the exact copy while the Sell tab stays fully live and
  * submittable. Also covers the invisible venue switch (status selects the engine).
@@ -92,7 +92,7 @@ afterEach(() => {
   cleanup();
 });
 
-describe("sells are never gated by pauseBuys (§6.5/§12.25)", () => {
+describe("sells are never gated by pauseBuys ", () => {
   it("pauseBuys=true → Buy disabled with exact copy, Sell stays live + submittable", () => {
     pauseState.pauseBuys = true;
     render(<TradeWidget token={tokenDetail({ status: "curve" })} />);
@@ -120,7 +120,7 @@ describe("sells are never gated by pauseBuys (§6.5/§12.25)", () => {
   });
 });
 
-describe("invisible venue switch — status selects the engine (§5.2)", () => {
+describe("invisible venue switch — status selects the engine ", () => {
   it("curve status → Buy/Sell tabs (curve engine)", () => {
     render(<TradeWidget token={tokenDetail({ status: "curve" })} />);
     expect(screen.getByRole("tab", { name: /buy/i })).toBeTruthy();
@@ -133,7 +133,7 @@ describe("invisible venue switch — status selects the engine (§5.2)", () => {
     expect(screen.getByText(/Trading on Uniswap V3/)).toBeTruthy();
     expect(screen.getByRole("tab", { name: /buy/i })).toBeTruthy();
     expect(screen.getByRole("tab", { name: /sell/i })).toBeTruthy();
-    // No curve-only pause copy exists post-graduation (no pause authority §6.5).
+    // No curve-only pause copy exists post-graduation (no pause authority).
     expect(screen.queryByText(PAUSE_COPY)).toBeNull();
   });
 
@@ -145,7 +145,7 @@ describe("invisible venue switch — status selects the engine (§5.2)", () => {
     expect((screen.getByRole("button", { name: "BUY HOODIE" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("post-grad Sell is never gated (no pause authority post-graduation §6.5)", () => {
+  it("post-grad Sell is never gated (no pause authority post-graduation)", () => {
     v3State.amountOut = 4200n;
     pauseState.pauseBuys = true; // even if a stale pause flag were set…
     render(<TradeWidget token={tokenDetail({ status: "graduated", graduated: true })} />);
@@ -158,7 +158,7 @@ describe("invisible venue switch — status selects the engine (§5.2)", () => {
   it("graduating status → both sides locked with interstitial (not 'paused')", () => {
     render(<TradeWidget token={tokenDetail({ status: "graduating" })} />);
     expect(screen.getByText(/Graduating to Uniswap V3/)).toBeTruthy();
-    // §12.12: the interstitial must not describe the lock as "paused".
+    // : the interstitial must not describe the lock as "paused".
     const region = screen.getByText(/automatic protocol step/i);
     expect(region.textContent).not.toMatch(/paused/i);
   });

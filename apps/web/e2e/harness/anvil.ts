@@ -214,7 +214,7 @@ export async function waitForCurveLocked(
 }
 
 // ── curve reads (on-chain ground truth) ──────────────────────────────────────
-// (§12.57, 2026-07-13: the token-detail SafetyStrip that rendered these live is
+// (, 2026-07-13: the token-detail SafetyStrip that rendered these live is
 // DELETED; these reads remain the harness's on-chain truth source for the trade
 // and graduation flows, no longer a UI mirror.)
 
@@ -234,7 +234,7 @@ export async function readReserves(curve: Address): Promise<{
 
 /**
  * LIVE graduation threshold from the DEPLOYED curve — `BondingCurve.GRADUATION_ETH()`
- * (§6.2). ALWAYS read on-chain, never the static M0 notebook: the target moved
+ *. ALWAYS read on-chain, never the static M0 notebook: the target moved
  * 8.076869 → 7.916610 ETH and the `constants.fork.json` fixture can lag whatever
  * the deploy actually baked in. Reads the same immutable getter the frontend's
  * live curve reads use (`entities/curve/model/reads.ts`). This is the
@@ -252,7 +252,7 @@ export async function readGraduationEth(curve: Address): Promise<bigint> {
  * On-chain curve `phase()` (IBondingCurve.Phase uint8): 0 Trading, 1
  * ReadyToGraduate, 2 Graduated (mirrors the keeper's `decodePhase`, apps/keeper/
  * src/chain.ts). The ground truth for the deterministic ReadyToGraduate lock
- * (§12.12) — asserted directly rather than inferring the lock from reserves, and
+ * — asserted directly rather than inferring the lock from reserves, and
  * KEEPER-SAFE: a spec reads this before ever buying so it never sends a trade
  * against a curve the compose keeper already graduated.
  */
@@ -277,7 +277,7 @@ export async function readCurvePhase(curve: Address): Promise<CurvePhase> {
 
 /**
  * The two unswept in-contract fee escrows the curve retains AFTER graduation
- * (§12.25 treasury leg + §12.63 creator leg). `graduate()` sends the curve's
+ * (treasury leg + creator leg). `graduate()` sends the curve's
  * whole ETH balance MINUS these to the migrator, so post-graduation the curve
  * holds EXACTLY `accruedFees + accruedCreatorFees` — the "post-grad curve holds
  * zero value (unswept fees excluded)" invariant. A stranded donation would push
@@ -300,7 +300,7 @@ export async function readAccruedFees(curve: Address): Promise<{
 }
 
 /** LIVE caller reward the graduation trigger earns (`BondingCurve.CALLER_REWARD`,
- *  §12.34) — read from the deployed curve, never the notebook. */
+ * ) — read from the deployed curve, never the notebook. */
 export async function readCallerReward(curve: Address): Promise<bigint> {
   return (await publicClient.readContract({
     address: curve,
@@ -309,7 +309,7 @@ export async function readCallerReward(curve: Address): Promise<bigint> {
   })) as bigint;
 }
 
-/** LIVE per-tx anti-sniper cap (`BondingCurve.MAX_EARLY_BUY`, §6.5) — the widget
+/** LIVE per-tx anti-sniper cap (`BondingCurve.MAX_EARLY_BUY`) — the widget
  *  disables a buy above this WHILE it believes the token is in its early window
  *  (a wall-clock check vs the warp-inflated chain `createdAt`), so a UI crossing
  *  buy must stay under it. Read live, never the notebook. */
@@ -405,7 +405,7 @@ export async function graduateOnChain(curve: Address, by?: DevAccount): Promise<
 
 /**
  * Send a raw ETH VALUE transfer to the curve address — the curve's ungated
- * `receive()` (BondingCurve.sol §5.7) accepts it. The donation is NEVER credited
+ * `receive()` (BondingCurve.sol) accepts it. The donation is NEVER credited
  * to reserves; at graduation it flows into the migrator and — with the F-1 fix —
  * surfaces as WETH dust to the treasury rather than pairing into the LP (which
  * pre-fix demanded an unachievable WETH deposit and FROZE graduation once
@@ -441,7 +441,7 @@ export interface GraduatedLog {
 
 /**
  * The single-fire `Graduated` event for a token — its canonical home is the
- * V3Migrator (contracts.md §2.5), and `token` is indexed, so it is recoverable
+ * V3Migrator (contracts.md), and `token` is indexed, so it is recoverable
  * over `getContractEvents` regardless of WHO called `graduate()` (the compose
  * keeper OR a manual trigger). Returns null until graduation has happened.
  */
@@ -469,7 +469,7 @@ export async function readGraduatedEvent(token: Address): Promise<GraduatedLog |
  * from the deployed `LPFeeVault.positionManager()` (no hardcoded address) and
  * queries the frozen ERC-721 standard `ownerOf` (viem's canonical `erc721Abi`,
  * not a hand-written ABI). At graduation the migrator mints the position to the
- * LPFeeVault, permanently locking the principal (§6.3/§12.14) — TD-6b/GRAD-AUTO
+ * LPFeeVault, permanently locking the principal — TD-6b/GRAD-AUTO
  * assert `ownerOf(tokenId) == lpFeeVault`.
  */
 export async function readLpNftOwner(tokenId: bigint): Promise<Address> {
@@ -500,7 +500,7 @@ export async function collectOnChain(tokenId: bigint, by?: DevAccount): Promise<
 }
 
 /**
- * Granular pause flags live on the CurveFactory (owner-only, §6.5). The owner on
+ * Granular pause flags live on the CurveFactory (owner-only). The owner on
  * the fork is the deployer (anvil account #0 = ROLES.creator). Sells NEVER read
  * these — ERR-4 proves a sell still works with buys paused.
  */
@@ -526,7 +526,7 @@ export async function setPauseCreates(paused: boolean, owner?: DevAccount): Prom
 }
 
 /**
- * ERR-5 (§12.25): make the treasury a REVERTING sink via `anvil_setCode`, to
+ * ERR-5 : make the treasury a REVERTING sink via `anvil_setCode`, to
  * prove the pull-payment fee accrual keeps sells alive even with a hostile Safe.
  * No contract change — a pure fork manipulation (the harness owns this).
  */
@@ -550,8 +550,8 @@ export async function restoreTreasury(): Promise<void> {
 /**
  * Make an ARBITRARY address a hostile, reverting sink via `anvil_setCode` — the
  * generic form of `makeTreasuryRevert`, used by CFEE-3 to turn a registered token
- * CREATOR into a reverting contract AFTER graduation. This proves the §12.69(C) /
- * §12.25 pull-payment isolation: `collect()` (which PUSHES the creator share to
+ * CREATOR into a reverting contract AFTER graduation. This proves the /
+ * pull-payment isolation: `collect()` (which PUSHES the creator share to
  * our non-reverting `CreatorVault`, never to the creator EOA) and post-grad V3
  * trades still succeed; only the creator's OWN `claim()` reverts (retriable once
  * the code is cleared). A pure fork manipulation (like ERR-5's), never a contract

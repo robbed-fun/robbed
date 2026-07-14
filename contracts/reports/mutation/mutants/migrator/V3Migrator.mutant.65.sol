@@ -36,7 +36,7 @@ import {
 ///         position (LP tranche + raised WETH) whose NFT goes to the {LPFeeVault}. Implements
 ///         `IUniswapV3SwapCallback` so the arb-back needs NO external SwapRouter.
 ///
-/// @dev Load-bearing engineering decisions (recorded for the hoodpad-security gate):
+/// @dev Load-bearing engineering decisions (recorded for the robbed-security gate):
 ///
 ///      1. **Reverting-treasury CANNOT lock graduation (TM-T1, graduation-fee leg).** The flat
 ///         graduation fee AND the residual WETH dust are paid to the treasury as **WETH via

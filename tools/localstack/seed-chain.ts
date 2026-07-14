@@ -1,24 +1,24 @@
 #!/usr/bin/env bun
 /**
  * seed-chain.ts — `bun run dev:seed` (plan item I-4, goal-gate G-2).
- * Owner: hoodpad-contracts (path-ownership note: `tools/localstack/seed-chain*`
- * + anvil/deploy glue → hoodpad-contracts; the surrounding compose/orchestration
- * is hoodpad-indexer's — this file deliberately touches nothing else there).
+ * Owner: robbed-contracts (path-ownership note: `tools/localstack/seed-chain*`
+ * + anvil/deploy glue → robbed-contracts; the surrounding compose/orchestration
+ * is robbed-indexer's — this file deliberately touches nothing else there).
  *
  * Seeds the running local stack (docker-compose.yml: anvil fork of chain 4663 on
  * :4545, contracts deployed by the `deploychain` one-shot → out/local.env, API on
  * :4001) with three demo tokens through the REAL launch path — never a shortcut:
  *
- *   image → POST /v1/uploads/image → POST /v1/metadata (api.md §3.1–§3.2), the
+ * image → POST /v1/uploads/image → POST /v1/metadata (api.md), the
  *   returned `metadataHash` re-verified CLIENT-SIDE with the shared canonicalizer
- *   (spec §12.19 dual-computation, normative) → `Router.createToken`.
+ * (dual-computation, normative) → `Router.createToken`.
  *
  *   (a) FRESH   — create only (renders the pristine-curve state).
  *   (b) MIDCV   — mid-curve: multi-actor buys AND sells from 3 dev accounts.
- *   (c) GRDTD   — driven past GRADUATION_ETH (§12.11 clamp does the landing) →
- *                 permissionless `graduate()` (§12.12 ReadyToGraduate lock; the
- *                 §12.32/§6.5 anti-sniper window is warped past with the viem
- *                 anvil test actions) → 2 real V3 swaps via SwapRouter02 (§12.28
+ * (c) GRDTD — driven past GRADUATION_ETH (clamp does the landing) →
+ * permissionless `graduate()` (ReadyToGraduate lock; the
+ * anti-sniper window is warped past with the viem
+ * anvil test actions) → 2 real V3 swaps via SwapRouter02 (
  *                 — the real periphery exists on the fork) → `LPFeeVault.collect`
  *                 with the LP-NFT tokenId read from the `Graduated` event.
  *
@@ -27,9 +27,9 @@
  * distinguishable in the UI. No no-op detection: the anvil chain resets on every
  * `docker compose up`, and on-chain create has no uniqueness to key on. Safe to
  * re-run any number of times (upload rate limit 3/min/IP is respected via
- * Retry-After backoff, api.md §6).
+ * Retry-After backoff, api.md).
  *
- * Constants discipline (spec §2/§6.4): every market/curve parameter is read
+ * Constants discipline : every market/curve parameter is read
  * LIVE from the deployed contracts (creationFee, GRADUATION_ETH, EARLY_WINDOW_END,
  * MAX_EARLY_BUY) — nothing is inlined from M0 output; addresses come from the
  * deploychain artifact `tools/localstack/out/local.env` (env vars override).
@@ -54,7 +54,7 @@ import { createRequire } from "node:module";
 import { deflateSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 
-// ── shared source modules (relative — the ONE canonicalizer, spec §12.19) ────
+// ── shared source modules (relative — the ONE canonicalizer) ────
 import { metadataHash as computeMetadataHash } from "../../packages/shared/src/metadata";
 import { UNISWAP_V3, WETH_ADDRESS } from "../../packages/shared/src/constants";
 import {
@@ -198,7 +198,7 @@ const read = <T>(params: {
 // ── minimal PNG encoder (placeholder art, generated programmatically) ────────
 // PNG spec (w3.org/TR/png-3): signature + IHDR + IDAT(zlib scanlines) + IEND,
 // each chunk CRC-32 over type+data. 64×64 solid RGB is enough for sharp's
-// decode→re-encode pipeline (api.md §3.1) and keeps uploads a few hundred bytes.
+// decode→re-encode pipeline (api.md) and keeps uploads a few hundred bytes.
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
@@ -245,12 +245,12 @@ function makePng(rgb: [number, number, number], size = 64): Uint8Array {
   return png;
 }
 
-// ── API client (envelope `{data,error}`, api.md §2; 429 Retry-After backoff) ─
+// ── API client (envelope `{data,error}`, api.md; 429 Retry-After backoff) ─
 async function api<T>(path: string, init: RequestInit): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     const res = await fetch(`${API_URL}${path}`, init);
     if (res.status === 429) {
-      // Uploads are limited to 3/min AND 10/hour per IP (api.md §6). The minute
+      // Uploads are limited to 3/min AND 10/hour per IP (api.md). The minute
       // window is worth waiting out; an hour-scale Retry-After means the 10/hour
       // cap is exhausted (>3 seed runs/hour incl. any concurrent e2e traffic) —
       // fail loud instead of stalling dev:seed for up to an hour.
@@ -285,9 +285,9 @@ interface MetadataResult {
 }
 
 /**
- * The REAL launch path, steps 1–2 (api.md §3.1–§3.2): upload the placeholder
+ * The REAL launch path, steps 1–2 (api.md) upload the placeholder
  * image, publish canonical metadata, then re-verify the returned hash with the
- * shared canonicalizer exactly like the web client does (spec §12.19 — the
+ * shared canonicalizer exactly like the web client does (— the
  * client must never sign a hash it did not recompute from canonical bytes).
  */
 async function publishMetadata(input: {
@@ -320,9 +320,9 @@ async function publishMetadata(input: {
     },
   );
 
-  // §12.19 dual computation — both checks with THE shared canonicalizer:
+  // dual computation — both checks with THE shared canonicalizer:
   // (1) hash of the server's canonical bytes matches what it claims;
-  // (2) hash of the doc WE meant (fixed field set + version tag, api.md §3.2)
+  // (2) hash of the doc WE meant (fixed field set + version tag, api.md)
   //     matches too, so the server cannot commit us to metadata we didn't write.
   const fromCanonicalBytes = computeMetadataHash(JSON.parse(resp.canonicalJson));
   const fromOurDoc = computeMetadataHash({
@@ -337,7 +337,7 @@ async function publishMetadata(input: {
   if (fromCanonicalBytes !== resp.metadataHash || fromOurDoc !== resp.metadataHash) {
     throw new Error(
       `[seed] metadataHash verification FAILED (server=${resp.metadataHash} ` +
-        `canonical=${fromCanonicalBytes} local=${fromOurDoc}) — refusing to sign (§12.19)`,
+        `canonical=${fromCanonicalBytes} local=${fromOurDoc}) — refusing to sign `,
     );
   }
   return { metadataHash: resp.metadataHash, metadataUri: resp.metadataUri };
@@ -383,7 +383,7 @@ async function createToken(
 }
 
 /**
- * Warp the fork clock past the curve's anti-sniper window (§6.5/§12.32 —
+ * Warp the fork clock past the curve's anti-sniper window (—
  * timestamp-based BY SPEC; `EARLY_WINDOW_END` is read live, never assumed).
  */
 async function warpPastEarlyWindow(curve: Address): Promise<void> {
@@ -400,7 +400,7 @@ async function warpPastEarlyWindow(curve: Address): Promise<void> {
   log(`warped +${delta}s past the anti-sniper window`);
 }
 
-/** Curve buy through the Router with a real quote-derived slippage floor (§6.5). */
+/** Curve buy through the Router with a real quote-derived slippage floor. */
 async function buy(traderIdx: number, token: Address, grossWei: bigint): Promise<void> {
   const [tokensOut] = await read<[bigint, bigint, bigint, bigint]>({
     address: ROUTER,
@@ -456,7 +456,7 @@ const wethAbi = parseAbi([
   "function balanceOf(address owner) view returns (uint256)",
 ]);
 
-/** One exactInputSingle on the graduated pool via the REAL SwapRouter02 (§12.28). */
+/** One exactInputSingle on the graduated pool via the REAL SwapRouter02. */
 async function v3Swap(
   traderIdx: number,
   tokenIn: Address,
@@ -470,7 +470,7 @@ async function v3Swap(
     args: [UNISWAP_V3.swapRouter02 as Address, amountIn],
   });
   // IV3SwapRouter.ExactInputSingleParams (SwapRouter02: no deadline field; the 1%
-  // graduation fee tier per spec §12.1). amountOutMinimum=0 is dev-seed-only: a
+  // graduation fee tier per). amountOutMinimum=0 is dev-seed-only: a
   // private anvil fork has no MEV; our own Router paths above always carry real
   // slippage floors.
   await write(traderIdx, {
@@ -544,7 +544,7 @@ async function main(): Promise<void> {
     rgb: [0xf5, 0x9e, 0x0b],
   });
   // Creator's atomic initial buy stays under MAX_EARLY_BUY (read live) — the
-  // anti-sniper cap applies to the creator too (contracts.md §5.3, no carve-out).
+  // anti-sniper cap applies to the creator too (contracts.md, no carve-out).
   const mid = await createToken(3, metaB, `Mid Curve Demo #${runId}`, "MIDCV", parseEther("0.05"));
   await warpPastEarlyWindow(mid.curve);
   log("mid-curve trades (accounts 5/6/7):");
@@ -572,7 +572,7 @@ async function main(): Promise<void> {
   const grad = await createToken(4, metaC, `Graduated Demo #${runId}`, "GRDTD", 0n);
   await warpPastEarlyWindow(grad.curve);
 
-  // One whale buy past the threshold: the §12.11 boundary clamp accepts exactly
+  // One whale buy past the threshold: the boundary clamp accepts exactly
   // up to GRADUATION_ETH net, refunds the rest, and flips phase→ReadyToGraduate.
   const graduationEth = await read<bigint>({
     address: grad.curve,
@@ -586,7 +586,7 @@ async function main(): Promise<void> {
     functionName: "phase",
   });
   if (phase !== 1) throw new Error(`[seed] expected ReadyToGraduate (1), got phase=${phase}`);
-  log("clamp landed on GRADUATION_ETH — phase=ReadyToGraduate (§12.12 lock)");
+  log("clamp landed on GRADUATION_ETH — phase=ReadyToGraduate (lock)");
 
   // Permissionless graduate() from an unrelated account (earns CALLER_REWARD).
   const gradReceipt = await write(6, {

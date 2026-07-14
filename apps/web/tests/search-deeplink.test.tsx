@@ -3,7 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Creator-click search deep link (DISC-4 nuance, §12.50(f)): `TokenCard` pushes
+ * Creator-click search deep link (DISC-4 nuance) `TokenCard` pushes
  * `/?q=<creator>`; the header's `UrlSeededSearchBox` reads `?q=` back via
  * `useSearchParams` and seeds `SearchBox` (`initialQ`), closing the round-trip.
  * jsdom-level proof: the box's value equals the deep-linked query, and re-seeds

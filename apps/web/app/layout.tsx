@@ -5,8 +5,8 @@ import { plexMono } from "@/app/fonts";
 import { Providers } from "@/app/providers";
 
 /**
- * Root layout (spec §9; web.md §2.1). Dark-only: `<html class="dark">` is
- * hard-set (§12.23) — no toggle, zero flash-of-light by construction.
+ * Root layout (web.md). Dark-only: `<html class="dark">` is
+ * hard-set — no toggle, zero flash-of-light by construction.
  *
  * ROBBED_ redesign (Phase F): the app font is IBM Plex Mono, self-hosted via
  * `next/font/local` (src/app/fonts.ts — no external fetch, CSP-safe) and exposed

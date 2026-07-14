@@ -1,13 +1,13 @@
 /**
- * Admin endpoints (§8.4, api.md §3.6). SIWE login → session cookie; moderation
+ * Admin endpoints (api.md). SIWE login → session cookie; moderation
  * queue; listing-visibility (HIDE/SHOW ONLY — no pause/chain capability exists by
- * construction, §8.4); impersonation flag; metadata re-verify (PUBLISHES
+ * construction); impersonation flag; metadata re-verify (PUBLISHES
  * `control:reverify` on Redis — the INDEXER flips its own row, X-9; the API never
  * writes indexer tables); audit log. Every mutation is audit-logged.
  *
  * The SIWE lifecycle (`GET /v1/admin/nonce` + `POST /v1/admin/login` + `POST
  * /v1/admin/logout`) is IN the frozen contract: transcribed into openapi.yaml
- * (ratified 2026-07-10) and api.md §3.6 — the earlier "absent from openapi" flag
+ * (ratified 2026-07-10) and api.md — the earlier "absent from openapi" flag
  * is resolved (W3/M2-2, 2026-07-12). The openapi-sync test holds route table and
  * yaml in endpoint-for-endpoint lockstep.
  */

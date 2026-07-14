@@ -2,10 +2,10 @@ import { formatEthFromWei, formatEthNumber, formatTokenFromWei } from "@/shared/
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Presentational ETH / token amount (web.md §7). Values are pre-computed
+ * Presentational ETH / token amount (web.md). Values are pre-computed
  * indexer/on-chain figures formatted for display — this component NEVER does
- * market math and NEVER carries a hardcoded metric (§2). ETH is the primary
- * denomination (§2); USD renders only via `UsdAmount`.
+ * market math and NEVER carries a hardcoded metric. ETH is the primary
+ * denomination; USD renders only via `UsdAmount`.
  */
 export function EthAmount({
   wei,
@@ -33,7 +33,7 @@ export function EthAmount({
     <span className={cn("tabular-nums", className)}>
       {text}
       {/* Unit inherits the number's color — mockup renders "0.4200 ETH" as ONE
-          color in tape/table rows (the ratified redesign, spec §12.50 — mockup line 281). */}
+          color in tape/table rows (the ratified redesign, — mockup line 281). */}
       {unit ? <span className="ml-1">{unit}</span> : null}
     </span>
   );

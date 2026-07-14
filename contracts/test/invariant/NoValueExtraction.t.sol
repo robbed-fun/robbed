@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {CurveHandler} from "test/invariant/handlers/CurveHandler.sol";
 
 /// @title Gate-2 invariant 7 — no fuzzed actor sequence extracts ETH beyond fair curve value
-///        (spec §10 gate 2; contracts.md §6 test matrix row 7)
+/// (gate 2; contracts.md test matrix row 7)
 /// @notice Accounting identity over all actor flows: Σ actor-ETH-out (sell proceeds + clamp
 ///         refunds; treasury and caller-reward flows excluded) can never exceed Σ actor-ETH-in
 ///         (accepted buy gross + donations) minus the in-contract fees minus what the curve still
@@ -21,11 +21,11 @@ contract NoValueExtractionInvariant is Test {
         targetContract(address(handler));
     }
 
-    /// @notice EXACT ASSERTION (contracts.md §6 row 7, §12.25-updated identity):
+    /// @notice EXACT ASSERTION (contracts.md row 7, -updated identity):
     ///         ghost_totalEthOut ≤ ghost_totalEthIn − ghost_feeSum − (curve.balance − accruedFees)
-    /// @dev Under §12.25 the accrued trade fees sit inside `curve.balance` but are ALSO counted in
+    /// @dev Under the accrued trade fees sit inside `curve.balance` but are ALSO counted in
     ///      `ghost_feeSum`; subtracting the balance net of `accruedFees` avoids double-counting them
-    ///      (the pre-§12.25 form subtracted the full balance, which under pull-payment would
+    /// (the pre- form subtracted the full balance, which under pull-payment would
     ///      underflow by exactly `accruedFees`). The subtraction underflowing is itself a violation
     ///      (out + fees + locked value > in) and fails the run. Post-graduation `curve.balance`
     ///      equals `accruedFees` so the balance term is 0 and the identity keeps holding over the

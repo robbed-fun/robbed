@@ -6,7 +6,7 @@
  *    bun contracts/script/codegen-addresses.ts
  *
  *  Deploy-time codegen (needs a broadcast) — the addresses seam of architecture.md
- *  §4: contracts-pipeline-owned, lives in packages/shared, consumed by the indexer
+ * : contracts-pipeline-owned, lives in packages/shared, consumed by the indexer
  *  config and web `shared/config/addresses.ts`. Every consumer selects ITS OWN
  *  chain via `getDeployment(chainId)`; local (31337 smoke), testnet (46630) and
  *  live (4663) entries coexist here.
@@ -17,17 +17,17 @@ import type { Address } from "viem";
 /**
  * A 4663 `fork` is a mainnet-FORK pipeline run (anvil --fork-url): same chainid as
  * `live` but deliberately NOT live so a fork can never masquerade as a real mainnet
- * deployment (§12.55). Consumers that require a canonical mainnet entry MUST assert
+ * deployment. Consumers that require a canonical mainnet entry MUST assert
  * `mode === "live"`; the indexer's chain-identity gate does exactly this.
  */
 export type DeploymentMode = "local" | "testnet" | "live" | "fork";
 
-/** The six-contract robbed topology + treasury for one chain (spec §6, §6.6). */
+/** The six-contract robbed topology + treasury for one chain. */
 export interface Deployment {
   chainId: number;
   mode: DeploymentMode;
   deployedAt: number;
-  /** The four singletons (§6) + the treasury Safe (§6.6). */
+  /** The four singletons + the treasury Safe. */
   robbed: {
     curveFactory: Address;
     router: Address;
@@ -35,7 +35,7 @@ export interface Deployment {
     lpFeeVault: Address;
     treasury: Address;
     /**
-     * The Phase-2 pull-payment CreatorVault (spec §7 / §12.63). OPTIONAL +
+     * The Phase-2 pull-payment CreatorVault. OPTIONAL +
      * additive: absent on every v1 deployment (no vault exists until a
      * creator-fee factory is deployed), so the existing entries below stay valid
      * against this shape. Once a creator-fee deploy artifact carries it, codegen
@@ -47,7 +47,7 @@ export interface Deployment {
      */
     creatorVault?: Address;
   };
-  /** Canonical externals wired at deploy (§12.28): WETH + the four Uniswap V3 addrs. */
+  /** Canonical externals wired at deploy : WETH + the four Uniswap V3 addrs. */
   external: {
     weth: Address;
     v3Factory: Address;
@@ -55,7 +55,7 @@ export interface Deployment {
     swapRouter02: Address;
     quoterV2: Address;
   };
-  /** The deploy-time canary launch (§7.2 step 6) — informational; not a user token. */
+  /** The deploy-time canary launch (step 6) — informational; not a user token. */
   canary: { token: Address; curve: Address };
 }
 

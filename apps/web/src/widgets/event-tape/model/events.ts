@@ -6,14 +6,14 @@ import type {
 } from "@robbed/shared";
 
 /**
- * Event-tape domain model (Discover, ROBBED_ redesign — spec §12.50, panel "2d").
+ * Event-tape domain model (Discover, ROBBED_ redesign —, panel "2d").
  *
  * The tape is a MERGED LIVE feed of protocol events — trades (BUY/SELL),
  * launches, graduations — across all tokens. This module is the pure,
  * React-free core (testable): it defines the event shapes, maps WS payloads to
  * events, seeds an initial snapshot, and filters by tab.
  *
- * PROTOCOL DISCIPLINE (§2, web.md §7):
+ * PROTOCOL DISCIPLINE (web.md):
  * - A `TapeEvent` carries ONLY the fields the emitting event actually supplies:
  *   a trade carries its `ethAmount` (indexer-supplied), a launch its metadata.
  *   It NEVER carries mcap / Δ% — those are per-token AGGREGATES. The row's
@@ -23,7 +23,7 @@ import type {
  *   indexer-supplied `priceEth`, never derived aggregates. Unknown tokens render
  *   mcap/Δ% as "—", never invented.
  *
- * GAP (reported to hoodpad-indexer via the orchestrator): there is no global
+ * GAP (reported to robbed-indexer via the orchestrator): there is no global
  * recent-activity REST endpoint (only per-token `/v1/tokens/:address/trades`), so
  * the server-side initial snapshot can only seed LAUNCH rows (derivable from the
  * `/v1/tokens` registry); historical BUY/SELL/GRADUATE rows arrive live over WS.
@@ -59,7 +59,7 @@ export type TapeEvent =
       ts: number;
     };
 
-/** Enrichment view of a token — the aggregates the tape reads by reference (§2). */
+/** Enrichment view of a token — the aggregates the tape reads by reference. */
 export type TokenInfo = Pick<
   TokenCard,
   "address" | "name" | "ticker" | "imageUrl" | "mcap" | "change24hPct" | "graduated"

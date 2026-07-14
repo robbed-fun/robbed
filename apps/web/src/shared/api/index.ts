@@ -25,13 +25,13 @@ import type { z } from "zod";
 import { env } from "@/shared/lib/env";
 
 /**
- * Typed REST client over the FROZEN `@robbed/shared` contract (api.md §3;
+ * Typed REST client over the FROZEN `@robbed/shared` contract (api.md;
  * openapi.yaml). Every response is validated with the shared zod schema — the
  * frontend NEVER redeclares a response shape (anti-drift rule 2). If a field is
- * missing from the contract, that is a gap reported to hoodpad-indexer/shared,
+ * missing from the contract, that is a gap reported to robbed-indexer/shared,
  * never patched client-side.
  *
- * Envelope (api.md §2): `{ data, error: null } | { data: null, error }`. This
+ * Envelope (api.md) `{ data, error: null } | { data: null, error }`. This
  * client unwraps `data` and throws `ApiError` on the error arm.
  */
 
@@ -50,7 +50,7 @@ export class ApiError extends Error {
 }
 
 type FetchOpts = {
-  /** Next.js server-fetch cache hint (web.md §2.2 — server components only). */
+  /** Next.js server-fetch cache hint (web.md — server components only). */
   revalidate?: number;
   signal?: AbortSignal;
 };
@@ -60,7 +60,7 @@ export async function apiGet<T>(
   schema: z.ZodType<T>,
   opts: FetchOpts = {},
 ): Promise<T> {
-  // Split-horizon base (web.md §2.3): SSR fetches prefer the server-only
+  // Split-horizon base (web.md) SSR fetches prefer the server-only
   // API_BASE_URL_INTERNAL (compose-internal origin); browsers always resolve
   // to NEXT_PUBLIC_API_BASE_URL. Single resolution point in shared/lib/env.ts.
   const res = await fetch(`${env.apiFetchBaseUrl()}${path}`, {
@@ -106,7 +106,7 @@ async function unwrap<T>(res: Response, schema: z.ZodType<T>): Promise<T> {
   return schema.parse(envelope.data);
 }
 
-// ── Read endpoints (api.md §3.3–§3.5) ───────────────────────────────────────
+// ── Read endpoints (api.md) ───────────────────────────────────────
 
 export function getTokens(
   query: {
@@ -126,7 +126,7 @@ export function getTokens(
   return apiGet(`/v1/tokens${q ? `?${q}` : ""}`, tokensResponseSchema, opts);
 }
 
-// NOTE (§12.50(f)): the king-of-the-hill client leg was removed with the
+// NOTE : the king-of-the-hill client leg was removed with the
 // Discover deviation — the endpoint remains an API capability, but no web
 // surface consumes it (the KotH hero is retired).
 
@@ -142,7 +142,7 @@ export function searchTokens(
 }
 
 /**
- * GET /v1/tokens/:address/trades — SERVER-SORTED, keyset-paginated (§12.59). The
+ * GET /v1/tokens/:address/trades — SERVER-SORTED, keyset-paginated. The
  * response is the shared `Paginated<TradeRow>` `{ items, nextCursor }` envelope;
  * `sort`/`dir` are the `tradeListQuerySchema` allowlist (API validates + 400s on
  * out-of-allowlist), `cursor` is the OPAQUE keyset cursor echoed back verbatim.
@@ -170,7 +170,7 @@ export function getTrades(
   );
 }
 
-/** GET /v1/trades/:txHash — used by the optimistic reducer's REST-heal (§4). */
+/** GET /v1/trades/:txHash — used by the optimistic reducer's REST-heal. */
 export function getTxTrades(txHash: string, opts?: FetchOpts): Promise<{ trades: TradeRow[] }> {
   return apiGet(`/v1/trades/${txHash.toLowerCase()}`, txTradesResponseSchema, opts);
 }
@@ -194,7 +194,7 @@ export function getCandles(
 }
 
 /**
- * GET /v1/tokens/:address/holders — SERVER-SORTED, keyset-paginated (§12.59). The
+ * GET /v1/tokens/:address/holders — SERVER-SORTED, keyset-paginated. The
  * response is the shared `Paginated<HolderRow>` `{ items, nextCursor }` envelope
  * (the legacy `{ holders, holderCount }` shape is retired for this endpoint —
  * DATA-GAP flagged: the header "Holders" count needs a `holderCount` on
@@ -224,20 +224,20 @@ export function getHolders(
   );
 }
 
-/** GET /v1/confirmations — SSR seed of the watermark (spec §12.20). */
+/** GET /v1/confirmations — SSR seed of the watermark. */
 export function getConfirmations(opts?: FetchOpts): Promise<ConfirmationsResponse> {
   return apiGet(`/v1/confirmations`, confirmationsResponseSchema, opts);
 }
 
-/** GET /v1/eth-usd — live-or-dated source; never a constant (§2). */
+/** GET /v1/eth-usd — live-or-dated source; never a constant. */
 export function getEthUsd(opts?: FetchOpts) {
   return apiGet(`/v1/eth-usd`, ethUsdResponseSchema, opts);
 }
 
-// ── Launch flow (api.md §3.1–§3.2) ──────────────────────────────────────────
+// ── Launch flow (api.md) ──────────────────────────────────────────
 
 /**
- * POST /v1/uploads/image — API-mediated upload (spec §12.19; no browser presign).
+ * POST /v1/uploads/image — API-mediated upload (no browser presign).
  * Accepts an optional `AbortSignal` so the caller can bound the request with a
  * timeout — an unbounded upload fetch can otherwise wedge the launch form's
  * `uploading` state true forever (button stuck disabled).
@@ -252,7 +252,7 @@ export function uploadImage(
   return apiPost(`/v1/uploads/image`, form, uploadImageResponseSchema, undefined, opts?.signal);
 }
 
-/** POST /v1/metadata — server canonicalizes + keccak; client re-verifies (§12.19). */
+/** POST /v1/metadata — server canonicalizes + keccak; client re-verifies. */
 export function postMetadata(body: MetadataRequest) {
   return apiPost(`/v1/metadata`, JSON.stringify(body), metadataResponseSchema, {
     "content-type": "application/json",

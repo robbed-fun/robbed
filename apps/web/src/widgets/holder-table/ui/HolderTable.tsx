@@ -27,19 +27,19 @@ import { useWsChannel } from "@/shared/lib/ws";
 import { formatPercent, formatTokenFromWei, shortAddress } from "@/shared/lib/format";
 
 /**
- * Top Holders table (§5.2/§12.58) — the right-column table that REPLACES the
- * deleted Trust panel (§12.57). RULED row shape: `rank · address · label · amount
+ * Top Holders table — the right-column table that REPLACES the
+ * deleted Trust panel. RULED row shape: `rank · address · label · amount
  * · percent`, where **label** is the account role (Bonding curve / Creator / LP
- * fee vault, §12.16) PLUS the §8.5 advisory sniper / programmatic bot-flags —
+ * fee vault) PLUS the advisory sniper / programmatic bot-flags —
  * this is now the surviving PUBLIC organic-flow surface (the standalone
- * organic-range / flow-quality blocks moved to the internal §12.54 endpoint).
+ * organic-range / flow-quality blocks moved to the internal endpoint).
  *
- * SERVER-AUTHORITATIVE (§12.59/§12.22): the DataTable is `manualSorting` — column
+ * SERVER-AUTHORITATIVE : the DataTable is `manualSorting` — column
  * headers dispatch a `?sort=&dir=` refetch, the browser NEVER re-ranks. Keyset
  * pagination is an opaque forward cursor (`useCursorStack`). The bare query key is
  * the WS-live default window (amount DESC ≡ rank ASC, page 1); a sorted/paginated
  * view is a distinct REST snapshot. Balances are the indexer's Transfer-derived
- * truth (§12.16) — no new on-chain surface. Refreshes on WS trades, throttled ≥5s.
+ * truth — no new on-chain surface. Refreshes on WS trades, throttled ≥5s.
  */
 
 /** Default order = amount DESC (≡ rank ASC), the SSR-seeded live window. */
@@ -111,7 +111,7 @@ const holderColumns: ColumnDef<HolderRowView>[] = [
   },
 ];
 
-/** Structural role chips (creator/curve/vault) + advisory §8.5 bot-flag chips. */
+/** Structural role chips (creator/curve/vault) + advisory bot-flag chips. */
 function LabelCell({ holder }: { holder: HolderRow }) {
   const hasAny = holder.flags.length > 0 || (holder.botFlags?.length ?? 0) > 0;
   if (!hasAny) return <span className="text-text-tertiary">—</span>;
@@ -127,7 +127,7 @@ function LabelCell({ holder }: { holder: HolderRow }) {
           key={b}
           variant="soft-confirmed"
           className="px-1 py-0 text-[10px]"
-          title="Advisory heuristic label (§8.5) — not a fact, gates nothing"
+          title="Advisory heuristic label — not a fact, gates nothing"
         >
           {BOT_FLAG_LABELS[b]}
         </Badge>

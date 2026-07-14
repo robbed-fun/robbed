@@ -5,7 +5,7 @@ import { confirmationBadgeMeta } from "@/entities/trade";
 import { claimDisplayState } from "@/widgets/creator-earnings/ui/CreatorEarningsPanel";
 
 /**
- * Creator-fee CLAIM confirmation-tier mapping (§7/§12.63 · §2.1/§12.56). The claim
+ * Creator-fee CLAIM confirmation-tier mapping (·). The claim
  * reuses the shared trade confirmation tiers via `ConfirmationBadge`; this proves
  * the mapping NEVER surfaces a settlement tier while soft-confirmed, matching the
  * trade rule (a just-mined claim shows NO chip until the watermark advances).

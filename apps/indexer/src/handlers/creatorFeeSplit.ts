@@ -1,5 +1,5 @@
 /**
- * Post-graduation creator-fee split handlers (spec §12.69, ADDITIVE Phase-2 leg).
+ * Post-graduation creator-fee split handlers (ADDITIVE Phase-2 leg).
  *
  *   LPFeeVault:FeesSplit            → creator_fee_split WS (per launch token)  [WS-only]
  *   CreatorVault:CreatorTokenDeposited → ACCRUED  → creator_token_claimable roll-up

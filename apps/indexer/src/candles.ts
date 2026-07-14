@@ -1,17 +1,17 @@
 /**
- * Venue-continuous candle pipeline (indexer.md §3.7, §4; spec §5.2/§12.17).
+ * Venue-continuous candle pipeline (indexer.md).
  *
  * Curve `Trade` and V3 `Swap` both insert into the unified `trades` table with a
  * uniform `price_eth`; candles aggregate `trades` WITHOUT reference to `venue`,
  * so the series is continuous across graduation by construction — the last curve
  * trade closes its bucket, the first V3 swap continues from the migrator's
- * arbitraged pool price, no gap/reset/null bucket at the boundary (§4.3).
+ * arbitraged pool price, no gap/reset/null bucket at the boundary.
  *
  * These functions are PURE (no DB): the Ponder handler applies them via
  * `db.insert(...).onConflictDoUpdate(...)` and the `rebuild` script replays them
  * into an in-memory store — same math, so `rebuild` is byte-equal to incremental
- * (§4.4). Idempotency: the high-water guard `(block,log) <= (last_block,
- * last_log)` makes a re-applied trade a no-op (§4.2).
+ *. Idempotency: the high-water guard `(block,log) <= (last_block,
+ * last_log)` makes a re-applied trade a no-op.
  */
 import type { CandleRow } from "@robbed/shared";
 import { CANDLE_INTERVALS, CANDLE_INTERVAL_SECONDS, type CandleInterval } from "@robbed/shared";
@@ -64,7 +64,7 @@ export function applyTradeToInterval(
     };
   }
 
-  // High-water idempotency guard (§4.2): skip re-apply of a seen position.
+  // High-water idempotency guard : skip re-apply of a seen position.
   if (positionLte(input.blockNumber, input.logIndex, existing.last_block_number, existing.last_log_index)) {
     return existing;
   }
@@ -73,13 +73,13 @@ export function applyTradeToInterval(
     ...existing,
     high: Math.max(existing.high, input.price),
     low: Math.min(existing.low, input.price),
-    close: input.price, // in-order processing → last write wins (§4.2)
+    close: input.price, // in-order processing → last write wins
     volume_eth: (BigInt(existing.volume_eth) + input.volumeEth).toString(),
     volume_token: (BigInt(existing.volume_token) + input.volumeToken).toString(),
     trade_count: existing.trade_count + 1,
     last_block_number: input.blockNumber,
     last_log_index: input.logIndex,
-    // `open` is intentionally NOT changed — set only on first insert (§4.2).
+    // `open` is intentionally NOT changed — set only on first insert.
   };
 }
 

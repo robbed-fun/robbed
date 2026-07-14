@@ -1,4 +1,4 @@
-/** Channel taxonomy builders (indexer.md §8.1). */
+/** Channel taxonomy builders (indexer.md). */
 import { describe, expect, it } from "bun:test";
 import {
   CONTROL_REVERIFY,
@@ -17,7 +17,7 @@ import {
 const ADDR = "0xAbCdEf0123456789aBcDeF0123456789ABCDef01";
 const LOWER = ADDR.toLowerCase();
 
-describe("channel taxonomy (indexer.md §8.1 — ratified names)", () => {
+describe("channel taxonomy (indexer.md — ratified names)", () => {
   it("global channels", () => {
     expect(GLOBAL_LAUNCHES).toBe("global:launches");
     expect(GLOBAL_TRADES).toBe("global:trades");
@@ -33,7 +33,7 @@ describe("channel taxonomy (indexer.md §8.1 — ratified names)", () => {
     expect(tokenCandles(LOWER, "1h")).toBe(`token:${LOWER}:candles:1h`);
   });
 
-  it("per-channel seq key (INCR channel:seq at publish, indexer.md §8.2)", () => {
+  it("per-channel seq key (INCR channel:seq at publish, indexer.md)", () => {
     expect(channelSeqKey("global:trades")).toBe("global:trades:seq");
     expect(channelSeqKey(tokenTrades(ADDR))).toBe(`token:${LOWER}:trades:seq`);
   });

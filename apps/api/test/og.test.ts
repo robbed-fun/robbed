@@ -1,5 +1,5 @@
 /**
- * OG share-card render + endpoint proof (api.md §3; spec §5.2). Mirrors the
+ * OG share-card render + endpoint proof (api.md). Mirrors the
  * frontend's `apps/web/tests/og.test.ts` contract — magic bytes + IHDR
  * 1200×630 — now proving the NATIVE satori + @resvg/resvg-js path that replaced
  * `@vercel/og` on the edge Worker. Also exercises the R2 cache (miss → hit),

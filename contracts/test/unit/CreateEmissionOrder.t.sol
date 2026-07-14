@@ -12,13 +12,13 @@ import {TestConstants} from "test/harness/TestConstants.sol";
 import {MockMigrator} from "test/harness/Harness.sol";
 import {MockArbSys} from "test/mocks/MockArbSys.sol";
 
-/// @title §12.41 emission-order gate — `TokenCreated` MUST precede the initial-buy `Trade` (§12.15)
+/// @title emission-order gate — `TokenCreated` MUST precede the initial-buy `Trade`
 /// @notice Pins the contracts-side invariant the M2-0b Ponder spike (2026-07-11, ponder 0.16.8)
 ///         made load-bearing: in an atomic `Router.createToken` with a non-zero initial buy, the
 ///         factory's `TokenCreated` is emitted STRICTLY BEFORE the child curve's initial-buy
 ///         `Trade` in the same transaction (`TokenCreated.logIndex < Trade.logIndex`). Ponder
 ///         processes same-block events by logIndex, so inverting this order would fire the
-///         indexer's `Trade` handler before the token row exists — spec §12.41 records this as an
+/// indexer's `Trade` handler before the token row exists — records this as an
 ///         event-shape/ordering divergence to ESCALATE (robbed-architect), never work around.
 ///         If either test here fails, do NOT patch the test or the handlers: the emission order
 ///         in `Router.createToken` / `CurveFactory.createToken` has drifted and must be escalated.
@@ -53,7 +53,7 @@ contract CreateEmissionOrderTest is Test {
 
     /// @notice Atomic create + non-zero initial buy: exactly one `TokenCreated` (from the factory)
     ///         and exactly one `Trade` (from the child curve) are emitted, and `TokenCreated`
-    ///         appears STRICTLY FIRST in emission order (spec §12.41 / §12.15).
+    /// appears STRICTLY FIRST in emission order.
     function test_emissionOrder_tokenCreatedBeforeInitialBuyTrade_spec12_41() public {
         uint256 fee = factory.creationFee();
         uint256 buyIn = 0.05 ether; // below the new anti-sniper early cap (0.0621 ETH); create+buy is in-window
@@ -75,12 +75,12 @@ contract CreateEmissionOrderTest is Test {
 
         assertEq(createdCount, 1, "expected exactly one TokenCreated from the factory");
         assertEq(tradeCount, 1, "expected exactly one initial-buy Trade from the curve");
-        // THE §12.41 invariant: strict logIndex ordering within the tx.
+        // THE invariant: strict logIndex ordering within the tx.
         assertLt(createdAt, tradeAt, "12.41 VIOLATED: Trade emitted before TokenCreated - ESCALATE, do not work around");
     }
 
     /// @notice No-initial-buy variant: the create tx emits exactly one `TokenCreated` and NO
-    ///         `Trade` at all (the §12.15 "initial buy derived from first same-tx Trade" rule
+    /// `Trade` at all (the "initial buy derived from first same-tx Trade" rule
     ///         must see zero Trades when the creator did not buy).
     function test_emissionOrder_noInitialBuy_tokenCreatedOnly_noTrade_spec12_41() public {
         uint256 fee = factory.creationFee();

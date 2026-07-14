@@ -11,19 +11,19 @@ import { formatEthFromWei, formatEthNumber } from "@/shared/lib/format";
 import { useLaunchEconomics } from "../model/use-launch-economics";
 
 /**
- * "Economics displayed plainly" (§5.3) — ROBBED_ terminal summary block
- * (redesign mockup, spec §12.50 — panel "Create"): a hairline-topped stack of label→value rows,
+ * "Economics displayed plainly" — ROBBED_ terminal summary block
+ * (redesign mockup, — panel "Create") a hairline-topped stack of label→value rows,
  * exactly the mockup's Deploy cost / Starting price / Supply, extended with the
- * §5.3-mandated Trade fee + Graduation rows and the verbatim LP sentence (those
+ * -mandated Trade fee + Graduation rows and the verbatim LP sentence (those
  * are product guarantees the mockup omits; kept, styled to match).
  *
  * Every figure is READ LIVE from the CurveFactory (`useLaunchEconomics`) — the
  * deploy fee, the trade-fee bps, the graduation threshold in ETH, the seed
- * virtual reserves that yield the starting price — never a constant (§2,
+ * virtual reserves that yield the starting price — never a constant (,
  * CLAUDE.md). The graduation threshold shows its on-chain ETH value, never a USD
- * literal (§5 copy rule 3). Supply is the fixed protocol constant from
- * `@robbed/shared` (§6.1), not a hardcoded market metric. The LP line is the
- * single shared constant, verbatim (§12.14) — the forbidden LP verb never appears.
+ * literal (copy rule 3). Supply is the fixed protocol constant from
+ * `@robbed/shared`, not a hardcoded market metric. The LP line is the
+ * single shared constant, verbatim — the forbidden LP verb never appears.
  *
  * Until the M1-14 deploy codegen furnishes the factory address the reads are
  * disabled (`available === false`) and the live numbers show "read on-chain"
@@ -37,7 +37,7 @@ export function EconomicsPanel({ ticker }: { ticker?: string }) {
     wei !== null ? `${formatEthFromWei(wei)} ETH` : liveHint(econ.available, econ.isError);
 
   // Starting price = seed virtual ETH ÷ seed virtual tokens (curve config, read
-  // live — a derived on-chain value, never a market-price constant, §2).
+  // live — a derived on-chain value, never a market-price constant).
   const startingPrice =
     econ.virtualEth0 !== null && econ.virtualToken0 !== null && econ.virtualToken0 !== 0n
       ? `${formatEthNumber(
@@ -49,7 +49,7 @@ export function EconomicsPanel({ ticker }: { ticker?: string }) {
     TOTAL_SUPPLY_WEI / 10n ** 18n,
   )} ${unit}`;
 
-  // Fee split read LIVE from the factory config (§12.63) — treasury + creator.
+  // Fee split read LIVE from the factory config — treasury + creator.
   const split = describeFeeSplit(econ.tradeFeeBps, econ.tradeFeeBps === null ? null : econ.creatorFeeBps ?? 0);
   const tradeFee = split
     ? split.hasCreatorShare
@@ -74,16 +74,16 @@ export function EconomicsPanel({ ticker }: { ticker?: string }) {
         )}
         <Row label="Graduation">{ethValue(econ.graduationEthWei)}</Row>
       </dl>
-      {/* Creator-fee disclosure (§12.68 pre-grad + §12.69 post-grad): the creator
+      {/* Creator-fee disclosure (pre-grad + post-grad) the creator
           rate is VENUE-INVARIANT — the same live-read % on the bonding curve and,
           after graduation, on Uniswap V3 (the 50/50 LP-fee split). Read live from
-          the factory config, never an inlined knob (§2, §12.68). */}
+          the factory config, never an inlined knob. */}
       {split?.hasCreatorShare && (
         <MonoText tone="faint" size="xs" className="pt-3 leading-relaxed">
           {`You keep ${split.creatorPct} of trading volume for the life of the token — on the bonding curve now, and on Uniswap after it graduates.`}
         </MonoText>
       )}
-      {/* The exact, single-sourced LP sentence — verbatim (§12.14). */}
+      {/* The exact, single-sourced LP sentence — verbatim. */}
       <MonoText tone="faint" size="xs" className="pt-3 leading-relaxed">
         {LP_DESTINY_COPY}
       </MonoText>

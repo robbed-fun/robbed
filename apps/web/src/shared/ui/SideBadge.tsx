@@ -4,7 +4,7 @@ import { cn } from "@/shared/lib/utils";
  * Event/trade side marker (ROBBED_ Phase F). The mockup renders sides as bare
  * colored uppercase text (11px), NOT pill badges: BUY green · SELL red ·
  * LAUNCH default text · GRADUATE purple. Sells stay renderable in every state —
- * this is display-only and never gates (§6.5 lives in the trade feature).
+ * this is display-only and never gates (lives in the trade feature).
  */
 export type Side = "buy" | "sell" | "launch" | "graduate";
 

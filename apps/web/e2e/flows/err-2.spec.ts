@@ -15,7 +15,7 @@ import {
   test,
 } from "../harness";
 
-// @flow:ERR-2 — Deadline expiry (§5.2)
+// @flow:ERR-2 — Deadline expiry
 // assertable-layers: on-chain · UI   (N/A indexed: reverted tx → no Trade — waiver)
 test(
   "ERR-2 an expired deadline reverts on-chain; the widget recomputes the deadline at submit",
@@ -43,14 +43,14 @@ test(
       await connectAs(page, "trader");
       await sel.buyTab(page).click();
       await sel.amountInput(page).fill("0.01");
-      // The §5.2 disclosure ("· deadline 20m") is ALWAYS rendered, so a bare
+      // The disclosure ("· deadline 20m") is ALWAYS rendered, so a bare
       // "no deadline text" check can never pass — assert the disclosure exists,
       // then that the submit SUCCEEDS (the deadline is recomputed at submit from
       // CHAIN time; a stale one reverts on-chain, as proven above) with no expiry
       // error.
       await expect(page.getByText(/deadline 20m/i).first()).toBeVisible();
       await sel.submitTrade(page).click();
-      // §12.56: soft-confirmed chip removed — prove the trade landed via the feed row.
+      // : soft-confirmed chip removed — prove the trade landed via the feed row.
       await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText(/expired/i)).toHaveCount(0);
     });

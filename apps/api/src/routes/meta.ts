@@ -1,7 +1,7 @@
 /**
- * Confirmation watermarks + ETH/USD (api.md §3.5). Both feed SSR initial state
- * and the §2 USD convention. ETH/USD is ALWAYS from `eth_usd_snapshots` — never
- * a constant (spec §2).
+ * Confirmation watermarks + ETH/USD (api.md). Both feed SSR initial state
+ * and the USD convention. ETH/USD is ALWAYS from `eth_usd_snapshots` — never
+ * a constant.
  */
 import { Hono } from "hono";
 import { confirmationsResponseSchema, ethUsdResponseSchema } from "@robbed/shared";
@@ -37,7 +37,7 @@ export function metaRoutes(deps: AppDeps) {
   app.get("/v1/eth-usd", async (c) => {
     const snap = await deps.db.getLatestEthUsd();
     if (!snap) {
-      // No snapshot ⇒ no price. Never fabricate a constant (§2).
+      // No snapshot ⇒ no price. Never fabricate a constant.
       return c.json(errBody(INTERNAL_ERROR_CODE, "no eth/usd snapshot available"), 503);
     }
     const body: EthUsdResponseT = {

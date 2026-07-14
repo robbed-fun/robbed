@@ -11,7 +11,7 @@ suites. This is the only way to exercise the REAL `slot0`/`swap`/`mint` math und
 | `NonfungiblePositionManager.json` | unpkg `@uniswap/v3-periphery@1.4.4` (`artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json`) | constructor `(factory, WETH9, tokenDescriptor)`; baked-in `POOL_INIT_CODE_HASH` matches the core above |
 
 Both artifacts have empty `linkReferences` (no library linking needed). These are TEST FIXTURES —
-production deploys read the §12.28-confirmed on-chain addresses from `tools/m0/out/constants.json`,
+production deploys read the -confirmed on-chain addresses from `tools/m0/out/constants.json`,
 and gate-3 fork tests (M1-12) hit the real deployment + real WETH `0x0Bd7…AD73`.
 
 Committed intentionally so the suite runs offline and reproducibly.

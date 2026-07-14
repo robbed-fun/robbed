@@ -1,6 +1,6 @@
 /**
- * Redis transport selection (prod-images.md §5 fix): the prod container runs
- * Ponder under NODE (spec §8), so the publish transport is runtime-selected —
+ * Redis transport selection (prod-images.md fix) the prod container runs
+ * Ponder under NODE, so the publish transport is runtime-selected —
  * Bun.RedisClient under Bun, node-redis 6.x under Node — and a silent no-op
  * transport must NEVER exist: unconstructible ⇒ THROW (startSidecars preflights
  * this at startup). Publish failures increment `redis_publish_errors_total`.
@@ -89,7 +89,7 @@ describe("createRuntimePublisher — Bun-vs-Node selection", () => {
   });
 });
 
-// ── Loud failure — a no-op transport must never exist (prod-images.md §5) ────
+// ── Loud failure — a no-op transport must never exist (prod-images.md) ────
 
 describe("loud failure when no transport is constructible", () => {
   it("createBunPublisher THROWS when Bun.RedisClient is absent", () => {

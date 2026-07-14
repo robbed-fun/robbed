@@ -3,7 +3,7 @@ import * as React from "react";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Vendored shadcn/ui Input (new-york) — code we own (§12.24), restyled to the
+ * Vendored shadcn/ui Input (new-york) — code we own, restyled to the
  * ROBBED_ terminal tokens (Phase F): square, hairline #1C221C border, mono 13px,
  * faint placeholder, green border on focus (mockup search/NAME/TICKER fields).
  */

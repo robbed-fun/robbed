@@ -14,7 +14,7 @@ import {
 } from "@/shared/lib/format";
 
 /**
- * WAVE-1 mockup-faithful contract (the ratified redesign, spec §12.50):
+ * WAVE-1 mockup-faithful contract (the ratified redesign):
  * - ETH amounts zero-PADDED to fixed decimals (default 4 — "0.4200 ETH"),
  *   never trimmed; callers pass `decimals: 2` where the mockup shows 2
  *   ("1.40 ETH" portfolio values).
@@ -128,7 +128,7 @@ describe("format helpers", () => {
   });
 });
 
-describe("formatUsd — never a bare USD figure (spec §2)", () => {
+describe("formatUsd — never a bare USD figure ", () => {
   it("throws without a live snapshot object", () => {
     expect(() => formatUsd(null)).toThrow(/live/i);
     expect(() => formatUsd(undefined)).toThrow();
@@ -154,7 +154,7 @@ describe("formatUsd — never a bare USD figure (spec §2)", () => {
   });
 });
 
-describe("formatUsd — full precision, never compact (§2 source fidelity)", () => {
+describe("formatUsd — full precision, never compact (source fidelity)", () => {
   it("renders the indexer figure verbatim (no compact notation)", () => {
     const v: UsdValue = {
       usd: "610000",

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { env } from "@/shared/lib/env";
 
 /**
- * Split-horizon API base resolution — `env.apiFetchBaseUrl()` (web.md §2.3;
+ * Split-horizon API base resolution — `env.apiFetchBaseUrl()` (web.md;
  * 2026-07-12 fix: SSR fetches inside the compose stack must use the
  * compose-internal origin, browsers the public one).
  *
@@ -22,7 +22,7 @@ import { env } from "@/shared/lib/env";
 // Must mirror vitest.config.ts test.env — the build-time-inlined public base.
 const PUBLIC_BASE = "https://api.test.invalid";
 
-describe("env.apiFetchBaseUrl — split-horizon resolution (web.md §2.3)", () => {
+describe("env.apiFetchBaseUrl — split-horizon resolution (web.md)", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();

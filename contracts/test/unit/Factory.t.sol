@@ -48,7 +48,7 @@ contract FactoryTest is BaseFixture {
     }
 
     function test_create_metadataHashPropagatedToToken_andEvent() public {
-        // F4: the non-zero commitment reaches the token verbatim & immutably (spec §8.3).
+        // F4: the non-zero commitment reaches the token verbatim & immutably.
         (LaunchToken token,) = _create();
         assertEq(token.metadataHash(), keccak256("meta-json"), "metadataHash not committed to token");
     }
@@ -92,7 +92,7 @@ contract FactoryTest is BaseFixture {
     }
 
     function test_create_revertsZeroMetadataHash() public {
-        // F4 load-bearing: the SOLE on-chain enforcement of the §8.3 non-zero commitment.
+        // F4 load-bearing: the SOLE on-chain enforcement of the non-zero commitment.
         vm.deal(address(this), 1 ether);
         uint256 fee = factory.creationFee();
         vm.expectRevert(ZeroMetadataHash.selector);
@@ -117,7 +117,7 @@ contract FactoryTest is BaseFixture {
 
     function test_constructor_revertsWhenGraduationUnfundable() public {
         // Worst-case ceilings summing to >= graduationEth must fail the deploy (fixup F-3): otherwise
-        // an owner could tune future curves into a permanently ungraduatable state (spec §12.11).
+        // an owner could tune future curves into a permanently ungraduatable state.
         CurveFactory.FactoryInit memory p = TestConstants.factoryInit(treasury, safeOwner);
         p.maxGraduationFee = p.graduationEth; // sum with maxCallerReward is now >= graduationEth
         vm.expectRevert(GraduationUnfundable.selector);
@@ -236,7 +236,7 @@ contract FactoryTest is BaseFixture {
         vm.stopPrank();
     }
 
-    /// @dev §12.63/§12.69: the two vault wires (creatorVault, lpFeeVault) mirror setRouter/setMigrator —
+    /// @dev : the two vault wires (creatorVault, lpFeeVault) mirror setRouter/setMigrator —
     ///      one-time-set, non-zero, owner-only.
     function test_setCreatorVault_setLpFeeVault_oneTimeOnly() public {
         CurveFactory f = new CurveFactory(TestConstants.factoryInit(treasury, safeOwner));
@@ -292,14 +292,14 @@ contract FactoryTest is BaseFixture {
         vm.stopPrank();
     }
 
-    /// @dev §12.63: creatorFeeBps is now a configurable factory param (was `constant = 0`), but its
+    /// @dev : creatorFeeBps is now a configurable factory param (was `constant = 0`), but its
     ///      DEFAULT — mirroring mainnet `constants.json` — is 0, so the base fixture stays the
     ///      treasury-only v1 and every legacy assertion holds. The additive-cap + setter + curve
     ///      threading are covered in test/unit/CreatorFee.t.sol.
     function test_creatorFeeBps_defaultsZero_andIsConfigurable() public {
         assertEq(factory.creatorFeeBps(), 0, "creatorFeeBps default (mainnet-mirroring) must be 0");
         assertEq(factory.config().creatorFeeBps, 0, "config creatorFeeBps must be 0 by default");
-        // Now configurable under the ADDITIVE ≤2% cap (spec §12.63).
+        // Now configurable under the ADDITIVE ≤2% cap.
         vm.prank(safeOwner);
         factory.setCreatorFeeBps(50);
         assertEq(factory.creatorFeeBps(), 50, "creatorFeeBps not settable");
@@ -316,7 +316,7 @@ contract FactoryTest is BaseFixture {
         assertEq(factory.owner(), newOwner, "ownership not accepted");
     }
 
-    // ───────── curveDefaults() — factory-level curve-shape view (§12.38/§12.39, LAUNCH-2) ─────────
+    // ───────── curveDefaults() — factory-level curve-shape view (LAUNCH-2) ─────────
 
     function test_curveDefaults_matchesConstructorInputs_beforeAnyCurveExists() public view {
         // LAUNCH-2: the Create-page preview needs the FACTORY-level defaults pre-create —

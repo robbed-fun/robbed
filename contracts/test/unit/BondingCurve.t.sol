@@ -16,8 +16,8 @@ import {
     EarlyBuyCapExceeded
 } from "src/errors/Errors.sol";
 
-/// @title BondingCurve unit suite (M1-8) — trading, §12.11 clamp, §12.18 anti-sniper, §12.12 lock,
-///        graduation single-fire + zero-value, §12.25 sweep, donations.
+/// @title BondingCurve unit suite (M1-8) — trading, clamp, anti-sniper, lock,
+/// graduation single-fire + zero-value, sweep, donations.
 contract BondingCurveTest is BaseFixture {
     LaunchToken internal token;
     BondingCurve internal curve;
@@ -50,7 +50,7 @@ contract BondingCurveTest is BaseFixture {
         assertGt(tOut, 0, "no tokens out");
         assertEq(curve.accruedFees(), quotedFee, "fee not accrued");
         assertEq(treasury.balance, tBefore, "treasury received a trade fee (must be pull-payment)");
-        // 1% ETH-leg fee (spec §6.4).
+        // 1% ETH-leg fee.
         assertEq(quotedFee, (1 ether * uint256(TestConstants.TRADE_FEE_BPS)) / 10_000, "fee != 1% of gross");
     }
 
@@ -74,7 +74,7 @@ contract BondingCurveTest is BaseFixture {
         router.buy{value: 0}(address(token), alice, 0, block.timestamp);
     }
 
-    // ───────────────────────────── Anti-sniper (§12.18) ──────────────────────────
+    // ───────────────────────────── Anti-sniper ──────────────────────────
 
     function test_antiSniper_capEnforcedInsideWindow() public {
         (, BondingCurve fresh) = _create(); // createdAt = now; window open
@@ -107,7 +107,7 @@ contract BondingCurveTest is BaseFixture {
         router.buy{value: big}(address(freshTok), alice, 0, block.timestamp);
     }
 
-    // ──────────────────────── Graduation-boundary clamp (§12.11) ──────────────────
+    // ──────────────────────── Graduation-boundary clamp ──────────────────
 
     function test_clamp_exactFill_armsGraduation_noRefund() public {
         uint256 gross = _grossToGraduate(curve);
@@ -142,7 +142,7 @@ contract BondingCurveTest is BaseFixture {
         assertLe(realEth, curve.GRADUATION_ETH(), "realEth exceeded threshold");
     }
 
-    // ───────────────────── ReadyToGraduate two-way lock (§12.12) ──────────────────
+    // ───────────────────── ReadyToGraduate two-way lock ──────────────────
 
     function test_readyToGraduate_locksBuysAndSells() public {
         _buy(curve, token, bob, 0.5 ether, 0); // give bob sellable tokens first
@@ -153,7 +153,7 @@ contract BondingCurveTest is BaseFixture {
         vm.prank(alice);
         vm.expectRevert(NotTrading.selector);
         router.buy{value: 1 ether}(address(token), alice, 0, block.timestamp);
-        // Sell locked too — this is a deterministic protocol lock, NOT a pause (spec §12.12).
+        // Sell locked too — this is a deterministic protocol lock, NOT a pause.
         uint256 bal = token.balanceOf(bob);
         vm.startPrank(bob);
         token.approve(address(router), bal);
@@ -202,7 +202,7 @@ contract BondingCurveTest is BaseFixture {
         assertEq(address(this).balance, callerBalBefore + curve.CALLER_REWARD(), "caller reward not paid");
         // Graduation fee pushed to treasury by the migrator.
         assertEq(treasury.balance, treasuryBefore + curve.GRADUATION_FEE(), "graduation fee not to treasury");
-        // Curve holds ZERO tokens and exactly the withheld accruedFees in ETH (§12.25 zero-value).
+        // Curve holds ZERO tokens and exactly the withheld accruedFees in ETH (zero-value).
         assertEq(token.balanceOf(address(curve)), 0, "curve still holds tokens");
         assertEq(address(curve).balance, accrued, "curve ETH != withheld accruedFees");
         (,, uint256 realEth, uint256 realTok) = curve.reserves();
@@ -226,7 +226,7 @@ contract BondingCurveTest is BaseFixture {
         curve.graduate();
     }
 
-    // ──────────────────────────── Donations (§5.7) ───────────────────────────────
+    // ──────────────────────────── Donations ───────────────────────────────
 
     function test_ethDonation_notCredited_sweptAtGraduation() public {
         _buy(curve, token, bob, 0.4 ether, 0);
@@ -248,7 +248,7 @@ contract BondingCurveTest is BaseFixture {
         assertEq(address(curve).balance, curve.accruedFees(), "curve retained more than accruedFees");
     }
 
-    // ─────────────────────────── sweepFees (§12.25) ──────────────────────────────
+    // ─────────────────────────── sweepFees ──────────────────────────────
 
     function test_sweepFees_permissionless_movesAccruedToTreasury_zeroesIt() public {
         uint256 tBefore = treasury.balance;

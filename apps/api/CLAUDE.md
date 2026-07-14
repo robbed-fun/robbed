@@ -1,6 +1,6 @@
 # apps/api — Hono API on Bun (owner: robbed-indexer)
 
-Hono + Postgres: API-mediated R2 uploads (§12.19), moderation queue (§8.4), search (pg_trgm), creator endpoints. Spec: §8 (off-chain architecture), §8.3 (metadata integrity), §2.1 (confirmation states).
+Hono + Postgres: API-mediated R2 uploads, moderation queue, search (pg_trgm), creator endpoints. Design docs: `docs/developers/api.md` (routes, uploads, moderation, metadata integrity), `docs/developers/architecture.md` (off-chain architecture, confirmation states).
 
 - `bun run dev` (hot reload) · `bun test` · `bun run typecheck`
 - `openapi.yaml` documents every route and must parse as YAML (doc-check gate f) — update it in the same change as any route change.

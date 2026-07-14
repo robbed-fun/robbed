@@ -6,12 +6,12 @@ import { CreatorEarningsPanel } from "@/widgets/creator-earnings";
 import { Button, EmptyState, ErrorState, Skeleton } from "@/shared/ui";
 
 /**
- * CREATED tab (mockup "2c" / §5.4, §7): tokens whose on-chain `creator` == this
+ * CREATED tab (mockup "2c" /) tokens whose on-chain `creator` == this
  * address. The endpoint returns the SAME `TokenCard` projection as `/tokens`, so
  * we reuse the `entities/token` card verbatim (anti-drift) in a responsive grid.
- * Listing-gated server-side (§8.4) — the client renders whatever the API lists.
+ * Listing-gated server-side — the client renders whatever the API lists.
  *
- * §7/§12.63: for the connected user's OWN created tokens the Creator earnings
+ * : for the connected user's OWN created tokens the Creator earnings
  * widget (claim creator fees) sits above the grid — self-gated + vault-gated
  * inside the widget, so it renders nothing for a treasury-only deployment or when
  * viewing someone else.
@@ -23,7 +23,7 @@ export function CreatedTab({ address, isSelf = false }: { address: string; isSel
   const tokens = data?.pages.flatMap((p) => p.tokens) ?? [];
 
   // Own-earnings claim widget above the grid (self-/vault-gated inside the widget).
-  // `createdTokens` feeds the post-grad §12.69 buckets: the graduated ones seed the
+  // `createdTokens` feeds the post-grad buckets: the graduated ones seed the
   // on-chain `tokenBalanceOf` fallback + the live `:events` WS subscriptions, and the
   // whole list is the ticker/avatar registry for bucket rows.
   const earnings = (

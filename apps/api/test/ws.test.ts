@@ -1,5 +1,5 @@
 /**
- * Bun WS fanout routing (indexer.md §8, api.md §6.5; M2-8). Drives the pure
+ * Bun WS fanout routing (indexer.md, api.md; M2-8). Drives the pure
  * `WsHub` core with fakes — no real socket is opened — covering client op
  * validation, channel hardening, the subscription cap, and the Redis→topic relay.
  */

@@ -8,14 +8,14 @@ import {
 import { buildMetadataDocument } from "@/features/launch-token";
 
 /**
- * §8.3 / §12.19 — the Launch flow must produce BYTE-IDENTICAL canonical JSON and
+ * — the Launch flow must produce BYTE-IDENTICAL canonical JSON and
  * keccak256 to the API + indexer. Proven against the SHARED golden fixtures (the
  * same frozen vectors the indexer/API suites use), through the SHARED
  * canonicalizer — the frontend never re-implements it. If this drifts, the
- * client-side re-verify (§12.19) would false-reject or false-accept, so this is
+ * client-side re-verify would false-reject or false-accept, so this is
  * the anti-drift anchor for the whole launch flow.
  */
-describe("canonicalizer parity vs shared golden fixtures (§8.3/§12.19)", () => {
+describe("canonicalizer parity vs shared golden fixtures ", () => {
   for (const fixture of METADATA_GOLDEN_FIXTURES) {
     it(`byte-identical canonical JSON + keccak — ${fixture.name}`, () => {
       const canonical = new TextDecoder("utf-8").decode(canonicalizeMetadata(fixture.input));
@@ -30,7 +30,7 @@ describe("canonicalizer parity vs shared golden fixtures (§8.3/§12.19)", () =>
     const doc = buildMetadataDocument({
       name: "Cash Cat",
       ticker: "CASHCAT",
-      imageUrl: "https://cdn.hoodpad.example/images/0xabc.webp",
+      imageUrl: "https://cdn.robbed.example/images/0xabc.webp",
       imageHash: `0x${"ab".repeat(32)}`,
     });
     const minimal = METADATA_GOLDEN_FIXTURES.find((f) => f.name.startsWith("minimal"))!;
@@ -44,11 +44,11 @@ describe("canonicalizer parity vs shared golden fixtures (§8.3/§12.19)", () =>
       ticker: "HOOD",
       description: "A token for the hood.",
       links: {
-        x: "https://x.com/hoodpad",
-        website: "https://hoodpad.example",
-        telegram: "https://t.me/hoodpad",
+        x: "https://x.com/robbed",
+        website: "https://robbed.example",
+        telegram: "https://t.me/robbed",
       },
-      imageUrl: "https://cdn.hoodpad.example/images/0xdef.webp",
+      imageUrl: "https://cdn.robbed.example/images/0xdef.webp",
       imageHash: `0x${"cd".repeat(32)}`,
     });
     const full = METADATA_GOLDEN_FIXTURES.find((f) => f.name.startsWith("full"))!;

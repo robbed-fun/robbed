@@ -1,48 +1,48 @@
-# ROBBED_ gate-7 alert rules (spec §10 gate 7; indexer.md §9.4; P-3).
+# ROBBED_ gate-7 alert rules (gate 7; indexer.md; P-3).
 #
 # Series names match apps/indexer/src/metrics.ts (M2-12) exactly. Threshold
 # provenance, per rule:
-#   - SPEC'D  — numeric threshold written in indexer.md §9.4 (authoritative).
+# - SPEC'D — numeric threshold written in indexer.md (authoritative).
 #   - M0      — governance constant from tools/m0/out/constants.json.governance
 #               (clusterAlertThresholds: perTokenPct=25, platformPct=10,
 #               windowHours=24) — already baked into the indexer's
 #               funding_cluster_vol_share_breach gauge; rules key off the
 #               breach gauge so retuning happens in ONE place (env/constants),
-#               never in this file (spec §2: no inlined governance values).
-#   - PLACEHOLDER — §9.4 says "alert on stall" (or lists the series with no
+# never in this file (no inlined governance values).
+# - PLACEHOLDER — says "alert on stall" (or lists the series with no
 #               number); the value here is a documented engineering default,
 #               tuned at M4 with robbed-security. Marked `tuning: placeholder`.
 #
-# Delivery (pager/webhook routing) is deliberately NOT decided here — §9.4:
+# Delivery (pager/webhook routing) is deliberately NOT decided here — :
 # "delivery mechanism per infra choice at M4". alertmanager.yml routes to a
 # no-integration placeholder receiver until then.
 #
-# severity: page = §9.4 "pages immediately"; warn = advisory/self-healing.
+# severity: page = "pages immediately"; warn = advisory/self-healing.
 
 groups:
   - name: robbed-gate7-liveness
     rules:
-      # SPEC'D — §9.4: indexer_head_lag_seconds alert > 10s.
+      # SPEC'D — indexer_head_lag_seconds alert > 10s.
       - alert: IndexerHeadLagHigh
         expr: indexer_head_lag_seconds > 10
         for: 1m
         labels:
           severity: page
         annotations:
-          summary: "Indexer head lag {{ $value }}s (> 10s, §9.4)"
-          description: "Chain head vs last indexed event exceeds 10s — sync stalled or RPC degraded. Runbook: docs/developers/runbooks/prod-images.md §4."
+          summary: "Indexer head lag {{ $value }}s (> 10s)"
+          description: "Chain head vs last indexed event exceeds 10s — sync stalled or RPC degraded. Runbook: docs/developers/runbooks/prod-images.md."
 
-      # SPEC'D — §9.4: ws_publish_to_head_ms p95 > 300ms (guards <500ms budget, §8).
+      # SPEC'D — ws_publish_to_head_ms p95 > 300ms (guards <500ms budget).
       - alert: WsPublishLatencyP95High
         expr: histogram_quantile(0.95, sum by (le) (rate(ws_publish_to_head_ms_bucket[5m]))) > 300
         for: 5m
         labels:
           severity: page
         annotations:
-          summary: "Publish→head p95 {{ $value }}ms (> 300ms, §9.4)"
-          description: "The <500ms event-to-browser budget (spec §8) is at risk. Check Redis, indexer host load, Alchemy WS."
+          summary: "Publish→head p95 {{ $value }}ms (> 300ms)"
+          description: "The <500ms event-to-browser budget is at risk. Check Redis, indexer host load, Alchemy WS."
 
-      # PLACEHOLDER (tuning: M4) — §9.4 says "alert on stall" with no number.
+      # PLACEHOLDER (tuning: M4) — says "alert on stall" with no number.
       # Stall detector: the lag DERIVATIVE tracks the head-block rate (~10
       # blocks/s at ~100ms blocks) when the safe watermark is frozen (batch
       # poster down ⇒ user-visible badge stall). deriv > 5 blocks/s sustained
@@ -54,7 +54,7 @@ groups:
           severity: page
           tuning: placeholder
         annotations:
-          summary: "posted-to-L1 (safe) watermark stalled (§2.1 badge stall)"
+          summary: "posted-to-L1 (safe) watermark stalled (badge stall)"
           description: "confirmation_safe_lag_blocks is growing at head rate — the L1 batch poster looks down. Confirmation badges stop advancing platform-wide."
 
       # PLACEHOLDER (tuning: M4) — same stall detector for the finalized tag.
@@ -65,7 +65,7 @@ groups:
           severity: page
           tuning: placeholder
         annotations:
-          summary: "finalized watermark stalled (§2.1)"
+          summary: "finalized watermark stalled "
           description: "confirmation_finalized_lag_blocks growing at head rate for 20m — L1 finality propagation stalled. Bridge/withdrawal + large-value displays depend on this tier."
 
       # PLACEHOLDER (tuning: M4) — meta: the gate-7 exposition itself is gone.
@@ -81,27 +81,27 @@ groups:
 
   - name: robbed-gate7-invariants
     rules:
-      # SPEC'D — §9.4: mismatch > 0 pages review (Trust panel shows it either way).
+      # SPEC'D — mismatch > 0 pages review (Trust panel shows it either way).
       - alert: MetadataHashMismatch
         expr: metadata_mismatch_total > 0
         for: 0m
         labels:
           severity: page
         annotations:
-          summary: "{{ $value }} token(s) with metadata hash mismatch (§8.3)"
+          summary: "{{ $value }} token(s) with metadata hash mismatch "
           description: "Canonical R2 JSON no longer keccak-matches the on-chain commitment for at least one token — possible R2 tamper. Review immediately."
 
-      # SPEC'D — §9.4: fee_collections.recipient != treasury ⇒ page immediately.
+      # SPEC'D — fee_collections.recipient != treasury ⇒ page immediately.
       - alert: FeeRecipientMismatch
         expr: increase(fee_recipient_mismatch_total[5m]) > 0
         for: 0m
         labels:
           severity: page
         annotations:
-          summary: "V3 Collect paid a non-treasury recipient (§6.4 invariant)"
+          summary: "V3 Collect paid a non-treasury recipient (invariant)"
           description: "LPFeeVault invariant violated at the indexer's view — investigate the Collect tx immediately."
 
-      # SPEC'D — §9.4: trade with fee_eth > 2% of leg ⇒ page (fee ceiling §6.4).
+      # SPEC'D — trade with fee_eth > 2% of leg ⇒ page (fee ceiling).
       - alert: TradeFeeCeilingBreach
         expr: trade_fee_ceiling_breach_total > 0
         for: 0m
@@ -109,9 +109,9 @@ groups:
           severity: page
         annotations:
           summary: "{{ $value }} curve trade(s) with fee > 2% of the ETH leg"
-          description: "In-contract fee computation invariant (§6.4) breached as indexed — page contracts + security."
+          description: "In-contract fee computation invariant breached as indexed — page contracts + security."
 
-      # SPEC'D — §9.4: second Graduated for a token ⇒ page immediately (gate 2).
+      # SPEC'D — second Graduated for a token ⇒ page immediately (gate 2).
       - alert: GraduationDoubleFire
         expr: increase(graduation_double_fire_total[5m]) > 0
         for: 0m
@@ -119,20 +119,20 @@ groups:
           severity: page
         annotations:
           summary: "Repeat Graduated event for an already-graduated token"
-          description: "Graduation single-fire invariant violated — page immediately (§10 gate 2 / §9.4)."
+          description: "Graduation single-fire invariant violated — page immediately (gate 2 /)."
 
   - name: robbed-gate7-data-quality
     rules:
-      # SPEC'D — §9.4: eth_usd_snapshot_age_seconds alert > 5m (USD goes
-      # "dated", never stale-silent — spec §2 no-hardcoded-metrics rule).
+      # SPEC'D — eth_usd_snapshot_age_seconds alert > 5m (USD goes
+      # "dated", never stale-silent — no-hardcoded-metrics rule).
       - alert: EthUsdSnapshotStale
         expr: eth_usd_snapshot_age_seconds > 300
         for: 1m
         labels:
           severity: page
         annotations:
-          summary: "ETH/USD snapshot {{ $value }}s old (> 5m, §9.4)"
-          description: "Poller down or §12.51 fail-closed tripped. USD displays go 'dated'; fix the source, never inline a price."
+          summary: "ETH/USD snapshot {{ $value }}s old (> 5m)"
+          description: "Poller down or fail-closed tripped. USD displays go 'dated'; fix the source, never inline a price."
 
       # M0 — governance.clusterAlertThresholds (perTokenPct=25 / platformPct=10,
       # 24h window). The breach gauge is computed in-process against those
@@ -144,10 +144,10 @@ groups:
           severity: page
         annotations:
           summary: "Funding-cluster volume share breach (scope {{ $labels.scope }})"
-          description: "A single §8.5 funder cluster exceeds its M0 governance share threshold ({{ $labels.scope }}). Advisory alert — never gates chain state (§8.4/§8.5). Route to security."
+          description: "A single funder cluster exceeds its M0 governance share threshold ({{ $labels.scope }}). Advisory alert — never gates chain state. Route to security."
 
       # PLACEHOLDER (tuning: M4) — publishes are self-healing (clients
-      # REST-heal on seq gap, §8.4→§12.23), so sustained-rate only, warn-level.
+      # REST-heal on seq gap, →), so sustained-rate only, warn-level.
       - alert: RedisPublishErrorsSustained
         expr: rate(redis_publish_errors_total[5m]) > 0.1
         for: 10m
@@ -158,7 +158,7 @@ groups:
           summary: "Redis publish failures sustained ({{ $value }}/s over 5m)"
           description: "WS updates degraded to REST-heal for 10m+. Check Redis health / indexer→Redis connectivity."
 
-      # PLACEHOLDER (tuning: M4) — §9.4 lists the series without a threshold;
+      # PLACEHOLDER (tuning: M4) — lists the series without a threshold;
       # a persistently large unfetched backlog means R2/CDN or verifier trouble.
       - alert: MetadataUnfetchedBacklog
         expr: metadata_unfetched_total > 0

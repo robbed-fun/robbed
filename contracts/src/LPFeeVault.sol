@@ -12,25 +12,25 @@ import {INonfungiblePositionManager} from "./interfaces/external/INonfungiblePos
 import {ZeroAddress, NotPositionManager, NotMigrator, CreatorAlreadyRegistered} from "./errors/Errors.sol";
 
 /// @title LPFeeVault — LP principal permanently locked; trading fees split between treasury and creator.
-///        (spec §6.3.4, §6.6, §12.14, §12.69; contracts.md §2.6)
+/// (contracts.md)
 /// @notice Terminal custody for graduation LP NFTs. No owner, no withdraw, no upgrade path, no
 ///         privileged setter. The ONLY state-mutating functions are permissionless `collect(tokenId)`
 ///         and migrator-gated set-once `registerCreator(tokenId, creator)`. `collect` harvests the
 ///         held position's accrued V3 fees and SPLITS each leg 50/50: the treasury share is pushed to
-///         the immutable treasury (treasury-first, §6.3), the creator share is routed to the
+/// the immutable treasury (treasury-first), the creator share is routed to the
 ///         pull-payment {CreatorVault}. There is deliberately no `decreaseLiquidity`, no
 ///         `transferFrom` initiation, and no `approve` beyond the exact-amount forward of the
 ///         creator's split share to the (trusted) CreatorVault — this contract can move NOTHING of the
 ///         position's PRINCIPAL liquidity, so it mathematically cannot leave (VitaliyShulik
-///         `TokenLocker` reference property, spec §4.3). Copy language everywhere (§12.14 as amended
-///         by §12.69): "LP principal permanently locked; trading fees split between treasury and
+/// `TokenLocker` reference property). Copy language everywhere (as amended
+/// by) "LP principal permanently locked; trading fees split between treasury and
 ///         creator" — never "burned".
 ///
-/// @dev THIS IS THE §12.63(a)/§12.69 CREATOR-FEE FACTORY GENERATION (deployed fresh; no retrofit —
-///      already-deployed treasury-only v1 vaults keep 100%-to-treasury `collect` forever, spec §6). It
+/// @dev THIS IS THE CREATOR-FEE FACTORY GENERATION (deployed fresh; no retrofit —
+/// already-deployed treasury-only v1 vaults keep 100%-to-treasury `collect` forever). It
 ///      grows past the ~50-line treasury-only vault by exactly: the per-leg split routing, the
 ///      `tokenId → creator` mapping, and the migrator-gated set-once registration — the minimal
-///      surface the 50/50 split requires (spec §6.6; every added line justified below).
+/// surface the 50/50 split requires (every added line justified below).
 ///
 ///      Design decisions recorded for the robbed-security gate:
 ///
@@ -39,18 +39,18 @@ import {ZeroAddress, NotPositionManager, NotMigrator, CreatorAlreadyRegistered} 
 ///         the vault must first take custody of both legs (`recipient = address(this)`), then transfer
 ///         each leg's shares. The mid-collect custody is fully atomic and leaves ZERO residue: per leg
 ///         `treasuryShare + creatorShare == amount` exactly (treasury gets `amount − creatorShare`, so
-///         the odd wei biases to the treasury — treasury-first, §6.3), so nothing accumulates in the
-///         vault (§12.69(i) exact-sum invariant, proven by test). Both legs are the launch token
-///         (plain OZ ERC20, no hooks — §6.1) and canonical WETH9 (balance-mapping `transfer`, no
+/// the odd wei biases to the treasury — treasury-first), so nothing accumulates in the
+/// vault (exact-sum invariant, proven by test). Both legs are the launch token
+/// (plain OZ ERC20, no hooks) and canonical WETH9 (balance-mapping `transfer`, no
 ///         recipient callback), so every outward transfer is callback-free: a hostile/mispointed
-///         treasury can never revert `collect` (§6.6/§12.25 discipline preserved), and the creator
+/// treasury can never revert `collect` (discipline preserved), and the creator
 ///         share is pushed to OUR non-reverting {CreatorVault} (never a hostile EOA on the fee path,
-///         §12.69(C)). No `nonReentrant` guard: every callee (`positionManager`, the two ERC20s, the
+/// ). No `nonReentrant` guard: every callee (`positionManager`, the two ERC20s, the
 ///         {CreatorVault}) is trusted and callback-free, so there is no re-entrancy surface — keeping
-///         the guard off preserves the §6.6 minimalism.
+/// the guard off preserves the minimalism.
 ///
-///      2. **Creator resolution: migrator-driven explicit `registerCreator`, NOT the §12.69(B)
-///         NFT-transfer `data` payload.** §12.69(B) ratified passing `abi.encode(creator)` through
+/// 2. **Creator resolution: migrator-driven explicit `registerCreator`, NOT the
+/// NFT-transfer `data` payload.** ratified passing `abi.encode(creator)` through
 ///         `safeTransferFrom` into `onERC721Received`. VERIFIED against the real v3-periphery
 ///         `NonfungiblePositionManager` (github.com/Uniswap/v3-periphery, `mint`): it mints with
 ///         `_mint(recipient, tokenId)` — NOT `_safeMint` — so `onERC721Received` is NEVER triggered on
@@ -59,8 +59,8 @@ import {ZeroAddress, NotPositionManager, NotMigrator, CreatorAlreadyRegistered} 
 ///         offers: the migrator (which mints the position and knows the graduating curve's creator)
 ///         calls `registerCreator(tokenId, creator)` in the SAME graduation tx, gated to the factory's
 ///         registered migrator and set-once. O(1), captured at the authoritative moment, unspoofable
-///         (§12.69(B) properties intact; the mechanism swapped for one that actually works). See the
-///         §12.69(B) reconciliation note flagged to the architect in the change report.
+/// (properties intact; the mechanism swapped for one that actually works). See the
+/// reconciliation note flagged to the architect in the change report.
 ///
 ///      3. **`creatorVault` + `migrator` read LIVE from the factory; `treasury` stays IMMUTABLE.**
 ///         The factory's `creatorVault`/`migrator` are one-time-set (immutable-by-convention —
@@ -84,7 +84,7 @@ contract LPFeeVault is ILPFeeVault {
     uint256 private constant BPS = 10_000;
 
     /// @inheritdoc ILPFeeVault
-    uint16 public constant override creatorLpShareBps = 5000; // 50% (spec §12.69) — immutable constant
+    uint16 public constant override creatorLpShareBps = 5000; // 50% — immutable constant
 
     /// @inheritdoc ILPFeeVault
     INonfungiblePositionManager public immutable override positionManager;
@@ -96,8 +96,8 @@ contract LPFeeVault is ILPFeeVault {
     /// @inheritdoc ILPFeeVault
     mapping(uint256 tokenId => address) public override creatorOf;
 
-    /// @param positionManager_ Canonical NonfungiblePositionManager (§12.28 address via deploy).
-    /// @param treasury_        Gnosis Safe treasury, fixed forever (spec §6.6).
+    /// @param positionManager_ Canonical NonfungiblePositionManager (address via deploy).
+    /// @param treasury_ Gnosis Safe treasury, fixed forever.
     /// @param factory_         CurveFactory of this generation (source of the live creatorVault sink +
     ///                         migrator registration authority).
     constructor(address positionManager_, address treasury_, address factory_) {
@@ -109,7 +109,7 @@ contract LPFeeVault is ILPFeeVault {
 
     /// @inheritdoc ILPFeeVault
     /// @dev Harvest both legs into this vault, then split each 50/50 (decision #1). Treasury-first
-    ///      (§6.3); creator share → {CreatorVault} (pull-payment, §12.69(C)). Principal untouched
+    ///; creator share → {CreatorVault} (pull-payment). Principal untouched
     ///      (`collect` never moves liquidity — docs-confirmed, v3-periphery `NonfungiblePositionManager`).
     function collect(uint256 tokenId) external override returns (uint256 amount0, uint256 amount1) {
         (amount0, amount1) = positionManager.collect(
@@ -131,7 +131,7 @@ contract LPFeeVault is ILPFeeVault {
     }
 
     /// @dev Split one leg: `creatorShare = amount·shareBps/1e4`, `treasuryShare = amount − creatorShare`
-    ///      (exact sum, treasury-biased odd wei — §12.69(i)). Treasury share pushed via a callback-free
+    /// (exact sum, treasury-biased odd wei). Treasury share pushed via a callback-free
     ///      ERC20 `transfer`; creator share forwarded to the {CreatorVault} via an exact-amount approve
     ///      + `depositERC20` (the vault pulls, credits `creator`). Returns the two shares for the event.
     function _route(address token, uint256 amount, address creator, uint16 shareBps, address vault)

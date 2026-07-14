@@ -10,7 +10,7 @@ import {
   test,
 } from "../harness";
 
-// @flow:PORT-7 — Empty portfolio (never-traded address; never a 404) (§12.50a / catalog §3b)
+// @flow:PORT-7 — Empty portfolio (never-traded address; never a 404) (/ catalog)
 // assertable-layers: indexed · UI   (the empty payload IS the indexer response — waiver)
 test(
   "PORT-7 a never-traded address resolves to an honestly-empty portfolio, never a 404",
@@ -20,7 +20,7 @@ test(
     const fresh = privateKeyToAccount(generatePrivateKey()).address;
 
     await assertIndexed("all four portfolio reads resolve EMPTY (no 404, no error envelope)", async () => {
-      // api.get throws on any error envelope — resolving at all proves §3.4a.
+      // api.get throws on any error envelope — resolving at all proves.
       const summary = await api.portfolioSummary(fresh);
       expect(summary.tradeCount).toBe(0);
       expect(summary.tokensCreated).toBe(0);

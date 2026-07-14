@@ -5,7 +5,7 @@ import { Delta, GraduationProgress, MonoText } from "@/shared/ui";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * TRENDING carousel (Discover, ROBBED_ redesign — spec §12.50, panel "2d").
+ * TRENDING carousel (Discover, ROBBED_ redesign —, panel "2d").
  *
  * Pixel-matched to the mockup: a full-bleed marquee of ranked 300×168 cards
  * (image · #rank · name + ticker · 24h Δ%) that auto-scrolls left via the pure-CSS
@@ -14,12 +14,12 @@ import { cn } from "@/shared/lib/utils";
  * client JS — the animation is CSS-only) so the viral above-the-fold content
  * paints without hydration; it pauses on hover and honours `prefers-reduced-motion`.
  *
- * DATA/DISCIPLINE (§2): ranking is API-owned — the view fetches
+ * DATA/DISCIPLINE : ranking is API-owned — the view fetches
  * `/v1/tokens?sort=volume24h` ("the day's biggest heists · by 24h volume") and
  * this component RENDERS the returned order, computing nothing. The card's vivid
  * look is supplied by the token IMAGE itself (full-bleed, object-cover); the only
  * overlay is the mockup's bottom scrim gradient (bg-token only) — no raw color
- * ever leaves the design-token system (web.md §8.3 lint).
+ * ever leaves the design-token system (web.md lint).
  */
 export function TrendingCarousel({ tokens }: { tokens: TokenCard[] }) {
   if (tokens.length === 0) return null;
@@ -104,9 +104,9 @@ function TrendingCard({
 
       {/* footer scrim + name/ticker/Δ% + raise-progress (mockup: single bottom
           gradient, no full-card scrim). The compact GraduationProgress adds the
-          §5.1 progress bar + graduated/on-curve status to the real Discover list;
+           progress bar + graduated/on-curve status to the real Discover list;
           `progressPct`/`status` come straight off the card payload (no threshold
-          hardcoded, no per-card on-chain read — §2). */}
+          hardcoded, no per-card on-chain read —). */}
       <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1.5 bg-gradient-to-b from-transparent to-bg/[0.92] px-3 pb-2.5 pt-[26px]">
         <div className="flex items-baseline gap-2">
           <MonoText tone="default" size="base" className="truncate font-semibold">

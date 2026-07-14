@@ -1,6 +1,6 @@
 /**
- * Pure builder for the single `Router.createToken` write (§5.3, contracts.md
- * §2.4). Kept side-effect-free so the wiring — argument ORDER and the
+ * Pure builder for the single `Router.createToken` write (, contracts.md
+ * ). Kept side-effect-free so the wiring — argument ORDER and the
  * `value: deployFee + initialBuy` composition — is unit-testable without a wallet
  * (tests/launch-validation.test.ts). The ABI is the shared generated `routerAbi`;
  * no ABI is hand-written (CLAUDE.md anti-drift rule).
@@ -35,7 +35,7 @@ export interface CreateTokenRequest {
 /**
  * `createToken(name, symbol, metadataHash, metadataUri, minTokensOut, deadline)`
  * payable with `value = deployFee + initialBuy`. The initial buy is ATOMIC with
- * creation — a single user-visible transaction (spec §5.3).
+ * creation — a single user-visible transaction.
  */
 export function buildCreateTokenRequest(a: CreateTokenArgs): CreateTokenRequest {
   return {

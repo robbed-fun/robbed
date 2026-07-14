@@ -19,8 +19,8 @@ import {
  * Portfolio address summary (mockup "2c"): avatar · `address · you` ·
  * `first seen … · N trades` · the stat cells TOTAL VALUE / LOOT ALL-TIME /
  * WALLET ETH. Values are the `/v1/portfolio/:address` roll-up — ETH-first, with
- * USD surfaced via `UsdAmount` (live source + timestamp, §2). PnL renders as its
- * honest range/nullable form (§5.2). Mobile: the identity block stacks above the
+ * USD surfaced via `UsdAmount` (live source + timestamp). PnL renders as its
+ * honest range/nullable form. Mobile: the identity block stacks above the
  * stat cells (which themselves stack), per the redesign's mobile rule.
  */
 export function PortfolioSummaryHeader({

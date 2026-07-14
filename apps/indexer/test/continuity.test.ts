@@ -1,6 +1,6 @@
 /**
  * Venue-continuity across a simulated graduation + rebuild byte-equality
- * (indexer.md §4.3/§4.4, DoD). Exercises the SAME pure engines the handlers and
+ * (indexer.md, DoD). Exercises the SAME pure engines the handlers and
  * the `rebuild` script use, so the properties proven here hold in production.
  */
 import { describe, expect, it } from "bun:test";

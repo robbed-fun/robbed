@@ -24,11 +24,11 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:CFEE-1 — Post-grad creator-fee accrual + claim (LP-fee 50/50 split → CreatorVault → claim) · §12.69
+// @flow:CFEE-1 — Post-grad creator-fee accrual + claim (LP-fee 50/50 split → CreatorVault → claim) ·
 // assertable-layers: on-chain · indexed   (UI waived — see waivers)
 //
-// WIDENED 2026-07-13 (creator-fee generation DEPLOYED to the fork): the §12.63(a)/
-// §12.69 factory generation is live, so this un-skips and widens from on-chain-only
+// WIDENED 2026-07-13 (creator-fee generation DEPLOYED to the fork) the /
+// factory generation is live, so this un-skips and widens from on-chain-only
 // to on-chain · INDEXED. The indexed leg polls the split roll-up the indexer now
 // materializes (`GET /v1/creators/:creator/claimable/:token`, authoritative live
 // `CreatorVault.tokenBalanceOf` over the `creator_token_claimable` accrual) and
@@ -72,8 +72,8 @@ test(
     await assertOnChain(
       "collect() splits post-grad V3 fees 50/50; the creator's token+WETH legs (both ERC20) land in the CreatorVault; treasury takes the other 50%",
       async () => {
-        // The migrator registered tokenId → creator at graduation (§12.69 B),
-        // and the vault's split is the 50/50 immutable (§12.69 A).
+        // The migrator registered tokenId → creator at graduation (B),
+        // and the vault's split is the 50/50 immutable (A).
         expect((await readCreatorOf(tokenId)).toLowerCase()).toBe(creator.toLowerCase());
         const shareBps = await readCreatorLpShareBps();
         expect(shareBps).toBe(EXPECTED_CREATOR_LP_SHARE_BPS);
@@ -88,7 +88,7 @@ test(
         const treasuryWethBefore = await readTokenBalance(ROLES.treasury.address, WETH);
         const treasuryTokBefore = await readTokenBalance(ROLES.treasury.address, token.token);
 
-        // Permissionless split collect() — the §12.69 vault routes the treasury share
+        // Permissionless split collect() — the vault routes the treasury share
         // to the fixed treasury and the creator share to the CreatorVault (creatorOf).
         const collectHash = await collectOnChain(tokenId, ROLES.trader);
         const collectReceipt = await publicClient.waitForTransactionReceipt({ hash: collectHash });
@@ -97,12 +97,12 @@ test(
         // A two-sided volume must have produced a fee in at least one leg.
         expect(collected.wethLeg + collected.tokenLeg > 0n).toBe(true);
 
-        // §12.69(F)(i): the FeesSplit sums EXACTLY to the collected amount per leg —
+        // : the FeesSplit sums EXACTLY to the collected amount per leg —
         // no leakage / rounding drain — and the beneficiary is the creator.
         expect(collected.creator.toLowerCase()).toBe(creator.toLowerCase());
         expect(collected.creatorWeth + collected.treasuryWeth).toBe(collected.wethLeg);
         expect(collected.creatorToken + collected.treasuryToken).toBe(collected.tokenLeg);
-        // §12.69(A): the creator share is the immutable 50/50 of each leg (floor; the
+        // : the creator share is the immutable 50/50 of each leg (floor; the
         // treasury keeps the odd wei — treasury-first in `_route`).
         expect(collected.creatorWeth).toBe((collected.wethLeg * BigInt(shareBps)) / 10_000n);
         expect(collected.creatorToken).toBe((collected.tokenLeg * BigInt(shareBps)) / 10_000n);
@@ -155,7 +155,7 @@ test(
     );
 
     await assertOnChain(
-      "the creator PULLS both ERC20 legs; each bucket drains to zero (pull-payment, §12.25 / §12.69 C)",
+      "the creator PULLS both ERC20 legs; each bucket drains to zero (pull-payment, C)",
       async () => {
         // WETH leg: `claimERC20(creator, WETH)` drains the WHOLE standing (aggregated)
         // balance; assert the wallet delta equals it and the bucket empties.

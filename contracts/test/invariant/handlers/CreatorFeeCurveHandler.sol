@@ -20,18 +20,18 @@ import {TestConstants} from "test/harness/TestConstants.sol";
 import {MockArbSys} from "test/mocks/MockArbSys.sol";
 
 /// @title CreatorFeeCurveHandler — fuzz-actor handler for the Phase-2 creator-fee gate re-run
-///        (spec §7, §12.63; §10 gate 2 re-opened)
+/// (gate 2 re-opened)
 /// @notice Deploys the stack with a NON-ZERO `creatorFeeBps` (the ratified testnet 50) AND a HOSTILE
 ///         (reverting) `creator`, then drives the same fuzz-actor sequence the gate-2 {CurveHandler}
-///         does. It exists to prove the §12.63 additions preserve every gate-2 invariant when the
+/// does. It exists to prove the additions preserve every gate-2 invariant when the
 ///         creator leg is LIVE and the creator address is adversarial:
 ///           - solvency now `balance ≥ realEthReserves + accruedFees + accruedCreatorFees`;
 ///           - exact-fee accounting covers the creator leg (vault + escrow == Σ computed creator fees);
 ///           - k non-decreasing, graduation single-fire, no actor extracts beyond fair value; and
 ///           - SELLS ALWAYS OPEN — a reverting creator can never freeze a Trading-phase sell (the
-///             decisive §6.5/§12.63 property, mirrored from the TM-T1 hostile-treasury proof).
+/// decisive property, mirrored from the TM-T1 hostile-treasury proof).
 /// @dev The creator is a {Reverter} that rejects all ETH. Because no trade path touches the creator
-///      or the vault (fees accrue in-contract, §12.63), every fuzzed sell must still clear; the
+/// or the vault (fees accrue in-contract), every fuzzed sell must still clear; the
 ///      creator's own `CreatorVault.claim` is what reverts (retriable, isolated). `ghost_creatorClaimed`
 ///      therefore stays 0 across a hostile run, so the fee-exactness identity reduces to
 ///      `vault.balanceOf(creator) + accruedCreatorFees == ghost_creatorFeeSum`.
@@ -61,10 +61,10 @@ contract CreatorFeeCurveHandler is CommonBase, StdAssertions, StdCheats, StdUtil
     address[] internal _actors;
     address internal _currentActor;
 
-    // ─────────────────── Ghost accounting (contracts.md §6 + §12.63) ───────────────────
+    // ─────────────────── Ghost accounting (contracts.md +) ───────────────────
     uint256 public ghost_lastK; // row 1
     uint256 public ghost_feeSum; // row 3 treasury leg: trade (both dirs) + creation + graduation
-    uint256 public ghost_creatorFeeSum; // §12.63 creator leg: independent Σ of every creator fee
+    uint256 public ghost_creatorFeeSum; // creator leg: independent Σ of every creator fee
     uint256 public ghost_creatorClaimed; // creator fees paid OUT of the vault (0 under hostile creator)
     uint256 public ghost_totalEthIn; // row 7: accepted buy gross + donations
     uint256 public ghost_totalEthOut; // row 7: sell net proceeds + clamp refunds (excl. treasury/reward/creator)
@@ -72,10 +72,10 @@ contract CreatorFeeCurveHandler is CommonBase, StdAssertions, StdCheats, StdUtil
     uint256 public ghost_graduatedCount; // row 4
     uint256 public ghost_postGradEthDonated; // row 5
     uint256 public ghost_f1BoundaryHits; // F-1: times the two-floor clamp rounded accepted → grossIn
-    bool public ghost_sellRevertedWhilePaused; // sells-never-pausable sentinel (spec §6.5/§12.63)
+    bool public ghost_sellRevertedWhilePaused; // sells-never-pausable sentinel
 
     constructor() {
-        creatorFeeBps = TestConstants.CREATOR_FEE_BPS_TESTNET; // 50 — the ratified §12.63 placeholder
+        creatorFeeBps = TestConstants.CREATOR_FEE_BPS_TESTNET; // 50 — the ratified placeholder
         for (uint256 i = 0; i < 5; ++i) {
             _actors.push(makeAddr(string(abi.encodePacked("cfActor", vm.toString(i)))));
         }
@@ -141,7 +141,7 @@ contract CreatorFeeCurveHandler is CommonBase, StdAssertions, StdCheats, StdUtil
 
     // ─────────────────────────────── Actions ──────────────────────────────────
 
-    /// @notice Buy through the Router. Tracks BOTH fee legs independently (rows 1, 3, 7 + §12.63).
+    /// @notice Buy through the Router. Tracks BOTH fee legs independently (rows 1, 3, 7 +).
     function buy(uint256 actorSeed, uint256 ethIn) external onlyWired useActor(actorSeed) {
         if (curve.phase() != IBondingCurve.Phase.Trading) return;
         ethIn = bound(ethIn, 1 wei, 100 ether);
@@ -149,7 +149,7 @@ contract CreatorFeeCurveHandler is CommonBase, StdAssertions, StdCheats, StdUtil
     }
 
     /// @notice Sell through the Router — MUST succeed for any circulating amount while Trading,
-    ///         regardless of the hostile creator or any pause flag (spec §6.5/§12.63).
+    /// regardless of the hostile creator or any pause flag.
     function sell(uint256 actorSeed, uint256 tokenAmount) external onlyWired useActor(actorSeed) {
         uint256 bal = token.balanceOf(_currentActor);
         if (bal == 0) return;
@@ -175,7 +175,7 @@ contract CreatorFeeCurveHandler is CommonBase, StdAssertions, StdCheats, StdUtil
             _recordK();
         } catch {
             // A phase-Trading, non-zero, min=0 sell has NO legal revert path — a hostile creator can
-            // never freeze it (spec §6.5/§12.63). Any revert here is a violation.
+            // never freeze it. Any revert here is a violation.
             ghost_sellRevertedWhilePaused = true;
         }
     }
@@ -280,12 +280,12 @@ contract CreatorFeeCurveHandler is CommonBase, StdAssertions, StdCheats, StdUtil
         _recordK();
     }
 
-    /// @notice Permissionless treasury-leg sweep (§12.25). Conserves rows 3/7.
+    /// @notice Permissionless treasury-leg sweep. Conserves rows 3/7.
     function sweepFees() external onlyWired {
         curve.sweepFees();
     }
 
-    /// @notice Permissionless creator-leg sweep (§12.63): escrow → vault, credited to the creator.
+    /// @notice Permissionless creator-leg sweep : escrow → vault, credited to the creator.
     ///         ALWAYS succeeds even with a hostile creator (the vault deposit is a non-reverting
     ///         accumulate). Conserves the creator-leg identity: accruedCreatorFees drops by `swept`,
     ///         vault.balanceOf(creator) rises by the same.
@@ -306,7 +306,7 @@ contract CreatorFeeCurveHandler is CommonBase, StdAssertions, StdCheats, StdUtil
         }
     }
 
-    /// @notice Permissionless graduation (spec §6.2). Rows 3, 4.
+    /// @notice Permissionless graduation. Rows 3, 4.
     function graduate(uint256 actorSeed) external onlyWired useActor(actorSeed) {
         uint256 balBefore = _currentActor.balance;
         try curve.graduate() {
@@ -330,13 +330,13 @@ contract CreatorFeeCurveHandler is CommonBase, StdAssertions, StdCheats, StdUtil
         }
     }
 
-    /// @notice BOUNDARY: time travel across the anti-sniper window (timestamp-based, §12.18).
+    /// @notice BOUNDARY: time travel across the anti-sniper window (timestamp-based).
     function warpTime(uint256 secondsForward) external onlyWired {
         secondsForward = bound(secondsForward, 1, 1 hours);
         vm.warp(block.timestamp + secondsForward);
     }
 
-    /// @notice BOUNDARY: owner toggles pauseBuys — sells must remain unaffected (spec §6.5).
+    /// @notice BOUNDARY: owner toggles pauseBuys — sells must remain unaffected.
     function setPauseBuys(bool paused) external onlyWired {
         vm.prank(safeOwner);
         factory.setPauseBuys(paused);

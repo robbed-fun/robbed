@@ -15,7 +15,7 @@ import {TestConstants} from "test/harness/TestConstants.sol";
 import {MockArbSys} from "test/mocks/MockArbSys.sol";
 import {FeeAboveCap, CreatorVaultUnset, AlreadyInitialized, ZeroAddress} from "src/errors/Errors.sol";
 
-/// @title CreatorFee — full-stack Phase-2 creator-fee unit suite (spec §7, §12.63)
+/// @title CreatorFee — full-stack Phase-2 creator-fee unit suite
 /// @notice Exercises the additive two-leg fee split, the ADDITIVE ≤2% cap (`== 200` accepted, `> 200`
 ///         reverts, constructor + both setters), the hostile-creator no-freeze guarantee, the
 ///         pull-payment sweep→vault→claim flow, graduation with a live creator escrow, and
@@ -23,7 +23,7 @@ import {FeeAboveCap, CreatorVaultUnset, AlreadyInitialized, ZeroAddress} from "s
 contract CreatorFeeTest is Test {
     uint256 internal constant BPS = 10_000;
     uint16 internal constant TREASURY_BPS = 100; // TestConstants.TRADE_FEE_BPS
-    uint16 internal constant CREATOR_BPS = 50; // ratified §12.63 testnet placeholder
+    uint16 internal constant CREATOR_BPS = 50; // ratified testnet placeholder
     /// @dev `_realEthReserves` storage slot (forge inspect BondingCurve storageLayout) — used to pin
     ///      the F-1 boundary `remaining` for the regression cases below.
     uint256 internal constant REAL_ETH_SLOT = 2;
@@ -236,7 +236,7 @@ contract CreatorFeeTest is Test {
 
     // ─────────────────────── hostile creator: no freeze ─────────────────────────
 
-    /// @notice THE §12.63 proof (mirror of the TM-T1 hostile-treasury test): a reverting creator can
+    /// @notice THE proof (mirror of the TM-T1 hostile-treasury test) a reverting creator can
     ///         never freeze a buy or a sell. Fees accrue in-contract on the trade path (no creator or
     ///         vault call), so trading is unaffected; only the downstream claim reverts.
     function test_sellAndBuy_succeed_underHostileCreator() public {
@@ -327,7 +327,7 @@ contract CreatorFeeTest is Test {
         // The F-1 clamp boundary depends only on (grossIn, remaining, totBps 150), NOT on G: net(grossIn)
         // exceeds `remaining` by 1 wei so the clamp fires, and ceilDiv(remaining·1e4/9850) == grossIn+1 so
         // acceptedEthGross clamps to grossIn (refund 0). remaining (1.97 ETH) sits below the G = 5.749 ETH
-        // (§12.67, retargeted) target so `_forceRemaining` can position the curve there.
+        // (retargeted) target so `_forceRemaining` can position the curve there.
         _f1Case(1_999_999_999_999_999_999, 1_970_000_000_000_000_000); // accepted rounds to grossIn+1
     }
 

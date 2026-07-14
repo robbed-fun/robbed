@@ -1,7 +1,7 @@
 /**
  * Small synchronous crypto helpers (node:crypto, available in Bun). Used by the
- * keyset-cursor signer (api.md §5) and the stateless admin session cookie
- * (§6.2). Timing-safe compare on every verify.
+ * keyset-cursor signer (api.md) and the stateless admin session cookie
+ *. Timing-safe compare on every verify.
  */
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 

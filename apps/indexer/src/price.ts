@@ -1,10 +1,10 @@
 /**
  * Price derivation — ETH per token, uniform across venues so the candle series
- * is venue-continuous by construction (indexer.md §3.2, §4.3).
+ * is venue-continuous by construction (indexer.md).
  *
  * All robbed tokens and WETH are 18-decimal, so ratios are pure numbers with
- * no decimal adjustment (indexer.md §3.4 "18/18 decimals"). Prices are
- * DISPLAY-ONLY doubles (indexer.md §3.1); we scale through bigint first to keep
+ * no decimal adjustment (indexer.md "18/18 decimals"). Prices are
+ * DISPLAY-ONLY doubles (indexer.md); we scale through bigint first to keep
  * ~18 fractional digits before the single lossy Number() conversion.
  */
 
@@ -13,7 +13,7 @@ const Q192 = 1n << 192n;
 
 /**
  * Curve spot price from POST-trade virtual reserves carried in the `Trade`
- * event (indexer.md §3.2): `price = virtualEth / virtualToken`. Zero hot-path
+ * event (indexer.md) `price = virtualEth / virtualToken`. Zero hot-path
  * RPC reads. Returns 0 if reserves are degenerate (guards div-by-zero).
  */
 export function curvePriceEth(virtualEth: bigint, virtualToken: bigint): number {
@@ -22,7 +22,7 @@ export function curvePriceEth(virtualEth: bigint, virtualToken: bigint): number 
 }
 
 /**
- * V3 price from `sqrtPriceX96` (indexer.md §3.2/§3.4, X-2 orientation).
+ * V3 price from `sqrtPriceX96` (indexer.md, X-2 orientation).
  *
  * The raw ratio `(sqrtPriceX96 / 2^96)^2` is **token1 per token0**. We want
  * WETH per token:

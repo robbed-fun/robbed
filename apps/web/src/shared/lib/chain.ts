@@ -5,7 +5,7 @@ import { env } from "./env";
 
 /**
  * Custom viem/wagmi chain for the Robinhood Chain target of THIS build — spec
- * §2/§9, CLAUDE.md "Chain facts", §12.55 (env selects the chain, the shared
+ *, CLAUDE.md "Chain facts", (env selects the chain, the shared
  * registry defines it). Gas token ETH; Blockscout explorer; RPC from env.
  *
  * Docs-first basis: viem `defineChain` (viem.sh/docs/chains/introduction) +
@@ -16,12 +16,12 @@ import { env } from "./env";
  * `rpcUrls.default.http[0]` / `blockExplorers`, so every field below must be
  * the OFFICIAL value for the target chain or wallets will reject the add.
  *
- * TARGET SELECTION (§12.55): `env.chainId()` — `NEXT_PUBLIC_CHAIN_ID` when set
+ * TARGET SELECTION : `env.chainId()` — `NEXT_PUBLIC_CHAIN_ID` when set
  * (validated against the shared deployment registry; testnet stack injects
  * 46630), else the compile-time mainnet `CHAIN_ID` (4663). One build targets
  * exactly one chain.
  *
- * ADDRESS POLICY (§9 / web.md §2.3): NO address literal lives here anymore —
+ * ADDRESS POLICY (/ web.md) NO address literal lives here anymore —
  * WETH resolves from the shared per-chain deployment registry
  * (`getDeployment(chainId).external.weth`, anti-drift rule 2). Every other
  * contract address comes from `shared/config/addresses.ts` (same registry).
@@ -35,9 +35,9 @@ import { env } from "./env";
 const TARGET_CHAIN_ID = env.chainId();
 
 /**
- * Official per-chain facts — TRANSCRIBED, never invented (§2/§13):
+ * Official per-chain facts — TRANSCRIBED, never invented :
  * - 4663:  CLAUDE.md "Chain facts" (explorer robinhoodchain.blockscout.com).
- * - 46630: docs/developers/runbooks/testnet.md §1 / spec §12.49 (docs.robinhood.com/chain/
+ * - 46630: docs/developers/runbooks/testnet.md / (docs.robinhood.com/chain
  *   connecting, retrieved 2026-07-11): name "Robinhood Chain Testnet", explorer
  *   explorer.testnet.chain.robinhood.com.
  * No entry for 31337: the local stack is an anvil FORK of 4663 (keeps chain id
@@ -60,7 +60,7 @@ if (!facts) {
   throw new Error(
     `[robbed/web] no official chain facts (name/explorer) recorded for chain id ` +
       `${TARGET_CHAIN_ID}. Web builds target 4663 (mainnet) or 46630 (testnet); ` +
-      `facts come from CLAUDE.md / docs/developers/runbooks/testnet.md §1 — never invented.`,
+      `facts come from CLAUDE.md / docs/developers/runbooks/testnet.md — never invented.`,
   );
 }
 
@@ -89,7 +89,7 @@ export const robinhoodChain = defineChain({
     ...(deployment ? { weth9: { address: deployment.external.weth } } : {}),
     // multicall3: intentionally omitted until M3-1 web-7 confirms canonical
     // Multicall3 (0xcA11…) is deployed on 4663. Trust-panel batch reads fall
-    // back to parallel `readContract` until then (web.md §9.7 / decide-yourself).
+    // back to parallel `readContract` until then (web.md / decide-yourself).
   },
 });
 

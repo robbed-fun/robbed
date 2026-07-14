@@ -1,5 +1,5 @@
 /**
- * Gate-7 metrics suite (indexer.md §9.4, spec §10 gate 7; M2-12). Asserts the
+ * Gate-7 metrics suite (indexer.md, gate 7; M2-12). Asserts the
  * named series are exposed (incl. the v1.2 funding-cluster share), the cluster
  * threshold logic (M0 governance X%/Y%), the in-process hooks, and that the
  * /metrics render merges the DB snapshot. Advisory — no metric gates chain state.

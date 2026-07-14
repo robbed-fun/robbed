@@ -17,8 +17,8 @@ import {
 } from "@/entities/trade/model/trades";
 
 /**
- * M3-7 · web.md §4 trade-lifecycle state machine. Each block proves one of the
- * §4 invariants against the PURE reducer (no React, no network, deterministic).
+ * M3-7 · web.md trade-lifecycle state machine. Each block proves one of the
+ * invariants against the PURE reducer (no React, no network, deterministic).
  */
 
 const TOKEN = "0x00000000000000000000000000000000000000aa";
@@ -100,7 +100,7 @@ function byId(s: TradesState, id: string) {
 
 // ── Invariant 1: immediate render ───────────────────────────────────────────
 
-describe("§4 invariant 1 — immediate render", () => {
+describe(" invariant 1 — immediate render", () => {
   it("submit with a txHash inserts a pending optimistic row synchronously", () => {
     const s = run([{ type: "submit", trade: submitInput(), now: 0 }]);
     const t = only(s);
@@ -132,7 +132,7 @@ describe("§4 invariant 1 — immediate render", () => {
 
 // ── receipt paths ───────────────────────────────────────────────────────────
 
-describe("§4 receipt paths", () => {
+describe(" receipt paths", () => {
   it("receipt success ⇒ optimistic:soft-confirmed (values still OUR estimate)", () => {
     const s = run([
       { type: "submit", trade: submitInput(), now: 0 },
@@ -170,7 +170,7 @@ describe("§4 receipt paths", () => {
 
 // ── Invariant 2: reconcile, never trust self ────────────────────────────────
 
-describe("§4 invariant 2 — reconcile REPLACES optimistic values with indexed truth", () => {
+describe(" invariant 2 — reconcile REPLACES optimistic values with indexed truth", () => {
   it("WS trade replaces amounts/price with indexed values", () => {
     const s = run([
       { type: "submit", trade: submitInput(), now: 0 },
@@ -217,7 +217,7 @@ describe("§4 invariant 2 — reconcile REPLACES optimistic values with indexed 
 
 // ── Invariant 3: never final while soft-confirmed ───────────────────────────
 
-describe("§4 invariant 3 — never final (or posted) while only soft-confirmed", () => {
+describe(" invariant 3 — never final (or posted) while only soft-confirmed", () => {
   it("watermark past the block does NOT upgrade an UN-reconciled optimistic row", () => {
     const s = run([
       { type: "submit", trade: submitInput(), now: 0 },
@@ -288,7 +288,7 @@ describe("§4 invariant 3 — never final (or posted) while only soft-confirmed"
 
 // ── Invariant 4: never drop on contradiction ────────────────────────────────
 
-describe("§4 invariant 4 — contradiction UPDATES, never drops", () => {
+describe(" invariant 4 — contradiction UPDATES, never drops", () => {
   it("a contradicting indexed row updates values + shimmers, keeps the row", () => {
     const s = run([
       { type: "submit", trade: submitInput(), now: 0 },
@@ -325,9 +325,9 @@ describe("§4 invariant 4 — contradiction UPDATES, never drops", () => {
   });
 });
 
-// ── §4.5 WS silence → REST-heal ─────────────────────────────────────────────
+// ── WS silence → REST-heal ─────────────────────────────────────────────
 
-describe("§4.5 WS silence — keep the row, REST-heal, escalate only on confirmed absence", () => {
+describe(" WS silence — keep the row, REST-heal, escalate only on confirmed absence", () => {
   it("no WS within WS_SILENCE_MS → awaitingIndex, row kept, flagged for heal", () => {
     const s = run([
       { type: "submit", trade: submitInput(), now: 0 },
@@ -390,9 +390,9 @@ describe("§4.5 WS silence — keep the row, REST-heal, escalate only on confirm
   });
 });
 
-// ── §12.20 watermark upgrade of multiple held rows (O(1) broadcast) ──────────
+// ── watermark upgrade of multiple held rows (O(1) broadcast) ──────────
 
-describe("§12.20 watermark broadcast upgrades every held row locally", () => {
+describe(" watermark broadcast upgrades every held row locally", () => {
   it("one watermark advance posts/finalizes all reconciled rows at once", () => {
     const s = run([
       { type: "submit", trade: submitInput({ id: "a" }), now: 0 },

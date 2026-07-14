@@ -32,11 +32,11 @@ import {
 import { useCandleFeed } from "../model/use-candle-feed";
 
 /**
- * Venue-continuous price chart (§5.2). ONE `CandlestickSeries` across graduation:
+ * Venue-continuous price chart. ONE `CandlestickSeries` across graduation:
  * the indexer merges curve + V3 events server-side, so there is no venue seam,
  * gap, or second series here. The only venue artifact is a single labeled marker
  * at the graduation timestamp ("Graduated to Uniswap V3") — an annotation, not
- * data (web.md §3.2).
+ * data (web.md).
  *
  * Docs-first (lightweight-charts v5, verified 2026-07-10): v5 uses
  * `chart.addSeries(CandlestickSeries, …)` (not the removed `addCandlestickSeries`)
@@ -165,9 +165,9 @@ export function PriceChart({
   const empty = !feed.isLoading && (feed.data?.candles.length ?? 0) === 0;
 
   return (
-    // ROBBED_ terminal chart panel (redesign mockup, spec §12.50 — panel "2a"): interval TabBar +
+    // ROBBED_ terminal chart panel (redesign mockup, — panel "2a") interval TabBar +
     // "price / ETH" micro-label over one venue-continuous series.
-    // DECISION (hoodpad-frontend): the mockup shows 1H/4H/1D/ALL, but the data
+    // DECISION (robbed-frontend): the mockup shows 1H/4H/1D/ALL, but the data
     // contract is INTERVAL-based (`CANDLE_INTERVALS` from @robbed/shared / the
     // candles API), not range-based — the buttons switch candle granularity. We
     // keep the real intervals (never redeclare the shared contract) rendered

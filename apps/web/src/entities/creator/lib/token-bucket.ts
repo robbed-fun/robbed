@@ -1,7 +1,7 @@
 import type { CreatorTokenClaimable, UsdValue } from "@robbed/shared";
 
 /**
- * A single post-graduation creator-fee bucket to render + claim (spec §12.69).
+ * A single post-graduation creator-fee bucket to render + claim.
  * Post-grad V3 fees are split 50/50 treasury/creator at `LPFeeVault.collect()`
  * and credited in the pull-payment `CreatorVault` as a per-`(creator, ERC20)`
  * balance — the aggregated WETH leg (buy-side) OR a graduated launch-token leg
@@ -20,7 +20,7 @@ export interface CreatorTokenBucket {
   vault: string;
   /** Live claimable, wei of `token` (`CreatorVault.tokenBalanceOf`, AUTHORITATIVE). */
   claimable: string;
-  /** USD mirror — populated only for the WETH leg (§12.69(C)); null for launch-token legs. */
+  /** USD mirror — populated only for the WETH leg; null for launch-token legs. */
   claimableUsd: UsdValue | null;
   /** True when `token` is canonical WETH (the aggregated buy-leg bucket). */
   isWeth: boolean;

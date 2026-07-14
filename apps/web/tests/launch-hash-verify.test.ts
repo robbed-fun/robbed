@@ -8,7 +8,7 @@ import {
 } from "@/features/launch-token";
 
 /**
- * §12.19 NORMATIVE — the client re-verifies the API's metadata hash with the
+ * NORMATIVE — the client re-verifies the API's metadata hash with the
  * SHARED canonicalizer BEFORE signing, and REFUSES to sign on any mismatch. These
  * prove the guard both accepts a correct server result and BLOCKS a tampered one
  * (hash OR canonical bytes) — a buggy/malicious server can never commit the user
@@ -19,7 +19,7 @@ const input = {
   name: "Cash Cat",
   ticker: "CASHCAT",
   description: "meow",
-  imageUrl: "https://cdn.hoodpad.example/images/0xabc.webp",
+  imageUrl: "https://cdn.robbed.example/images/0xabc.webp",
   imageHash: `0x${"ab".repeat(32)}`,
 } as const;
 
@@ -30,7 +30,7 @@ function honestServerResult(document: Parameters<typeof metadataHash>[0]) {
   };
 }
 
-describe("client hash re-verification (§12.19)", () => {
+describe("client hash re-verification ", () => {
   it("accepts a correct server result → ok, localHash present", () => {
     const doc = buildMetadataDocument(input);
     const result = verifyMetadataHash(doc, honestServerResult(doc));

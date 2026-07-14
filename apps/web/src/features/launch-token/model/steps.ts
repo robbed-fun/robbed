@@ -1,16 +1,16 @@
 /**
- * Launch stepper state (§5.3: "form → upload/pin → sign → live"). Pure enum +
+ * Launch stepper state ("form → upload/pin → sign → live"). Pure enum +
  * label map so the progression is testable and the UI stays presentational.
  */
 export type LaunchStep =
   | "idle" // filling the form
   | "uploading" // POST /v1/uploads/image (eager, on file select)
   | "pinning" // POST /v1/metadata (canonicalize + pin)
-  | "verifying" // §12.19 client hash re-verification
+  | "verifying" // client hash re-verification
   | "verify-failed" // BLOCKED — hash/canonical mismatch, never signed
   | "signing" // awaiting the wallet signature
   | "pending" // tx broadcast, awaiting the RPC receipt
-  | "soft-confirmed" // receipt success — token tradeable <1s (§5.3)
+  | "soft-confirmed" // receipt success — token tradeable <1s
   | "indexing" // waiting for the token to be indexed before redirect (grace)
   | "live" // indexed — redirecting to /t/[address]
   | "live-unindexed" // soft-confirmed but not yet indexed past the grace window
@@ -43,9 +43,9 @@ export function launchStepLabel(step: LaunchStep): string {
       return "Awaiting signature";
     case "pending":
       return "Confirming transaction";
-    // §12.56: the visible "Soft-confirmed" launch label is dropped (the internal
+    // : the visible "Soft-confirmed" launch label is dropped (the internal
     // `soft-confirmed` step name is unchanged). This node means "receipt success
-    // — token tradeable now" (§5.3), so it reads as "Tradeable".
+    // — token tradeable now", so it reads as "Tradeable".
     case "soft-confirmed":
       return "Tradeable";
     case "indexing":

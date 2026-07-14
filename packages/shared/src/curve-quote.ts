@@ -1,13 +1,13 @@
 /**
- * curve-quote — pure TS port of contracts/src/libs/CurveMath.sol (spec §6.2,
- * §6.4; contracts.md §2.3). BYTE-IDENTICAL semantics to the on-chain library so
+ * curve-quote — pure TS port of contracts/src/libs/CurveMath.sol (,
+ *; contracts.md). BYTE-IDENTICAL semantics to the on-chain library so
  * the client can preview a trade WITHOUT a chain round-trip:
  *  - M3-6 launch initial-buy preview + a non-zero `minTokensOut` slippage floor
  *    for a NOT-YET-DEPLOYED token, seeded by the factory's initial virtual
- *    reserves (`VIRTUAL_ETH_0` / `VIRTUAL_TOKEN_0`, contracts.md §2.2);
+ * reserves (`VIRTUAL_ETH_0` / `VIRTUAL_TOKEN_0`, contracts.md);
  *  - a reusable pre-grad quote for any live curve given its current reserves.
  *
- * ── Rounding — THE load-bearing invariant (CurveMath.sol @dev; §6.2/§12.25) ──
+ * ── Rounding — THE load-bearing invariant (CurveMath.sol @dev) ──
  * Both primitives solve the constant-product relation `newA · newB = k` for the
  * reserve the trader does NOT supply and round THAT retained reserve UP (ceil).
  * Rounding the retained reserve up == rounding the paid-out amount DOWN, so every
@@ -21,15 +21,15 @@
  * k non-decreasing (buy shown; sell symmetric): newVirtualToken = ceil(k/(vE+e))
  * ≥ k/(vE+e) ⇒ k' = (vE+e)·newVirtualToken ≥ k. No underflow: since vE+e ≥ vE the
  * real quotient is ≤ vT and its ceil is ≤ vT (integer upper bound), so the
- * subtraction never underflows and tokensOut ≥ 0. (contracts.md §2.3.)
+ * subtraction never underflows and tokensOut ≥ 0. (contracts.md)
  *
  * Fidelity note: {@link buyTokensOut} / {@link sellEthOut} mirror the CurveMath
  * primitives ONLY (no fee, no graduation clamp — those live in {BondingCurve}).
  * {@link previewBuy} / {@link previewSell} add the in-contract fee (floor,
- * contracts.md §2.3 §12.25) for a display quote. They deliberately do NOT apply
+ * contracts.md) for a display quote. They deliberately do NOT apply
  * the graduation-boundary clamp: the clamp only bites within the last
  * `GRADUATION_ETH − realEthReserves` of the curve; a launch initial-buy is far
- * from it, and the on-chain `quoteBuy` view (contracts.md §2.3) stays
+ * from it, and the on-chain `quoteBuy` view (contracts.md) stays
  * authoritative near graduation. Callers previewing a near-graduation buy must
  * use the chain view, not this module.
  */
@@ -44,7 +44,7 @@ export class CurveQuoteZeroReserveError extends Error {
   }
 }
 
-/** Basis-points denominator (contracts.md §2.3 fee: `floor(x · bps / 10_000)`). */
+/** Basis-points denominator (contracts.md fee: `floor(x · bps / 10_000)`). */
 const BPS_DENOMINATOR = 10_000n;
 
 /**
@@ -114,10 +114,10 @@ export interface SellPreview {
 }
 
 /**
- * Fee-inclusive buy preview (contracts.md §2.3 buy order: fee first, then curve
+ * Fee-inclusive buy preview (contracts.md buy order: fee first, then curve
  * math on the net). Mirrors the curve EXCEPT the graduation clamp (see module
  * @dev). Use `tokensOut` to derive a slippage-protected `minTokensOut`.
- * @param tradeFeeBps The curve's snapshot `TRADE_FEE_BPS` (per-curve, §12.40d).
+ * @param tradeFeeBps The curve's snapshot `TRADE_FEE_BPS` (per-curve).
  */
 export function previewBuy(
   virtualEth: bigint,
@@ -133,10 +133,10 @@ export function previewBuy(
 }
 
 /**
- * Fee-inclusive sell preview (contracts.md §2.3 sell order: curve math on the
+ * Fee-inclusive sell preview (contracts.md sell order: curve math on the
  * token leg first, then fee on the gross ETH out). Use `ethOut` to derive a
  * slippage-protected `minEthOut`.
- * @param tradeFeeBps The curve's snapshot `TRADE_FEE_BPS` (per-curve, §12.40d).
+ * @param tradeFeeBps The curve's snapshot `TRADE_FEE_BPS` (per-curve).
  */
 export function previewSell(
   virtualEth: bigint,

@@ -16,10 +16,10 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:ERR-14 — WS silence on an optimistic trade (§4.1 rule 5)
+// @flow:ERR-14 — WS silence on an optimistic trade (rule 5)
 // assertable-layers: on-chain · indexed · UI  (full 3-layer)
 //
-// §12.56 RE-ANCHOR (2026-07-12): the old anchor — hovering the visible
+// RE-ANCHOR (2026-07-12) the old anchor — hovering the visible
 // "Soft-confirmed" chip to read its "awaiting index" tooltip — is GONE. The chip is
 // removed and the soft-confirmed tier renders NO badge, so the awaiting-index note
 // (which is only ever APPENDED to a rendered badge's tooltip) has no visible surface
@@ -64,7 +64,7 @@ test(
       await sel.amountInput(page).fill("0.02");
       await sel.submitTrade(page).click();
 
-      // §12.56: the removed "Soft-confirmed" chip is the OLD anchor — a fresh
+      // : the removed "Soft-confirmed" chip is the OLD anchor — a fresh
       // soft-confirmed trade now surfaces as the feed ROW itself (no settlement
       // chip). The optimistic BUY row lands in the live head.
       const optimisticRow = sel.tradeRows(page).first();
@@ -73,7 +73,7 @@ test(
       optimisticSeen = true;
 
       // The removed chip must never render, and the row must never read
-      // unqualified-final while soft-confirmed (§2.1/§12.20) — the never-final-
+      // unqualified-final while soft-confirmed — the never-final-
       // while-soft rule holds trivially now (no chip until an indexed higher tier).
       await expect(page.getByText(copy.softConfirmed)).toHaveCount(0);
       await expect(page.getByText(/\bfinal(ized)?\b(?!.*soft)/i)).toHaveCount(0);

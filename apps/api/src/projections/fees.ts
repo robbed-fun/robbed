@@ -1,5 +1,5 @@
 /**
- * Fee-collection aggregation for GET /v1/tokens/:address/fees (§6.4 treasury
+ * Fee-collection aggregation for GET /v1/tokens/:address/fees (treasury
  * dashboard). `collected` sums indexed `fee_collections`; `uncollected` is a
  * live NPM `tokensOwed` RPC read (cold, cached 60s — never the hot path) added
  * by the route. Uses the frozen `feeCollectionEntrySchema` shape.

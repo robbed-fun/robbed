@@ -11,14 +11,14 @@ import {
   test,
 } from "../harness";
 
-// @flow:CFEE-4 — Set-once, unspoofable creator registration (tokenId → creator) · §12.69(B)
+// @flow:CFEE-4 — Set-once, unspoofable creator registration (tokenId → creator) ·
 // assertable-layers: on-chain   (indexed · UI N/A — a contract-level mapping invariant — waiver)
 //
-// PENDING PHASE-2 (@pending:phase2): authored against the ratified §12.69(B) —
+// PENDING PHASE-2 (@pending:phase2) authored against the ratified —
 // the migrator registers `tokenId → creator` at graduation, set-once + migrator-
 // authenticated — and `test.fixme`-guarded. This is a pure on-chain invariant: a
 // NON-migrator caller can neither set nor overwrite the mapping, and the recorded
-// creator equals the graduating curve's creator. Uses the §12.69 stub surface
+// creator equals the graduating curve's creator. Uses the stub surface
 // (`creatorOf` / migrator-gated `registerCreator`) — reconcile names at un-skip.
 test(
   "CFEE-4 creatorOf(tokenId) equals the true creator and a non-migrator cannot spoof or overwrite it",

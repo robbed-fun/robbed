@@ -6,7 +6,7 @@ import {LaunchToken} from "../../src/LaunchToken.sol";
 import {ILaunchToken} from "../../src/interfaces/ILaunchToken.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-/// @title LaunchToken unit tests (M1-5) — spec §6.1, §8.3; contracts.md §2.1
+/// @title LaunchToken unit tests (M1-5) —, contracts.md
 /// @notice Proves the owned invariants: fixed 1B supply minted once to the curve; ownerless (no
 ///         `Ownable`); `metadataHash` immutable; no `mint`/`burn` selectors exist; EIP-2612 permit
 ///         works; 18 decimals; no transfer tax/hook. These back the M1-5 "Definition of done".

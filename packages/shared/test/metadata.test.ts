@@ -1,6 +1,6 @@
 /**
- * Canonicalization + hash unit tests (indexer.md §9.1; api.md §8).
- * Dual computation (client pre-sign / indexer verify) is normative (§12.19) —
+ * Canonicalization + hash unit tests (indexer.md; api.md).
+ * Dual computation (client pre-sign / indexer verify) is normative —
  * these fixtures are the shared golden set.
  */
 import { describe, expect, it } from "bun:test";
@@ -20,7 +20,7 @@ const baseMeta = {
   version: 1,
   name: "Cash Cat",
   ticker: "CASHCAT",
-  imageUrl: "https://cdn.hoodpad.example/images/0xabc.webp",
+  imageUrl: "https://cdn.robbed.example/images/0xabc.webp",
   imageHash: IMAGE_HASH,
 } as const;
 
@@ -96,7 +96,7 @@ describe("numbers & invalid values", () => {
   });
 });
 
-describe("image-hash field (§8.3: image integrity rides inside the JSON)", () => {
+describe("image-hash field (image integrity rides inside the JSON)", () => {
   it("imageHash participates in the commitment — changing it changes the hash", () => {
     const h1 = metadataHash({ ...baseMeta });
     const h2 = metadataHash({ ...baseMeta, imageHash: `0x${"cd".repeat(32)}` });
@@ -104,7 +104,7 @@ describe("image-hash field (§8.3: image integrity rides inside the JSON)", () =
   });
 });
 
-describe("re-verification path (indexer.md §6.1: fetch → parse → canonicalize → keccak)", () => {
+describe("re-verification path (indexer.md : fetch → parse → canonicalize → keccak)", () => {
   it("round-trips: parse(canonical) re-canonicalizes to identical bytes and hash", () => {
     for (const f of METADATA_GOLDEN_FIXTURES) {
       const refetched = JSON.parse(f.canonical) as JsonValue;
@@ -131,7 +131,7 @@ describe("re-verification path (indexer.md §6.1: fetch → parse → canonicali
   });
 });
 
-describe("tokenMetadataSchema (fixed field set + version tag, api.md §3.2)", () => {
+describe("tokenMetadataSchema (fixed field set + version tag, api.md)", () => {
   it("accepts every golden fixture input", () => {
     for (const f of METADATA_GOLDEN_FIXTURES) {
       expect(tokenMetadataSchema.safeParse(f.input).success).toBe(true);
@@ -142,7 +142,7 @@ describe("tokenMetadataSchema (fixed field set + version tag, api.md §3.2)", ()
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, extra: "nope" }).success).toBe(false);
   });
 
-  it("enforces name ≤32 BYTES / ticker ≤10 BYTES (§12.30) at the boundary", () => {
+  it("enforces name ≤32 BYTES / ticker ≤10 BYTES at the boundary", () => {
     // ASCII boundary: 32 bytes ok, 33 bytes rejected (name)
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, name: "x".repeat(32) }).success).toBe(true);
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, name: "x".repeat(33) }).success).toBe(false);
@@ -177,7 +177,7 @@ describe("tokenMetadataSchema (fixed field set + version tag, api.md §3.2)", ()
   });
 });
 
-describe("metadata version frozen at 1 (§12.31 / X-13 close-out — negative path)", () => {
+describe("metadata version frozen at 1 (/ X-13 close-out — negative path)", () => {
   it("rejects version omitted, version:0, version:2 — the literal is a real gate", () => {
     const { version: _v, ...noVersion } = baseMeta;
     expect(tokenMetadataSchema.safeParse(noVersion).success).toBe(false);

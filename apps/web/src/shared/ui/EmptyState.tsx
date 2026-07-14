@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/shared/lib/utils";
 
-/** Neutral empty-state (§5.1 "No tokens match." etc.). Presentational. */
+/** Neutral empty-state ("No tokens match." etc). Presentational. */
 export function EmptyState({
   title,
   description,

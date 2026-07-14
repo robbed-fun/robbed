@@ -1,6 +1,6 @@
 /**
- * Canonical metadata JSON — THE shared implementation (spec §8.3, §12.19;
- * api.md §3.2/§5; indexer.md §6).
+ * Canonical metadata JSON — THE shared implementation (,
+ * api.md; indexer.md).
  *
  * Dual computation is normative:
  * - the API canonicalizes + hashes before writing `metadata/{hash}.json` to R2;
@@ -28,9 +28,9 @@ import {
 } from "./constants";
 import { byteBoundedString } from "./text";
 
-// ── Schema (api.md §5 metadata.ts row: name/ticker/description/links/imageUrl/imageHash/version) ──
+// ── Schema (api.md metadata.ts row: name/ticker/description/links/imageUrl/imageHash/version) ──
 
-/** Optional links, URL-validated (api.md §3.2: `links: {website?,x?,telegram?}`). */
+/** Optional links, URL-validated (api.md : `links: {website?,x?,telegram?}`). */
 export const tokenMetadataLinksSchema = z.strictObject({
   website: z.url().optional(),
   x: z.url().optional(),
@@ -40,15 +40,15 @@ export type TokenMetadataLinks = z.infer<typeof tokenMetadataLinksSchema>;
 
 /**
  * The canonical metadata JSON document ("fixed field set + version tag",
- * api.md §3.2 step 1). Strict: unknown keys are rejected — the field set is
+ * api.md step 1). Strict: unknown keys are rejected — the field set is
  * part of the hash commitment.
  *
- * `imageHash` = keccak256 of the RE-ENCODED image bytes (api.md §3.1 step 3);
- * image integrity rides inside this JSON (spec §8.3), lowercase hex.
+ * `imageHash` = keccak256 of the RE-ENCODED image bytes (api.md step 3);
+ * image integrity rides inside this JSON, lowercase hex.
  */
 export const tokenMetadataSchema = z.strictObject({
   version: z.literal(METADATA_VERSION),
-  // Byte-length limits (§12.30) — mirror the on-chain gate exactly (text.ts).
+  // Byte-length limits — mirror the on-chain gate exactly (text.ts).
   name: byteBoundedString(METADATA_NAME_MAX, "name"),
   ticker: byteBoundedString(METADATA_TICKER_MAX, "ticker"),
   description: z.string().max(METADATA_DESCRIPTION_MAX).optional(),
@@ -58,7 +58,7 @@ export const tokenMetadataSchema = z.strictObject({
 });
 export type TokenMetadata = z.infer<typeof tokenMetadataSchema>;
 
-// ── Canonicalization (RFC 8785-style; single implementation, spec §12.19) ───
+// ── Canonicalization (RFC 8785-style; single implementation) ───
 
 /** JSON value domain accepted by the canonicalizer. */
 export type JsonValue =
@@ -78,10 +78,10 @@ function canonicalizeValue(value: unknown, path: string): string {
       if (!Number.isFinite(value)) {
         throw new TypeError(`Non-finite number at ${path} cannot be canonicalized`);
       }
-      // ECMAScript Number::toString — exactly what JCS (RFC 8785 §3.2.2.3) mandates.
+      // ECMAScript Number::toString — exactly what JCS (RFC 8785) mandates.
       return JSON.stringify(value);
     case "string":
-      // JSON.stringify string escaping matches JCS (RFC 8785 §3.2.2.2):
+      // JSON.stringify string escaping matches JCS (RFC 8785):
       // two-char escapes where defined, \u00xx for other control chars,
       // non-ASCII passed through unescaped.
       return JSON.stringify(value);
@@ -96,7 +96,7 @@ function canonicalizeValue(value: unknown, path: string): string {
           })
           .join(",")}]`;
       }
-      // Plain object: sort keys by UTF-16 code units (RFC 8785 §3.2.3 —
+      // Plain object: sort keys by UTF-16 code units (RFC 8785 —
       // default JS string comparison), drop undefined-valued properties.
       const entries = Object.keys(value as Record<string, unknown>)
         .sort()
@@ -128,7 +128,7 @@ export function canonicalizeMetadata(obj: JsonValue): Uint8Array {
 
 /**
  * keccak256 of the canonical bytes — the on-chain `metadataHash` commitment
- * emitted in `TokenCreated` and stored immutably in LaunchToken (§8.3).
+ * emitted in `TokenCreated` and stored immutably in LaunchToken.
  */
 export function metadataHash(obj: JsonValue): `0x${string}` {
   return keccak256(canonicalizeMetadata(obj));
@@ -136,7 +136,7 @@ export function metadataHash(obj: JsonValue): `0x${string}` {
 
 /**
  * Hash raw fetched bytes AS-IS after re-canonicalization (indexer verify path,
- * indexer.md §6.1 steps 2-3): parse → canonicalize → keccak256. Returns null
+ * indexer.md steps 2-3) parse → canonicalize → keccak256. Returns null
  * if the bytes are not valid JSON (verifier records the error, stays
  * `unfetched`/errored — never `match` without a byte-level comparison).
  */

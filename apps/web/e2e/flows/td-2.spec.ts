@@ -17,7 +17,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:TD-2 — Buy pre-grad (curve): optimistic → reconcile · tx type `buy` (§5.2/§2.1)
+// @flow:TD-2 — Buy pre-grad (curve) optimistic → reconcile · tx type `buy`
 // assertable-layers: on-chain · indexed · UI
 test(
   "TD-2 curve buy renders soft-confirmed then reconciles to indexed truth",
@@ -31,14 +31,14 @@ test(
       await sel.buyTab(page).click();
       await sel.amountInput(page).fill("0.02");
       // Quote rows disclose the curve fee (widget "Fee" row, value from the M0
-      // notebook) + min-received after slippage (§5.2). The old /curve fee/i
+      // notebook) + min-received after slippage. The old /curve fee/i
       // check passed via TrustPanel prose and never asserted the widget.
       await expect(sel.feeRow(page)).toBeVisible();
       await expect(sel.feeRow(page)).toContainText(tradeFeeLabel());
       await expect(sel.minReceivedRow(page)).toBeVisible();
       await sel.submitTrade(page).click();
-      // §12.56: the soft-confirmed chip is removed — the optimistic row landing
-      // is proven by the feed ROW appearing (never rendered final; §2.1 rule 3).
+      // : the soft-confirmed chip is removed — the optimistic row landing
+      // is proven by the feed ROW appearing (never rendered final; rule 3).
       await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 10_000 });
     });
 

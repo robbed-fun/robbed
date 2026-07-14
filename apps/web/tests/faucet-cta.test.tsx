@@ -74,7 +74,7 @@ describe("FaucetCta — zero-balance testnet onboarding", () => {
     expect(official.getAttribute("target")).toBe("_blank");
     expect(official.getAttribute("rel")).toContain("noopener");
 
-    // Verified fallbacks (runbook §3) render as secondary links.
+    // Verified fallbacks (runbook) render as secondary links.
     expect(
       screen.getByRole("link", { name: /Chainlink faucet/ }).getAttribute("href"),
     ).toBe("https://faucets.chain.link/robinhood-testnet");

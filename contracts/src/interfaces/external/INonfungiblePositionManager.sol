@@ -5,16 +5,16 @@ import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 /// @title INonfungiblePositionManager — minimal local interface
 ///        (mint, collect, createAndInitializePoolIfNecessary, positions)
-/// @notice The live NPM address on chain 4663 is an OPEN ITEM (spec §13, contracts.md O-4):
+/// @notice The live NPM address on chain 4663 is an OPEN ITEM (contracts.md O-4):
 ///         pulled from the official Uniswap deployments registry, constructor/config param only.
-/// @dev Minimal local interface, no upstream npm dependency (contracts.md §2 inventory).
-///      `is IERC721` because the LP NFT custody flow (mint recipient = LPFeeVault, spec §6.3)
+/// @dev Minimal local interface, no upstream npm dependency (contracts.md inventory).
+/// `is IERC721` because the LP NFT custody flow (mint recipient = LPFeeVault)
 ///      and the fork lifecycle test need ownerOf/safeTransferFrom semantics.
 interface INonfungiblePositionManager is IERC721 {
     /// @notice Canonical NPM Collect event — transcribed VERBATIM from upstream v3-periphery
     ///         `INonfungiblePositionManager.sol` (github.com/Uniswap/v3-periphery, main).
     /// @dev Declared locally so the M1-3 `events.json` codegen extracts the fragment from a
-    ///      forge artifact instead of hand-writing it (spec §12.15-16; indexer.md §3.5 —
+    /// forge artifact instead of hand-writing it (; indexer.md —
     ///      filtered to LPFeeVault-held tokenIds; feeds the treasury fee-accrual dashboard).
     event Collect(uint256 indexed tokenId, address recipient, uint256 amount0, uint256 amount1);
 
@@ -40,7 +40,7 @@ interface INonfungiblePositionManager is IERC721 {
     }
 
     /// @notice Creates + initializes the pool if needed. Used at token-creation time for the
-    ///         pre-seed defense (spec §6.3.2; contracts.md §2.5 initializePool). If an attacker
+    /// pre-seed defense (contracts.md initializePool). If an attacker
     ///         pre-created the pool at a hostile price, initialization is skipped — tolerated,
     ///         migrate() never trusts slot0.
     function createAndInitializePoolIfNecessary(address token0, address token1, uint24 fee, uint160 sqrtPriceX96)
@@ -49,29 +49,29 @@ interface INonfungiblePositionManager is IERC721 {
         returns (address pool);
 
     /// @notice Mints a new position; graduation mints full-range with amount-mins enforced and
-    ///         recipient = LPFeeVault (spec §6.3, contracts.md §3.4 step 7).
+    /// recipient = LPFeeVault (contracts.md step 7).
     function mint(MintParams calldata params)
         external
         payable
         returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1);
 
-    /// @notice Collects accrued fees; sole call made by LPFeeVault.collect (spec §6.3.4).
+    /// @notice Collects accrued fees; sole call made by LPFeeVault.collect.
     function collect(CollectParams calldata params) external payable returns (uint256 amount0, uint256 amount1);
 
     /// @notice The Uniswap V3 Factory this NPM was deployed against (IPeripheryImmutableState).
-    /// @dev Deploy-time V3 runtime assertion (contracts.md §7.2, spec §12.28):
+    /// @dev Deploy-time V3 runtime assertion (contracts.md):
     ///      `NPM.factory() == v3Factory` proves the registry-sourced NPM and Factory addresses on
     ///      4663 belong to the same deployment — fail-closed otherwise.
     function factory() external view returns (address);
 
     /// @notice The WETH9 this NPM wraps ETH through (IPeripheryImmutableState).
-    /// @dev Deploy-time V3 runtime assertion (contracts.md §7.2, spec §12.28):
+    /// @dev Deploy-time V3 runtime assertion (contracts.md):
     ///      `NPM.WETH9() == 0x0Bd7…AD73` binds the periphery to the canonical 4663 WETH used by the
     ///      curve/migrator WETH leg — fail-closed otherwise.
     function WETH9() external view returns (address);
 
     /// @notice Position data; used by tests to verify the minted full-range position
-    ///         (gate-2 row 6 "position value ratio at target", contracts.md §6).
+    /// (gate-2 row 6 "position value ratio at target", contracts.md).
     function positions(uint256 tokenId)
         external
         view

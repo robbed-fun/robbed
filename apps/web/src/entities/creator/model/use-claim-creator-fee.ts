@@ -11,11 +11,12 @@ import { useCallback, useState } from "react";
 import type { Address } from "viem";
 import { usePublicClient, useWriteContract } from "wagmi";
 
+import { humanizeContractError } from "@/shared/lib/humanize-contract-error";
 import { useConfirmationWatermarks } from "@/shared/lib/ws";
 
 /**
- * Creator-fee CLAIM (§7 / §12.63) → `CreatorVault.claim(creator)`, tracked through
- * the SHARED confirmation TIERS (§2.1/§12.20). This hook returns PRIMITIVE tier
+ * Creator-fee CLAIM → `CreatorVault.claim(creator)`, tracked through
+ * the SHARED confirmation TIERS. This hook returns PRIMITIVE tier
  * info only — a `phase` + a derived `ConfirmationState` + the indexed block — and
  * NEVER imports `entities/trade` (a sibling entity): the widget maps this onto the
  * shared `ConfirmationBadge` (which lives in `entities/trade`) so the same
@@ -101,11 +102,12 @@ export function useClaimCreatorFee(meta: ClaimCreatorFeeTxMeta): {
   return { claim, reset, state: { ...state, confirmationState } };
 }
 
-/** Shared with the post-grad `claimERC20` model (`use-claim-creator-token-fee`). */
+/**
+ * Claim-error copy — delegates to the central humanizer (decodes reverts by
+ * merged-ABI error name, never substring-matched) with the claim-specific
+ * wallet-rejection wording. Shared with the post-grad `claimERC20` model
+ * (`use-claim-creator-token-fee`).
+ */
 export function humanizeClaimError(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  if (/user rejected|denied|rejected the request/i.test(msg)) {
-    return "Claim rejected in wallet.";
-  }
-  return msg.length > 160 ? `${msg.slice(0, 157)}…` : msg;
+  return humanizeContractError(e, { rejectionMessage: "Claim rejected in wallet." });
 }

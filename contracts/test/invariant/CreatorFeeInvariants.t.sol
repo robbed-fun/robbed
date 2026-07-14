@@ -8,8 +8,8 @@ import {ILaunchToken} from "src/interfaces/ILaunchToken.sol";
 import {IRouter} from "src/interfaces/IRouter.sol";
 import {CreatorFeeCurveHandler} from "test/invariant/handlers/CreatorFeeCurveHandler.sol";
 
-/// @title Gate-2 re-run with the Phase-2 creator fee LIVE + a HOSTILE creator (spec §7, §12.63)
-/// @notice The §12.63 audit-surface reopen. One handler drives a fuzzed actor sequence with a
+/// @title Gate-2 re-run with the Phase-2 creator fee LIVE + a HOSTILE creator
+/// @notice The audit-surface reopen. One handler drives a fuzzed actor sequence with a
 ///         non-zero `creatorFeeBps` (the ratified testnet 50) and a reverting creator address; every
 ///         gate-2 invariant below must hold — the creator-inclusive solvency + fee-exactness forms,
 ///         plus the decisive "sells always open under a hostile creator" property. At
@@ -43,7 +43,7 @@ contract CreatorFeeInvariants is Test {
         assertEq(uint256(h.curve().phase()), uint256(IBondingCurve.Phase.ReadyToGraduate), "boundary buy must graduate");
     }
 
-    /// @notice Row 2 (§12.63 solvency form): `balance ≥ realEthReserves + accruedFees +
+    /// @notice Row 2 (solvency form) `balance ≥ realEthReserves + accruedFees +
     ///         accruedCreatorFees`; a Trading-phase sell never reverted under the hostile creator;
     ///         and every actor's full balance is drainable (paid out) under snapshot/revert.
     function invariant_solvencyWithCreatorLeg() public {
@@ -81,7 +81,7 @@ contract CreatorFeeInvariants is Test {
         }
     }
 
-    /// @notice Row 3 (§12.63 exact-fee, both legs, to the wei):
+    /// @notice Row 3 (exact-fee, both legs, to the wei):
     ///         - TREASURY leg: `treasury.balance + accruedFees == ghost_feeSum`;
     ///         - CREATOR leg: `creatorVault.balanceOf(creator) + accruedCreatorFees + claimed ==
     ///           ghost_creatorFeeSum` (ghost = independent Σ of every computed creator fee).
@@ -101,7 +101,7 @@ contract CreatorFeeInvariants is Test {
         );
     }
 
-    /// @notice Row 7 (§12.63 identity): actor ETH out never exceeds actor ETH in minus BOTH fee legs
+    /// @notice Row 7 (identity) actor ETH out never exceeds actor ETH in minus BOTH fee legs
     ///         minus the value still locked in the curve (`balance − accruedFees − accruedCreatorFees`,
     ///         i.e. the live reserves). A subtraction underflow is itself a violation and fails.
     function invariant_noExtractionWithCreatorLeg() public view {
@@ -119,7 +119,7 @@ contract CreatorFeeInvariants is Test {
         assertLe(handler.ghost_graduatedCount(), 1, "gate-2 row 4 (12.63): graduated more than once");
     }
 
-    /// @notice §12.63 post-graduation zero value: after graduation the curve's ETH balance equals
+    /// @notice post-graduation zero value: after graduation the curve's ETH balance equals
     ///         exactly the two unswept escrows plus any post-grad donation — nothing extractable, no
     ///         residual reserve/LP value. Both escrows drain to 0 via their permissionless sweeps.
     function invariant_postGraduationZeroValue() public view {

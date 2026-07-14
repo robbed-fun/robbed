@@ -8,7 +8,7 @@
  * an explicit `estimate * 2` limit, only clamped by an absolute block-safe cap.
  * NEVER a tight cap.
  *
- * Fork-measured worst case is ~817,845 gas (spec §12.62, Lifecycle.t.sol); 2x an
+ * Fork-measured worst case is ~817,845 gas (Lifecycle.t.sol); 2x an
  * honest estimate clears that with headroom while staying well under the cap.
  */
 

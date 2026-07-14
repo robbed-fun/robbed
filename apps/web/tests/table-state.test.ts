@@ -12,7 +12,7 @@ import {
 } from "@/shared/lib/table";
 
 /**
- * Server-side sort + keyset-pagination primitives (§12.59). Pure `nextSort` /
+ * Server-side sort + keyset-pagination primitives. Pure `nextSort` /
  * `isDefaultSort` only compute the NEXT request (never re-rank rows), and
  * `useCursorStack` stores the API's OPAQUE cursor VERBATIM — it never parses or
  * constructs one (the API is the sole signer/decoder).

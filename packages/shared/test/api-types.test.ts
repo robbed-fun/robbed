@@ -1,4 +1,4 @@
-/** REST DTO schema sanity (api.md §2/§3/§5). */
+/** REST DTO schema sanity (api.md). */
 import { describe, expect, it } from "bun:test";
 import {
   apiEnvelopeSchema,
@@ -65,7 +65,7 @@ const card = {
   moderation: { visibility: "visible", impersonationFlag: false },
 };
 
-describe("envelope (api.md §2)", () => {
+describe("envelope (api.md)", () => {
   const env = apiEnvelopeSchema(tokenCardSchema);
   it("success: { data, error: null }", () => {
     expect(env.safeParse({ data: card, error: null }).success).toBe(true);
@@ -78,7 +78,7 @@ describe("envelope (api.md §2)", () => {
   });
 });
 
-describe("UsdValue (§2: computed, with asOf; stale flag)", () => {
+describe("UsdValue (computed, with asOf; stale flag)", () => {
   it("accepts with and without stale:true, rejects stale:false", () => {
     expect(usdValueSchema.safeParse(usd).success).toBe(true);
     expect(usdValueSchema.safeParse({ ...usd, stale: true }).success).toBe(true);
@@ -86,7 +86,7 @@ describe("UsdValue (§2: computed, with asOf; stale flag)", () => {
   });
 });
 
-describe("TokenCard / TokenDetail (§5.1/§5.2)", () => {
+describe("TokenCard / TokenDetail ", () => {
   it("parses a valid card; enforces status and confirmationState enums", () => {
     expect(tokenCardSchema.safeParse(card).success).toBe(true);
     expect(tokenCardSchema.safeParse({ ...card, status: "v2" }).success).toBe(false);
@@ -115,14 +115,14 @@ describe("TokenCard / TokenDetail (§5.1/§5.2)", () => {
     expect(tokenDetailSchema.safeParse(detail).success).toBe(true);
   });
 
-  it("accepts a populated organic block; requires the key present (§5.2/§8.5)", () => {
+  it("accepts a populated organic block; requires the key present ", () => {
     const withOrganic = {
       ...detail,
       trust: {
         ...detail.trust,
         organic: {
           holderPctLow: 41.2, holderPctHigh: 58.7, volumePct: 63.0,
-          flaggedClusterVolPct24h: 22.5, methodology: "heuristic — see §8.5",
+          flaggedClusterVolPct24h: 22.5, methodology: "heuristic — see ",
           updatedAt: "2026-07-10T00:00:00Z",
         },
       },
@@ -133,7 +133,7 @@ describe("TokenCard / TokenDetail (§5.1/§5.2)", () => {
     expect(tokenDetailSchema.safeParse({ ...detail, trust: trustNoOrganic }).success).toBe(false);
   });
 
-  it("lpCopy must be the EXACT canonical sentence (spec §12.14 / CLAUDE.md)", () => {
+  it("lpCopy must be the EXACT canonical sentence (/ CLAUDE.md)", () => {
     const wrong = {
       ...detail,
       trust: { ...detail.trust, lpCopy: "LP principal locked; fees to treasury" },
@@ -157,7 +157,7 @@ describe("TokenCard / TokenDetail (§5.1/§5.2)", () => {
     expect(tokenDetailSchema.safeParse({ ...detail, lpTokenId: 12345 }).success).toBe(false);
   });
 
-  it("creatorFeeBps is present from day 1 (§7)", () => {
+  it("creatorFeeBps is present from day 1 ", () => {
     const { feePolicy: _fp, ...trustNoFee } = detail.trust;
     expect(
       tokenDetailSchema.safeParse({ ...detail, trust: trustNoFee }).success,
@@ -187,7 +187,7 @@ describe("TradeRow / Candle / HolderRow", () => {
     ).toBe(true);
   });
 
-  it("holder flags restricted to creator|curve|lp_pool|vault (§5.2)", () => {
+  it("holder flags restricted to creator|curve|lp_pool|vault ", () => {
     expect(
       holderRowSchema.safeParse({ address: ADDR, balance: "1", pct: 0.1, flags: ["creator", "curve"] }).success,
     ).toBe(true);
@@ -196,7 +196,7 @@ describe("TradeRow / Candle / HolderRow", () => {
     ).toBe(false);
   });
 
-  it("holder botFlags/clusterId optional; botFlags restricted to §8.5 vocabulary", () => {
+  it("holder botFlags/clusterId optional; botFlags restricted to vocabulary", () => {
     expect(
       holderRowSchema.safeParse({
         address: ADDR, balance: "1", pct: 0.1, flags: [],
@@ -223,7 +223,7 @@ describe("TradeRow / Candle / HolderRow", () => {
   });
 });
 
-describe("Sortable + keyset-paginated list tables (api.md §3.4; redesign)", () => {
+describe("Sortable + keyset-paginated list tables (api.md; redesign)", () => {
   const tradeRow = {
     id: `${"0x" + "12".repeat(32)}-1`,
     token: ADDR, trader: ADDR, venue: "curve", isBuy: true,
@@ -320,7 +320,7 @@ describe("Sortable + keyset-paginated list tables (api.md §3.4; redesign)", () 
   });
 });
 
-describe("Portfolio (spec §5.4; ROBBED_ redesign page 4)", () => {
+describe("Portfolio (ROBBED_ redesign page 4)", () => {
   const holding = {
     token: { address: ADDR, name: "Cash Cat", ticker: "CASHCAT", imageUrl: null, graduated: false, status: "curve" },
     balance: "1000000000000000000000",
@@ -371,7 +371,7 @@ describe("Portfolio (spec §5.4; ROBBED_ redesign page 4)", () => {
     expect(portfolioSummarySchema.safeParse({ ...summary, confirmationState: "soft_confirmed" }).success).toBe(true);
   });
 
-  it("holding: priceable row vs unpriceable (nulls, no false precision §5.2)", () => {
+  it("holding: priceable row vs unpriceable (nulls, no false precision)", () => {
     expect(portfolioHoldingSchema.safeParse(holding).success).toBe(true);
     // never-traded token: price/value/pnl all null, balance still exact
     const unpriceable = { ...holding, priceEth: null, valueEth: null, value: null, unrealizedPnl: null };
@@ -395,7 +395,7 @@ describe("Portfolio (spec §5.4; ROBBED_ redesign page 4)", () => {
   });
 });
 
-describe("creator-fee claim surface (spec §7 / §12.63)", () => {
+describe("creator-fee claim surface ", () => {
   const claimable = {
     creator: ADDR,
     vault: ADDR,
@@ -415,7 +415,7 @@ describe("creator-fee claim surface (spec §7 / §12.63)", () => {
     expect(
       creatorClaimableSchema.safeParse({ ...claimable, confirmationState: "soft_confirmed" }).success,
     ).toBe(true);
-    // usd mirror is required (derived §2)
+    // usd mirror is required (derived)
     const { claimable: _c, ...noUsd } = claimable;
     expect(creatorClaimableSchema.safeParse(noUsd).success).toBe(false);
   });
@@ -431,8 +431,8 @@ describe("creator-fee claim surface (spec §7 / §12.63)", () => {
   });
 });
 
-describe("feePolicy additive cap (spec §6.4/§12.68 — un-frozen creator leg)", () => {
-  it("accepts the §12.68 mainnet default: tradeFeeBps 100 + creatorFeeBps 50 (=150 ≤ 200)", () => {
+describe("feePolicy additive cap (un-frozen creator leg)", () => {
+  it("accepts the mainnet default: tradeFeeBps 100 + creatorFeeBps 50 (=150 ≤ 200)", () => {
     expect(feePolicySchema.safeParse({ tradeFeeBps: 100, creatorFeeBps: 50 }).success).toBe(true);
     // legacy/testnet-only v1 curve reads 0 — still valid (backward-compatible)
     expect(feePolicySchema.safeParse({ tradeFeeBps: 100, creatorFeeBps: 0 }).success).toBe(true);
@@ -449,7 +449,7 @@ describe("feePolicy additive cap (spec §6.4/§12.68 — un-frozen creator leg)"
   });
 });
 
-describe("post-grad creator LP-fee split surface (spec §12.69 — 50/50, Option-B custody)", () => {
+describe("post-grad creator LP-fee split surface (50/50, Option-B custody)", () => {
   // per-(creator, ERC20-token) SINGLE-asset — matches claimERC20(creator, token) 1:1.
   const tokenClaimable = {
     creator: ADDR,
@@ -489,7 +489,7 @@ describe("post-grad creator LP-fee split surface (spec §12.69 — 50/50, Option
   });
 });
 
-describe("error codes (closed enum, single source — X-9/api §5)", () => {
+describe("error codes (closed enum, single source — X-9/api)", () => {
   it("apiError.code accepts only the enumerated codes", () => {
     const env = apiEnvelopeSchema(tokenCardSchema);
     expect(env.safeParse({ data: null, error: { code: "rate_limited", message: "slow down" } }).success).toBe(true);
@@ -503,7 +503,7 @@ describe("error codes (closed enum, single source — X-9/api §5)", () => {
     }
   });
 
-  it("includes the ratified upstream_unavailable + conflict members (api.md §5)", () => {
+  it("includes the ratified upstream_unavailable + conflict members (api.md)", () => {
     // These must stay in lockstep with openapi.yaml Error.code (removing either
     // breaks this assertion): upstream_unavailable = 500 / readyz-503 path,
     // conflict = stored-state conflict (e.g. unknown imageHash).
@@ -515,7 +515,7 @@ describe("error codes (closed enum, single source — X-9/api §5)", () => {
 });
 
 describe("misc endpoints", () => {
-  it("confirmations (§2.1 SSR initial state)", () => {
+  it("confirmations (SSR initial state)", () => {
     expect(
       confirmationsResponseSchema.safeParse({
         safeBlock: 1000, finalizedBlock: 500, latestBlock: 1200, updatedAt: "2026-07-09T12:00:00Z",
@@ -523,14 +523,14 @@ describe("misc endpoints", () => {
     ).toBe(true);
   });
 
-  it("eth-usd carries source + asOf (§2 hard rule: never a constant)", () => {
+  it("eth-usd carries source + asOf (hard rule: never a constant)", () => {
     expect(
       ethUsdResponseSchema.safeParse({ price: 3500.12, source: "chainlink:4663", asOf: "2026-07-09T12:00:00Z" }).success,
     ).toBe(true);
     expect(ethUsdResponseSchema.safeParse({ price: 3500.12 }).success).toBe(false);
   });
 
-  it("sorts and filters (§5.1)", () => {
+  it("sorts and filters ", () => {
     for (const s of ["trending", "newest", "mcap", "volume24h", "progress"]) {
       expect(tokenSortSchema.safeParse(s).success).toBe(true);
     }
@@ -540,7 +540,7 @@ describe("misc endpoints", () => {
     expect(tokenSortSchema.safeParse("holders").success).toBe(false);
   });
 
-  it("metadata request body — name ≤32 BYTES / ticker ≤10 BYTES (§12.30)", () => {
+  it("metadata request body — name ≤32 BYTES / ticker ≤10 BYTES ", () => {
     const body = { name: "Cash Cat", ticker: "CASHCAT", imageUrl: "https://cdn.x/i.webp", imageHash: HASH };
     expect(metadataRequestSchema.safeParse(body).success).toBe(true);
     // ASCII boundary

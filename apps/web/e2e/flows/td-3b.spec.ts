@@ -17,7 +17,7 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:TD-3b — Sell pre-grad via permit (no prior approval) · tx `sellWithPermit` (§5.2)
+// @flow:TD-3b — Sell pre-grad via permit (no prior approval) · tx `sellWithPermit`
 // assertable-layers: on-chain · indexed · UI
 test(
   "TD-3b sell via EIP-2612 permit (single tx, zero prior allowance)",
@@ -39,7 +39,7 @@ test(
       // bearing assertion is that the sell submits and soft-confirms from a
       // zero-allowance account (on-chain = sellWithPermit).
       await sel.submitTrade(page).click();
-      // §12.56: soft-confirmed chip removed — prove the optimistic row via the feed row.
+      // : soft-confirmed chip removed — prove the optimistic row via the feed row.
       await expect(sel.tradeRows(page).first()).toBeVisible({ timeout: 12_000 });
     });
 

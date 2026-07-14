@@ -1,5 +1,5 @@
-# ROBBED_ gate-7 monitoring overlay — Prometheus + Alertmanager (P-3; spec §10
-# gate 7, indexer.md §9.4). Host-agnostic per architecture.md §6: plain Compose
+# ROBBED_ gate-7 monitoring overlay — Prometheus + Alertmanager (P-3;
+# gate 7, indexer.md). Host-agnostic per architecture.md : plain Compose
 # services + bind-mounted config files under docker/monitoring/ — portable to
 # any compose host; on k8s, reuse the same three config files in ConfigMaps.
 #
@@ -13,7 +13,7 @@
 #
 # In Komodo: add both files to the Stack resource's compose file list.
 #
-# Alert DELIVERY is an M4 decision (§9.4) — alertmanager routes to a
+# Alert DELIVERY is an M4 decision — alertmanager routes to a
 # no-integration placeholder receiver until then (docker/monitoring/
 # alertmanager.yml). Neither service is exposed on the host by default;
 # opt in via PROMETHEUS_HOST_PORT / ALERTMANAGER_HOST_PORT (bind them to

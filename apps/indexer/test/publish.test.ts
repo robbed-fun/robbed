@@ -1,5 +1,5 @@
 /**
- * Redis publish path (indexer.md §8.2/§8.3, §9.3; M2-8): backfill suppression,
+ * Redis publish path (indexer.md, M2-8) backfill suppression,
  * envelope + per-channel seq, dual-channel trade fanout, the gate-7 fee-recipient
  * alert, and a STRUCTURAL no-DB-import assertion on the hot-path module.
  */
@@ -38,7 +38,7 @@ const NOW_SEC = Math.floor(NOW_MS / 1000);
 
 // ── backfill suppression latch ──────────────────────────────────────────────
 
-describe("PublishGate — backfill suppression (§9.3)", () => {
+describe("PublishGate — backfill suppression ", () => {
   it("stays suppressed for historical events, latches on a recent one", () => {
     const gate = new PublishGate(120, () => NOW_MS);
     gate.observe(NOW_SEC - 10_000); // old backfill block
@@ -100,7 +100,7 @@ describe("publishTrade — suppression + dual-channel + envelope", () => {
 
 // ── gate-7 fee-recipient alert ──────────────────────────────────────────────
 
-describe("feeRecipientAlert (§9.4)", () => {
+describe("feeRecipientAlert ", () => {
   const treasury = "0x" + "11".repeat(20);
   const ctx = { token: "0xtok", txHash: "0xtx" };
 
@@ -119,13 +119,13 @@ describe("feeRecipientAlert (§9.4)", () => {
 
 // ── structural: hot-path module imports no DB client ────────────────────────
 
-describe("publish.ts — no DB in the hot path (§8.3)", () => {
+describe("publish.ts — no DB in the hot path ", () => {
   const text = readFileSync(join(import.meta.dir, "..", "src", "publish.ts"), "utf8");
 
   // Scan IMPORT SPECIFIERS (not prose — the docstring mentions DB module names
   // precisely to say it does NOT import them). publish.ts may only import
   // shared, node builtins, the Redis transport itself (`redis` — the ONE
-  // allowed external dep of the hot path, prod-images.md §5 fix), and the
+  // allowed external dep of the hot path, prod-images.md fix), and the
   // dependency-free in-process metric registry (`./metrics`).
   it("imports only shared/node:/redis/./metrics (no ponder/pg/DB modules)", () => {
     const imports = [...text.matchAll(/from ["']([^"']+)["']/g)].map((m) => m[1]!);

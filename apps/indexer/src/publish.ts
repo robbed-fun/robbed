@@ -1,16 +1,16 @@
 /**
- * Redis publish path (indexer.md §7.2, §8.2/§8.3; M2-8) — the ONLY hop between a
+ * Redis publish path (indexer.md, M2-8) — the ONLY hop between a
  * Ponder handler and the Bun WS fanout.
  *
- * Hard constraints this module enforces (spec §8, <500ms budget):
+ * Hard constraints this module enforces (<500ms budget):
  *  - ZERO database / RPC reads here. Every message is built entirely from values
  *    the handler already holds; the structural `no-DB-import` test asserts this
  *    module imports no DB client (`ponder:schema`/`ponder:registry`/`pg`/…).
  *  - Fire-and-forget: a lost publish is self-healing (clients REST-heal on a
- *    `seq` gap, §8.4) — we log and move on, never block or throw into a handler.
- *  - Per-channel monotonic `seq` via a single Redis `INCR channel:seq` (§8.2) —
+ * `seq` gap) — we log and move on, never block or throw into a handler.
+ * - Per-channel monotonic `seq` via a single Redis `INCR channel:seq` —
  *    one Redis op, no DB.
- *  - Publishes are SUPPRESSED during historical backfill (§9.3) — see
+ * - Publishes are SUPPRESSED during historical backfill — see
  *    `PublishGate`.
  *
  * Decide-it-yourself — backfill suppression mechanism (basis recorded here):
@@ -24,8 +24,8 @@
  *   REST heals) or a few slightly-late realtime events published (harmless).
  *   No false publish-storm to Redis is possible. Fully unit-tested.
  *
- * Transport decision (prod-images.md §5 fix, 2026-07-11 — basis recorded):
- *   Ponder runs under NODE in the prod container (spec §8), where
+ * Transport decision (prod-images.md fix, 2026-07-11 — basis recorded):
+ * Ponder runs under NODE in the prod container, where
  *   `globalThis.Bun` does not exist, so the former Bun-only transport silently
  *   no-opped every realtime publish with `redis_publish_errors_total` stuck at
  *   0. The transport is now selected BY RUNTIME in `createRuntimePublisher`:
@@ -107,7 +107,7 @@ export function getBunRedisNamespace(): BunRedisNamespace | undefined {
 
 /**
  * Bun-native publisher. THROWS when `Bun.RedisClient` is absent — a no-op
- * transport must never exist (prod-images.md §5); callers wanting runtime
+ * transport must never exist (prod-images.md); callers wanting runtime
  * selection use `createRuntimePublisher`.
  */
 export function createBunPublisher(url: string, bun: BunRedisNamespace | null | undefined = getBunRedisNamespace()): RedisPublisher {
@@ -132,7 +132,7 @@ export function createBunPublisher(url: string, bun: BunRedisNamespace | null | 
 
 /**
  * Node publisher (node-redis 6.x) — the prod-container path (Ponder under
- * Node, spec §8). Connect is fire-and-forget: node-redis's offline queue
+ * Node). Connect is fire-and-forget: node-redis's offline queue
  * (enabled by default) buffers INCR/PUBLISH until the socket is up, the 5s
  * default per-command timeout bounds a dead-Redis publish (failure lands in
  * `firePublish`'s catch → error counter), and the default reconnectStrategy
@@ -173,7 +173,7 @@ export function createNodePublisher(url: string): RedisPublisher {
 }
 
 /**
- * Runtime transport selection (prod-images.md §5): Bun global with a
+ * Runtime transport selection (prod-images.md) Bun global with a
  * RedisClient → Bun-native path (dev/compose, matches the API); otherwise the
  * Node client (prod Ponder container). Never a no-op — both branches either
  * return a real transport or throw.
@@ -200,7 +200,7 @@ export interface ReverifySubscriberLike {
 }
 
 /**
- * Runtime-selected `control:reverify` subscriber (prod-images.md §5 fix):
+ * Runtime-selected `control:reverify` subscriber (prod-images.md fix):
  * Bun's RedisClient under Bun, node-redis under Node. SUBSCRIBE takes over a
  * connection, so both branches use a dedicated client — never the publisher's.
  * THROWS when no client can be constructed (missing REDIS_URL) — an inert
@@ -250,7 +250,7 @@ export function getDefaultPublisher(): RedisPublisher {
   if (!url) {
     throw new Error(
       "[indexer publish] REDIS_URL is unset — no Redis publish transport can be constructed. " +
-        "Refusing to run as a silent no-op (every realtime WS publish would drop; prod-images.md §5).",
+        "Refusing to run as a silent no-op (every realtime WS publish would drop; prod-images.md).",
     );
   }
   defaultPublisher = createRuntimePublisher(url);
@@ -263,7 +263,7 @@ export function setDefaultPublisherForTest(pub: RedisPublisher | null): void {
   defaultPublisher = pub;
 }
 
-// ── Backfill suppression latch (§9.3) ───────────────────────────────────────
+// ── Backfill suppression latch ───────────────────────────────────────
 
 export class PublishGate {
   private realtime = false;
@@ -305,7 +305,7 @@ export interface WsEnvelope<T> {
 
 /**
  * INCR the channel seq and PUBLISH one enveloped message. Fire-and-forget:
- * errors are counted (`redis_publish_errors_total`, gate-7 §9.4) and logged,
+ * errors are counted (`redis_publish_errors_total`, gate-7) and logged,
  * never propagated into the caller (handler/tracker).
  */
 export function firePublish<T>(
@@ -351,7 +351,7 @@ export interface TradePublishInput {
   confirmationState: ConfirmationState;
 }
 
-/** trade → `token:{addr}:trades` + `global:trades` (§8.1). */
+/** trade → `token:{addr}:trades` + `global:trades`. */
 export function publishTrade(input: TradePublishInput): void {
   if (!gatedFor(input.blockTimestamp)) return;
   const data: WsTradeData = {
@@ -387,7 +387,7 @@ export interface CandlePublishInput {
   blockTimestamp: number;
 }
 
-/** candle → `token:{addr}:candles:{interval}` (§8.1, chart live updates). */
+/** candle → `token:{addr}:candles:{interval}` (chart live updates). */
 export function publishCandle(input: CandlePublishInput): void {
   if (!gatedFor(input.blockTimestamp)) return;
   const data: WsCandleData = {
@@ -415,7 +415,7 @@ export interface LaunchPublishInput {
   confirmationState: ConfirmationState;
 }
 
-/** launch → `global:launches` (§5.1 Discover ticker). */
+/** launch → `global:launches` (Discover ticker). */
 export function publishLaunch(input: LaunchPublishInput): void {
   if (!gatedFor(input.createdAt)) return;
   const data: WsLaunchData = {
@@ -438,7 +438,7 @@ export interface GraduatedPublishInput {
   ts: number;
 }
 
-/** graduated → `token:{addr}:events` + `global:launches` (venue switch, §5.2). */
+/** graduated → `token:{addr}:events` + `global:launches` (venue switch). */
 export function publishGraduated(input: GraduatedPublishInput): void {
   if (!gatedFor(input.ts)) return;
   const data: WsGraduatedData = {
@@ -464,7 +464,7 @@ export interface FeeCollectedPublishInput {
   confirmationState: ConfirmationState;
 }
 
-/** fee_collected → `token:{addr}:events` (X-6, treasury fee dashboard, §3.5). */
+/** fee_collected → `token:{addr}:events` (X-6, treasury fee dashboard). */
 export function publishFeeCollected(input: FeeCollectedPublishInput): void {
   if (!gatedFor(input.blockTimestamp)) return;
   const data: WsFeeCollectedData = {
@@ -497,7 +497,7 @@ export interface CreatorFeeSplitPublishInput {
 }
 
 /**
- * creator_fee_split → `token:{launchToken}:events` (§12.69). The 50/50 split of a
+ * creator_fee_split → `token:{launchToken}:events`. The 50/50 split of a
  * graduated pool's fees at `LPFeeVault.collect()`, keyed by the launch token so the
  * token page / creator claim surface can live-update accrual. Both beneficiaries'
  * per-leg amounts are already resolved to token/weth by the handler.
@@ -533,7 +533,7 @@ export interface CreatorFeeClaimedPublishInput {
 }
 
 /**
- * creator_fee_claimed → `token:{token}:events` (§12.69). A creator pulled an accrued
+ * creator_fee_claimed → `token:{token}:events`. A creator pulled an accrued
  * post-grad ERC20 balance (`claimERC20(creator, token)`); the Portfolio CreatedTab
  * reconciles optimistic state against the confirmed payout. Channel decision (indexer-
  * owned taxonomy, channels.ts): the shared DEFAULT `token:{address}:events` keyed by the
@@ -563,7 +563,7 @@ export function publishCreatorFeeClaimed(input: CreatorFeeClaimedPublishInput): 
 
 // ── Side-process helpers (UNGATED — tracker/verifier run post-backfill) ──────
 
-/** metadata_verified → `token:{addr}:events` (verifier, §6.1 step 7). */
+/** metadata_verified → `token:{addr}:events` (verifier, step 7). */
 export function publishMetadataVerified(
   publisher: RedisPublisher,
   token: string,
@@ -574,7 +574,7 @@ export function publishMetadataVerified(
   firePublish(publisher, "metadata_verified", tokenEvents(token), ts, data);
 }
 
-/** confirmations watermark broadcast → `global:confirmations` (§12.20, O(1)). */
+/** confirmations watermark broadcast → `global:confirmations` (O(1)). */
 export function publishConfirmations(
   publisher: RedisPublisher,
   safeBlock: number,
@@ -585,7 +585,7 @@ export function publishConfirmations(
   firePublish(publisher, "confirmations", GLOBAL_CONFIRMATIONS, ts, data);
 }
 
-/** reorg notice → `global:confirmations` (§5.3 — clients drop orphaned rows). */
+/** reorg notice → `global:confirmations` (clients drop orphaned rows). */
 export function publishReorg(publisher: RedisPublisher, fromBlock: number, ts: number): void {
   const data: WsReorgData = { fromBlock };
   firePublish(publisher, "reorg", GLOBAL_CONFIRMATIONS, ts, data);

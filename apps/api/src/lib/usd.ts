@@ -1,5 +1,5 @@
 /**
- * USD projection (api.md §2 hard rule, spec §2): every USD figure is computed at
+ * USD projection (api.md hard rule) every USD figure is computed at
  * request time from the latest `eth_usd_snapshots` row — NEVER a constant. Ships
  * as `{ usd, ethUsd, asOf }` with `stale: true` added when the snapshot is older
  * than `USD_STALE_AFTER_SECONDS`.

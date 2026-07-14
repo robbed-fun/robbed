@@ -1,12 +1,12 @@
 /**
- * DB glue for the candle pipeline (indexer.md §4.2). Thin wrapper that reads the
+ * DB glue for the candle pipeline (indexer.md). Thin wrapper that reads the
  * current bucket, folds the trade in with the TESTED pure `applyTradeToInterval`
  * math (single source of truth — the same function the rebuild script and the
- * continuity tests use), and upserts. Six intervals per trade (§4.1); the
+ * continuity tests use), and upserts. Six intervals per trade; the
  * high-water guard inside `applyTradeToInterval` makes re-delivery a no-op.
  *
  * Curve `Trade` and V3 `Swap` both call this with a uniform `price` → the series
- * is venue-continuous by construction (§4.3).
+ * is venue-continuous by construction.
  */
 import { candles } from "ponder:schema";
 import type { Context } from "ponder:registry";
@@ -60,8 +60,8 @@ function candleRowToDbValues(r: CandleRow) {
 /**
  * Fold one trade into all six interval candles for its token. Returns the six
  * resulting rows (post-fold) so the handler can publish the live candle updates
- * to `token:{addr}:candles:{interval}` (§8.1) WITHOUT re-reading the DB in the
- * publish path — the values are already in hand from the upsert (§8.3 hot-path
+ * to `token:{addr}:candles:{interval}` WITHOUT re-reading the DB in the
+ * publish path — the values are already in hand from the upsert (hot-path
  * rule: no per-message DB read).
  */
 export async function upsertCandlesForTrade(db: CandleStoreDb, input: CandleTradeInput): Promise<CandleRow[]> {

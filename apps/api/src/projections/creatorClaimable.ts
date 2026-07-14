@@ -1,10 +1,10 @@
 /**
  * `creator_claimable` roll-up + live vault balance → the shared `CreatorClaimable`
- * DTO (spec §7 / §12.63). The AUTHORITATIVE `claimableEth` is the live
+ * DTO. The AUTHORITATIVE `claimableEth` is the live
  * `CreatorVault.balanceOf(creator)`; when unavailable (no RPC / read failed) it
  * falls back to the event-derived MIRROR (accrued − claimed, floored at 0) so a
  * figure is always served. USD is computed at request time from the latest
- * eth/usd snapshot (§2) — never a constant. Wire shape single-sourced in
+ * eth/usd snapshot — never a constant. Wire shape single-sourced in
  * @robbed/shared (`creatorClaimableSchema`), never redeclared.
  */
 import type { CreatorClaimable, CreatorClaimableRow, UsdValue } from "@robbed/shared";

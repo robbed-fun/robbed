@@ -1,9 +1,9 @@
 /**
- * Public-surface CORS middleware (api.md §6.1 — normative text there; closes
+ * Public-surface CORS middleware (api.md — normative text there; closes
  * the env-inventory `CORS_ALLOWED_ORIGINS` audit gap, 2026-07-12).
  *
  * Scope: mounted on `/v1/*` and explicitly SKIPS `/v1/admin/*`; `/internal/*`
- * never mounts it. Decision (api.md §6.1): admin + internal are the
+ * never mounts it. Decision (api.md) admin + internal are the
  * cookie+CSRF SIWE surface — opening them cross-origin widens the
  * CSRF/session attack surface for zero product need, so they stay
  * same-origin only. The public /v1 surface is cookie-less, so `credentials`
@@ -19,7 +19,7 @@
  *    upload bug). Mounted BEFORE the rate limiters in app.ts so preflights
  *    never consume rate budget, while a 429 on the actual request still
  *    carries CORS headers (a readable failure, not an opaque network error).
- *  - `exposeHeaders: Retry-After`: the browser client's 429 backoff (§6.3)
+ * - `exposeHeaders: Retry-After`: the browser client's 429 backoff
  *    must be able to read it (only safelisted response headers are readable
  *    cross-origin otherwise).
  */
@@ -34,10 +34,10 @@ export function publicCors(allowedOrigins: ReadonlySet<string>): MiddlewareHandl
     allowHeaders: ["Content-Type"],
     exposeHeaders: ["Retry-After"],
     maxAge: 86400,
-    // NO `credentials` — public /v1 is cookie-less (api.md §6.1).
+    // NO `credentials` — public /v1 is cookie-less (api.md).
   });
   return async (c, next) => {
-    // §6.1 scoping: the SIWE cookie surface is never opened cross-origin.
+    // scoping: the SIWE cookie surface is never opened cross-origin.
     if (c.req.path.startsWith("/v1/admin")) return next();
     return mw(c, next);
   };

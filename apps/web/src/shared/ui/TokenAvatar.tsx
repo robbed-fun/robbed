@@ -1,13 +1,13 @@
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Token image (§5.1/§5.2). DECISION (hoodpad-frontend; basis recorded): a plain
+ * Token image. DECISION (robbed-frontend; basis recorded) a plain
  * `<img>` — NOT `next/image` — because token image origins are user-supplied and
  * served from the R2 CDN whose host comes from env; `next/image`'s remote
  * allowlist is env-gated and empty in dev/CI, where it would throw at render.
  * A plain `<img>` degrades gracefully (and never blocks SSR). Revisit once the
- * R2 CDN host is fixed and allowlisted (web.md §7 prefers next/image then).
- * `imageUrl` is null until the indexer fetches metadata (indexer.md §3.1) → we
+ * R2 CDN host is fixed and allowlisted (web.md prefers next/image then).
+ * `imageUrl` is null until the indexer fetches metadata (indexer.md) → we
  * render a deterministic monogram fallback, no layout shift.
  */
 export function TokenAvatar({

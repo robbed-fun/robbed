@@ -1,6 +1,6 @@
 /**
  * Postgres + RPC concretes for the confirmation tracker (M2-6; reworked at M2-3
- * per OI-11/§12.48c). Kept OUT of `confirmation.ts` so that module stays DB-free
+ * per OI-11). Kept OUT of `confirmation.ts` so that module stays DB-free
  * and fully unit-testable; here live the two side-effecting boundaries: the
  * `confirmation_watermarks` SIDECAR singleton read/write (own `pg.Pool`; plain
  * `public`-schema table from migrations/0002 — the tracker touches NOTHING in

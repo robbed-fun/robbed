@@ -175,7 +175,7 @@ export function envSyncFindings(root: string, notice: (msg: string) => void = ()
           file: rf.file,
           line: k.line,
           check: "env-sync",
-          msg: `\`${k.key}\` is not documented anywhere in ${INVENTORY} — add a row in the owning service's section (or §5 dev/test tooling)`,
+          msg: `\`${k.key}\` is not documented anywhere in ${INVENTORY} — add a row in the owning service's section (or dev/test tooling)`,
         });
     }
   }

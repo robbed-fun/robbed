@@ -9,7 +9,7 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 import {ZeroAddress, NotCurve, NotLpFeeVault, EthTransferFailed} from "src/errors/Errors.sol";
 
 /// @dev Minimal stand-in for the CurveFactory registry surfaces the vault reads: `isCurve` (gates the
-///      ETH `deposit`) and `lpFeeVault` (gates `depositERC20`, §12.69). Lets these unit tests exercise
+/// ETH `deposit`) and `lpFeeVault` (gates `depositERC20`). Lets these unit tests exercise
 ///      the vault in isolation (the full stack is covered by CreatorFee.t.sol / CreatorFeeInvariants /
 ///      LPFeeVaultCreatorSplit).
 contract MockCurveRegistry {
@@ -25,7 +25,7 @@ contract MockCurveRegistry {
     }
 }
 
-/// @title CreatorVault unit tests (spec §7, §12.63)
+/// @title CreatorVault unit tests
 /// @notice Proves the pull-payment escrow's minimalism + safety properties: deposit is curve-only and
 ///         cannot revert for a real curve; claim pays the fixed `creator` (never the caller) under
 ///         CEI + nonReentrant; a hostile/reverting creator's claim reverts in ISOLATION and leaves
@@ -105,7 +105,7 @@ contract CreatorVaultTest is Test {
 
     /// @notice A hostile/reverting creator's claim reverts in ISOLATION: its own balance stays put
     ///         (retriable), and — crucially — no OTHER creator's balance or the vault's custody of
-    ///         their funds is affected. This is the vault-side of the §12.63 no-freeze guarantee.
+    /// their funds is affected. This is the vault-side of the no-freeze guarantee.
     function test_claim_hostileCreator_revertsButIsolated() public {
         Reverter hostile = new Reverter();
         vm.prank(curveA);
@@ -131,7 +131,7 @@ contract CreatorVaultTest is Test {
         assertFalse(ok, "vault must reject unattributed ETH (no receive/fallback)");
     }
 
-    // ─────────────────── ERC20 custody legs (§12.69 post-graduation split) ───────────────────
+    // ─────────────────── ERC20 custody legs (post-graduation split) ───────────────────
 
     address internal feeVault = makeAddr("lpFeeVault");
     MockWETH9 internal erc20;

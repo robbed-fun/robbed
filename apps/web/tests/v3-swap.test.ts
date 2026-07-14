@@ -12,8 +12,8 @@ import {
 } from "@/entities/curve";
 
 /**
- * Post-graduation Uniswap V3 routing (§5.2 invisible venue switch, M3-5). Proves
- * the inline routing targets the SHARED periphery (QuoterV2 / SwapRouter02, §12.28)
+ * Post-graduation Uniswap V3 routing (invisible venue switch, M3-5). Proves
+ * the inline routing targets the SHARED periphery (QuoterV2 / SwapRouter02)
  * on the 1% tier, previews via the REVERT-quoter surface, and composes the
  * native-ETH sell via multicall(exactInputSingle → unwrapWETH9). No ABI is
  * hand-written — the builders bind the shared `swapRouter02Abi` / `quoterV2Abi`.
@@ -31,7 +31,7 @@ describe("V3 direction + fee tier", () => {
   });
 });
 
-describe("QuoterV2 preview request (§12.28 revert-quoter — simulate, not read)", () => {
+describe("QuoterV2 preview request (revert-quoter — simulate, not read)", () => {
   it("targets UNISWAP_V3.quoterV2 with the fee-10000 exact-input params", () => {
     const q = buildV3QuoteRequest({ side: "buy", token: TOKEN, amountWei: 5n * 10n ** 17n });
     expect(lc(q.address)).toBe(lc(UNISWAP_V3.quoterV2));

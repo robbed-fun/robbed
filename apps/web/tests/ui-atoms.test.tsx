@@ -23,7 +23,7 @@ import {
  * ROBBED_ atomic kit (redesign Phase F) — render tests. Each atom must
  * (a) render its contract, and (b) style ONLY via design tokens: the class
  * assertions here pin the token utilities (text-green/bg-active/…) that map to
- * the exact hexes sampled from the ratified redesign (spec §12.50); the copy-lint token-bypass
+ * the exact hexes sampled from the ratified redesign; the copy-lint token-bypass
  * suite separately guarantees no raw color ever appears in the components.
  */
 

@@ -1,5 +1,5 @@
 /**
- * Confirmation tracker transition suite (indexer.md §5, spec §2.1/§12.20/§12.48c;
+ * Confirmation tracker transition suite (indexer.md,
  * M2-6, reworked to the OI-11 sidecar READ-DERIVATION design). Exercises the PURE
  * decisions + the injectable `runTrackerTick` driver — the same code the sidecar
  * runs in production. Properties: monotonicity (a derived tier can never regress

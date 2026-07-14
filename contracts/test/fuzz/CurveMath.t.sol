@@ -5,11 +5,11 @@ import {Test} from "forge-std/Test.sol";
 import {CurveMath} from "../../src/libs/CurveMath.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-/// @title CurveMath direct fuzz (M1-6) — spec §6.2; contracts.md §2.3 (gate 2)
+/// @title CurveMath direct fuzz (M1-6) —; contracts.md (gate 2)
 /// @notice Proves the pure-math invariants without curve state: `k` non-decreasing across every
 ///         trade; no reserve underflow (payout ≤ retained reserve); and rounding that NEVER lets a
 ///         caller extract more than the most-generous (floor-rounded) fair value — i.e. rounding
-///         always favors the curve (spec §6.2, §12.25). This is the direct-library complement to the
+/// always favors the curve. This is the direct-library complement to the
 ///         stateful `KNonDecreasing`/`CurveSolvency` invariant suites (M1-8).
 /// @dev Inputs are bounded to launch-realistic magnitudes (≤ 1e30) so the test's OWN reference
 ///      product `vE·vT` cannot overflow uint256 — the library itself is 512-bit safe via

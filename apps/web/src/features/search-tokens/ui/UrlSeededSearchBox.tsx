@@ -5,8 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { SearchBox } from "./SearchBox";
 
 /**
- * SearchBox seeded from the URL `?q=` — the creator-click deep link (§5.1
- * DISC-4 as amended by §12.50(f)): `TokenCard` pushes `/?q=<creator>` and this
+ * SearchBox seeded from the URL `?q=` — the creator-click deep link (
+ * DISC-4 as amended by) `TokenCard` pushes `/?q=<creator>` and this
  * component closes the round-trip by reading the param back into the box.
  *
  * DECISION (docs-first, nextjs.org/docs/app/api-reference/functions/use-search-params,

@@ -1,4 +1,4 @@
-# ROBBED_ — full local dev stack: infra (spec §8: Postgres (+pg_trgm), Redis, minio) PLUS every
+# ROBBED_ — full local dev stack: infra (Postgres (+pg_trgm), Redis, minio) PLUS every
 # workspace app in dev/hot-reload mode (api, ws fanout, indexer, web). Master plan item M2-0+.
 #
 # Bring up:   docker compose up -d          (first run: builds dev image + pnpm install, be patient)
@@ -43,7 +43,7 @@ x-dev-base: &dev-base
     - robbed_keeper_nm:/workspace/apps/keeper/node_modules
 
 services:
-  # ── Postgres 17 (+ pg_trgm) — indexer.md §2/§3 (search GIN indexes, offchain tables) ──
+  # ── Postgres 17 (+ pg_trgm) — indexer.md (search GIN indexes, offchain tables) ──
   # Tag: postgres:17. Docs-first (hub.docker.com/_/postgres, 2026-07-10): 18 is current `latest`,
   # 17 is a fully-supported major (17.x). 17 chosen deliberately as the widely-adopted, Ponder-proven
   # major; pg_trgm ships as a bundled contrib extension in every supported major, so either satisfies
@@ -71,7 +71,7 @@ services:
       retries: 5
       start_period: 30s
 
-  # ── Redis 7 — pub/sub fanout + rate-limit windows (indexer.md §8, api.md §6.3) ──
+  # ── Redis 7 — pub/sub fanout + rate-limit windows (indexer.md, api.md) ──
   # Tag: redis:7-alpine. Docs-first (hub.docker.com/_/redis, 2026-07-10): 8.x is current `latest`,
   # 7.x maintained (7.4). 7 chosen: battle-tested pub/sub across every client, the boring safe pick.
   # appendonly keeps rate-limit/seq keys across restarts (pub/sub itself needs no persistence).
@@ -89,7 +89,7 @@ services:
       retries: 5
       start_period: 10s
 
-  # ── minio — R2/S3-compatible object store for images + canonical metadata JSON (api.md §8) ──
+  # ── minio — R2/S3-compatible object store for images + canonical metadata JSON (api.md) ──
   # Image + healthcheck are docs-verified against the official minio docker-compose
   # (github.com/minio/minio docs/orchestration/docker-compose, 2026-07-10):
   #   - image quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z (verified via quay.io tag API 2026-07-10;
@@ -197,7 +197,7 @@ services:
           echo "MIGRATOR_ADDRESS=$$(addr v3Migrator)";
           echo "TREASURY_ADDRESS=$$(addr treasury)";
           echo "LP_FEE_VAULT_ADDRESS=$$(addr lpFeeVault)";
-          # §12.63/§12.69 creator-fee generation: the indexer gates its CreatorVault +
+          # creator-fee generation: the indexer gates its CreatorVault +
           # LPFeeVault `FeesSplit` sources on CREATOR_VAULT_ADDRESS, and the api resolves
           # the per-(creator,token) claimable vault + WETH USD leg from these. Without
           # them the post-grad 50/50 split never indexes and /v1/creators/:a/claimable/:t
@@ -251,7 +251,7 @@ services:
   # ── api — Hono on Bun, hot reload (`bun run --hot`, apps/api). Host :4001 ──
   api:
     <<: *dev-base
-    # Sources the deploychain-emitted addresses (treasury/vault flags, api.md §3.4) when
+    # Sources the deploychain-emitted addresses (treasury/vault flags, api.md) when
     # present — best-effort: the API boots fine without them.
     command:
       - /bin/sh
@@ -271,16 +271,16 @@ services:
       R2_BUCKET: ${R2_BUCKET:-robbed-assets}
       # Browser-visible object URL base — host-mapped minio port (4900), not the service DNS name.
       R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4900}/${R2_BUCKET:-robbed-assets}
-      # Dev runs on stub moderation vendors (§4.3 boot guard allows this outside production).
+      # Dev runs on stub moderation vendors (boot guard allows this outside production).
       MODERATION_ALLOW_STUBS: "true"
-      # Public-/v1 CORS (api.md §6.1): the local web origin. Override seam kept for
+      # Public-/v1 CORS (api.md) the local web origin. Override seam kept for
       # ad-hoc setups; admin/internal routes are never opened regardless.
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:${WEB_PORT:-4000}}
       # Dev/e2e: 100x the production per-route rate limits — back-to-back full
       # e2e matrix runs exhaust prod uploads_h=10 and fail every create flow.
       # Production deployments never set this (default 1 = prod values).
       RATE_LIMIT_SCALE: "100"
-      # Cold `tokensOwed` read (api.md §3.4) against the local fork.
+      # Cold `tokensOwed` read (api.md) against the local fork.
       ROBINHOOD_RPC_URL: http://anvil:8545
     ports:
       - "${API_PORT:-4001}:3001"
@@ -334,11 +334,11 @@ services:
       - /bin/sh
       - -c
       - |
-        # set -e per §12.55(d): the migrate step runs the fail-closed startup
+        # set -e per : the migrate step runs the fail-closed startup
         # assertions — its failure MUST kill the container, never be swallowed.
         set -e
         set -a; . ./tools/localstack/out/local.env; set +a
-        # Offchain sidecar tables (watermarks, eth_usd, metadata_verifications — indexer.md §3)
+        # Offchain sidecar tables (watermarks, eth_usd, metadata_verifications — indexer.md)
         # live outside Ponder's schema management; the migrate script is idempotent.
         # Phase 2 (0003 GIN indexes + 0005/0007 views over Ponder-managed tables) is
         # skipped here on a fresh DB and applied by the indexer SIDECAR BOOT
@@ -352,10 +352,10 @@ services:
         required: false
     environment:
       <<: *dev-env
-      # §12.55 chain-identity gate: explicit selection (registry-validated + live
+      # chain-identity gate: explicit selection (registry-validated + live
       # RPC-asserted). This stack is the anvil FORK of mainnet — eth_chainId 4663.
       INDEXER_CHAIN_ID: "4663"
-      # §12.55 known limit: the registry's 4663 entry is a mainnet-FORK pipeline
+      # known limit: the registry's 4663 entry is a mainnet-FORK pipeline
       # artifact, so 4663 is refused unless the stack declares itself a LOCAL fork
       # (this one is — the sanctioned exception until a real Phase-B deploy).
       INDEXER_ALLOW_FORK_4663: "1"
@@ -363,7 +363,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
       REDIS_URL: redis://redis:6379
       METRICS_PORT: "9464"
-      # M2-7 metadata verifier (indexer.md §6.1): fallback base for tokens whose
+      # M2-7 metadata verifier (indexer.md) fallback base for tokens whose
       # row carries no metadata_uri — container-internal minio service DNS
       # (key layout metadata/{keccak-no-0x}.json, matching the API's writes).
       R2_METADATA_BASE_URL: http://minio:9000/${R2_BUCKET:-robbed-assets}/metadata
@@ -399,7 +399,7 @@ services:
     restart: "no"
 
   # ── keeper — auto-graduation keeper (apps/keeper). Fires permissionless graduate()
-  #   within ~1-2 blocks of GraduationReady; the §12.34 caller reward offsets gas.
+  # within ~1-2 blocks of GraduationReady; the caller reward offsets gas.
   #   DEV: ON by default. RPC = the anvil fork over WS (ws://anvil:8545 → the
   #   eth_subscribe push-detection path; anvil serves JSON-RPC over WS on the same
   #   port — HTTP would fall back to log polling + the DB sweep). Signer = anvil

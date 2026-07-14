@@ -1,7 +1,7 @@
 /**
- * M2-10 metadata (§8.3, §12.19): golden hash parity with the shared canonicalizer
+ * M2-10 metadata : golden hash parity with the shared canonicalizer
  * (same fn the client + indexer use), byte-limit + link-scheme validation, and
- * NON-BLOCKING moderation (impersonation never blocks the response — §8.4).
+ * NON-BLOCKING moderation (impersonation never blocks the response).
  */
 import { describe, expect, it } from "bun:test";
 import { canonicalizeJson, metadataHash } from "@robbed/shared";

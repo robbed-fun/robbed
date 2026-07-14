@@ -3,13 +3,13 @@
 -- that gather the raw aggregates the PURE `rollUpAddressPnl` (src/pnl/compute.ts)
 -- consumes. The realized-PnL math + range/confidence logic lives in TS (testable,
 -- no literals in SQL); these views only shape the data with FILTERed aggregates.
--- ADVISORY / read-only — never gate chain state (§8.4). Rebuildable from raw
--- events (§4.4). Applied in the Ponder schema AFTER `ponder start` builds those
+-- ADVISORY / read-only — never gate chain state. Rebuildable from raw
+-- events. Applied in the Ponder schema AFTER `ponder start` builds those
 -- tables (scripts/migrate.ts, same rule as 0003 GIN indexes / 0005 flow views).
 -- All idempotent.
 
 -- Per-(address, token) trade legs, split by venue. Curve legs are EXACT; V3 legs
--- are best-effort (recipient is often a router — spec §12.16 OI-5), which is why
+-- are best-effort (recipient is often a router — OI-5), which is why
 -- realized PnL is a range and `has_v3` drives 'estimated' confidence. Cost basis
 -- IN = GROSS eth (fee included); proceeds OUT = NET eth (eth_amount − fee) —
 -- byte-identical to the rebuild ledger's applyCostBasis* semantics (rebuild.ts).
@@ -39,7 +39,7 @@ GROUP BY tr.trader;
 
 -- Per-address first/last Transfer touch (both directions; the zero address — mint
 -- source / burn sink — is never recorded as an address). Transfers are the sole
--- balance truth (§3.6), so this is the authoritative first-seen anchor.
+-- balance truth, so this is the authoritative first-seen anchor.
 CREATE OR REPLACE VIEW pnl_address_seen AS
 SELECT address,
        MIN(ts) AS first_seen_at,
@@ -53,7 +53,7 @@ FROM (
 ) u
 GROUP BY address;
 
--- Per-address created-token count (CREATED tab count; §7 creator tracked day 1).
+-- Per-address created-token count (CREATED tab count; creator tracked day 1).
 CREATE OR REPLACE VIEW pnl_tokens_created AS
 SELECT creator AS address, COUNT(*) AS tokens_created
 FROM tokens

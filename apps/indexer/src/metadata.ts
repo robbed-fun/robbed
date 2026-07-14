@@ -1,5 +1,5 @@
 /**
- * Metadata integrity verification (indexer.md §6, spec §8.3; M2-7).
+ * Metadata integrity verification (indexer.md, M2-7).
  *
  * R2 URLs are mutable; the on-chain `metadataHash` is not. On `TokenCreated`
  * the row is seeded `unfetched` (by the verifier's discovery pass — the verifier
@@ -9,10 +9,10 @@
  *      the frontend's pre-sign hash and the API's write-time hash — one impl);
  *   3. keccak256s and compares BYTE-FOR-BYTE against the on-chain hash;
  *   4. persists `match` / `mismatch` / `unfetched` (+ both hashes, raw-body
- *      sha256) — NEVER `match` without an actual byte comparison (§6.1 step 4);
- *   5. publishes `metadata_verified` (§6.1 step 7);
+ * sha256) — NEVER `match` without an actual byte comparison (step 4);
+ * 5. publishes `metadata_verified` (step 7);
  *   6. re-verifies on a schedule (unfetched→backoff, mismatch→daily, match→
- *      weekly — R2 is mutable, the verdict must not be assumed stable, §6.2);
+ * weekly — R2 is mutable, the verdict must not be assumed stable);
  *   7. subscribes `control:reverify` (X-9) so the admin re-verify seam re-queues
  *      a row WITHOUT the API ever writing this indexer-owned table.
  *
@@ -29,7 +29,7 @@ import {
 } from "@robbed/shared";
 import { publishMetadataVerified, type RedisPublisher } from "./publish";
 
-/** Fetch timeout (§6.1 step 1). */
+/** Fetch timeout (step 1). */
 export const METADATA_FETCH_TIMEOUT_MS = 10_000;
 
 const MINUTE = 60_000;
@@ -38,7 +38,7 @@ const DAY = 24 * HOUR;
 const WEEK = 7 * DAY;
 
 /**
- * Exponential backoff for `unfetched`/errored rows (§6.1 step 6): 1m, 5m, 30m,
+ * Exponential backoff for `unfetched`/errored rows (step 6) 1m, 5m, 30m,
  * 6h, then daily forever (the attempts counter never STOPS the daily retry).
  */
 const BACKOFF_LADDER_MS = [1 * MINUTE, 5 * MINUTE, 30 * MINUTE, 6 * HOUR] as const;
@@ -50,7 +50,7 @@ export function nextAttemptDelayMs(attempts: number): number {
 }
 
 /**
- * Re-verify cadence for a SETTLED row (§6.2): a `mismatch` re-checks daily (the
+ * Re-verify cadence for a SETTLED row : a `mismatch` re-checks daily (the
  * R2 object may be corrected to match the immutable hash), a `match` re-checks
  * weekly (detects R2 mutation after the fact), `unfetched` falls back to the
  * attempt backoff (handled by `nextAttemptDelayMs`).
@@ -79,7 +79,7 @@ export interface MetadataFetcher {
 /**
  * Real HTTP fetcher: timeout via `AbortController`, hard 64KB size cap
  * (content-length pre-check + post-read guard), content-type sanity. Any failure
- * → `{ ok:false }` so the row stays `unfetched` and backs off (§6.1 step 6).
+ * → `{ ok:false }` so the row stays `unfetched` and backs off (step 6).
  */
 export function createHttpMetadataFetcher(
   timeoutMs: number = METADATA_FETCH_TIMEOUT_MS,
@@ -114,13 +114,13 @@ export function createHttpMetadataFetcher(
 // ── Pure verdict ────────────────────────────────────────────────────────────
 
 /**
- * Display fields extracted from the fetched metadata JSON (indexer.md §6.1
- * step 5, §3.1). Persisted on the OFFCHAIN `metadata_verifications` sidecar —
+ * Display fields extracted from the fetched metadata JSON (indexer.md
+ * step 5). Persisted on the OFFCHAIN `metadata_verifications` sidecar —
  * NOT on the Ponder-managed `tokens` table, whose `image_url`/`description`/
- * `links` columns cannot be legally written outside handlers (§7.3 OI-11
+ * `links` columns cannot be legally written outside handlers (OI-11
  * verdict: external UPDATEs are silently reverted by ponder 0.16.8 cache
  * flushes and forbidden by Ponder's docs). The API projections COALESCE these
- * over the tokens columns at read time (same pattern as the §12.48c
+ * over the tokens columns at read time (same pattern as the
  * confirmation-state read-derivation).
  */
 export interface DisplayFields {
@@ -137,7 +137,7 @@ export interface VerificationOutcome {
   /**
    * Non-null ONLY when the fetch succeeded and the bytes strict-parsed as the
    * shared canonical doc (`tokenMetadataSchema`). Populated on match AND
-   * mismatch (content is still shown, badged by the Trust panel — §3.1/§6.1
+   * mismatch (content is still shown, badged by the Trust panel —
    * step 5); the store must never let a later FAILED fetch null out previously
    * extracted fields.
    */
@@ -172,7 +172,7 @@ export function extractDisplayFields(bytes: Uint8Array): DisplayFields | null {
 /**
  * Decide the verdict from a fetch result + the on-chain commitment. The ONLY
  * path to `match` is the explicit byte-for-byte hash equality on line marked
- * below — a fetch/parse success is NEVER a match (§6.1 step 4; the mutation-
+ * below — a fetch/parse success is NEVER a match (step 4; the mutation-
  * guard test replaces this compare and asserts the suite fails).
  */
 export function decideVerification(fetchResult: FetchResult, onchainHash: string): VerificationOutcome {
@@ -187,7 +187,7 @@ export function decideVerification(fetchResult: FetchResult, onchainHash: string
     // commitment (which is keccak256 of canonical JSON). Genuine mismatch.
     return { status: "mismatch", computedHash: null, bodySha256, error: "unparseable_json", display };
   }
-  // ── THE byte-level comparison — the sole gate to `match` (§6.1 step 4). ──
+  // ── THE byte-level comparison — the sole gate to `match` (step 4). ──
   const matches = computed.toLowerCase() === onchainHash.toLowerCase();
   return {
     status: matches ? "match" : "mismatch",

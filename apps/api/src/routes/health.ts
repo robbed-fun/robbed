@@ -1,9 +1,9 @@
 /**
- * Liveness + readiness (gate-7 probes, api.md §3.5). `/v1/healthz` is a pure
+ * Liveness + readiness (gate-7 probes, api.md). `/v1/healthz` is a pure
  * liveness signal; `/v1/readyz` probes DB + Redis + R2 and returns 503 when any
  * dependency is down so `dev:health` / orchestration can gate startup.
  *
- * Envelope (NORMATIVE — api.md §3.5, 2026-07-12 W3/M2-2 reconcile): the 200 arm
+ * Envelope (NORMATIVE — api.md, 2026-07-12 W3/M2-2 reconcile) the 200 arm
  * carries the structured `{ ok: true, checks }` breakdown; the 503 arm is the
  * STANDARD shared ErrorEnvelope with the closed-enum code `upstream_unavailable`
  * (ratified 2026-07-10 with the explicit "readyz-503 dependency-down"

@@ -1,8 +1,8 @@
 /**
- * Internal dashboard endpoints (D-4; api.md §3.7; M2-13/M2-14 verify legs).
+ * Internal dashboard endpoints (D-4; api.md; M2-13/M2-14 verify legs).
  * — GET /internal/flow/:address returns organic % (the shared organicFlowSchema
  *   RANGE) + bot-flag counts for a SEEDED token (M2-13 verify clause);
- * — GET /internal/competitor-snapshots is paged newest-first with §2
+ * — GET /internal/competitor-snapshots is paged newest-first with
  *   source+timestamp on EVERY row, empty (never fabricated) while the source
  *   is unconfigured (M2-14 verify clause);
  * — both are admin-SIWE-gated (401 without a session).
@@ -76,7 +76,7 @@ describe("GET /internal/flow/:address (M2-13; Gate G-A.1)", () => {
     // organic is EXACTLY the shared shape the Trust panel gets (anti-drift).
     expect(() => organicFlowSchema.parse(data.organic)).not.toThrow();
     expect(data.organic.holderPctLow).toBe(35);
-    expect(data.organic.holderPctHigh).toBe(60); // a RANGE, never a point (§5.2)
+    expect(data.organic.holderPctHigh).toBe(60); // a RANGE, never a point
     expect(data.organic.volumePct).toBe(48.5);
     expect(data.organic.flaggedClusterVolPct24h).toBe(22);
     // flagged summary: per-flag counts zero-filled to the full BotFlag record.
@@ -87,7 +87,7 @@ describe("GET /internal/flow/:address (M2-13; Gate G-A.1)", () => {
     });
   });
 
-  it("organic is null (never fabricated) before the §8.5 job computes stats", async () => {
+  it("organic is null (never fabricated) before the job computes stats", async () => {
     const { deps, headers } = internalDeps();
     const res = await createApp(deps).request(
       new Request(`http://x/internal/flow/${TEST_ADDR}`, { headers }),
@@ -109,7 +109,7 @@ describe("GET /internal/flow/:address (M2-13; Gate G-A.1)", () => {
 });
 
 describe("GET /internal/competitor-snapshots (M2-14; Gate G-A.2)", () => {
-  it("returns seeded snapshots newest-first, §2 source+timestamp on every row", async () => {
+  it("returns seeded snapshots newest-first, source+timestamp on every row", async () => {
     const { deps, db, headers } = internalDeps();
     db.competitorSnapshots = [
       snapshot({ captured_at: "2026-06-21T00:00:00.000Z", tokens_per_day: 30 }),
@@ -127,7 +127,7 @@ describe("GET /internal/competitor-snapshots (M2-14; Gate G-A.2)", () => {
       "2026-06-21T00:00:00.000Z",
     ]);
     for (const s of data.snapshots) {
-      expect(s.source).toBeTruthy(); // never fabricated / never sourceless (§2)
+      expect(s.source).toBeTruthy(); // never fabricated / never sourceless
       expect(s.captured_at).toBeTruthy();
       expect(s.visible_volume_eth).toMatch(/^\d+$/); // wei decimal string
     }

@@ -1,8 +1,8 @@
 /**
- * Gate-7 invariant alerts (indexer.md §9.4). Pure decision functions — no I/O —
+ * Gate-7 invariant alerts (indexer.md). Pure decision functions — no I/O —
  * so the handler stays thin and the alert conditions are unit-tested. The
  * handler logs the returned message (delivery = Prometheus/pager per infra
- * choice at M4); these functions only DECIDE, they never gate chain state (§8.4).
+ * choice at M4); these functions only DECIDE, they never gate chain state.
  */
 
 export interface Alert {
@@ -13,8 +13,8 @@ export interface Alert {
 }
 
 /**
- * V3 `Collect.recipient` MUST be the treasury (§6.4/§6.6 — LPFeeVault sends fees
- * to a fixed treasury). Any other recipient pages immediately (§9.4). Returns an
+ * V3 `Collect.recipient` MUST be the treasury (— LPFeeVault sends fees
+ * to a fixed treasury). Any other recipient pages immediately. Returns an
  * alert on mismatch, or `null` when it matches / when `treasury` is unconfigured
  * (can't compare — the caller logs a softer "unverifiable" warning instead).
  * Addresses are compared lowercase (stored lowercase throughout).

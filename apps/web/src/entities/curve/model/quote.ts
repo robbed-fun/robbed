@@ -5,17 +5,17 @@ import { useReadContract } from "wagmi";
 import type { Address } from "viem";
 
 /**
- * Curve quote model (§5.2 TradeWidget). The QUOTE is an on-chain view — the
- * source of truth is `BondingCurve.quoteBuy/quoteSell` (contracts.md §2.3), read
+ * Curve quote model (TradeWidget). The QUOTE is an on-chain view — the
+ * source of truth is `BondingCurve.quoteBuy/quoteSell` (contracts.md), read
  * live; the shared curve math is only a display fallback/oracle. This module owns
  * the pure DISPLAY math around that quote (slippage floor, price impact, deadline)
  * and the read hook.
  *
- * None of these are market metrics (§2): slippage/deadline are user settings and
+ * None of these are market metrics : slippage/deadline are user settings and
  * price impact is a ratio of the live quote to the live spot — no constant ETH/USD
  * or price is ever inlined.
  *
- * DECISIONS (hoodpad-frontend):
+ * DECISIONS (robbed-frontend):
  * - Quote reads use `useReadContract` keyed by (curve, side, amount): TanStack
  *   Query's key-based caching discards a superseded response automatically, so a
  *   stale quote can never overwrite a newer one (the epoch guard is the query
@@ -32,14 +32,14 @@ import type { Address } from "viem";
  *   the fallback when no client is present or the read throws.
  */
 
-/** Default slippage tolerance — 2% (§5.2). */
+/** Default slippage tolerance — 2%. */
 export const DEFAULT_SLIPPAGE_BPS = 200;
-/** Above this, the widget warns (§5.2 "warnings >5%"). */
+/** Above this, the widget warns ("warnings >5%"). */
 export const SLIPPAGE_WARN_BPS = 500;
 export const SLIPPAGE_MIN_BPS = 10; // 0.1%
 export const SLIPPAGE_MAX_BPS = 5000; // 50%
 /**
- * Default trade deadline window — now + 20 min (§5.2, "deadline on every trade").
+ * Default trade deadline window — now + 20 min ("deadline on every trade").
  * 20 (bumped from 10) is belt-and-suspenders headroom on top of the real fix
  * (`computeChainDeadline`, which derives the absolute deadline from chain time,
  * not the browser clock).
@@ -150,7 +150,7 @@ export interface CurveQuote {
   feeEth: bigint;
   /** Buy only: gross ETH actually accepted after graduation-clamp. */
   acceptedEthGross?: bigint;
-  /** Buy only: ETH refunded by the graduation clamp (§12.11). */
+  /** Buy only: ETH refunded by the graduation clamp. */
   refund?: bigint;
 }
 

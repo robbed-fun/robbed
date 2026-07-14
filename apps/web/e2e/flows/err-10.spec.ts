@@ -14,7 +14,7 @@ import {
   test,
 } from "../harness";
 
-// @flow:ERR-10 — Transaction reverts on-chain (generic) (§5.2)
+// @flow:ERR-10 — Transaction reverts on-chain (generic)
 // assertable-layers: on-chain · UI   (N/A indexed: reverted tx → no Trade — waiver)
 test(
   "ERR-10 a generic on-chain revert flips the row to failed (never left as final)",
@@ -36,7 +36,7 @@ test(
 
     await assertUi("a reverted receipt turns the pending row into a failed row + tx link", async () => {
       // Force the trade's receipt to read `reverted` — the client can't tell a
-      // real revert from this and must run its failed-row treatment (§4 rule).
+      // real revert from this and must run its failed-row treatment (rule).
       await page.route(isRpcRequest, async (route) => {
         const body = route.request().postDataJSON?.();
         const calls = Array.isArray(body) ? body : [body];

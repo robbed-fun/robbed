@@ -39,13 +39,13 @@ import { cn } from "@/shared/lib/utils";
 import { useWsChannel } from "@/shared/lib/ws";
 
 /**
- * Live event tape (Discover, ROBBED_ redesign — spec §12.50, panel "2d").
+ * Live event tape (Discover, ROBBED_ redesign —, panel "2d").
  *
  * Filter tabs (ALL/LAUNCHES/TRADES/GRADUATIONS) + a LIVE dot, then rows:
  * age · colored SIDE · token · amount ETH · mcap · Δ%. It merges a real
  * server-seeded LAUNCH snapshot with the live WS streams (`global:trades`,
  * `global:launches`) — see model/events.ts for the protocol-discipline notes
- * (mcap/Δ% resolve from the registry, never fabricated from a trade; §2).
+ * (mcap/Δ% resolve from the registry, never fabricated from a trade).
  *
  * Rows are driven by the shared headless `DataTable` (TanStack Table v8): typed
  * `ColumnDef<TapeEvent>[]` supply the cell renderers, and `renderRow` wraps each
@@ -140,7 +140,7 @@ export function EventTape({ tokens }: { tokens: TokenCard[] }) {
 /**
  * Column model for the tape row — cells close over the token `registry` and the
  * age `now` tick so mcap/Δ%/age resolve from live indexer aggregates by reference
- * (§2), never fabricated. Rebuilt only on the 10s `now` tick or a registry change.
+ *, never fabricated. Rebuilt only on the 10s `now` tick or a registry change.
  */
 function buildTapeColumns(
   registry: Map<string, TokenInfo>,
@@ -218,7 +218,7 @@ function buildTapeColumns(
       cell: ({ row }) => {
         const event = row.original;
         // Live rows resolve the token's 24h Δ% from the registry — never from a
-        // single event (§2: no fabricated aggregates).
+        // single event (no fabricated aggregates).
         const delta = registry.get(event.token)?.change24hPct ?? null;
         return (
           // mockup: delta / "new" inherit the 13px base ramp (text-base)
@@ -238,7 +238,7 @@ function buildTapeColumns(
 }
 
 /**
- * mcap cell — only renders a USD figure when a live-priced snapshot exists (§2).
+ * mcap cell — only renders a USD figure when a live-priced snapshot exists.
  * Mockup renders the WHOLE mcap cell (label + value) in text-muted
  * (template.html:282) at the 13px base ramp — the value is NOT brightened.
  */

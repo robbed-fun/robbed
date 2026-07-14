@@ -5,7 +5,7 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 
 import { cn } from "@/shared/lib/utils";
 
-/** Vendored shadcn/ui Tooltip (new-york, Radix) — code we own (§12.24). */
+/** Vendored shadcn/ui Tooltip (new-york, Radix) — code we own. */
 const TooltipProvider = TooltipPrimitive.Provider;
 const Tooltip = TooltipPrimitive.Root;
 const TooltipTrigger = TooltipPrimitive.Trigger;

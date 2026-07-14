@@ -11,7 +11,7 @@
  * so this card is byte-for-byte consistent with the terminal skin and the
  * per-token cards. Palette is sampled from the ROBBED_ tokens in
  * `apps/web/src/app/globals.css` / mirrored in `apps/api/src/og/theme.ts` — brand
- * color literals only, NO market metrics (spec §2).
+ * color literals only, NO market metrics.
  *
  * Docs verified via the existing pipeline's header (satori 0.19 / resvg 2.6):
  *   satori(element, { width, height, fonts }) → SVG (glyphs as <path>)

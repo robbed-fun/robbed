@@ -19,7 +19,7 @@ import {
 /**
  * Thin React binding for the pure `tradesReducer` (lib/trades.ts). React-only
  * plumbing lives here so the reducer stays framework-agnostic + testable:
- *   - feeds `global:confirmations` watermark advances into the reducer (§12.20),
+ * - feeds `global:confirmations` watermark advances into the reducer,
  *   - runs the silence `tick` on an interval,
  *   - drives REST-heal (`GET /v1/trades/:txHash`) for rows past WS silence.
  *
@@ -65,7 +65,7 @@ export function useOptimisticTrades(opts: UseOptimisticTradesOptions = {}): Opti
     createInitialTradesState(watermarks),
   );
 
-  // Feed watermark advances into the reducer (§12.20 — O(1) local upgrade).
+  // Feed watermark advances into the reducer (O(1) local upgrade).
   useEffect(() => {
     dispatch({ type: "watermark", watermarks });
   }, [watermarks]);
@@ -95,7 +95,7 @@ export function useOptimisticTrades(opts: UseOptimisticTradesOptions = {}): Opti
         })
         .catch(() => {
           // Network/REST error is not indexer-confirmed absence — retry next cycle,
-          // never escalate to `failed` on a fetch failure (web.md §4.4).
+          // never escalate to `failed` on a fetch failure (web.md).
           lastHealAt.current.delete(key);
         });
     }

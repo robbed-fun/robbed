@@ -17,8 +17,8 @@ import {CreatesPaused, BuysPaused, UnknownToken, InvalidMsgValue, EthTransferFai
 ///         the treasury, moves sell tokens into the curve before calling `sell`, and gates buys on
 ///         `pauseBuys`. It deliberately does NOT enforce `deadline` — the real Router (M1-9) owns
 ///         the deadline/slippage-guard surface; this harness only proves the curve's Router-facing
-///         signatures and the §12.25 no-treasury-on-trade property. The sell path here reads NO
-///         pause flag, matching the production guarantee (spec §6.5).
+/// signatures and the no-treasury-on-trade property. The sell path here reads NO
+/// pause flag, matching the production guarantee.
 contract TestRouter is IRouter {
     using SafeERC20 for IERC20;
 
@@ -75,7 +75,7 @@ contract TestRouter is IRouter {
         (tokensOut,,) = IBondingCurve(curve).buy{value: msg.value}(msg.sender, recipient, msg.sender, minTokensOut);
     }
 
-    /// @dev No pause flag is read here or in {BondingCurve}.sell — sells are unfreezable (spec §6.5).
+    /// @dev No pause flag is read here or in {BondingCurve}.sell — sells are unfreezable.
     function sell(
         address token,
         uint256 tokenAmount,
@@ -138,7 +138,7 @@ contract TestRouter is IRouter {
 /// @notice TEST HARNESS. Real V3 pool init + arb-back + mint are M1-10 (invariant 6). For M1-8 this
 ///         only needs to (1) return a deterministic non-zero pool at create time and (2) accept the
 ///         curve's tokens + ETH at graduation and push the flat GRADUATION_FEE to the treasury FIRST
-///         (contracts.md §3.4 step 2), so the exact-fee invariant sees the graduation-fee leg. It
+/// (contracts.md step 2), so the exact-fee invariant sees the graduation-fee leg. It
 ///         holds the rest (the LP ETH) — representing value locked in the future V3 position.
 contract MockMigrator {
     ICurveFactory public immutable factoryContract;
@@ -173,7 +173,7 @@ contract MockMigrator {
 }
 
 /// @title Reverter — treasury/recipient that rejects all incoming ETH
-/// @notice TEST HARNESS for the decisive §12.25 / UM-1 proof: pointed at as the factory `treasury`,
+/// @notice TEST HARNESS for the decisive / UM-1 proof: pointed at as the factory `treasury`,
 ///         it proves a curve SELL still succeeds (no trade path touches it) while `sweepFees()`
 ///         reverts (retriable). Also reused to prove a reverting `recipient` only fails its own trade.
 contract Reverter {

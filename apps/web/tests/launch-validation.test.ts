@@ -16,12 +16,12 @@ import {
 const ROUTER = "0x00000000000000000000000000000000000000a1" as const;
 
 /**
- * Launch client-side validation + wiring (§5.3, §12.30). The byte-limit gates use
+ * Launch client-side validation + wiring. The byte-limit gates use
  * the SHARED zod schemas (never redeclared); the create-tx wiring proves the
  * single `createToken` value/args; the index-grace proves the redirect only fires
  * once the token is indexed (no 404 for the creator).
  */
-describe("byte-length validation via shared zod (§12.30)", () => {
+describe("byte-length validation via shared zod ", () => {
   it("accepts a valid name/ticker", () => {
     const r = launchTextSchema.safeParse({ name: "Cash Cat", ticker: "CASHCAT" });
     expect(r.success).toBe(true);
@@ -70,7 +70,7 @@ describe("byte-length validation via shared zod (§12.30)", () => {
   });
 });
 
-describe("image validation (§5.3, ≤4 MB)", () => {
+describe("image validation (≤4 MB)", () => {
   const asFile = (over: Partial<File>): File =>
     ({ size: 1_000, type: "image/png", name: "x.png", ...over }) as unknown as File;
 
@@ -102,12 +102,12 @@ describe("initial-buy parsing", () => {
   });
 });
 
-// Factory seed virtual reserves (contracts.md §2.2). VIRTUAL_TOKEN_0 chosen to
+// Factory seed virtual reserves (contracts.md). VIRTUAL_TOKEN_0 chosen to
 // match the shared curve-quote golden vector so the preview is cross-checked.
 const VIRTUAL_ETH_0 = 30n * 10n ** 18n;
 const VIRTUAL_TOKEN_0 = 1073000000n * 10n ** 18n;
 
-describe("M3-6 initial-buy preview + non-zero minTokensOut (§5.3)", () => {
+describe("M3-6 initial-buy preview + non-zero minTokensOut ", () => {
   it("previewInitialBuy tokensOut == shared previewBuy (no re-implemented math)", () => {
     const ethIn = 10n ** 18n; // 1 ETH gross
     const feeBps = 100; // 1%
@@ -170,7 +170,7 @@ describe("M3-6 initial-buy preview + non-zero minTokensOut (§5.3)", () => {
   });
 });
 
-describe("createToken tx wiring (§5.3 single tx, deployFee + initialBuy)", () => {
+describe("createToken tx wiring (single tx, deployFee + initialBuy)", () => {
   it("value = deployFee + initialBuy; args in contract order; shared routerAbi", () => {
     const preview = previewInitialBuy({
       virtualEth0: VIRTUAL_ETH_0,
@@ -186,7 +186,7 @@ describe("createToken tx wiring (§5.3 single tx, deployFee + initialBuy)", () =
       name: "Cash Cat",
       symbol: "CASHCAT",
       metadataHash: `0x${"ab".repeat(32)}`,
-      metadataUri: "https://cdn.hoodpad.example/metadata/0xab.json",
+      metadataUri: "https://cdn.robbed.example/metadata/0xab.json",
       minTokensOut,
       deadline: 1_800_000_000n,
       deployFeeWei: 3_000_000_000_000_000n, // live-read, not a constant in prod
@@ -200,7 +200,7 @@ describe("createToken tx wiring (§5.3 single tx, deployFee + initialBuy)", () =
       "Cash Cat",
       "CASHCAT",
       `0x${"ab".repeat(32)}`,
-      "https://cdn.hoodpad.example/metadata/0xab.json",
+      "https://cdn.robbed.example/metadata/0xab.json",
       minTokensOut,
       1_800_000_000n,
     ]);
@@ -222,7 +222,7 @@ describe("createToken tx wiring (§5.3 single tx, deployFee + initialBuy)", () =
   });
 });
 
-describe("not-yet-indexed redirect grace (web.md §4 pending-shell)", () => {
+describe("not-yet-indexed redirect grace (web.md pending-shell)", () => {
   const nap = () => Promise.resolve();
 
   it("navigates only AFTER the token resolves (retries through 404s)", async () => {

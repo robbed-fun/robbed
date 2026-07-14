@@ -1,21 +1,21 @@
 /**
- * derive.ts — ROBBED_ Milestone 0 parameter notebook (spec §11.0).
+ * derive.ts — ROBBED_ Milestone 0 parameter notebook.
  *
- * Derives every deploy-time curve constant (spec §6.2 math, §6.4 targets),
- * the V3 graduation price/tick in both token orderings (§6.3), LP tranche
+ * Derives every deploy-time curve constant (math, targets),
+ * the V3 graduation price/tick in both token orderings, LP tranche
  * sizing, and fee / anti-sniper proposals; validates with randomized
  * round-trip simulations; emits:
- *   out/constants.json    — canonical artifact (schema: docs/developers/contracts.md §4)
+ * out/constants.json — canonical artifact (schema: docs/developers/contracts.md)
  *   out/Constants.sol.txt — generated Solidity rendering (never hand-edited)
  *   out/constants.ts      — generated TS rendering for apps/web / packages/shared
  *   out/plots/*.svg + out/plots/checkpoints.md
  *
  * ┌────────────────────────────────────────────────────────────────────────┐
- * │ STATUS: final tick + constants remain OPEN ITEM (spec §13) until this  │
- * │ output is reviewed and gate-approved by hoodpad-architect.             │
+ * │ STATUS: final tick + constants remain OPEN ITEM until this │
+ * │ output is reviewed and gate-approved by robbed-architect.             │
  * └────────────────────────────────────────────────────────────────────────┘
  *
- * Hard rule (§2): ETH/USD is fetched LIVE at run time with source + timestamp
+ * Hard rule : ETH/USD is fetched LIVE at run time with source + timestamp
  * provenance. There is NO baked-in fallback price — fetch failure exits 1.
  *
  * Usage: bun run derive [--source=coingecko|defillama] [--reuse-snapshot]
@@ -27,7 +27,7 @@
  *   out/constants.json (recompute-only mode; provenance is preserved).
  *   --network=testnet (Phase T-1) emits out/constants.testnet.json — same schema,
  *   same validations, chainId 46630, with external.* taken from the checked-in
- *   fixture external.testnet.json (spec §12.52 ratified set; derive FAILS CLOSED
+ * fixture external.testnet.json (ratified set; derive FAILS CLOSED
  *   naming that fixture while any of its values is null). Testnet mode emits ONLY
  *   the JSON: the Sol/TS renderings + plots stay mainnet-canonical (a testnet run
  *   must never overwrite them with a different live snapshot). Recommended:
@@ -39,27 +39,27 @@
  *   M0_TESTNET_GRADUATION_ETH=<decimal ETH, e.g. 0.005>  (env var; testnet mode only)
  *   Re-derives the FULL self-consistent constant set around a small, faucet-testable
  *   graduation target instead of the $69k-mcap-derived one: the solver keeps the
- *   §6.4 supply split (793.1M curve / 206.9M LP tranche) and inverts constraint (c)
+ * supply split (793.1M curve / 206.9M LP tranche) and inverts constraint (c)
  *   `G = p·L + F + R` to pick the graduation price, so virtual reserves, the
  *   pre-created V3 pool price/ticks, LP amounts, the anti-sniper cap (2.5% of G),
  *   the beta caps (1.5×G / 50×G) and the organic floor all stay consistent at the
  *   new G. Fee policy under the override (small-G rescale, review-required):
  *     callerReward   = 10% of target G      (maxCallerReward = 2× → 20% of G)
- *     graduationFee  = min(cost-based §12.26, 10% of G)
+ * graduationFee = min(cost-based, 10% of G)
  *                                            (maxGraduationFee = min(10×, 20% of G))
  *     ⇒ maxCallerReward + maxGraduationFee ≤ 40% of G — Deploy.s.sol's
  *       GraduationUnfundable guard passes with ≥60% margin (checked below).
- *     §12.34 caller-reward gas floor is relaxed 10× → 1.5× (still strictly
+ * caller-reward gas floor is relaxed 10× → 1.5× (still strictly
  *     profitable to call graduate(); the 10× margin is a MAINNET liveness knob).
  *   creationFee is independent of G and is NOT rescaled. FAILS CLOSED if the env
  *   var is set while deriving mainnet (--network=mainnet or default): the override
  *   must never be able to influence the reviewed mainnet economics.
  *
  * ── MAINNET flat graduation target (approved change 2026-07-13; retargeted 5.7 ETH 2026-07-13) ──────
- *   Mainnet G is now a FLAT net-of-fee ETH raise (§12.11): DEFAULT 5.7 ETH (MAINNET_GRADUATION_ETH;
+ * Mainnet G is now a FLAT net-of-fee ETH raise : DEFAULT 5.7 ETH (MAINNET_GRADUATION_ETH;
  *   matches RobinFun's ~5.74 ETH / ~$44k graduation bar), env-overridable via M0_MAINNET_GRADUATION_ETH=<decimal ETH>.
  *   Same MECHANISM as the testnet override — invert constraint (c) `G = p·L + F + R` around the target —
- *   but the MAINNET fee policy is UNCHANGED (USD-sized ~$5 caller reward, cost-based §12.26 graduation fee,
+ * but the MAINNET fee policy is UNCHANGED (USD-sized ~$5 caller reward, cost-based graduation fee,
  *   10× gas floor): at 5.7 ETH those fees are ≪ G, so NO faucet-scale %-of-G rescale and NO gas-floor
  *   relaxation apply.
  *   The `smallGOverride` flag (TRUE only for the testnet faucet path) gates every rescale; the mainnet
@@ -95,55 +95,55 @@ import {
 import { linePlotSvg, markdownTable } from "./lib/plot.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Spec constants (§6.4 economics targets — these are SPEC TARGETS, not market
+// Spec constants (economics targets — these are SPEC TARGETS, not market
 // data; every market-dependent number below is computed from the live fetch).
 // ─────────────────────────────────────────────────────────────────────────────
 const MAINNET_CHAIN_ID = 4663;
-// Official Robinhood Chain TESTNET id (spec §12.49/§12.52; docs.robinhood.com/chain/connecting —
+// Official Robinhood Chain TESTNET id (; docs.robinhood.com/chain/connecting —
 // beware: some third-party lists print 46646; the official docs say 46630). Selected via
 // --network=testnet; the deploy script keys its TESTNET mode on the same id.
 const TESTNET_CHAIN_ID = 46630;
 const E18 = 10n ** 18n;
-const TOTAL_SUPPLY = 1_000_000_000n * E18; // §6.4: fixed 1B
-const CURVE_SUPPLY = 793_100_000n * E18; // §6.4: ~793.1M (79.31%), pump.fun ratio
-const LP_TOKEN_TRANCHE = 206_900_000n * E18; // §6.4: ~206.9M (20.69%)
+const TOTAL_SUPPLY = 1_000_000_000n * E18; // : fixed 1B
+const CURVE_SUPPLY = 793_100_000n * E18; // : ~793.1M (79.31%), pump.fun ratio
+const LP_TOKEN_TRANCHE = 206_900_000n * E18; // : ~206.9M (20.69%)
 const GRAD_MCAP_USD = 69_000n; // LEGACY $69k-mcap parity target — retained for provenance ONLY. The
 // mainnet graduation target is now a FLAT ETH raise (MAINNET_GRADUATION_ETH below), not mcap-derived;
 // this constant only still drives the (vestigial) testnet-without-override mcap fallback path.
 // ── MAINNET graduation target (approved product change 2026-07-13; retargeted 5.7 ETH 2026-07-13) ──
-// A FLAT net-of-fee ETH raise (§12.11), DEFAULT 5.7 ETH (matches RobinFun's ~5.74 ETH / ~$44k bar),
+// A FLAT net-of-fee ETH raise, DEFAULT 5.7 ETH (matches RobinFun's ~5.74 ETH / ~$44k bar),
 // replacing the earlier flat 2.5-ETH default (itself replacing the retired $69k-mcap derivation,
 // ~7.9166 ETH). Env-overridable via M0_MAINNET_GRADUATION_ETH (mirrors the testnet
 // M0_TESTNET_GRADUATION_ETH mechanism): the solver INVERTS constraint (c) `G = p·L + F + R` around
-// this target while keeping the §6.4 supply split (793.1M curve / 206.9M LP tranche). Unlike the
+// this target while keeping the supply split (793.1M curve / 206.9M LP tranche). Unlike the
 // testnet faucet-scale override, the MAINNET fee policy is UNCHANGED (USD-sized ~$5 caller reward +
-// cost-based §12.26 graduation fee, 10× gas floor) — 5.7 ETH funds those fees with ≳300× headroom vs
+// cost-based graduation fee, 10× gas floor) — 5.7 ETH funds those fees with ≳300× headroom vs
 // the GraduationUnfundable ceiling, so NO faucet-scale %-of-G rescale is applied.
-const MAINNET_GRADUATION_ETH = 5_700_000_000_000_000_000n; // 5.7 ETH (net-of-fee real reserves, §12.11; RobinFun ~5.74 ETH / ~$44k bar)
-const TRADE_FEE_BPS = 100n; // §6.4: 1% ETH leg, both directions
-const MAX_TRADE_FEE_BPS = 200; // §6.4: hard cap ≤2% (structural, hardcoded in factory)
-// §7 / §12.63: creator-fee leg. MAINNET = 50 bps (approved 2026-07-13: 0.5% creator leg; treasury 100
+const MAINNET_GRADUATION_ETH = 5_700_000_000_000_000_000n; // 5.7 ETH (net-of-fee real reserves, RobinFun ~5.74 ETH / ~$44k bar)
+const TRADE_FEE_BPS = 100n; // : 1% ETH leg, both directions
+const MAX_TRADE_FEE_BPS = 200; // : hard cap ≤2% (structural, hardcoded in factory)
+// : creator-fee leg. MAINNET = 50 bps (approved 2026-07-13: 0.5% creator leg; treasury 100
 // + creator 50 = 150 ≤ the 200/2% additive cap, asserted in run() AND in the factory constructor).
-// TESTNET = the architect-ratified §12.63 value 50 (identical split) so Phase-T exercises the creator
+// TESTNET = the architect-ratified value 50 (identical split) so Phase-T exercises the creator
 // leg end-to-end. Selected per-network in run(); NEVER inlined into curve logic (read from constants).
 const CREATOR_FEE_BPS_MAINNET = 50;
-const CREATOR_FEE_BPS_TESTNET = 50; // §12.63 (treasury 100 + creator 50 = 150)
-const V3_FEE_TIER = 10_000; // §12.1: 1% tier
+const CREATOR_FEE_BPS_TESTNET = 50; // (treasury 100 + creator 50 = 150)
+const V3_FEE_TIER = 10_000; // : 1% tier
 const V3_TICK_SPACING = 200; // 1% tier spacing
 
-// §6.4: creation fee ~$1–2 equivalent → take the midpoint as the target.
+// : creation fee ~$1–2 equivalent → take the midpoint as the target.
 const CREATION_FEE_USD_TENTHS = 15n; // $1.50, expressed in tenths of USD
-// O-9 (§12.34): graduation caller reward sized in USD terms (~$5). M1 RE-VALIDATION
+// O-9 : graduation caller reward sized in USD terms (~$5). M1 RE-VALIDATION
 // (2026-07-12) DONE — the ≥10×-graduate()-gas floor is now checked against the
-// FORK-MEASURED graduate() gas × live gas price (see the §12.34 `check` below);
+// FORK-MEASURED graduate() gas × live gas price (see the `check` below);
 // passes with margin at current gas. Retunable within [0, maxCallerReward] in beta.
 const CALLER_REWARD_USD = 5n;
-// ── Graduation fee: small flat, COST-BASED (spec §12.26 / decision 26) ───────
+// ── Graduation fee: small flat, COST-BASED (/ decision 26) ───────
 // Ratified: the graduation fee is a *small flat* fee sized to ≈ the V3-migration
 // gas cost + a thin margin — explicitly NOT a %-of-raise, and NEVER a hardcoded
 // USD figure. M0 carries it as a transparent gas formula whose inputs are
 // clearly-labeled PLACEHOLDERS; the exact number is finalized at M1 against real
-// `graduate()` gas on testnet (contracts.md §4, §6.4).
+// `graduate()` gas on testnet (contracts.md).
 //
 //   graduationFeeWei = migrationGasEstimate × gasPriceWei × (marginNum / marginDen)
 //
@@ -152,7 +152,7 @@ const CALLER_REWARD_USD = 5n;
 // the NonfungiblePositionManager, LP-NFT transfer to the vault, and dust handling.
 //
 // M1 RE-VALIDATION (2026-07-12) — MEASURED on a mainnet-fork of chain 4663 at the
-// LATEST block through the REAL §12.28 V3 factory/NPM (contracts/test/fork/
+// LATEST block through the REAL V3 factory/NPM (contracts/test/fork
 // Lifecycle.t.sol `test_fork_lifecycleGas` / `test_fork_fullLifecycle`):
 //   graduate()+V3 migration = 814_729 gas (CLEAN, pool at target, no arb-back)
 //                             817_845 gas (WITH arb-back, polluted pool).
@@ -160,20 +160,20 @@ const CALLER_REWARD_USD = 5n;
 // in that measurement and rounded UP to a conservative bound that covers the full
 // MAX_ARB_ITERATIONS=8 arb-back loop under heavier griefing (each bounded arb swap
 // ≈ 50–130k gas): 1_500_000 ≈ 1.83× the measured worst case. Still a placeholder-
-// class knob per §12.26 (finalized at deploy against live gas), now measurement-based.
+// class knob per (finalized at deploy against live gas), now measurement-based.
 const MEASURED_GRADUATE_GAS = 817_845n; // fork-measured worst case (arb-back), 2026-07-12
 const MIGRATION_GAS_ESTIMATE = 1_500_000n; // conservative fee basis; covers full arb-back
 // gasPriceWei — chain-4663 (Orbit L2) gas price. Fetched LIVE from
 // ROBINHOOD_RPC_URL when set (provenance recorded); otherwise this labeled
-// placeholder is used. Unlike ETH/USD (§2 hard-fail, no fallback), a placeholder
-// IS permitted here because §12.26 explicitly defers the exact figure to M1.
+// placeholder is used. Unlike ETH/USD (hard-fail, no fallback), a placeholder
+// IS permitted here because explicitly defers the exact figure to M1.
 const GAS_PRICE_WEI_PLACEHOLDER = 100_000_000n; // 0.1 gwei — M0 PLACEHOLDER
 // marginNum/marginDen — thin margin over raw gas cost (gas-price variance / L1
 // data-fee spikes). 3/2 = 1.5×. M0 PLACEHOLDER, tuned at M1.
 const GRAD_FEE_MARGIN_NUM = 3n;
 const GRAD_FEE_MARGIN_DEN = 2n;
-// PROPOSAL (O-7, review-required): anti-sniper window 8s (§12.18 timestamp
-// mechanism; §6.5 suggests 5–10s ≈ 80 blocks at ~100ms) and per-tx early cap
+// PROPOSAL (O-7, review-required) anti-sniper window 8s (timestamp
+// mechanism; suggests 5–10s ≈ 80 blocks at ~100ms) and per-tx early cap
 // of 2.5% of GRADUATION_ETH — bounds a single-tx sweep to a small slice of the
 // curve while not blocking ordinary early buys; multi-wallet bypass is a
 // documented limitation, not a claimed guarantee.
@@ -186,47 +186,47 @@ const TOLERANCE_TICKS = 100;
 const MAX_ARB_ITERATIONS = 8;
 const MIGRATION_SLIPPAGE_BPS = 100;
 // PLACEHOLDERS (O-10, gate 7): beta caps — testnet placeholders only; mainnet
-// numbers set with hoodpad-security before beta deploy.
+// numbers set with robbed-security before beta deploy.
 const PER_TOKEN_CAP_X_G = { num: 3n, den: 2n }; // 1.5 × GRADUATION_ETH
 const GLOBAL_CAP_X_G = 50n;
 
-// ── M0-4 (spec §2.2/§8.5/§10/§14): governance / monitoring thresholds ────────
+// ── M0-4 : governance / monitoring thresholds ────────
 // These are OFF-CHAIN governance + monitoring inputs — they are NOT deployed
-// contract constants (the §8.5 heuristics are advisory and never gate chain
-// state, §8.4/§8.5; the Gate G-A.1 floor is a human go/no-go input, §14). They
+// contract constants (the heuristics are advisory and never gate chain
+// state, the Gate G-A.1 floor is a human go/no-go input). They
 // therefore land in constants.json + the TS rendering (indexer / dashboard
 // consumers) but NOT in Constants.sol.txt.
 //
-// (a) Organic-volume floor for Gate G-A.1 (§14): the market-collapse threshold
-// below which a mainnet launch is a no-go. Hard rule (§2): NO headline / chain-
+// (a) Organic-volume floor for Gate G-A.1 : the market-collapse threshold
+// below which a mainnet launch is a no-go. Hard rule : NO headline / chain-
 // wide / Dune volume figure is baked in. The floor is expressed SELF-REFERENTIALLY
 // as a multiple of the curve's own GRADUATION_ETH constant, and is compared
-// against the OWN INDEXER's organic-volume estimate (§8.5), never a headline
+// against the OWN INDEXER's organic-volume estimate, never a headline
 // metric. Chosen basis: N graduations-equivalent of genuinely-organic curve
 // volume per rolling window. Default N = 5 / 7 days = "if fewer than ~5
 // graduations' worth of organic curve flow happens in a week, the niche has
 // effectively collapsed for our purposes." The magnitude of N is a genuine
 // product/policy call (what counts as "not collapsed") → labeled M0 default,
-// hoodpad-architect ratifies before Gate G-A.
-const ORGANIC_FLOOR_GRADUATIONS_EQUIV = 5n; // N — M0 DEFAULT (architect ratifies §14)
+// robbed-architect ratifies before Gate G-A.
+const ORGANIC_FLOOR_GRADUATIONS_EQUIV = 5n; // N — M0 DEFAULT (architect ratifies)
 const ORGANIC_FLOOR_WINDOW_DAYS = 7; // rolling window for the organic-volume estimate
-// §2.2 binding assumption: assume ≤50% of headline DEX volume is organic until
+// binding assumption: assume ≤50% of headline DEX volume is organic until
 // own-indexer data says otherwise. The floor is evaluated against the indexer's
 // organic estimate directly; this cap governs the headline→organic conversion
 // when only headline data is available and is recorded so the assumption is
 // explicit and reviewable.
 const ORGANIC_FLOW_DISCOUNT_MAX_PCT = 50;
 //
-// (b) Funding-cluster alert thresholds (gate 7, §10 amend / §8.5): alert (never
-// gate — §8.4/§8.5 advisory-only) when a single §8.5 funder cluster dominates
+// (b) Funding-cluster alert thresholds (gate 7, amend /) alert (never
+// gate — advisory-only) when a single funder cluster dominates
 // volume. X = % of one token's curve volume; Y = % of platform-wide curve
 // volume, both over a trailing window. Early-warning for metric distortion +
 // coordinated dumps. Defaults are tunable engineering values; final tuning is
-// with hoodpad-security before beta (gate 7). Y < X by design: a single cluster
+// with robbed-security before beta (gate 7). Y < X by design: a single cluster
 // at 10% of ALL platform flow is a rarer, louder signal than 25% of one token.
 const CLUSTER_ALERT_PER_TOKEN_PCT = 25; // X — M0 default
 const CLUSTER_ALERT_PLATFORM_PCT = 10; // Y — M0 default
-const CLUSTER_ALERT_WINDOW_HOURS = 24; // matches §5.2 trailing-24h flow-quality metric
+const CLUSTER_ALERT_WINDOW_HOURS = 24; // matches trailing-24h flow-quality metric
 
 const OUT_DIR = join(import.meta.dir, "out");
 const PLOTS_DIR = join(OUT_DIR, "plots");
@@ -294,7 +294,7 @@ function gitSha(): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. Live ETH/USD (hard rule §2: live query, provenance recorded, no fallback)
+// 1. Live ETH/USD (hard rule : live query, provenance recorded, no fallback)
 // ─────────────────────────────────────────────────────────────────────────────
 interface EthUsdSnapshot {
   source: string; // human-readable source name + endpoint
@@ -334,7 +334,7 @@ async function fetchEthUsd(source: string): Promise<{ snap: EthUsdSnapshot; ethU
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Gas price for the cost-based graduation fee (§12.26). Live from the chain when
+// Gas price for the cost-based graduation fee. Live from the chain when
 // ROBINHOOD_RPC_URL is set; otherwise a clearly-labeled M0 placeholder (the exact
 // figure is finalized at M1 vs real testnet gas, so a placeholder is by design).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -380,10 +380,10 @@ async function fetchGasPriceWei(): Promise<GasPriceSnapshot> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// External addresses per network (canonical/ratified, NEVER invented — §2).
-// MAINNET (4663): the §12.28-confirmed set, inline here as before (this is the
+// External addresses per network (canonical/ratified, NEVER invented).
+// MAINNET (4663) the -confirmed set, inline here as before (this is the
 // canonical, architect-reviewed record). TESTNET (46630): read from the checked-in
-// fixture external.testnet.json (spec §12.52 ratified set) — fail-closed while any
+// fixture external.testnet.json (ratified set) — fail-closed while any
 // value is null, so "fill the fixture, re-run derive" is the entire T-1 step.
 // ─────────────────────────────────────────────────────────────────────────────
 interface ExternalAddresses {
@@ -428,7 +428,7 @@ const TESTNET_FIXTURE = join(import.meta.dir, "external.testnet.json");
 function loadTestnetExternal(): ExternalAddresses {
   if (!existsSync(TESTNET_FIXTURE)) {
     console.error(`FATAL: testnet external fixture not found: ${TESTNET_FIXTURE}`);
-    console.error("Author it with the ratified 46630 addresses (spec §12.52), then re-run.");
+    console.error("Author it with the ratified 46630 addresses (), then re-run.");
     process.exit(1);
   }
   const j = JSON.parse(readFileSync(TESTNET_FIXTURE, "utf8")) as {
@@ -441,7 +441,7 @@ function loadTestnetExternal(): ExternalAddresses {
     console.error(
       `FATAL: ${TESTNET_FIXTURE} still contains null externals: ${nulls.join(", ")} — ` +
         "PENDING Phase-T inventory. Fill them with the ratified 46630 addresses " +
-        "(spec §12.52; never invented), then re-run: bun run derive --network=testnet --reuse-snapshot",
+        "(never invented), then re-run: bun run derive --network=testnet --reuse-snapshot",
     );
     if (j.status) console.error(`fixture status: ${j.status}`);
     process.exit(1);
@@ -486,14 +486,14 @@ async function main(): Promise<void> {
   }
   const isTestnet = network === "testnet";
   const chainId = isTestnet ? TESTNET_CHAIN_ID : MAINNET_CHAIN_ID;
-  // §12.63 creator-fee leg: 50 bps on mainnet (approved 2026-07-13) AND testnet (ratified). Both
+  // creator-fee leg: 50 bps on mainnet (approved 2026-07-13) AND testnet (ratified). Both
   // satisfy the additive ≤2% cap (treasury 100 + creator 50 = 150 ≤ 200); asserted below AND in the
   // factory constructor.
   const creatorFeeBps = isTestnet ? CREATOR_FEE_BPS_TESTNET : CREATOR_FEE_BPS_MAINNET;
   if (Number(TRADE_FEE_BPS) + creatorFeeBps > MAX_TRADE_FEE_BPS) {
     console.error(
       `FATAL: tradeFeeBps ${TRADE_FEE_BPS} + creatorFeeBps ${creatorFeeBps} > ${MAX_TRADE_FEE_BPS} bps additive cap ` +
-        "(§6.4/§7/§12.63). Refusing to emit a constant set the factory constructor would reject.",
+        ". Refusing to emit a constant set the factory constructor would reject.",
     );
     process.exit(1);
   }
@@ -552,10 +552,10 @@ async function main(): Promise<void> {
   } else if (!isTestnet) {
     console.log(
       `MAINNET FLAT-G TARGET: ${gradTargetSource} → target G = ${gradTargetWei} wei (${eth(gradTargetWei!)} ETH ` +
-        "net-of-fee, §12.11); full constant set re-solved around it, MAINNET fee policy unchanged.",
+        "net-of-fee); full constant set re-solved around it, MAINNET fee policy unchanged.",
     );
   }
-  console.log("NOTE: final tick/constants are OPEN ITEM (spec §13) until reviewed.\n");
+  console.log("NOTE: final tick/constants are OPEN ITEM () until reviewed.\n");
 
   // ── ETH/USD provenance ────────────────────────────────────────────────────
   let snap: EthUsdSnapshot;
@@ -578,7 +578,7 @@ async function main(): Promise<void> {
     try {
       ({ snap, ethUsdE8 } = await fetchEthUsd(source));
     } catch (e) {
-      // Hard fail — never a baked-in price (§2 / m0-notebook non-negotiable).
+      // Hard fail — never a baked-in price (/ m0-notebook non-negotiable).
       console.error(`FATAL: live ETH/USD fetch failed (${(e as Error).message}).`);
       console.error("No fallback price exists by design. Retry, or pass --source=defillama.");
       process.exit(1);
@@ -604,7 +604,7 @@ async function main(): Promise<void> {
   const creationFeeWei = roundWei((CREATION_FEE_USD_TENTHS * E18 * E8) / (10n * ethUsdE8));
   const maxCreationFeeWei = creationFeeWei * 20n; // immutable ceiling ≈ $30 equiv. (independent of G)
 
-  // Cost-based graduation fee (§12.26): gas-derived flat wei, NOT %-of-raise,
+  // Cost-based graduation fee : gas-derived flat wei, NOT %-of-raise,
   // NOT a hardcoded USD figure. Kept exact (no rounding) so the formula IS the
   // value. All inputs are M0 placeholders (gasPrice live when RPC set).
   const gas = await fetchGasPriceWei();
@@ -633,18 +633,18 @@ async function main(): Promise<void> {
     graduationFeeWei = costBasedGraduationFeeWei;
   }
   console.log(
-    `\nGraduation fee (COST-BASED §12.26, gas ${gas.basis}): ` +
+    `\nGraduation fee (COST-BASED, gas ${gas.basis}) ` +
       `${MIGRATION_GAS_ESTIMATE} gas × ${gasPriceWei} wei × ${GRAD_FEE_MARGIN_NUM}/${GRAD_FEE_MARGIN_DEN} ` +
       `= ${costBasedGraduationFeeWei} wei (${eth(costBasedGraduationFeeWei)} ETH); applied = ${graduationFeeWei} wei` +
       `${smallGOverride ? " (TESTNET override cap: ≤10% of target G)" : ""}; source=${gas.source}`,
   );
 
-  // §12.34 M1 re-validation (O-9): the permissionless graduate() caller reward must clear a multiple
+  // M1 re-validation (O-9) the permissionless graduate() caller reward must clear a multiple
   // of the REAL graduate() gas cost so triggering graduation is always profitable (liveness of the
-  // §12.12 ReadyToGraduate → Graduated transition). MAINNET floor: 10×. TESTNET small-G override:
+  // ReadyToGraduate → Graduated transition). MAINNET floor: 10×. TESTNET small-G override:
   // relaxed to 1.5× — still strictly profitable, but compatible with the ≤50%-of-G fee-ceiling budget
   // (at faucet scale the 10× margin would force the reward toward ~16–33% of G; the 10× margin is a
-  // mainnet liveness knob, re-ratified by hoodpad-architect via the override reviewRequired entry).
+  // mainnet liveness knob, re-ratified by robbed-architect via the override reviewRequired entry).
   // Validated against the FORK-MEASURED graduate() gas × the LIVE gas price — not the placeholder.
   // Advisory when gas is a placeholder (no live RPC), hard when live.
   const graduateGasCostWei = MEASURED_GRADUATE_GAS * gasPriceWei;
@@ -654,7 +654,7 @@ async function main(): Promise<void> {
   const callerRewardFloorWei = (floorNum * graduateGasCostWei) / floorDen;
   const callerRewardCoversGas = callerRewardWei >= callerRewardFloorWei;
   check(
-    `callerReward >= ${floorLabel} real graduate() gas (§12.34, M1)`,
+    `callerReward >= ${floorLabel} real graduate() gas (M1)`,
     callerRewardCoversGas,
     `reward ${callerRewardWei} wei (${eth(callerRewardWei)} ETH) vs floor ${floorNum}/${floorDen} × ` +
       `${MEASURED_GRADUATE_GAS} gas × ${gasPriceWei} wei = ${callerRewardFloorWei} wei ` +
@@ -662,7 +662,7 @@ async function main(): Promise<void> {
   );
   if (gas.basis === "live" && !callerRewardCoversGas) {
     throw new Error(
-      `§12.34 VIOLATED at live gas: callerReward ${callerRewardWei} wei < ${floorLabel} graduate() gas cost ` +
+      ` VIOLATED at live gas: callerReward ${callerRewardWei} wei < ${floorLabel} graduate() gas cost ` +
         `${callerRewardFloorWei} wei. Raise the reward sizing or retune before deploy.`,
     );
   }
@@ -674,7 +674,7 @@ async function main(): Promise<void> {
   // alignment then shifts it by ≤~1% (asserted by grad.gTracksTarget). We snap to
   // the NEAREST USABLE TICK of the 1% tier (spacing 200) and use THAT exact tick
   // price as the curve's terminal price, so curve terminal price == pool init price
-  // == tick-aligned (contracts.md §4) and the LP mint is zero-dust by construction.
+  // == tick-aligned (contracts.md) and the LP mint is zero-dust by construction.
   // LEGACY mcap fallback (testnet-without-override only): raw target spot =
   // (69000/ethUsd) ETH / 1e9 tokens — the old $69k-mcap derivation, kept solely for
   // the reuse-snapshot compat path; the mainnet default no longer uses it.
@@ -706,14 +706,14 @@ async function main(): Promise<void> {
 
   // Target label: flat-G targets report the requested ETH raise; the legacy fallback reports $69k mcap.
   const gradTargetLabel =
-    gradTargetWei !== null ? `target ${eth(gradTargetWei)} ETH flat raise (§12.11)` : `target $${GRAD_MCAP_USD} mcap`;
+    gradTargetWei !== null ? `target ${eth(gradTargetWei)} ETH flat raise ` : `target $${GRAD_MCAP_USD} mcap`;
   console.log("\nGraduation price / tick (1% tier, spacing 200):");
   console.log(`  raw target-price tick (token0=token): ${rawTickA}`);
   console.log(`  aligned target tick token0=token:     ${tickA}   sqrtPriceX96 ${sqrtA}`);
   console.log(`  aligned target tick token0=WETH:      ${tickB}   sqrtPriceX96 ${sqrtB}`);
   console.log(`  tick-aligned graduation mcap:         ${eth(gradMcapWei, 4)} ETH ≈ $${gradMcapUsd.toFixed(2)} (${gradTargetLabel})`);
 
-  // ── 4. Solve virtual reserves (§6.2 — algebra documented in lib/curve.ts) ─
+  // ── 4. Solve virtual reserves (algebra documented in lib/curve.ts) ─
   const targets: CurveTargets = {
     priceNum,
     priceDen,
@@ -734,32 +734,32 @@ async function main(): Promise<void> {
   const maxEarlyBuyWei = roundWei((c.graduationEthWei * MAX_EARLY_BUY_BPS_OF_G) / 10_000n);
   const perTokenEthCapWei = (c.graduationEthWei * PER_TOKEN_CAP_X_G.num) / PER_TOKEN_CAP_X_G.den;
   const globalEthCapWei = c.graduationEthWei * GLOBAL_CAP_X_G;
-  // M0-4: organic-volume floor as N × GRADUATION_ETH (self-referential; §14/§8.5).
+  // M0-4: organic-volume floor as N × GRADUATION_ETH (self-referential).
   const organicVolumeFloorWei = ORGANIC_FLOOR_GRADUATIONS_EQUIV * c.graduationEthWei;
 
   const initialMcapWei = (c.virtualEthWei * TOTAL_SUPPLY) / c.virtualTokenWei;
   console.log("\nDerived curve constants (all wei):");
   console.log(`  VIRTUAL_ETH_0    = ${c.virtualEthWei}  (${eth(c.virtualEthWei)} ETH)`);
   console.log(`  VIRTUAL_TOKEN_0  = ${c.virtualTokenWei}  (${tokensM(c.virtualTokenWei)} tokens)`);
-  console.log(`  GRADUATION_ETH   = ${c.graduationEthWei}  (${eth(c.graduationEthWei)} ETH net-of-fee, §12.11; ≈ $${weiToUsd(c.graduationEthWei).toFixed(2)})`);
-  console.log(`  GRADUATION_FEE   = ${c.graduationFeeWei}  (${eth(c.graduationFeeWei)} ETH ≈ $${weiToUsd(c.graduationFeeWei).toFixed(2)}, cost-based flat §12.26, gas ${gas.basis})`);
+  console.log(` GRADUATION_ETH = ${c.graduationEthWei} (${eth(c.graduationEthWei)} ETH net-of-fee, ≈ $${weiToUsd(c.graduationEthWei).toFixed(2)})`);
+  console.log(` GRADUATION_FEE = ${c.graduationFeeWei} (${eth(c.graduationFeeWei)} ETH ≈ $${weiToUsd(c.graduationFeeWei).toFixed(2)}, cost-based flat, gas ${gas.basis})`);
   console.log(`  CALLER_REWARD    = ${callerRewardWei}  (${eth(callerRewardWei)} ETH ≈ $${weiToUsd(callerRewardWei).toFixed(2)})`);
   console.log(`  ETH to LP        = ${c.ethToLpWei}  (${eth(c.ethToLpWei)} ETH = G − gradFee − callerReward)`);
   console.log(`  initial mcap     ≈ ${eth(initialMcapWei, 4)} ETH ≈ $${weiToUsd(initialMcapWei).toFixed(2)} (pump.fun-parity sanity: ~$4–6k)`);
 
   // Threshold semantics (flagged per m0-notebook): GRADUATION_ETH counts the
-  // NET-of-trade-fee real reserves — resolved decision §12.11, restated here.
-  console.log("\n  Threshold semantics: GRADUATION_ETH = NET-of-1%-fee real reserves (§12.11, resolved).");
+  // NET-of-trade-fee real reserves — resolved decision, restated here.
+  console.log("\n Threshold semantics: GRADUATION_ETH = NET-of-1%-fee real reserves (, resolved).");
 
-  // ── M0-4: governance / monitoring thresholds (§2.2/§8.5/§10/§14) ───────────
+  // ── M0-4: governance / monitoring thresholds ───────────
   console.log("\nGovernance / monitoring thresholds (M0-4, off-chain — NOT deployed constants):");
   console.log(
     `  Gate G-A.1 organic-volume floor: ${ORGANIC_FLOOR_GRADUATIONS_EQUIV} × GRADUATION_ETH / ${ORGANIC_FLOOR_WINDOW_DAYS}d ` +
-      `= ${eth(organicVolumeFloorWei)} ETH organic curve volume (own-indexer §8.5 estimate, NOT a headline metric; ≤${ORGANIC_FLOW_DISCOUNT_MAX_PCT}% organic-flow discount §2.2)`,
+      `= ${eth(organicVolumeFloorWei)} ETH organic curve volume (own-indexer estimate, NOT a headline metric; ≤${ORGANIC_FLOW_DISCOUNT_MAX_PCT}% organic-flow discount)`,
   );
   console.log(
     `  Gate-7 funding-cluster alert: per-token X=${CLUSTER_ALERT_PER_TOKEN_PCT}% / platform Y=${CLUSTER_ALERT_PLATFORM_PCT}% ` +
-      `of curve volume over ${CLUSTER_ALERT_WINDOW_HOURS}h (advisory alert, never gates chain state §8.4/§8.5)`,
+      `of curve volume over ${CLUSTER_ALERT_WINDOW_HOURS}h (advisory alert, never gates chain state)`,
   );
 
   // ── 5. Validations ─────────────────────────────────────────────────────────
@@ -772,7 +772,7 @@ async function main(): Promise<void> {
     "CURVE_SUPPLY + LP_TOKEN_TRANCHE == 1e9 tokens exactly",
   );
 
-  // Additive fee cap (§6.4/§7/§12.63): treasury leg + creator leg ≤ the 2% structural ceiling. This
+  // Additive fee cap : treasury leg + creator leg ≤ the 2% structural ceiling. This
   // is the SAME invariant the factory constructor enforces (`FeeAboveCap`); asserting it here keeps a
   // bad constant set from ever reaching the deploy. MAINNET now carries a non-zero creator leg (50).
   check(
@@ -833,7 +833,7 @@ async function main(): Promise<void> {
     `both target ticks are multiples of tickSpacing ${V3_TICK_SPACING}`,
   );
 
-  // LP tranche sizing / dust check, both orderings (§6.3.5: token dust → dEaD, WETH dust → treasury).
+  // LP tranche sizing / dust check, both orderings (token dust → dEaD, WETH dust → treasury).
   const frLower = minUsableTick(V3_TICK_SPACING);
   const frUpper = maxUsableTick(V3_TICK_SPACING);
   const mintA = fullRangeMint(sqrtA, frLower, frUpper, LP_TOKEN_TRANCHE, c.ethToLpWei); // token0=token, token1=WETH
@@ -892,7 +892,7 @@ async function main(): Promise<void> {
   check(
     "sim.graduation",
     allGraduated,
-    `${sims.length}/${sims.length} fuzz runs graduated with realEth == GRADUATION_ETH exactly (final buy clamped, §12.11)`,
+    `${sims.length}/${sims.length} fuzz runs graduated with realEth == GRADUATION_ETH exactly (final buy clamped)`,
   );
   check("sim.kInvariant", allKOk, "k = vE·vT non-decreasing at every step of every run");
   check(
@@ -982,38 +982,38 @@ async function main(): Promise<void> {
   );
   } // end !isTestnet (plots)
 
-  // ── 7. Emit canonical constants JSON (schema: contracts.md §4) ─────────────
+  // ── 7. Emit canonical constants JSON (schema: contracts.md) ─────────────
   const generatedAt = new Date().toISOString();
   const reviewRequired = [
-    "§13 GATE: ALL constants below are open item §13 until hoodpad-architect reviews this output; gate approval closes the item.",
-    "fees.graduationFeeWei: COST-BASED per §12.26 (decision 26) — a small flat fee = migrationGasEstimate × gasPriceWei × margin (see derivation.graduationFeeModel), NOT a %-of-raise and never a hardcoded USD figure. M1 RE-VALIDATION DONE (2026-07-12): migrationGasEstimate is now FORK-MEASURED (real §12.28 V3 factory/NPM, graduate()+V3 = ~817845 gas worst-case), not the old 3,000,000 placeholder. gasPrice is fetched live when ROBINHOOD_RPC_URL is set; the exact fee is still re-confirmed at deploy against live gas per §12.26.",
-    "fees.callerRewardWei: O-9 (§12.34) — sized ≈$5 equivalent at snapshot. M1 RE-VALIDATION DONE (2026-07-12): asserted ≥10× the FORK-MEASURED graduate() gas × live gas price (see derivation.graduationFeeModel.callerRewardCoversGasFloor); passes with margin.",
-    "fees.creatorFeeBps: §7/§12.63 creator-fee leg = 50 bps (0.5%) on BOTH mainnet and testnet (approved product change 2026-07-13). treasury 100 + creator 50 = 150 ≤ the 200/2% additive cap (asserted by fees.additiveCap here AND the factory constructor's FeeAboveCap). The on-chain fee SPLIT/routing (post-graduation LP-fee share) is a SEPARATE new-factory-version phase, being designed by a spec agent — NOT shipped in this M0 re-derivation; here the leg is only priced into the fee schedule.",
-    "antiSniper.*: PROPOSAL (O-7) — 8s timestamp window (§12.18) with per-tx cap = 2.5% of GRADUATION_ETH; multi-wallet bypass documented.",
+    " GATE: ALL constants below are open item until robbed-architect reviews this output; gate approval closes the item.",
+    "fees.graduationFeeWei: COST-BASED per (decision 26) — a small flat fee = migrationGasEstimate × gasPriceWei × margin (see derivation.graduationFeeModel), NOT a %-of-raise and never a hardcoded USD figure. M1 RE-VALIDATION DONE (2026-07-12) migrationGasEstimate is now FORK-MEASURED (real V3 factory/NPM, graduate()+V3 = ~817845 gas worst-case), not the old 3,000,000 placeholder. gasPrice is fetched live when ROBINHOOD_RPC_URL is set; the exact fee is still re-confirmed at deploy against live gas per.",
+    "fees.callerRewardWei: O-9 — sized ≈$5 equivalent at snapshot. M1 RE-VALIDATION DONE (2026-07-12) asserted ≥10× the FORK-MEASURED graduate() gas × live gas price (see derivation.graduationFeeModel.callerRewardCoversGasFloor); passes with margin.",
+    "fees.creatorFeeBps: creator-fee leg = 50 bps (0.5%) on BOTH mainnet and testnet (approved product change 2026-07-13). treasury 100 + creator 50 = 150 ≤ the 200/2% additive cap (asserted by fees.additiveCap here AND the factory constructor's FeeAboveCap). The on-chain fee SPLIT/routing (post-graduation LP-fee share) is a SEPARATE new-factory-version phase, being designed by a spec agent — NOT shipped in this M0 re-derivation; here the leg is only priced into the fee schedule.",
+    "antiSniper.*: PROPOSAL (O-7) — 8s timestamp window with per-tx cap = 2.5% of GRADUATION_ETH; multi-wallet bypass documented.",
     "v3.toleranceTicks / maxArbIterations / migrationSlippageBps: PROPOSAL (O-8) — needed before gate-2 fuzz bounds are final.",
-    "beta.*: PLACEHOLDER (O-10) — mainnet values set with hoodpad-security before beta deploy.",
+    "beta.*: PLACEHOLDER (O-10) — mainnet values set with robbed-security before beta deploy.",
     ...(smallGOverride
       ? [
-          "TESTNET SMALL-G OVERRIDE ACTIVE (M0_TESTNET_GRADUATION_ETH): curve.*, fees.graduationFee/callerReward (+ their ceilings), antiSniper.maxEarlyBuyWei, beta.* and governance.organicVolumeFloor are re-derived around the faucet-scale graduation target — see derivation.testnetGraduationOverride for the policy. The §12.34 caller-reward gas floor is relaxed 10×→1.5× (still strictly profitable) FOR TESTNET ONLY. Derive fails closed if this env var is set in mainnet mode; the mainnet derivation path is untouched. hoodpad-architect re-ratifies the override policy before it is treated as anything but a lifecycle-testing device.",
+          "TESTNET SMALL-G OVERRIDE ACTIVE (M0_TESTNET_GRADUATION_ETH) curve.*, fees.graduationFee/callerReward (+ their ceilings), antiSniper.maxEarlyBuyWei, beta.* and governance.organicVolumeFloor are re-derived around the faucet-scale graduation target — see derivation.testnetGraduationOverride for the policy. The caller-reward gas floor is relaxed 10×→1.5× (still strictly profitable) FOR TESTNET ONLY. Derive fails closed if this env var is set in mainnet mode; the mainnet derivation path is untouched. robbed-architect re-ratifies the override policy before it is treated as anything but a lifecycle-testing device.",
         ]
       : []),
     ...(!isTestnet
       ? [
-          "curve.graduationEthWei: MAINNET FLAT graduation target (approved product change 2026-07-13; retargeted 5.7 ETH 2026-07-13) — see derivation.mainnetGraduationTarget. The solver inverts constraint (c) `G = p·L + F + R` around a FLAT ETH raise (§12.11), DEFAULT 5.7 ETH (matches RobinFun's ~5.74 ETH / ~$44k bar; env-overridable M0_MAINNET_GRADUATION_ETH), replacing the earlier flat 2.5-ETH default (itself replacing the retired $69k-mcap derivation, ~7.9166 ETH). The MAINNET fee policy is UNCHANGED (USD-sized ~$5 caller reward, cost-based §12.26 graduation fee, 10× gas floor) — at 5.7 ETH the fees are ≪ G, so GraduationUnfundable clears by ~350×. hoodpad-architect gate-approves the new target before deploy (§13).",
+          "curve.graduationEthWei: MAINNET FLAT graduation target (approved product change 2026-07-13; retargeted 5.7 ETH 2026-07-13) — see derivation.mainnetGraduationTarget. The solver inverts constraint (c) `G = p·L + F + R` around a FLAT ETH raise, DEFAULT 5.7 ETH (matches RobinFun's ~5.74 ETH / ~$44k bar; env-overridable M0_MAINNET_GRADUATION_ETH), replacing the earlier flat 2.5-ETH default (itself replacing the retired $69k-mcap derivation, ~7.9166 ETH). The MAINNET fee policy is UNCHANGED (USD-sized ~$5 caller reward, cost-based graduation fee, 10× gas floor) — at 5.7 ETH the fees are ≪ G, so GraduationUnfundable clears by ~350×. robbed-architect gate-approves the new target before deploy.",
         ]
       : []),
-    "governance.organicVolumeFloor: M0-4 DEFAULT (§14 Gate G-A.1) — floor = 5 × GRADUATION_ETH / 7d of OWN-INDEXER organic curve volume (§8.5); NOT a headline metric (§2). The magnitude ('what counts as not-collapsed') is a product/policy call → hoodpad-architect ratifies before Gate G-A; recalibrate at M2 with real organic series.",
-    "governance.clusterAlertThresholds: M0-4 DEFAULT (§10 gate 7 amend, §8.5) — per-token X=25% / platform Y=10% of curve volume over 24h; ADVISORY alert only, never gates chain state (§8.4/§8.5). Final tuning with hoodpad-security before beta.",
+    "governance.organicVolumeFloor: M0-4 DEFAULT (Gate G-A.1) — floor = 5 × GRADUATION_ETH / 7d of OWN-INDEXER organic curve volume; NOT a headline metric. The magnitude ('what counts as not-collapsed') is a product/policy call → robbed-architect ratifies before Gate G-A; recalibrate at M2 with real organic series.",
+    "governance.clusterAlertThresholds: M0-4 DEFAULT (gate 7 amend) — per-token X=25% / platform Y=10% of curve volume over 24h; ADVISORY alert only, never gates chain state. Final tuning with robbed-security before beta.",
     ...(isTestnet
       ? [
-          "external.weth / v3Factory / positionManager / swapRouter02 / quoterV2: TESTNET 46630 set — RATIFIED spec §12.52 (2026-07-11), sourced from tools/m0/external.testnet.json (never inlined in source, §12.49). WETH is official (docs.robinhood.com/chain/protocol-contracts); the V3 set is a Blockscout-VERIFIED community deployment, TESTNET-ONLY with the §12.52 trust caveat (deployer EOA owns the factory) — FORBIDDEN on mainnet/local. Deploy script still runtime-asserts feeAmountTickSpacing(10000)==200, NPM.factory(), NPM.WETH9() (contracts.md §7.2) so a wrong address fails closed.",
-          "external.treasurySafe: UNSET (T-2) — zero address on purpose; canonical Safe v1.4.1 contracts are CONFIRMED on 46630 (§12.52) but the dev-signer treasury Safe is not created yet. Create it, fill external.testnet.json, re-run derive; Deploy.s.sol fails closed (TreasurySafeUnset) until then. Never invented.",
+          "external.weth / v3Factory / positionManager / swapRouter02 / quoterV2: TESTNET 46630 set — RATIFIED (2026-07-11), sourced from tools/m0/external.testnet.json (never inlined in source). WETH is official (docs.robinhood.com/chain/protocol-contracts); the V3 set is a Blockscout-VERIFIED community deployment, TESTNET-ONLY with the trust caveat (deployer EOA owns the factory) — FORBIDDEN on mainnet/local. Deploy script still runtime-asserts feeAmountTickSpacing(10000)==200, NPM.factory(), NPM.WETH9() (contracts.md) so a wrong address fails closed.",
+          "external.treasurySafe: UNSET (T-2) — zero address on purpose; canonical Safe v1.4.1 contracts are CONFIRMED on 46630 but the dev-signer treasury Safe is not created yet. Create it, fill external.testnet.json, re-run derive; Deploy.s.sol fails closed (TreasurySafeUnset) until then. Never invented.",
         ]
       : [
-          "external.v3Factory / positionManager / swapRouter02 / quoterV2: CONFIRMED on 4663 (spec §12.28, O-4 RESOLVED) — registry-sourced + on-chain verified, never invented; deploy script still runtime-asserts feeAmountTickSpacing(10000)==200, NPM.factory(), NPM.WETH9() (contracts.md §7.2) so a wrong address fails closed.",
-          "external.treasurySafe: UNSET (O-6, spec §13) — zero address on purpose; deploy script's zero-address guard must fail until filled from the official Safe deployment on 4663. Never invented.",
+          "external.v3Factory / positionManager / swapRouter02 / quoterV2: CONFIRMED on 4663 (O-4 RESOLVED) — registry-sourced + on-chain verified, never invented; deploy script still runtime-asserts feeAmountTickSpacing(10000)==200, NPM.factory(), NPM.WETH9() (contracts.md) so a wrong address fails closed.",
+          "external.treasurySafe: UNSET (O-6) — zero address on purpose; deploy script's zero-address guard must fail until filled from the official Safe deployment on 4663. Never invented.",
         ]),
-    "Graduation threshold counts NET-of-1%-fee real reserves — resolved §12.11; restated so the deploy reviewer re-confirms.",
+    "Graduation threshold counts NET-of-1%-fee real reserves — resolved; restated so the deploy reviewer re-confirms.",
   ];
 
   const constants = {
@@ -1058,45 +1058,45 @@ async function main(): Promise<void> {
       perTokenEthCapWei: perTokenEthCapWei.toString(),
       globalEthCapWei: globalEthCapWei.toString(),
     },
-    // ── M0-4 (spec §2.2/§8.5/§10/§14): off-chain governance + monitoring ──────
-    // Consumed by Gate G-A.1 (§14) and the M2-12 gate-7 metric hooks / M2-13 bot
-    // heuristics — NOT deployed on-chain (§8.4/§8.5 advisory-only). All values are
+    // ── M0-4 : off-chain governance + monitoring ──────
+    // Consumed by Gate G-A.1 and the M2-12 gate-7 metric hooks / M2-13 bot
+    // heuristics — NOT deployed on-chain (advisory-only). All values are
     // labeled M0 defaults; the organic floor references the curve's own
-    // GRADUATION_ETH, never a headline/chain-wide market metric (§2).
+    // GRADUATION_ETH, never a headline/chain-wide market metric.
     governance: {
       organicVolumeFloor: {
         basis:
-          "Gate G-A.1 (§14) mainnet market floor: evaluated at Phase-A exit against the OWN INDEXER organic-volume estimate (§8.5), NEVER a headline/chain-wide/Dune metric (§2/§2.2).",
+          "Gate G-A.1 mainnet market floor: evaluated at Phase-A exit against the OWN INDEXER organic-volume estimate, NEVER a headline/chain-wide/Dune metric.",
         metric:
-          "rolling platform-wide ORGANIC curve volume (buy+sell ETH notional) after excluding §8.5 wash-flagged volume; when only headline data is available, apply the ≤50% organic-flow discount (§2.2) to estimate the organic component.",
+          "rolling platform-wide ORGANIC curve volume (buy+sell ETH notional) after excluding wash-flagged volume; when only headline data is available, apply the ≤50% organic-flow discount to estimate the organic component.",
         unit: "multiple of GRADUATION_ETH (self-referential to the curve's own economics — no external ETH/USD or chain-volume figure is baked in)",
         windowDays: ORGANIC_FLOOR_WINDOW_DAYS,
         floorGraduationsEquiv: Number(ORGANIC_FLOOR_GRADUATIONS_EQUIV),
         floorWei: organicVolumeFloorWei.toString(),
         organicFlowDiscountMaxPct: ORGANIC_FLOW_DISCOUNT_MAX_PCT,
         status:
-          "M0 DEFAULT (tunable) — recalibrate at M2 once the indexer emits real organic-volume series (§8.5); the magnitude of N ('what counts as not-collapsed') is a product/policy call → hoodpad-architect ratifies before Gate G-A (§13/§14).",
+          "M0 DEFAULT (tunable) — recalibrate at M2 once the indexer emits real organic-volume series; the magnitude of N ('what counts as not-collapsed') is a product/policy call → robbed-architect ratifies before Gate G-A.",
       },
       clusterAlertThresholds: {
         basis:
-          "Gate 7 capped-beta cluster monitoring (§10 gate 7 amend, §8.5): ALERT (never a chain-state gate — §8.4/§8.5 advisory-only) when one §8.5 funder cluster dominates volume. Early-warning for metric distortion + coordinated dumps.",
+          "Gate 7 capped-beta cluster monitoring (gate 7 amend) ALERT (never a chain-state gate — advisory-only) when one funder cluster dominates volume. Early-warning for metric distortion + coordinated dumps.",
         perTokenPct: CLUSTER_ALERT_PER_TOKEN_PCT,
         platformPct: CLUSTER_ALERT_PLATFORM_PCT,
         windowHours: CLUSTER_ALERT_WINDOW_HOURS,
         measuredAgainst:
-          "trailing-window curve volume, grouped by §8.5 funder cluster (indexer feed); per-token X% of one token's curve volume, platform Y% of platform-wide curve volume.",
+          "trailing-window curve volume, grouped by funder cluster (indexer feed); per-token X% of one token's curve volume, platform Y% of platform-wide curve volume.",
         status:
-          "M0 DEFAULT (tunable) — hooks emitted in M2-12; alert delivery + final thresholds tuned with hoodpad-security before beta deploy (gate 7).",
+          "M0 DEFAULT (tunable) — hooks emitted in M2-12; alert delivery + final thresholds tuned with robbed-security before beta deploy (gate 7).",
       },
     },
     // ── external addresses (canonical + registry-sourced, NEVER invented) ──────
-    // MAINNET (4663): WETH + the four Uniswap V3 addresses are CONFIRMED (spec §12.28,
+    // MAINNET (4663) WETH + the four Uniswap V3 addresses are CONFIRMED (,
     // O-4 RESOLVED 2026-07-09), inlined in MAINNET_EXTERNAL above; treasurySafe stays
     // ZERO on purpose (O-6 OPEN — deploy fails closed until the official Safe exists).
-    // TESTNET (46630): the §12.52-ratified set from external.testnet.json (fail-closed
+    // TESTNET (46630) the -ratified set from external.testnet.json (fail-closed
     // loader above); treasurySafe ZERO until the T-2 dev-signer Safe is created.
     // Both networks: the deploy script runtime-asserts feeAmountTickSpacing(10000)==200,
-    // NPM.factory(), NPM.WETH9() (contracts.md §7.2), so a wrong address fails closed.
+    // NPM.factory(), NPM.WETH9() (contracts.md), so a wrong address fails closed.
     external,
     provenance: {
       generator: "tools/m0/derive.ts (@robbed/m0)",
@@ -1104,8 +1104,8 @@ async function main(): Promise<void> {
       ethUsdSource: snap.source,
       ethUsdPrice: snap.value,
       fetchedAt: snap.timestamp,
-      specRefs: ["§2.2", "§6.2", "§6.3", "§6.4", "§6.5", "§8.5", "§10", "§11.0", "§12.11", "§12.18", "§12.26", "§13", "§14"],
-      status: "OPEN ITEM §13 — constants not final until reviewed by hoodpad-architect",
+      specRefs: ["", "", "", "", "", "", "", "", "", "", "", "", ""],
+      status: "OPEN ITEM — constants not final until reviewed by robbed-architect",
       simulation: {
         seeds: SIM_SEEDS,
         runs: sims.length,
@@ -1115,16 +1115,16 @@ async function main(): Promise<void> {
     },
     derivation: {
       note: "vT0 = S²/(2S−T−f), vE0 = p·(L+f)²/(2S−T−f), G = p·(L+f) with f=(gradFee+callerReward)/p; p = exact price of targetTickToken0. Full algebra in tools/m0/lib/curve.ts.",
-      graduationTargetBasis: gradTargetWei !== null ? "flat net-of-fee ETH raise (§12.11)" : "legacy $69k mcap",
+      graduationTargetBasis: gradTargetWei !== null ? "flat net-of-fee ETH raise " : "legacy $69k mcap",
       // LEGACY $69k-mcap parity figure — retained for provenance only; NOT the graduation driver on any
       // flat-G run (every mainnet run + the testnet faucet override). See mainnetGraduationTarget /
       // testnetGraduationOverride for the operative target.
       gradMcapTargetUsd: GRAD_MCAP_USD.toString(),
       graduationFeeModel: {
-        basis: "cost-based (§12.26) — migrationGasEstimate × gasPriceWei × (marginNum/marginDen); NOT %-of-raise, no hardcoded USD",
+        basis: "cost-based — migrationGasEstimate × gasPriceWei × (marginNum/marginDen); NOT %-of-raise, no hardcoded USD",
         migrationGasEstimate: MIGRATION_GAS_ESTIMATE.toString(),
         migrationGasBasis:
-          "MEASURED on a mainnet-fork of chain 4663 at the latest block via the real §12.28 V3 factory/NPM " +
+          "MEASURED on a mainnet-fork of chain 4663 at the latest block via the real V3 factory/NPM " +
           "(contracts/test/fork/Lifecycle.t.sol, 2026-07-12): graduate()+V3 migration = 814729 gas clean / " +
           `817845 gas with arb-back. Estimate rounded up to ${MIGRATION_GAS_ESTIMATE} (~1.83× measured) to cover the full MAX_ARB_ITERATIONS=8 loop.`,
         measuredGraduateGas: MEASURED_GRADUATE_GAS.toString(),
@@ -1139,8 +1139,8 @@ async function main(): Promise<void> {
         callerRewardCoversGasFloor: callerRewardCoversGas,
         status:
           "M1 gas re-validation DONE (2026-07-12) — migrationGasEstimate is fork-measured; graduation fee " +
-          "and the §12.34 ≥10×-graduate()-gas caller-reward floor are validated against live gas. Exact fee " +
-          "still finalized at deploy against live gas per §12.26.",
+          "and the ≥10×-graduate()-gas caller-reward floor are validated against live gas. Exact fee " +
+          "still finalized at deploy against live gas per.",
       },
       rawTickToken0BeforeAlignment: rawTickA,
       k: c.k.toString(),
@@ -1155,12 +1155,12 @@ async function main(): Promise<void> {
               policy: {
                 priceTarget: "constraint (c) inverted: raw p = (G − F − R)/L, then tick-aligned (±≤~1%)",
                 callerReward: "10% of target G; ceiling 2× (20% of G)",
-                graduationFee: "min(cost-based §12.26, 10% of G); ceiling min(10×, 20% of G)",
+                graduationFee: "min(cost-based, 10% of G); ceiling min(10×, 20% of G)",
                 callerRewardGasFloor: "relaxed 10× → 1.5× of fork-measured graduate() gas (TESTNET-ONLY)",
                 creationFee: "unchanged (independent of G)",
               },
               status:
-                "TESTNET-ONLY faucet-scale lifecycle-testing device — derive fails closed if the env var is present in mainnet mode; never a mainnet input (hoodpad-architect re-ratifies the policy).",
+                "TESTNET-ONLY faucet-scale lifecycle-testing device — derive fails closed if the env var is present in mainnet mode; never a mainnet input (robbed-architect re-ratifies the policy).",
             },
           }
         : {}),
@@ -1168,7 +1168,7 @@ async function main(): Promise<void> {
         ? {
             mainnetGraduationTarget: {
               basis:
-                "MAINNET FLAT graduation target (approved product change 2026-07-13; retargeted 5.7 ETH 2026-07-13): G is a flat net-of-fee ETH raise (§12.11), matching RobinFun's ~5.74 ETH / ~$44k bar, NOT the retired $69k-mcap derivation (~7.9166 ETH) nor the earlier flat 2.5-ETH default. Same solver MECHANISM as the testnet override (constraint (c) `G = p·L + F + R` inverted around the target), but the MAINNET fee policy is kept intact — no faucet-scale rescale.",
+                "MAINNET FLAT graduation target (approved product change 2026-07-13; retargeted 5.7 ETH 2026-07-13) G is a flat net-of-fee ETH raise, matching RobinFun's ~5.74 ETH / ~$44k bar, NOT the retired $69k-mcap derivation (~7.9166 ETH) nor the earlier flat 2.5-ETH default. Same solver MECHANISM as the testnet override (constraint (c) `G = p·L + F + R` inverted around the target), but the MAINNET fee policy is kept intact — no faucet-scale rescale.",
               source: gradTargetSource,
               envVar: "M0_MAINNET_GRADUATION_ETH",
               envOverridden: mainnetOverrideRaw != null && mainnetOverrideRaw !== "",
@@ -1178,12 +1178,12 @@ async function main(): Promise<void> {
               policy: {
                 priceTarget: "constraint (c) inverted: raw p = (G − F − R)/L, then tick-aligned (±≤~1%)",
                 callerReward: "MAINNET USD-sized ≈$5; ceiling 5× (unchanged)",
-                graduationFee: "MAINNET cost-based §12.26; ceiling 10× (unchanged; no %-of-G cap)",
+                graduationFee: "MAINNET cost-based; ceiling 10× (unchanged; no %-of-G cap)",
                 callerRewardGasFloor: "MAINNET 10× of fork-measured graduate() gas (unchanged)",
                 creationFee: "unchanged (independent of G)",
               },
               status:
-                "OPEN ITEM §13 — hoodpad-architect gate-approves the 5.7-ETH target before deploy. Fails closed if M0_MAINNET_GRADUATION_ETH is set under --network=testnet.",
+                "OPEN ITEM — robbed-architect gate-approves the 5.7-ETH target before deploy. Fails closed if M0_MAINNET_GRADUATION_ETH is set under --network=testnet.",
             },
           }
         : {}),
@@ -1195,10 +1195,10 @@ async function main(): Promise<void> {
     humanReadable: {
       virtualEth0: `${eth(c.virtualEthWei)} ETH`,
       virtualToken0: `${tokensM(c.virtualTokenWei)} tokens`,
-      graduationEth: `${eth(c.graduationEthWei)} ETH (net-of-fee, §12.11) ≈ $${weiToUsd(c.graduationEthWei).toFixed(2)} @snapshot`,
+      graduationEth: `${eth(c.graduationEthWei)} ETH (net-of-fee) ≈ $${weiToUsd(c.graduationEthWei).toFixed(2)} @snapshot`,
       graduationMcap: `${eth(gradMcapWei, 4)} ETH ≈ $${gradMcapUsd.toFixed(2)} @snapshot (${gradTargetLabel})`,
       initialMcap: `${eth(initialMcapWei, 4)} ETH ≈ $${weiToUsd(initialMcapWei).toFixed(2)} @snapshot`,
-      graduationFee: `${eth(c.graduationFeeWei)} ETH ≈ $${weiToUsd(c.graduationFeeWei).toFixed(2)} @snapshot — cost-based flat (§12.26), gas ${gas.basis} (USD shown is informational only)`,
+      graduationFee: `${eth(c.graduationFeeWei)} ETH ≈ $${weiToUsd(c.graduationFeeWei).toFixed(2)} @snapshot — cost-based flat, gas ${gas.basis} (USD shown is informational only)`,
       creationFee: `${eth(creationFeeWei)} ETH ≈ $${weiToUsd(creationFeeWei).toFixed(2)} @snapshot`,
       callerReward: `${eth(callerRewardWei)} ETH ≈ $${weiToUsd(callerRewardWei).toFixed(2)} @snapshot`,
       maxEarlyBuy: `${eth(maxEarlyBuyWei)} ETH ≈ $${weiToUsd(maxEarlyBuyWei).toFixed(2)} @snapshot`,
@@ -1227,7 +1227,7 @@ async function main(): Promise<void> {
     console.log(`  ${join(PLOTS_DIR, "mcap-vs-tokens-sold.svg")}`);
     console.log(`  ${join(PLOTS_DIR, "checkpoints.md")}`);
   }
-  console.log(`\nAll ${checks.length} validations passed. Reminder: §13 gate approval of these constants is still required.`);
+  console.log(`\nAll ${checks.length} validations passed. Reminder: gate approval of these constants is still required.`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1256,43 +1256,43 @@ function header(c: C, comment: string): string {
     `${comment} ${c.provenance.status}.`,
     `${comment} Provenance: ETH/USD $${c.ethUsdSnapshot.value} — ${c.ethUsdSnapshot.source} — fetched ${c.ethUsdSnapshot.timestamp}.`,
     `${comment} generatedAt ${c.generatedAt} · gitSha ${c.provenance.gitSha} · chainId ${c.chainId}.`,
-    `${comment} GRADUATION_ETH counts NET-of-fee real reserves (spec §12.11).`,
+    `${comment} GRADUATION_ETH counts NET-of-fee real reserves.`,
   ].join("\n");
 }
 
 function renderSol(c: C): string {
   return `${header(c, "//")}
 // Ready to paste/import into contracts/script/ — the deploy script's canonical
-// source remains out/constants.json via vm.readFile + vm.parseJson (contracts.md §4).
+// source remains out/constants.json via vm.readFile + vm.parseJson (contracts.md).
 
 // SPDX-License-Identifier: MIT
-// pragma solidity <exact pin per §6.7 — candidate 0.8.35, confirm vs Blockscout (O-5)>;
+// pragma solidity <exact pin per — candidate 0.8.35, confirm vs Blockscout (O-5)>;
 
 library RobbedConstants {
-    // ── curve (§6.2 / §6.4) ────────────────────────────────────────────────
-    uint256 internal constant TOTAL_SUPPLY      = 1_000_000_000e18; // structural, §6.4
+    // ── curve ────────────────────────────────────────────────
+    uint256 internal constant TOTAL_SUPPLY      = 1_000_000_000e18; // structural,
     uint256 internal constant CURVE_SUPPLY      = ${c.curve.curveSupplyWei};
     uint256 internal constant LP_TOKEN_TRANCHE  = ${c.curve.lpTrancheWei};
     uint256 internal constant VIRTUAL_ETH_0     = ${c.curve.virtualEthWei};
     uint256 internal constant VIRTUAL_TOKEN_0   = ${c.curve.virtualTokenWei};
-    uint256 internal constant GRADUATION_ETH    = ${c.curve.graduationEthWei}; // net-of-fee, §12.11
+    uint256 internal constant GRADUATION_ETH    = ${c.curve.graduationEthWei}; // net-of-fee,
 
-    // ── fees (§6.4, §7) ────────────────────────────────────────────────────
+    // ── fees ────────────────────────────────────────────────────
     uint16  internal constant TRADE_FEE_BPS       = ${c.fees.tradeFeeBps};
     uint16  internal constant MAX_TRADE_FEE_BPS   = ${MAX_TRADE_FEE_BPS};  // hard cap, structural
-    uint16  internal constant CREATOR_FEE_BPS     = ${c.fees.creatorFeeBps};    // §7/§12.63: additive under the 200 cap (0.5% = 50 bps)
+    uint16  internal constant CREATOR_FEE_BPS     = ${c.fees.creatorFeeBps};    // : additive under the 200 cap (0.5% = 50 bps)
     uint256 internal constant CREATION_FEE        = ${c.fees.creationFeeWei};
     uint256 internal constant MAX_CREATION_FEE    = ${c.fees.maxCreationFeeWei};
-    uint256 internal constant GRADUATION_FEE      = ${c.fees.graduationFeeWei}; // cost-based flat, §12.26 (M0 placeholder; finalized at M1 vs testnet gas)
+    uint256 internal constant GRADUATION_FEE      = ${c.fees.graduationFeeWei}; // cost-based flat, (M0 placeholder; finalized at M1 vs testnet gas)
     uint256 internal constant MAX_GRADUATION_FEE  = ${c.fees.maxGraduationFeeWei};
     uint256 internal constant CALLER_REWARD       = ${c.fees.callerRewardWei};
     uint256 internal constant MAX_CALLER_REWARD   = ${c.fees.maxCallerRewardWei};
 
-    // ── anti-sniper (§6.5, §12.18 — block.timestamp window, NEVER block.number)
+    // ── anti-sniper (block.timestamp window, NEVER block.number)
     uint64  internal constant EARLY_WINDOW_SECONDS = ${c.antiSniper.windowSeconds};
     uint256 internal constant MAX_EARLY_BUY        = ${c.antiSniper.maxEarlyBuyWei};
 
-    // ── V3 graduation (§6.3; both token orderings, address order unknown pre-deploy)
+    // ── V3 graduation (both token orderings, address order unknown pre-deploy)
     uint24  internal constant FEE_TIER               = ${c.v3.feeTier};
     int24   internal constant TICK_SPACING           = ${c.v3.tickSpacing};
     uint160 internal constant SQRT_PRICE_TOKEN0_X96  = ${c.v3.sqrtPriceX96Token0}; // launch token is token0
@@ -1309,12 +1309,12 @@ library RobbedConstants {
     uint256 internal constant PER_TOKEN_ETH_CAP = ${c.beta.perTokenEthCapWei};
     uint256 internal constant GLOBAL_ETH_CAP    = ${c.beta.globalEthCapWei};
 
-    // ── external (V3 addrs CONFIRMED §12.28; TREASURY_SAFE zero = unset O-6, deploy MUST fail if zero)
+    // ── external (V3 addrs CONFIRMED; TREASURY_SAFE zero = unset O-6, deploy MUST fail if zero)
     address internal constant WETH             = ${c.external.weth};
-    address internal constant V3_FACTORY       = ${c.external.v3Factory};       // §12.28, assert feeAmountTickSpacing(10000)==200
-    address internal constant POSITION_MANAGER = ${c.external.positionManager};       // §12.28, assert factory()/WETH9()
-    address internal constant SWAP_ROUTER_02   = ${c.external.swapRouter02};       // §12.28 (indexer/quoter use)
-    address internal constant QUOTER_V2        = ${c.external.quoterV2};       // §12.28 (indexer/quoter use)
+    address internal constant V3_FACTORY       = ${c.external.v3Factory};       //, assert feeAmountTickSpacing(10000)==200
+    address internal constant POSITION_MANAGER = ${c.external.positionManager};       //, assert factory()/WETH9()
+    address internal constant SWAP_ROUTER_02   = ${c.external.swapRouter02};       // (indexer/quoter use)
+    address internal constant QUOTER_V2        = ${c.external.quoterV2};       // (indexer/quoter use)
     address internal constant TREASURY_SAFE    = ${c.external.treasurySafe};       // O-6 OPEN — zero on purpose, deploy fails if zero
 }
 `;

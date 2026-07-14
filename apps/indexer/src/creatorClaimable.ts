@@ -1,5 +1,5 @@
 /**
- * Creator-fee claimable roll-up — PURE aggregation logic (spec §7 / §12.63).
+ * Creator-fee claimable roll-up — PURE aggregation logic.
  *
  * Per-creator pull-payment ledger, rebuildable from the on-chain creator-fee
  * events, maintained in the reorg-tracked Ponder table `creator_claimable`

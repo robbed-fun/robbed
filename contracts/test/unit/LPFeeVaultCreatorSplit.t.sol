@@ -13,8 +13,8 @@ import {IBondingCurve} from "src/interfaces/IBondingCurve.sol";
 import {IUniswapV3Pool} from "src/interfaces/external/IUniswapV3Pool.sol";
 import {ZeroAddress, NotMigrator, CreatorAlreadyRegistered, NotLpFeeVault} from "src/errors/Errors.sol";
 
-/// @title LPFeeVault + CreatorVault post-graduation split invariants (spec §12.69)
-/// @notice The five §12.69(F) invariants the creator-aware fee generation MUST hold, plus a full
+/// @title LPFeeVault + CreatorVault post-graduation split invariants
+/// @notice The five invariants the creator-aware fee generation MUST hold, plus a full
 ///         lifecycle through the split and the CreatorVault ERC20-custody surface:
 ///           (a) exact-sum split per leg     — `creatorAmt + treasuryAmt == collected`, both legs
 ///           (b) principal-monotonic         — position liquidity never decreases across collects
@@ -45,7 +45,7 @@ contract LPFeeVaultCreatorSplitTest is Test, V3Fixture {
     }
 
     /// @dev Fuzz the fee-generating trade size; the 50/50 split must be exact to the wei on both legs
-    ///      for any accrued amount (no leakage / rounding drain — §12.69(i)).
+    /// for any accrued amount (no leakage / rounding drain).
     function testFuzz_split_exactSumPerLeg(uint96 wethIn) public {
         wethIn = uint96(bound(wethIn, 0.01 ether, 20 ether));
         (LaunchToken token, BondingCurve curve, address pool, uint256 tokenId) = _graduate("aFuzzCreator");
@@ -205,7 +205,7 @@ contract LPFeeVaultCreatorSplitTest is Test, V3Fixture {
     // ─────────────────────── CreatorVault ERC20 custody ─────────────────────────
 
     function test_depositERC20_onlyLpFeeVault() public {
-        // A non-LPFeeVault caller cannot credit ERC20 custody (exact-accounting gate, §12.69(C)).
+        // A non-LPFeeVault caller cannot credit ERC20 custody (exact-accounting gate).
         vm.prank(makeAddr("randomDepositor"));
         vm.expectRevert(NotLpFeeVault.selector);
         creatorVault.depositERC20(makeAddr("someCreator"), address(weth), 1 ether);
