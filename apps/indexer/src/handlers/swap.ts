@@ -6,12 +6,15 @@
  * orientation (`v3PriceEth`): raw `(sqrtPriceX96/2^96)^2` is WETH-per-token when
  * the token is token0, inverted when it is token1. Direction from the pool-side
  * `amount0/amount1` signs (negative = flowing OUT to the recipient). Cost-basis
- * is best-effort for the recipient (OI-5 — often a router); `balance`/
- * `holder_count` are NOT written here (the Transfer handler owns them, X-4).
+ * is best-effort, keyed on the transaction-sender EOA (`event.transaction.from`,
+ * D-75 — closes OI-5; a contract-mediated/aggregator swap attributes to the
+ * relayer); `balance`/`holder_count` are NOT written here (the Transfer handler
+ * owns them, X-4).
  */
 import { ponder } from "ponder:registry";
 import { balances, graduations, tokens, trades } from "ponder:schema";
-import { eventId, lower } from "../ids";
+import { eventId } from "../ids";
+import { v3SwapTrader } from "../attribution";
 import { v3PriceEth } from "../price";
 import { graduationRegistry } from "../graduationRegistry";
 import { upsertCandlesForTrade } from "./candlesDb";
@@ -54,7 +57,14 @@ ponder.on("UniswapV3Pool:Swap", async ({ event, context }) => {
   const isBuy = tokenAmountSigned < 0n; // token flowing OUT to recipient = buy
   const tokenAmount = abs(tokenAmountSigned);
   const ethAmount = abs(ethAmountSigned);
-  const trader = lower(event.args.recipient);
+  // D-75: attribute to the transaction-sender EOA, NOT `Swap.recipient`. For an
+  // ETH-output V3 sell, `recipient` is SwapRouter02 (it receives WETH to unwrap
+  // into ETH for the user), which mis-attributed the trade to the router in the
+  // Token Detail Trades table. `event.transaction.from` is the user's EOA for a
+  // direct SwapRouter02 swap — correct for both buys and sells (and the intended
+  // best-effort cost-basis `holder` below, which reuses `trader` = the EOA);
+  // contract-mediated/aggregator swaps attribute to the relayer (Phase-2 4337).
+  const trader = v3SwapTrader(event);
   const ts = event.block.timestamp;
 
   await context.db.insert(trades).values({
