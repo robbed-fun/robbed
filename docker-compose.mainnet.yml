@@ -251,11 +251,19 @@ services:
       API_ENV: development
       DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
       REDIS_URL: redis://redis:6379
-      R2_ENDPOINT: http://minio:9000
-      R2_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-robbed}
-      R2_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-robbed_dev_secret}
+      # Object storage. DEFAULTS = the local minio (dev/CI); OVERRIDE via root .env
+      # to a real Cloudflare R2 bucket so uploaded images are publicly reachable from
+      # robbed.fun (the minio default only resolves on the host — localhost:4290 — so
+      # images 404 for any real browser). To use R2, set in root .env:
+      #   R2_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
+      #   R2_ACCESS_KEY_ID=<R2 S3 API token key>   R2_SECRET_ACCESS_KEY=<secret>
+      #   MAINNET_PUBLIC_R2_BASE_URL=https://pub-<hash>.r2.dev   (bucket public-read URL)
+      # imageUrl the API stamps into metadata MUST start with MAINNET_PUBLIC_R2_BASE_URL.
+      R2_ENDPOINT: ${R2_ENDPOINT:-http://minio:9000}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-${MINIO_ROOT_USER:-robbed}}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-${MINIO_ROOT_PASSWORD:-robbed_dev_secret}}
       R2_BUCKET: ${R2_BUCKET:-robbed-assets}
-      R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4290}/${R2_BUCKET:-robbed-assets}
+      R2_PUBLIC_BASE_URL: ${MAINNET_PUBLIC_R2_BASE_URL:-http://localhost:${MINIO_PORT:-4290}/${R2_BUCKET:-robbed-assets}}
       MODERATION_ALLOW_STUBS: "true"
       # Public-/v1 CORS (api.md) the public web origin + local browsing. Stays
       # correct when robbed.fun flips to the CF Worker origin (same hostname).
