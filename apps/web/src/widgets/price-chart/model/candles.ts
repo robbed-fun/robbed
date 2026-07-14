@@ -1,6 +1,8 @@
-import type { Candle, CandleInterval, WsCandleData } from "@robbed/shared";
+import type { Candle, CandleInterval, TokenDetail, WsCandleData } from "@robbed/shared";
 import { CANDLE_INTERVAL_SECONDS } from "@robbed/shared";
 import { formatEther } from "viem";
+
+import { getCandles } from "@/shared/api";
 
 /**
  * Trailing REST backfill window for one interval. PURE + server-safe: it
@@ -8,13 +10,90 @@ import { formatEther } from "viem";
  * TokenDetailView can compute the SSR candle window without importing a client
  * module — invoking a client-marked export from the server is a hard error in
  * the App Router (Next 16, verified 2026-07-10). The hook re-exports it.
+ *
+ * `anchorSec` (unix seconds) moves the window's RIGHT edge off `now` onto a
+ * token's last on-chain activity, so short intervals still cover an idle token's
+ * real candles instead of a false-empty window (design-decisions D-72). Absent
+ * (the live case) the window trails `now` exactly — behaviour is unchanged.
  */
 const BARS_PER_WINDOW = 400;
 
-export function candleWindow(interval: CandleInterval, now = Date.now()) {
-  const to = Math.floor(now / 1000);
-  const span = CANDLE_INTERVAL_SECONDS[interval] * BARS_PER_WINDOW;
+export function candleWindow(
+  interval: CandleInterval,
+  opts?: { anchorSec?: number; now?: number },
+) {
+  const width = CANDLE_INTERVAL_SECONDS[interval];
+  const span = width * BARS_PER_WINDOW;
+  if (opts?.anchorSec !== undefined) {
+    // Right edge = anchor + one bucket of headroom so the anchor's own bucket
+    // sits inside the inclusive [from, to] range the candles API returns.
+    const to = opts.anchorSec + width;
+    return { from: to - span, to };
+  }
+  const to = Math.floor((opts?.now ?? Date.now()) / 1000);
   return { from: to - span, to };
+}
+
+/**
+ * Right-edge anchor for the idle-token fallback window (D-72): a token's most
+ * recent on-chain activity. `TokenDetail` carries no dedicated `lastActivityAt`
+ * yet — GAP reported to robbed-shared / robbed-indexer (the indexer already has
+ * the last-trade timestamp) — so this uses `graduatedAt ?? createdAt`, the best
+ * last-activity proxy already on the wire. It is a FALLBACK anchor only: a live
+ * token's now-window fetch wins first (see `loadCandles`), so this matters solely
+ * when the now-window comes back empty. When shared adds `lastActivityAt`, only
+ * this one function changes and the anchor becomes exact for a mid-life-then-idle
+ * token (the residual case createdAt/graduatedAt cannot reach).
+ */
+export function lastActivityAnchor(
+  token: Pick<TokenDetail, "createdAt" | "graduatedAt">,
+): number {
+  return token.graduatedAt ?? token.createdAt;
+}
+
+/**
+ * Resumable REST truth for one interval, with a DATA-ANCHORED fallback (D-72).
+ *
+ * Phase 1 fetches the live (now-trailing) window — correct and unchanged for an
+ * actively trading token. If Phase 1 is EMPTY *and* the token's last activity is
+ * older than that window, Phase 2 re-fetches a window whose right edge is that
+ * activity (`anchorSec`), so an idle token's short intervals surface its real
+ * candles instead of a false-empty (DEXScreener / Pump.fun behaviour: clicking a
+ * short interval on a long-idle token scrolls to the trade, it does not blank).
+ *
+ * Server-safe (no client-only imports) so the SSR seed and the client feed hook
+ * share ONE implementation and cannot drift. The `now` opt is test-only.
+ */
+export async function loadCandles(
+  address: string,
+  interval: CandleInterval,
+  opts?: {
+    anchorSec?: number;
+    now?: number;
+    fetch?: { signal?: AbortSignal; revalidate?: number };
+  },
+): Promise<{ candles: Candle[] }> {
+  const live = await getCandles(
+    address,
+    interval,
+    candleWindow(interval, { now: opts?.now }),
+    opts?.fetch,
+  );
+  if (live.candles.length > 0 || opts?.anchorSec === undefined) return live;
+
+  // Skip Phase 2 when the anchor already sits inside the live window (nothing to
+  // gain, e.g. a token that simply has not traded yet) — the empty Phase-1
+  // result is the truth in that case.
+  const nowSec = Math.floor((opts.now ?? Date.now()) / 1000);
+  const liveFrom = nowSec - CANDLE_INTERVAL_SECONDS[interval] * BARS_PER_WINDOW;
+  if (opts.anchorSec >= liveFrom) return live;
+
+  return getCandles(
+    address,
+    interval,
+    candleWindow(interval, { anchorSec: opts.anchorSec }),
+    opts.fetch,
+  );
 }
 
 /**

@@ -31,11 +31,19 @@ export function tokenCard(over: Partial<TokenCard> = {}): TokenCard {
     name: "Hoodie Coin",
     ticker: "HOODIE",
     imageUrl: null,
+    // D-70 card-preview blurb (added to the shared `TokenCard` shape by an
+    // in-flight robbed-shared change) — fixture conforms to the schema; null =
+    // no description. Flagged for robbed-shared/robbed-architect (not my task).
+    description: null,
     creator: "0x00000000000000000000000000000000000000bb",
     createdAt: Math.floor(Date.now() / 1000) - 300,
     priceEth: 0.00021,
     mcap: usdValue(),
-    progressPct: 42.5,
+    // ETH-first mcap source (D-70 card denomination) — wei decimal string (5.7 ETH).
+    mcapEth: "5700000000000000000",
+    // [0,1] FRACTION (real_eth_reserves / graduation_eth) — the card multiplies
+    // ×100 for GraduationProgress (D-70 units caveat). 0.425 = 42.5% to graduation.
+    progressPct: 0.425,
     change24hPct: 12.34,
     volume24h: "1500000000000000000",
     graduated: false,

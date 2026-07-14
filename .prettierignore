@@ -1,0 +1,29 @@
+# Prettier ignore — gitignore syntax.
+# Solidity (.sol) is forge fmt's job; Prettier skips .sol by default (no solidity plugin).
+
+# Dependencies
+node_modules
+
+# Build output / caches
+**/.next
+**/.open-next
+**/dist
+**/.turbo
+
+# Generated / data — single source of truth lives elsewhere, not hand-formatted
+packages/shared/src/abi/**
+packages/shared/src/addresses.ts
+tools/m0/out/**
+tools/localstack/out/**
+
+# Foundry (Solidity toolchain owns these)
+contracts/lib/**
+contracts/out/**
+contracts/cache/**
+contracts/broadcast/**
+
+# Lockfile (pnpm owns formatting)
+pnpm-lock.yaml
+
+# Generated type shim
+apps/web/next-env.d.ts

@@ -7,6 +7,7 @@ import {
   EthAmount,
   MonoLabel,
   MonoText,
+  PriceEth,
   RelativeTime,
   SideBadge,
   StatCell,
@@ -29,18 +30,12 @@ import {
  * the SSR holders page count, BONDING = `graduation.progressPct`. No metric is
  * computed or hardcoded here.
  */
-export function TokenHeader({
-  token,
-  holderCount,
-}: {
-  token: TokenDetail;
-  holderCount?: number;
-}) {
+export function TokenHeader({ token, holderCount }: { token: TokenDetail; holderCount?: number }) {
   return (
     // Full-bleed identity row (fidelity audit fix 2; template 2a line 351):
     // border-bottom ONLY — no side/top border, no fill — padding 16px 24px,
     // gap 14px.
-    <div className="flex flex-col gap-3.5 border-b border-border px-4 py-4 md:flex-row md:items-center md:gap-6 sm:px-6">
+    <div className="flex flex-col gap-3.5 px-4 py-4 md:flex-row md:items-center md:gap-6 sm:px-6">
       {/* ── Identity: avatar · NAME TICKER · addr·created·creator ─────────── */}
       <div className="flex min-w-0 items-center gap-3.5">
         <TokenAvatar
@@ -73,7 +68,9 @@ export function TokenHeader({
           {token.priceEth === null ? (
             <MonoText tone="muted">—</MonoText>
           ) : (
-            <EthAmount eth={token.priceEth} />
+            // Compact subscript for the tiny curve prices memecoins live at
+            // (0.0₁₀63 ETH), plain decimal at normal magnitude (format-price.ts).
+            <PriceEth value={token.priceEth} unit="ETH" />
           )}
         </StatCell>
         <StatCell label="Vol 24H" align="right">

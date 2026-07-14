@@ -35,6 +35,7 @@ import {
   tokenFilterSchema,
   tokenRefSchema,
   tokenSortSchema,
+  tokenStatusSchema,
   tradeListQuerySchema,
   tradeRowSchema,
   tradeSortFieldSchema,
@@ -52,6 +53,7 @@ const card = {
   name: "Cash Cat",
   ticker: "CASHCAT",
   imageUrl: null,
+  description: "a community memecoin on ROBBED_", // NEW card field (D-70) — present-but-nullable
   creator: ADDR,
   createdAt: 1767950000,
   priceEth: 8.1e-9,
@@ -91,6 +93,22 @@ describe("TokenCard / TokenDetail ", () => {
     expect(tokenCardSchema.safeParse(card).success).toBe(true);
     expect(tokenCardSchema.safeParse({ ...card, status: "v2" }).success).toBe(false);
     expect(tokenCardSchema.safeParse({ ...card, confirmationState: "confirmed" }).success).toBe(false);
+  });
+
+  it("card description (D-70) is present-but-nullable — string|null ok, missing/number rejected", () => {
+    expect(tokenCardSchema.safeParse({ ...card, description: null }).success).toBe(true);
+    expect(tokenCardSchema.safeParse({ ...card, description: "gm" }).success).toBe(true);
+    const { description: _d, ...noDescription } = card;
+    // required key (matches TokenDetail's `z.string().nullable()`) — absent ⇒ every producer must emit it
+    expect(tokenCardSchema.safeParse(noDescription).success).toBe(false);
+    expect(tokenCardSchema.safeParse({ ...card, description: 123 }).success).toBe(false);
+  });
+
+  it("tokenStatusSchema is re-exported from api-types after the D-70 move", () => {
+    for (const s of ["curve", "graduating", "graduated"]) {
+      expect(tokenStatusSchema.safeParse(s).success).toBe(true);
+    }
+    expect(tokenStatusSchema.safeParse("v2").success).toBe(false);
   });
 
   const detail = {

@@ -1,6 +1,6 @@
 "use client";
 
-import type { TokenCard as TokenCardType } from "@robbed/shared";
+import type { TokenCard as TokenCardType, UsdValue } from "@robbed/shared";
 import { useRouter } from "next/navigation";
 
 import { CopyAddressButton } from "@/shared/ui";
@@ -9,24 +9,51 @@ import { GraduationProgress } from "@/shared/ui";
 import { RelativeTime } from "@/shared/ui";
 import { TokenAvatar } from "@/shared/ui";
 import { UsdAmount } from "@/shared/ui";
-import { Badge } from "@/shared/ui";
 import { TokenAddressLink } from "./TokenAddressLink";
 import { formatPercent, shortAddress } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 /**
- * Discover token card — the field set EXACTLY:
- *   image · name · ticker · mcap · progress bar · 24h Δ% · creator · age.
+ * Discover / Created token card (D-70 rich card — pump.fun / robinhood.fun style).
+ * Field set EXACTLY: image · name · ticker · description · mcap (ETH) · 24h Δ% ·
+ * graduation status · Vol 24h (ETH) · creator · age.
  *
- * All metrics are indexer-computed values off `TokenCard` (mcap is a live-priced
- * `UsdValue` carrying source+asOf; volume24h/Δ% are indexer aggregates) — this
- * component performs ZERO market math and holds no metric constant.
+ * Every metric is an indexer aggregate rendered BY REFERENCE — this component
+ * performs ZERO market math and holds no metric constant (no-market-metrics).
+ * `global:metrics` snapshots patch the cached `TokenCard` (D-70), so a swap
+ * live-updates mcap / vol / Δ% / progress / status here with no reload.
  *
- * Navigation: DECISION — the card navigates via `useRouter().push` (not an
- * `<a>` wrapper) so the nested creator/Blockscout anchors stay valid HTML (no
- * `<a>`-in-`<a>`) while still honoring "creator click → search filtered by
- * creator". Hover prefetches the detail route (web.md speed).
+ * DENOMINATION (D-70 / no-market-metrics): mcap + Vol 24h render ETH-first from
+ * `mcapEth` / `volume24h` (wei). The USD mirror renders ONLY where a real live
+ * ETH/USD feed exists (`ethUsd > 0`); on testnet (no feed, `ethUsd == 0`) NO USD
+ * is fabricated — `UsdAmount` would otherwise print a live-priced zero figure.
+ *
+ * GRADUATION COPY (HARD RULE — D-14 / D-65 / lp-copy): curve → "{n}% to
+ * graduation"; graduated → "Graduated · Uniswap V3". The forbidden LP verb never
+ * appears — the full LP-destiny sentence stays token-detail-only (D-65); the card
+ * carries only the venue/status label. `progressPct` is a [0,1] FRACTION but
+ * `GraduationProgress` expects 0–100 → multiply ×100 at the call site (D-70).
+ *
+ * Navigation: the card navigates via `useRouter().push` (not an `<a>` wrapper) so
+ * the nested creator/Blockscout anchors stay valid HTML; hover prefetches.
  */
+
+/** True only for a real live ETH/USD snapshot — the no-feed sentinel is `ethUsd == 0`. */
+function hasLiveUsd(v: UsdValue | null | undefined): boolean {
+  if (!v) return false;
+  const rate = Number(v.ethUsd);
+  return Number.isFinite(rate) && rate > 0 && typeof v.asOf === "string" && v.asOf !== "";
+}
+
+const clampPct = (p: number) => Math.max(0, Math.min(100, Number.isFinite(p) ? p : 0));
+
+/** D-70 graduation-status label — venue-named; the forbidden LP verb never renders. */
+function gradStatusLabel(token: TokenCardType, pct100: number): string {
+  if (token.graduated || token.status === "graduated") return "Graduated · Uniswap V3";
+  if (token.status === "graduating") return "Graduating · Uniswap V3";
+  return `${clampPct(pct100).toFixed(1)}% to graduation`;
+}
+
 export function TokenCard({
   token,
   flashing = false,
@@ -39,6 +66,9 @@ export function TokenCard({
   const delta = token.change24hPct;
   const deltaClass =
     delta === null ? "text-muted-foreground" : delta >= 0 ? "text-buy" : "text-sell";
+  // [0,1] fraction → 0–100 for the shared GraduationProgress / pctText (D-70).
+  const pct100 = token.progressPct * 100;
+  const gradStatus = token.graduated ? "graduated" : token.status;
 
   return (
     <div
@@ -66,16 +96,9 @@ export function TokenCard({
           size={40}
         />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="truncate text-sm font-semibold text-foreground">
-              {token.name}
-            </span>
-            {token.graduated && (
-              <Badge variant="finalized" className="shrink-0">
-                Graduated
-              </Badge>
-            )}
-          </div>
+          <span className="block truncate text-sm font-semibold text-foreground">
+            {token.name}
+          </span>
           <span className="text-xs uppercase tracking-wide text-muted-foreground">
             {token.ticker}
           </span>
@@ -83,12 +106,29 @@ export function TokenCard({
         <RelativeTime unixSeconds={token.createdAt} className="text-xs text-muted-foreground" />
       </div>
 
+      {/* description — server-truncated card-preview blurb (D-70); full text on /t/… */}
+      {token.description ? (
+        <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">
+          {token.description}
+        </p>
+      ) : null}
+
       <div className="flex items-end justify-between">
-        <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col">
           <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
             Mcap
           </span>
-          <UsdAmount value={token.mcap} className="text-sm font-medium text-foreground" />
+          {/* ETH-first (D-70); live USD mirror only where a real feed exists. */}
+          <span className="flex items-baseline gap-1.5">
+            <EthAmount
+              wei={token.mcapEth}
+              unit="ETH"
+              className="text-sm font-medium text-foreground"
+            />
+            {hasLiveUsd(token.mcap) ? (
+              <UsdAmount value={token.mcap} className="text-xs text-muted-foreground" />
+            ) : null}
+          </span>
         </div>
         <div className="flex flex-col items-end">
           <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -100,15 +140,12 @@ export function TokenCard({
         </div>
       </div>
 
-      {/* Graduation progress + status — the shared compact GraduationProgress
-          (bar + % pre-grad, or a Graduating / Graduated pill). `progressPct` is
-          the indexer's cached card value (a per-card on-chain read would be too
-          costly for a list); `status`/`graduated` drive the status pill. */}
-      <GraduationProgress
-        variant="compact"
-        progressPct={token.progressPct}
-        status={token.graduated ? "graduated" : token.status}
-      />
+      {/* Graduation status (D-70): venue-named label over the shared compact bar.
+          `progressPct` is a [0,1] fraction → ×100 for GraduationProgress. */}
+      <div className="flex flex-col gap-1">
+        <span className="text-xs text-muted-foreground">{gradStatusLabel(token, pct100)}</span>
+        <GraduationProgress variant="compact" progressPct={pct100} status={gradStatus} />
+      </div>
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <button

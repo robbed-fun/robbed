@@ -1,12 +1,6 @@
 "use client";
 
-import type {
-  Candle,
-  HolderRow,
-  Paginated,
-  TokenDetail,
-  TradeRow,
-} from "@robbed/shared";
+import type { Candle, HolderRow, Paginated, TokenDetail, TradeRow } from "@robbed/shared";
 import type { CSSProperties } from "react";
 
 import { useLiveTokenDetail } from "@/entities/token";
@@ -37,11 +31,13 @@ import { TokenInfo } from "./TokenInfo";
  * TokenInfo V3-pool link.
  *
  * REDESIGN (USER-DIRECTED 2026-07-13): the token-detail SafetyStrip block is
- * REMOVED. The LP-destiny hard-rule floor is preserved by a single muted
- * `LP_DESTINY_COPY` footnote rendered in `TokenInfo` (verbatim, copy-lint
- * enforced). Graduation progress/status still live on the Discover carousel +
- * TokenCard; only this page's SafetyStrip is gone. The trade feed + holders
- * table are the common server-sorted, paginated `DataTable`.
+ * REMOVED. The LP-destiny line that briefly survived as a muted `LP_DESTINY_COPY`
+ * footnote in `TokenInfo` is now ALSO REMOVED (USER-DIRECTED 2026-07-14, D-74):
+ * the D-14 LP-copy sentence is no longer a required render on /t/[address]. This
+ * is UI-disclosure only — LP stays permanently locked on-chain and the API still
+ * returns `trust.lpCopy` — so no floor survives on this page. Graduation
+ * progress/status still live on the Discover carousel + TokenCard. The trade feed
+ * + holders table are the common server-sorted, paginated `DataTable`.
  *
  * Interactive islands hydrate from SSR `initialData`, so there is no double-fetch
  * flash while the client query becomes authoritative for live WS patching.
@@ -65,62 +61,31 @@ export function TokenDetailClient({
     <OptimisticTradesProvider>
       <TokenHeader token={token} holderCount={holderCount} />
 
-      {/*
-        HERO — chart (left) + trade form (right). FIXED-HEIGHT EQUAL COLUMNS
-        (layout revision 2026-07-12, supersedes the viewport-fill hero): on lg+
-        the hero row is a FIXED `--td-hero-h` px height (single constant in
-        ../config/hero — NOT a `100dvh - header` calc, NOT the removed
-        useViewportFillHeight hook), sized to fit a MacBook 13" first screen. BOTH
-        columns take `lg:h-full`, so the chart box and the trade-form box are
-        EXACTLY equal-height, aligned top and bottom; `lg:items-stretch` keeps
-        them flush even if one had less content. Mockup fidelity
-        (redesign mockup, — panel "2a") FLAT regions on the page bg, single vertical
-        hairline via the chart column's `border-r`, 320px trade rail self-padded.
-        MOBILE (< lg): the two columns STACK — chart (viewport-relative height)
-        then trade form — via `flex-col`; the fixed equal-height is scoped to
-        `lg:*` only so the mobile layout is unchanged.
-      */}
+      {/* Row 1 — chart | trade widget, split 8:4. MOBILE-FIRST: single column (chart
+          above the widget, fixed mobile height); ≥lg an 8:4 grid at the hero height,
+          both columns stretched to equal height. */}
       <div
         style={{ "--td-hero-h": TD_HERO_HEIGHT } as CSSProperties}
-        className="flex shrink-0 flex-col lg:h-[var(--td-hero-h)] lg:flex-row lg:items-stretch"
+        className="grid grid-cols-1 gap-2 lg:h-[var(--td-hero-h)] lg:grid-cols-12"
       >
-        {/* Chart column — `min-h-0`/`min-w-0` defuse the flexbox min-content trap
-            so PriceChart's `flex-1` canvas can shrink. `lg:flex-1` is scoped to lg
-            ON PURPOSE: at lg the hero is a ROW so flex-1 grows the horizontal axis
-            while `lg:h-full` sets the vertical fill (= the fixed hero height); on
-            mobile (hero is a COLUMN) an unconditional flex-1 would put
-            flex-basis:0 on the vertical main axis and override `h-[56vh]`,
-            collapsing the chart. */}
-        <div className="flex h-[56vh] min-h-0 min-w-0 flex-col px-4 pb-3.5 pt-[18px] sm:px-6 lg:h-full lg:flex-1 lg:border-r lg:border-border">
+        <div className="h-[320px] min-w-0 lg:col-span-8 lg:h-auto">
           <PriceChart token={token} initialCandles={initialCandles} />
         </div>
-
-        {/* Trade rail — 320px on lg, `lg:h-full` = the SAME fixed hero height as
-            the chart column, and scrolls internally if the form ever exceeds it.
-            On mobile a top hairline separates it from the chart above. */}
-        <div className="flex flex-col border-t border-border lg:h-full lg:w-[320px] lg:min-h-0 lg:shrink-0 lg:overflow-y-auto lg:border-t-0">
+        <div className="min-w-0 lg:col-span-4">
           <TradeWidget token={token} />
         </div>
       </div>
 
-      {/*
-        LOWER — detail region below the fixed hero. Two columns on lg (LEFT trade
-        feed + token info | RIGHT Top Holders table) keep the 320px right rail +
-        vertical hairline continuous with the hero above. MOBILE ordering:
-        chart → trade → holders → trades → info, grid-placed into the right rail
-        on lg (lg:order-2 / col 2). The token-detail SafetyStrip was removed
-        (USER-DIRECTED 2026-07-13); the LP-destiny floor now lives as a muted
-        footnote inside TokenInfo.
-      */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-        <div className="order-1 flex flex-col lg:order-2 lg:col-start-2 lg:row-start-1">
-          <div className="px-5 py-4">
-            <HolderTable token={token} initialData={initialHolders} />
-          </div>
-        </div>
-        <div className="order-2 flex min-w-0 flex-col gap-6 px-4 pb-[18px] pt-4 sm:px-6 lg:order-1 lg:col-start-1 lg:row-start-1 lg:border-r lg:border-border">
+      {/* Row 2 — (feed + info) | holders, split 8:4 to LINE UP under row 1 (holders
+          under the widget, feed under the chart). MOBILE-FIRST: stacked; ≥lg the same
+          12-col grid. `min-w-0` lets the DataTables truncate inside their column. */}
+      <div className="grid grid-cols-1 gap-2 lg:grid-cols-12 pt-2">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-span-8">
           <TradeFeed token={token} initialTrades={initialTrades} />
           <TokenInfo token={token} />
+        </div>
+        <div className="min-w-0 lg:col-span-4">
+          <HolderTable token={token} initialData={initialHolders} />
         </div>
       </div>
     </OptimisticTradesProvider>

@@ -139,8 +139,8 @@ describe("StatCell", () => {
 
 describe("CursorTag / Wordmark", () => {
   it("CursorTag appends a blinking `_` cursor (inherits tone by default)", () => {
-    const { container } = render(<CursorTag>rob responsibly</CursorTag>);
-    expect(screen.getByText("rob responsibly")).toBeTruthy();
+    const { container } = render(<CursorTag>terminal ready</CursorTag>);
+    expect(screen.getByText("terminal ready")).toBeTruthy();
     const cursor = container.querySelector(".animate-blink");
     expect(cursor?.textContent).toBe("_");
     expect(cursor?.className).not.toContain("text-green");

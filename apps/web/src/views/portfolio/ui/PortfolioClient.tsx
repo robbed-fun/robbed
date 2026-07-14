@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useAccount } from "wagmi";
 
 import { WalletConnectButton } from "@/features/connect-wallet";
-import { EmptyState, Tab, TabBar } from "@/shared/ui";
+import { EmptyState, MascotLockup, Tab, TabBar } from "@/shared/ui";
 
 import { ActivityTab } from "./ActivityTab";
 import { CreatedTab } from "./CreatedTab";
@@ -43,8 +43,14 @@ export function PortfolioClient({ initialAddress }: { initialAddress?: string })
 
   if (!subject) {
     return (
-      <div className="px-4 py-12 md:px-6">
+      <div className="flex flex-col items-center gap-6 px-4 py-12 md:px-6">
+        {/* Portfolio brand LOCKUP (design §4: "apply the lockup to … portfolio").
+            The connect prompt is Portfolio's own brand moment, so it carries the
+            LOOT_ + ROBBED_ lockup (connected users get the shared header lockup).
+            STATIC so it reads as a logo, not a distraction; reduced-motion safe. */}
+        <MascotLockup size={40} animated={false} />
         <EmptyState
+          className="w-full max-w-sm"
           title="Connect a wallet"
           description="See your holdings, activity, and created tokens."
           action={

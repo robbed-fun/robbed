@@ -110,9 +110,13 @@ GET /v1/tokens
   progress = real_eth_reserves / graduation_eth (pre-grad only)
   200 → { tokens: TokenCard[], nextCursor }
   TokenCard: address, name, ticker, imageUrl, creator, createdAt, priceEth, mcap{usd,ethUsd,asOf},
-             progressPct, change24hPct, volume24h, graduated,
+             mcapEth,                                            -- ETH-first mcap (wei); cards/OG render ETH from THIS, USD derives (mcapEth × ethUsd). ETH-only on testnet (no live feed, D-51/no-market-metrics)
+             description,                                        -- NEW (D-70): card-preview blurb, server-truncated to TOKEN_CARD_DESCRIPTION_MAX; full text stays on GET /v1/tokens/:address.
+                                                                --   NO indexer change — tokens.description is already SELECTed by TOKEN_LIST_SELECT; add only to tokenCardSchema + toTokenCard.
+             progressPct, change24hPct, volume24h, graduated,   -- progressPct = real_eth_reserves/graduation_eth (fraction); volume24h = ETH wei
              status: 'curve'|'graduating'|'graduated'            -- derived (indexer.md section 3.2); drives the venue pill/widget engine
              confirmationState, moderation{visibility, impersonationFlag}
+  Discover grid (D-70) consumes ?sort/?filter again (view-local control; grid URL-state stays retired) — server-authoritative order, no client re-rank.
 
 GET /v1/tokens/king-of-the-hill                                 (section 5.1 hero)
   Closest to graduation among pre-grad tokens, volume-weighted:
@@ -446,6 +450,7 @@ Canonicalization is defined once, here, RFC-8785-style (UTF-8, sorted keys at ev
 - **`api-types.ts` error-code union (D-40b):** the union lists **only codes the API actually returns**; `conflict`/409 is **dropped** (no genuine resource-conflict path exists in v1 — content-addressed image + metadata are idempotent). The metadata imageHash-reference mismatch is `invalid_request` (HTTP 400, section 3.2).
 - `metadata.ts` `TokenMetadata`: `name` max = **32 bytes**, `ticker` max = **10 bytes** (UTF-8 byte length via a custom zod refinement, not `.max()` char count — must equal the on-chain byte limits, D-30). `version` is a literal `1` (frozen inside the hash preimage, D-31). The prior `name ≤ 64 chars` is superseded — robbed-shared updates the frozen schema and the OpenAPI (`apps/api/openapi.yaml`) to match.
 - `api-types.ts` **`TokenCard.creator` is an address string; `TokenDetail.creator` is `{ address, tokensCreated }`** (an enriched object) — by design (card vs detail), documented here so consumers don't expect one shape (X-13). `ws-messages.ts` gains the `fee_collected` message (indexer.md section 8.2, X-6).
+- **D-70 additions (robbed-shared to land; robbed-indexer publishes, robbed-frontend consumes):** (1) `api-types.ts` `tokenCardSchema` gains **`description: z.string().nullable()`** (card preview) + a `TOKEN_CARD_DESCRIPTION_MAX` constant (`constants.ts`) — additive; `TokenDetail` keeps the FULL description. **No indexer/DB change** — `tokens.description` is already SELECTed (`TOKEN_LIST_SELECT`) and mapped into `TokenListRow`; only `toTokenCard` must project it (truncated). (2) `ws-messages.ts` gains a **`token_metrics`** message (`wsTokenMetricsDataSchema`) carrying the ETH-first aggregate snapshot `{ token, priceEth, mcapEth, volume24h, change24hPct, progressPct, status, graduated, blockNumber, ts }` — field types **reused from `tokenCardSchema`** (no re-declared scalars; `tokenStatusSchema` moves to a cycle-free module so the WS union can import it). (3) `channels.ts` gains **`GLOBAL_METRICS = "global:metrics"`** in `GLOBAL_CHANNELS`. Published **coalesced** per token (≤1 / `WS_METRICS_THROTTLE_MS` ≈ 2 s, trailing-edge, last-write-wins by `blockNumber`) on each indexed trade + graduation; the frontend patches the cached `tokens` list by reference via `setQueryData` (no refetch, no client math). **No fabricated USD** — the payload is ETH-denominated; USD mirrors only where the live `GET /v1/meta/eth-usd` feed exists.
 
 ## 6. Auth, rate limiting, abuse surface
 

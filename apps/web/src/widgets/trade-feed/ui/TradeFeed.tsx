@@ -19,6 +19,7 @@ import {
   EthAmount,
   MonoLabel,
   MonoText,
+  PriceEth,
   RelativeTime,
   SideBadge,
   SortHeader,
@@ -34,7 +35,7 @@ import {
   useCursorStack,
 } from "@/shared/lib/table";
 import { useWsChannel } from "@/shared/lib/ws";
-import { formatPriceEth, shortAddress } from "@/shared/lib/format";
+import { shortAddress } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 import { type FeedRow, buildFeedRows, prependTrade } from "../model/merge";
@@ -85,9 +86,7 @@ const tradeColumns: ColumnDef<FeedRow>[] = [
   },
   {
     id: "amount",
-    header: (ctx) => (
-      <SortHeader label="Amount" field="amount" align="right" meta={metaOf(ctx)} />
-    ),
+    header: (ctx) => <SortHeader label="Amount" field="amount" align="right" meta={metaOf(ctx)} />,
     cell: ({ row }) => <AmountCell row={row.original} />,
   },
   {
@@ -116,8 +115,7 @@ export function TradeFeed({
   const optimistic = useOptimisticTradesContext();
   const [sort, setSort] = useState<SortState<TradeSortField>>(DEFAULT_TRADE_SORT);
   const cursors = useCursorStack();
-  const isDefaultView =
-    isDefaultSort(sort, DEFAULT_TRADE_SORT) && cursors.cursor === null;
+  const isDefaultView = isDefaultSort(sort, DEFAULT_TRADE_SORT) && cursors.cursor === null;
 
   // Bare key = WS-live default head; params key = a REST snapshot.
   const canonicalKey = qk.trades(token.address);
@@ -175,9 +173,7 @@ export function TradeFeed({
 
   const onSort = useCallback(
     (field: string) => {
-      setSort((cur) =>
-        nextSort(cur, field as TradeSortField, field === "trader" ? "asc" : "desc"),
-      );
+      setSort((cur) => nextSort(cur, field as TradeSortField, field === "trader" ? "asc" : "desc"));
       cursors.reset();
     },
     [cursors],
@@ -200,23 +196,25 @@ export function TradeFeed({
   return (
     // FLAT region (fidelity audit fix 1): the DataTable's TableLabel titles the
     // feed; the mockup grid tracks are preserved on the header + each row.
-    <div className="border-t border-border pt-3">
+    <div className="">
       <DataTable<FeedRow>
         data={rows}
         columns={tradeColumns}
         getRowId={(row) => row.key}
         aria-label="Trades"
         meta={meta}
-        tableLabel={{
-          title: <MonoLabel size="2xs" className="text-text-tertiary">Trades</MonoLabel>,
-        }}
+        // Same DataTable treatment as the sibling HolderTable (plain-string
+        // TableLabel → bold <h3>, `text-[11px]` header, `py-1.5 text-xs` rows) so
+        // the two token-detail tables read identically; the optimistic /
+        // just-updated row modifiers are TradeFeed's own data behaviour, kept.
+        tableLabel={{ title: "Trades" }}
         renderHeader={(cells) => (
-          <div className={`${GRID} border-b border-border-soft pb-2`}>{cells}</div>
+          <div className={`${GRID} border-b border-border-soft pb-2 text-[11px]`}>{cells}</div>
         )}
         renderRow={({ row, cells }) => (
           <div
             className={cn(
-              `${GRID} border-b border-border-soft py-[7px] text-sm last:border-b-0`,
+              `${GRID} border-b border-border-soft py-1.5 text-xs last:border-b-0`,
               row.original.isOptimistic && "opacity-90",
               row.original.justUpdated && "animate-pulse",
             )}
@@ -224,9 +222,7 @@ export function TradeFeed({
             {cells}
           </div>
         )}
-        empty={
-          <p className="py-6 text-center text-xs text-muted">No trades yet — be the first.</p>
-        }
+        empty={<p className="py-6 text-center text-xs text-muted">No trades yet — be the first.</p>}
         pagination={pagination}
       />
     </div>
@@ -279,8 +275,8 @@ function AmountCell({ row }: { row: FeedRow }) {
 
 function PriceCell({ row }: { row: FeedRow }) {
   return (
-    <span className="hidden text-right tabular-nums text-muted sm:block">
-      {formatPriceEth(row.priceEth)}
+    <span className="hidden text-right text-muted sm:block">
+      <PriceEth value={row.priceEth} />
     </span>
   );
 }

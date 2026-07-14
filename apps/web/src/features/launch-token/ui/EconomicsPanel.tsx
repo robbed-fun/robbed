@@ -45,15 +45,16 @@ export function EconomicsPanel({ ticker }: { ticker?: string }) {
         )} ETH`
       : liveHint(econ.available, econ.isError);
 
-  const supply = `${new Intl.NumberFormat("en-US").format(
-    TOTAL_SUPPLY_WEI / 10n ** 18n,
-  )} ${unit}`;
+  const supply = `${new Intl.NumberFormat("en-US").format(TOTAL_SUPPLY_WEI / 10n ** 18n)} ${unit}`;
 
   // Fee split read LIVE from the factory config — treasury + creator.
-  const split = describeFeeSplit(econ.tradeFeeBps, econ.tradeFeeBps === null ? null : econ.creatorFeeBps ?? 0);
+  const split = describeFeeSplit(
+    econ.tradeFeeBps,
+    econ.tradeFeeBps === null ? null : (econ.creatorFeeBps ?? 0),
+  );
   const tradeFee = split
     ? split.hasCreatorShare
-      ? `${split.totalPct} — ${split.treasuryPct} treasury + ${split.creatorPct} creator`
+      ? `0.5% treasury + ${split.creatorPct} creator`
       : `${split.treasuryPct} curve fee → treasury`
     : liveHint(econ.available, econ.isError);
 

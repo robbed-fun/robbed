@@ -17,11 +17,12 @@ import {
   EmptyState,
   ErrorState,
   MonoLabel,
+  PriceEth,
   RelativeTime,
   SideBadge,
   Skeleton,
 } from "@/shared/ui";
-import { formatEthFromWei, formatPriceEth, shortAddress } from "@/shared/lib/format";
+import { formatEthFromWei, shortAddress } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 /**
@@ -97,9 +98,10 @@ const activityColumns: ColumnDef<TradeRow>[] = [
       </MonoLabel>
     ),
     cell: ({ row }) => (
-      <span className="hidden text-right tabular-nums text-muted sm:block">
-        {/* Same review fix as the token-detail feed: 2-sig decimal, never e-notation. */}
-        {formatPriceEth(row.original.priceEth)}
+      <span className="hidden text-right text-muted sm:block">
+        {/* Compact subscript for tiny curve prices, plain 2-sig decimal at normal
+            magnitude — shared PriceEth (never e-notation, format-price.ts). */}
+        <PriceEth value={row.original.priceEth} />
       </span>
     ),
   },

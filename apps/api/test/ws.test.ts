@@ -48,8 +48,8 @@ function fakeSocket() {
 }
 
 describe("isValidClientChannel — hardening", () => {
-  it("accepts the three global channels", () => {
-    for (const c of ["global:launches", "global:trades", "global:confirmations"]) {
+  it("accepts every global channel (incl. global:metrics, D-70)", () => {
+    for (const c of ["global:launches", "global:trades", "global:confirmations", "global:metrics"]) {
       expect(isValidClientChannel(c)).toBe(true);
     }
   });
@@ -69,10 +69,17 @@ describe("isValidClientChannel — hardening", () => {
 });
 
 describe("WsHub — subscription lifecycle", () => {
-  it("eagerly subscribes Redis to the global channels at construction", () => {
+  it("eagerly subscribes Redis to the global channels at construction (incl. global:metrics, D-70)", () => {
     const up = fakeUpstream();
     new WsHub(up.redis);
-    expect(up.subscribed.sort()).toEqual(["global:confirmations", "global:launches", "global:trades"]);
+    // Sourced from the shared GLOBAL_CHANNELS — global:metrics (D-70) is now a
+    // first-class explicit-SUBSCRIBE alongside launches/trades/confirmations.
+    expect(up.subscribed.sort()).toEqual([
+      "global:confirmations",
+      "global:launches",
+      "global:metrics",
+      "global:trades",
+    ]);
   });
 
   it("sub: subscribes the topic, tracks membership, lazily subscribes Redis", () => {

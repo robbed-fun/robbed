@@ -9,8 +9,10 @@ import {
   MAX_IMAGE_BYTES,
   MAX_METADATA_JSON_BYTES,
   MAX_TRADE_FEE_BPS,
+  METADATA_DESCRIPTION_MAX,
   METADATA_NAME_MAX,
   METADATA_TICKER_MAX,
+  TOKEN_CARD_DESCRIPTION_MAX,
   UNISWAP_V3,
   WETH_ADDRESS,
 } from "../src/constants";
@@ -37,6 +39,12 @@ describe("byte-limit maxes + LP copy + size caps ", () => {
   it("name/ticker maxes are the byte counts", () => {
     expect(METADATA_NAME_MAX).toBe(32);
     expect(METADATA_TICKER_MAX).toBe(10);
+  });
+
+  it("card description truncation length (D-70) is 160 and below the stored max", () => {
+    expect(TOKEN_CARD_DESCRIPTION_MAX).toBe(160);
+    // card cap is a projection truncation only — must not exceed the stored/validated max
+    expect(TOKEN_CARD_DESCRIPTION_MAX).toBeLessThanOrEqual(METADATA_DESCRIPTION_MAX);
   });
 
   it("LP_COPY is the exact canonical sentence WITH trailing period", () => {

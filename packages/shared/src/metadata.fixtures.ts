@@ -8,6 +8,11 @@
  * @noble/hashes keccak_256 and the keccak256("") known vector at freeze time,
  * 2026-07-09). Frontend (pre-sign verify), API (canonicalize+hash), and
  * indexer (verification) test suites must all reproduce them byte-for-byte.
+ *
+ * 2026-07-14: fixtures #1/#2 (`minimal`, `full`) had their `input` rebranded
+ * hoodpad.example → robbed.example; `canonical`+`hash` were re-derived from the
+ * current inputs by running the real `canonicalizeJson`/`metadataHash` (never
+ * hand-computed) so the golden stays authoritative. #3/#4 were unchanged.
  */
 import type { JsonValue } from "./metadata";
 
@@ -33,7 +38,7 @@ export const METADATA_GOLDEN_FIXTURES: MetadataGoldenFixture[] = [
     },
     canonical:
       '{"imageHash":"0xabababababababababababababababababababababababababababababababab","imageUrl":"https://cdn.robbed.example/images/0xabc.webp","name":"Cash Cat","ticker":"CASHCAT","version":1}',
-    hash: "0xe17e6c73929cc51359a844b485c56beb562bd3b83df43a710a9424f691bab1c1",
+    hash: "0xd57df531ab5d079e27ab3a29ef6d090a8ea8b645fbe27bdef12648ec085856e1",
   },
   {
     name: "full field set, keys deliberately out of order",
@@ -51,8 +56,8 @@ export const METADATA_GOLDEN_FIXTURES: MetadataGoldenFixture[] = [
       imageUrl: "https://cdn.robbed.example/images/0xdef.webp",
     },
     canonical:
-      '{"description":"A token for the hood.","imageHash":"0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","imageUrl":"https://cdn.hoodpad.example/images/0xdef.webp","links":{"telegram":"https://t.me/hoodpad","website":"https://hoodpad.example","x":"https://x.com/hoodpad"},"name":"Hood Token","ticker":"HOOD","version":1}',
-    hash: "0xa4b5b4d1c40660b6310e1bcc70980b144e5f777bf9ad241747a3d487ca72986b",
+      '{"description":"A token for the hood.","imageHash":"0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd","imageUrl":"https://cdn.robbed.example/images/0xdef.webp","links":{"telegram":"https://t.me/robbed","website":"https://robbed.example","x":"https://x.com/robbed"},"name":"Hood Token","ticker":"HOOD","version":1}',
+    hash: "0x8da09247187d32bc765e9e63577b23b736edc43957a35db24a69fd56cac46be6",
   },
   {
     name: "unicode: emoji, accents, CJK, escapes",

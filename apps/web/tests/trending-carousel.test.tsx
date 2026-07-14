@@ -24,7 +24,8 @@ describe("TrendingCarousel — Discover token list ", () => {
             address: "0x00000000000000000000000000000000000000aa",
             name: "Curve One",
             ticker: "CUR",
-            progressPct: 42.5,
+            // [0,1] fraction (the real card payload unit) → the card renders 42.5%.
+            progressPct: 0.425,
             status: "curve",
           }),
           tokenCard({
@@ -33,7 +34,7 @@ describe("TrendingCarousel — Discover token list ", () => {
             ticker: "GRD",
             graduated: true,
             status: "graduated",
-            progressPct: 100,
+            progressPct: 1,
           }),
         ]}
       />,

@@ -11,61 +11,79 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:DISC-3 — Event tape: seeded snapshot, tab filter, registry-sourced
-// metrics, navigate (replaces the retired token grid's sort/filter/paginate
-// surface)
+// @flow:DISC-3 — Discover grid: view-local sort/filter tabs + card navigation
 // assertable-layers: on-chain · indexed · UI
+//
+// D-73 (2026-07-14): the event tape is RETIRED; its client-side ALL/LAUNCHES/
+// TRADES/GRADUATIONS row-filter is replaced by the D-70 token grid's view-local
+// sort/filter tabs. These are SERVER-authoritative (`?sort=&filter=` refetch —
+// the client paints the returned order verbatim, never a client re-rank). This
+// flow exercises the Sort (Newest) + Filter (Graduated/Pre-grad) tabs and card
+// navigation; card metrics resolve from indexer aggregates by reference.
 test(
-  "DISC-3 event tape seeds real LAUNCH rows, filters by tab and navigates",
+  "DISC-3 the Discover grid sorts, filters and navigates",
   { tag: ["@flow:DISC-3", "@layer:on-chain", "@layer:indexed", "@layer:ui"] },
   async ({ page }) => {
-    const token = await seedToken({ name: "Tape Runner", ticker: "TAPE" });
+    const token = await seedToken({ name: "Grid Runner", ticker: "GRID" });
 
     await assertOnChain("token exists on the fork", async () => {
       const receipt = await publicClient.getTransactionReceipt({ hash: token.txHash });
       expect(receipt.status).toBe("success");
     });
 
-    await assertIndexed("newest list (the tape's seed + enrichment registry) has the token", async () => {
-      const list = await waitForIndexed(
-        () => api.tokens("?sort=newest&filter=all&limit=40"),
-        (r) => r.tokens.some((t) => t.address?.toLowerCase() === token.token.toLowerCase()),
-        { label: "token in tape seed" },
-      );
-      const card = list.tokens.find(
-        (t) => t.address?.toLowerCase() === token.token.toLowerCase(),
-      );
-      // Tape rows resolve mcap/Δ% from these indexer aggregates by reference —
-      // never client price math, never fabricated.
-      for (const field of ["mcapEth", "change24hPct", "creator", "createdAt"]) {
-        expect(card).toHaveProperty(field);
-      }
-    });
+    await assertIndexed(
+      "GET /v1/tokens serves the token with its indexer aggregates (rendered by reference)",
+      async () => {
+        const list = await waitForIndexed(
+          () => api.tokens("?sort=newest&filter=all&limit=48"),
+          (r) => r.tokens.some((t) => t.address?.toLowerCase() === token.token.toLowerCase()),
+          { label: "token in tokens list" },
+        );
+        const card = list.tokens.find(
+          (t) => t.address?.toLowerCase() === token.token.toLowerCase(),
+        );
+        // Grid cards resolve mcap / Δ% / status / progress from these indexer
+        // aggregates by reference — never client price math, never fabricated
+        // (no-market-metrics rule).
+        for (const field of [
+          "mcapEth",
+          "change24hPct",
+          "creator",
+          "createdAt",
+          "status",
+          "progressPct",
+        ]) {
+          expect(card).toHaveProperty(field);
+        }
+      },
+    );
 
-    await assertUi("LAUNCH row paints, tabs filter it, row click navigates", async () => {
-      // Discover SSR revalidates ~5s — reload until the seeded LAUNCH row paints.
-      await page.goto(routes.discover);
-      // Scope to the event tape (`<section aria-label="Live event tape">`, role
-      // region): the TRENDING carousel above it renders a same-named card
-      // (aria-label "Tape Runner … — rank N") that a page-wide `.first()` would
-      // grab instead — and the carousel is never touched by the tab filter, so
-      // the TRADES-hides assertion below must target the tape's own LAUNCH row.
-      const tape = page.getByRole("region", { name: /live event tape/i });
-      const row = tape.getByRole("link", { name: /Tape Runner/i }).first();
-      await expect(async () => {
-        await page.reload();
-        await expect(row).toBeVisible({ timeout: 2_000 });
-      }).toPass({ timeout: 20_000 });
+    await assertUi(
+      "sort=Newest surfaces it; filter=Graduated hides the pre-grad token; card navigates",
+      async () => {
+        await page.goto(routes.discover);
+        const grid = page.getByRole("region", { name: /token grid/i });
+        await expect(grid).toBeVisible();
+        // TokenCard accessible name is "<name> (<ticker>)".
+        const card = grid.getByRole("link", { name: `${token.name} (${token.ticker})` });
 
-      // Tab filter: TRADES hides the launch row; LAUNCHES brings it back.
-      await page.getByRole("tab", { name: /^trades$/i }).click();
-      await expect(row).toBeHidden();
-      await page.getByRole("tab", { name: /^launches$/i }).click();
-      await expect(row).toBeVisible();
+        // SORT — Newest: the just-created token sorts to the head (server-sorted;
+        // the client paints the returned order verbatim, never re-ranks).
+        await grid.getByRole("tab", { name: /^newest$/i }).click();
+        await expect(card).toBeVisible({ timeout: 15_000 });
 
-      // Row click → token detail.
-      await row.click();
-      await expect(page).toHaveURL(new RegExp(`/t/${token.token}`, "i"));
-    });
+        // FILTER — Graduated: the pre-grad curve token is server-filtered OUT (the
+        // client re-requests `?filter=graduated`; never a client-side moderation).
+        // Pre-grad brings it back.
+        await grid.getByRole("tab", { name: /^graduated$/i }).click();
+        await expect(card).toHaveCount(0);
+        await grid.getByRole("tab", { name: /^pre-grad$/i }).click();
+        await expect(card).toBeVisible();
+
+        // Card click → token detail.
+        await card.click();
+        await expect(page).toHaveURL(new RegExp(`/t/${token.token}`, "i"));
+      },
+    );
   },
 );

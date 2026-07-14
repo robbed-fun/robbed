@@ -109,6 +109,15 @@ export const METADATA_NAME_MAX = 32;
 export const METADATA_TICKER_MAX = 10;
 /** Description ≤500. */
 export const METADATA_DESCRIPTION_MAX = 500;
+/**
+ * Card-preview description truncation length, CHARACTERS (D-70; api.md section 3.4 /
+ * web.md section 3.1). The API's `toTokenCard` projection truncates the full stored
+ * `tokens.description` (bounded by METADATA_DESCRIPTION_MAX) to this length for the
+ * TokenCard / list variant; the FULL description stays on GET /v1/tokens/:address
+ * (TokenDetail). Card projection cap ONLY — not a stored/validated input limit, and
+ * not a market metric (a UI truncation length; the no-market-metrics rule is untouched).
+ */
+export const TOKEN_CARD_DESCRIPTION_MAX = 160;
 /** metadataUri length validated on-chain in [1,256] (contracts.md). */
 export const METADATA_URI_MAX = 256;
 

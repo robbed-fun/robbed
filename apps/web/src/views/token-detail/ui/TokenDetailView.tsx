@@ -4,8 +4,8 @@ import { LiveStatusBanner } from "@/widgets/live-status-banner";
 import { NetworkBanner } from "@/widgets/network-banner";
 import { AppHeader } from "@/widgets/app-header";
 import { MobileNav } from "@/widgets/mobile-nav";
-import { ApiError, getCandles, getHolders, getToken, getTrades } from "@/shared/api";
-import { candleWindow } from "@/widgets/price-chart";
+import { ApiError, getHolders, getToken, getTrades } from "@/shared/api";
+import { lastActivityAnchor, loadCandles } from "@/widgets/price-chart";
 
 import { TokenDetailClient } from "./TokenDetailClient";
 
@@ -37,12 +37,17 @@ export default async function TokenDetailView({ address }: { address: string }) 
     throw err;
   }
 
-  const win = candleWindow(token.status === "graduated" ? "5m" : "1m");
   const interval = token.status === "graduated" ? "5m" : "1m";
   const [tradesR, holdersR, candlesR] = await Promise.allSettled([
     getTrades(lower, { limit: 50 }, { revalidate: 5 }),
     getHolders(lower, { limit: 20 }, { revalidate: 5 }),
-    getCandles(lower, interval, win, { revalidate: 5 }),
+    // Same two-phase, data-anchored load the client feed uses (D-72), so the SSR
+    // seed matches the client's initial-interval query and an idle token is not
+    // pre-rendered with a false-empty chart.
+    loadCandles(lower, interval, {
+      anchorSec: lastActivityAnchor(token),
+      fetch: { revalidate: 5 },
+    }),
   ]);
 
   // : /trades + /holders return the shared `Paginated<T>` `{ items,

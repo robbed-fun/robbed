@@ -7,6 +7,8 @@
     "prepare": "git config core.hooksPath .githooks",
     "validate": "scripts/validate.sh",
     "validate:full": "scripts/validate.sh --full",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "dev": "docker compose up",
     "dev:stack": "bun tools/localstack/stack.ts",
     "dev:health": "bun tools/localstack/health.ts",
@@ -64,5 +66,8 @@
       "viem": "2.55.0",
       "hono": "4.12.28"
     }
+  },
+  "devDependencies": {
+    "prettier": "^3.9.5"
   }
 }

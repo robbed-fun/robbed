@@ -7,6 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { WETH_ADDRESS } from "@robbed/shared";
+import { getDeployment } from "@robbed/shared/addresses";
 import { loadConfig } from "../src/config";
 import { assertStaticConfig } from "../src/assertions";
 
@@ -84,9 +85,25 @@ describe("loadConfig — no curve-constant env vars ", () => {
 describe("loadConfig — optional creatorVault (additive, graceful skip)", () => {
   it("is undefined when neither env nor the registry provides it (v1 deployment)", () => {
     delete process.env.CREATOR_VAULT_ADDRESS;
-    // The 4663 registry entry carries no creatorVault → the vault source is not
-    // registered and the indexer runs treasury-only (no crash).
-    expect(loadConfig().creatorVault).toBeUndefined();
+    // loadConfig has TWO creatorVault sources (env override → registry → undefined);
+    // this test exercises the graceful-skip branch where BOTH are absent, so it must
+    // control both — deleting the env alone is not enough now that the committed 4663
+    // registry entry carries a creatorVault (populated by a creator-fee deploy artifact).
+    // getDeployment(4663) returns the live ROBBED_DEPLOYMENTS[4663] object by reference —
+    // the same reference loadConfig reads — so temporarily clearing robbed.creatorVault
+    // here reproduces a registry-absent (v1) deployment deterministically, regardless of
+    // what the committed artifact holds. Restore in finally so no other test leaks.
+    const registryRobbed = getDeployment(4663)!.robbed as { creatorVault?: string };
+    const savedVault = registryRobbed.creatorVault;
+    delete registryRobbed.creatorVault;
+    try {
+      // Neither env NOR registry provides it → the vault source is not registered and
+      // the indexer runs treasury-only (no crash).
+      expect(loadConfig().creatorVault).toBeUndefined();
+    } finally {
+      if (savedVault === undefined) delete registryRobbed.creatorVault;
+      else registryRobbed.creatorVault = savedVault;
+    }
   });
 
   it("resolves the env override when set (creator-fee deployment)", () => {

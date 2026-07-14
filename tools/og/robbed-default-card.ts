@@ -111,26 +111,11 @@ function buildCard() {
     },
     // ── Top: eyebrow ────────────────────────────────────────────────────────
     eyebrow(),
-    // ── Middle: wordmark + tagline ──────────────────────────────────────────
+    // ── Middle: wordmark ────────────────────────────────────────────────────
     h(
       "div",
       { style: { display: "flex", flexDirection: "column" } },
       wordmark(),
-      h(
-        "div",
-        {
-          style: {
-            display: "flex",
-            marginTop: 28,
-            fontSize: 40,
-            fontWeight: 400,
-            letterSpacing: "0.02em",
-            color: OG_COLORS.muted,
-          },
-        },
-        "rob responsibly",
-        h("span", { style: { color: OG_COLORS.accent, marginLeft: 2 } }, "_"),
-      ),
     ),
     // ── Bottom: hairline + accurate subtitle ────────────────────────────────
     h(

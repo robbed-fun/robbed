@@ -52,7 +52,26 @@ test.describe("TD-12", () => {
             "content",
             new RegExp(`^https?://.+/v1/og/${token.token.toLowerCase()}\\.png$`, "i"),
           );
-          await expect(page.getByText(/SHAR/i).first()).toBeVisible();
+
+          // The token-detail SSR fetches its summary with `revalidate: 5`
+          // (getToken → TokenDetailView). Under the e2e seed's DETERMINISTIC
+          // address reuse — snapshot/revert recycles the factory's create-nonce,
+          // so one on-chain address holds different tokens across specs — the
+          // FIRST no-JS SSR request for a reused address can serve the prior
+          // occupant's render from the persisted `.next` fetch-cache
+          // (stale-while-revalidate) and refresh in the background. This never
+          // happens in production (a token address is a one-and-done immutable
+          // deploy, so `/t/:addr` identity is fixed forever), so reload past the
+          // SWR window: the ticker STILL renders in no-JS SSR — the exact thing
+          // this leg proves. Match the effective on-chain ticker (uniquified, so
+          // a stale *different* token can't false-pass). Mirrors DISC-1's
+          // ~5s-revalidate reload-retry (playwright.dev → expect().toPass).
+          await expect(async () => {
+            await page.reload();
+            await expect(
+              page.getByText(new RegExp(token.ticker, "i")).first(),
+            ).toBeVisible({ timeout: 2_000 });
+          }).toPass({ timeout: 20_000 });
 
           // (2) PNG-contract leg — the API OG endpoint returns a real PNG at
           //     the spec dimensions (routes.og() is already the absolute URL).

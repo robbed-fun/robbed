@@ -25,11 +25,10 @@ import {
 import { getEvents } from "@/shared/api";
 import {
   DataTable,
-  Delta,
   Divider,
-  EthAmount,
   LiveDot,
   MonoText,
+  PriceEth,
   SideBadge,
   Tab,
   TabBar,
@@ -45,13 +44,15 @@ import { useWsChannel } from "@/shared/lib/ws";
  * Live event tape (Discover, ROBBED_ redesign —, panel "2d").
  *
  * Filter tabs (ALL/LAUNCHES/TRADES/GRADUATIONS) + a LIVE dot, then rows:
- * age · colored SIDE · token · amount ETH · mcap · Δ%. Rows are seeded from the
- * merged `GET /v1/events` feed (launches ∪ trades ∪ graduations — so historical
- * graduations paint on first load) folded over the synchronous launch-only
- * `/v1/tokens` snapshot, then kept live by the WS streams (`global:trades`,
- * `global:launches`). Stable per-event ids de-dupe the REST seed against live
- * rows. See model/events.ts for the protocol-discipline notes (mcap/Δ% resolve
- * from the registry, never fabricated from a trade).
+ * age · colored SIDE · token · amount ETH · mcap · flag (LAUNCH "new"). The
+ * per-row 24h Δ% chip was REMOVED (user-directed, via the orchestrator): a
+ * token-level metric painted identically on every row reads as noise. Rows are
+ * seeded from the merged `GET /v1/events` feed (launches ∪ trades ∪ graduations —
+ * so historical graduations paint on first load) folded over the synchronous
+ * launch-only `/v1/tokens` snapshot, then kept live by the WS streams
+ * (`global:trades`, `global:launches`). Stable per-event ids de-dupe the REST
+ * seed against live rows. See model/events.ts for the protocol-discipline notes
+ * (mcap resolves from the registry, never fabricated from a trade).
  *
  * Rows are driven by the shared headless `DataTable` (TanStack Table v8): typed
  * `ColumnDef<TapeEvent>[]` supply the cell renderers, and `renderRow` wraps each
@@ -239,9 +240,13 @@ function buildTapeColumns(
         const amountWei =
           "ethAmount" in event && event.ethAmount !== undefined ? event.ethAmount : null;
         return (
-          // mockup: amount inherits the 13px base ramp (text-base), right-aligned
+          // mockup: amount inherits the 13px base ramp (text-base), right-aligned.
+          // Compact subscript for tiny trade amounts (0.0₁₀63 ETH), 4-dec
+          // zero-padded at normal magnitude — shared PriceEth (format-price.ts).
           <span className="hidden w-28 shrink-0 text-right text-text-secondary sm:block md:w-auto">
-            {amountWei !== null ? <EthAmount wei={amountWei} unit="ETH" className="text-base" /> : null}
+            {amountWei !== null ? (
+              <PriceEth wei={amountWei} unit="ETH" decimals={4} className="text-base" />
+            ) : null}
           </span>
         );
       },
@@ -251,25 +256,23 @@ function buildTapeColumns(
       cell: ({ row }) => <Mcap info={registry.get(row.original.token)} />,
     },
     {
-      id: "delta",
-      cell: ({ row }) => {
-        const event = row.original;
-        // Live rows resolve the token's 24h Δ% from the registry — never from a
-        // single event (no fabricated aggregates).
-        const delta = registry.get(event.token)?.change24hPct ?? null;
-        return (
-          // mockup: delta / "new" inherit the 13px base ramp (text-base)
+      // Trailing flag column. The per-row 24h Δ% chip was REMOVED (user-directed,
+      // routed via the orchestrator): change24hPct is a token-level metric that
+      // rendered identically on every row of a token, reading as noise. Only the
+      // LAUNCH "new" marker remains here (the GRADUATE "→ AMM pool live" marker
+      // lives in the token cell). The 110px grid track is kept for column
+      // alignment across kinds.
+      id: "flag",
+      cell: ({ row }) =>
+        row.original.kind === "launch" ? (
           <span className="w-16 shrink-0 text-right md:w-auto">
-            {event.kind === "launch" ? (
-              <MonoText tone="faint" size="base">
-                new
-              </MonoText>
-            ) : (
-              <Delta value={delta} className="text-base" />
-            )}
+            <MonoText tone="faint" size="base">
+              new
+            </MonoText>
           </span>
-        );
-      },
+        ) : (
+          <span className="w-16 shrink-0 md:w-auto" aria-hidden />
+        ),
     },
   ];
 }

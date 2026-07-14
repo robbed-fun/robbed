@@ -5,6 +5,7 @@ import {
   GLOBAL_CHANNELS,
   GLOBAL_CONFIRMATIONS,
   GLOBAL_LAUNCHES,
+  GLOBAL_METRICS,
   GLOBAL_TRADES,
   TOKEN_CHANNEL_PATTERN,
   channelSeqKey,
@@ -22,7 +23,15 @@ describe("channel taxonomy (indexer.md — ratified names)", () => {
     expect(GLOBAL_LAUNCHES).toBe("global:launches");
     expect(GLOBAL_TRADES).toBe("global:trades");
     expect(GLOBAL_CONFIRMATIONS).toBe("global:confirmations");
-    expect(GLOBAL_CHANNELS).toEqual(["global:launches", "global:trades", "global:confirmations"]);
+    expect(GLOBAL_METRICS).toBe("global:metrics"); // D-70 live-metrics channel
+    expect(GLOBAL_CHANNELS).toEqual([
+      "global:launches",
+      "global:trades",
+      "global:confirmations",
+      "global:metrics",
+    ]);
+    // the WS server explicit-SUBSCRIBEs GLOBAL_CHANNELS — the new channel must be in the set
+    expect(GLOBAL_CHANNELS).toContain(GLOBAL_METRICS);
     expect(TOKEN_CHANNEL_PATTERN).toBe("token:*");
   });
 

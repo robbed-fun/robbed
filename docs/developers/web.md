@@ -27,7 +27,7 @@ Cross-cutting product rules implemented by this app:
 
 - **Confirmation semantics (section 2.1):** three explicit states — `soft-confirmed` → `posted-to-l1` → `finalized` — tracked by the indexer and surfaced in the UI where it matters. The **tier machinery is unchanged**, but per **D-56 the soft-confirmed tier no longer renders a status chip** — a fresh trade makes no finality claim; **posted/finalized still surface**, and large-value (≥1 ETH) displays disclose them. See section 4 of this doc.
 - **Optimistic UI reconciled by WebSocket (section 2.1, section 5):** every trade renders immediately at the soft-confirmed tier (**no finality chip — D-56**) and reconciles to indexed truth when the WS event arrives. Never rendered as final; never dropped when the WS contradicts it.
-- **Transparency surface (section 5.2, section 8.3; redesign D-57/D-58):** the first-class **Trust panel is deleted (D-57)**. The differentiator vs hood.fun is now the **Top Holders table** (`widgets/holder-table`, D-58) plus a compact **safety strip** (`widgets/safety-strip`) that relocates the hard-rule must-render floor — the D-14 LP-copy sentence, graduation progress, and live curve reserves — so those signals never vanish.
+- **Transparency surface (section 5.2, section 8.3; redesign D-57/D-58):** the first-class **Trust panel is deleted (D-57)**. The differentiator vs hood.fun is now the **Top Holders table** (`widgets/holder-table`, D-58) plus a compact **safety strip** (`widgets/safety-strip`) that relocates the hard-rule must-render floor — graduation progress and live curve reserves — so those signals never vanish. (The D-14 LP-copy sentence is **no longer** a required render — D-74; it is UI-only, the on-chain lock + API `trust.lpCopy` are unchanged.)
 - **Sells always work (section 6.5):** no UI path ever gates a curve sell on `pauseBuys`/`pauseCreates`. If buys are paused, the sell side stays fully live.
 - **No hardcoded market metrics (section 2):** no inline ETH/USD, TVL, volume, or mcap constants anywhere in code or copy. Everything is computed from live on-chain reads or indexer data, or cited with source + timestamp.
 - **Per-token OG image (section 5.2, section 9):** the viral share unit; SSR'd, renders with zero client JS.
@@ -195,7 +195,33 @@ Degraded modes: WS down → banner "Live updates degraded — reconnecting", que
 
 ### 3.1 Discover `/` (section 5.1)
 
-> **SUPERSEDED by D-50(f) (D-1 user-ratified 2026-07-12; spec entry being recorded by robbed-architect):** the shipped Discover is the **TRENDING carousel + live event tape** — the KotH hero, token grid, 5 sorts / 3 filters, and Discover URL-state below are **retired from the page** (they remain API capabilities). Authoritative surface description: `src/views/discover/ui/DiscoverView.tsx` + `docs/user-flows.md` DISC-1..DISC-4 (amended 2026-07-12). The creator click now deep-links `/?q=<creator>` into the header search (DISC-4). The tree below is kept as the pre-redesign design record only.
+> **SUPERSEDED by D-50(f) (D-1 user-ratified 2026-07-12), AMENDED by D-70, then by D-73 (both 2026-07-14):** the shipped Discover is the **TRENDING carousel** over a **re-added rich per-token TokenCard grid** (D-70; the grid is the primary browse surface — see *"Re-added token-card grid (D-70)"* immediately below). **Per D-73 the live event tape is RETIRED** (`views/discover/ui/DiscoverTape` no longer composed into `DiscoverView`); the carousel stays. The KotH hero, 5-sort/3-filter URL-state remain **retired from the page** (sorts/filters return only as a **view-local** grid control); they stay API capabilities. Authoritative surface description: `src/views/discover/ui/DiscoverView.tsx` + `apps/web/e2e/user-flows.md` DISC-1..DISC-4 (DISC-1/2/3 repointed from the tape to the grid by D-73). The creator click deep-links `/?q=<creator>` into the header search (DISC-4). The component tree below is kept as the pre-redesign design record only.
+
+#### Re-added token-card grid (D-70, 2026-07-14) — authoritative
+
+The grid renders **below** the carousel as the primary browse surface; the carousel is unchanged and the **live event tape is retired (D-73)**. Responsive **1 / 2 / 3 columns** (mobile → desktop), SSR-hydrated from `GET /v1/tokens`, cursor-paginated ("load more", page size 48). Rendering is **server-authoritative** — the client paints the API's returned order verbatim and never re-ranks (no client price math — no-market-metrics rule).
+
+**Card fields (exact, per token):**
+
+| Field | Source (indexer/API `TokenCard`) | Notes |
+|---|---|---|
+| image · name · ticker | `imageUrl` · `name` · `ticker` | — |
+| **description** | `description` (NEW card field, D-70) | card-preview blurb, server-truncated to `TOKEN_CARD_DESCRIPTION_MAX`; full text stays on `/t/[address]` |
+| creator | `creator` (address) | click → `/?q=<creator>` (DISC-4) |
+| age | `createdAt` | relative ("3m", "2h") |
+| **mcap** | `mcapEth` (wei) → ETH; USD mirror only via live `mcap` UsdValue | **ETH-denominated**; USD only where the live `/v1/meta/eth-usd` feed exists — **no fabricated USD on testnet** |
+| **Vol 24h** | `volume24h` (wei) → ETH | ETH-denominated |
+| **24h Δ%** | `change24hPct` | indexer-computed; `null` → "—", never invented |
+| **graduation status** | `status` + `progressPct` | copy strings below (`GraduationProgress` component, `compact` variant) |
+
+**Graduation-status copy (HARD RULE — D-14 / D-65 / `.claude/rules/lp-copy.md`):**
+- Curve → **"{n}% to graduation"** (`n` from `progressPct`, via the shared `GraduationProgress` `pctText`).
+- Graduated → **"Graduated · Uniswap V3"** (venue named; reuses the existing "→ Uniswap V3" phrasing).
+- The card **NEVER** renders "burned" / "LP burned". The card **never** carries the full `LP_COPY` sentence (D-65 kept it token-detail-only; D-74 then lifted even the token-detail render) — the card carries only the venue/status label.
+
+**Sorts / filters (view-local, not URL — D-50 keeps URL-state retired; only `?q=` is a URL param):** default `sort=trending`; sort tabs {trending, newest, mcap, volume24h}; filter tabs {all, pregrad, graduated}. Maps 1:1 to the existing `GET /v1/tokens?sort=&filter=` (D-22).
+
+**Live metrics over WS (freshness — D-70):** the grid cards read aggregate metrics from the shared `tokens` cache **by reference**. On each indexed trade / graduation the indexer publishes a **coalesced `token_metrics`** snapshot on the new **`global:metrics`** channel (shared `wsTokenMetricsDataSchema`: `{ token, priceEth, mcapEth, volume24h, change24hPct, progressPct, status, graduated, blockNumber, ts }`). The grid mounts `useDiscoverMetricsSync` (`useWsChannel(GLOBAL_METRICS, …)`) once and patches every cached `tokens`-family query **by reference** via TanStack Query `setQueriesData` (functional immutable updater — docs-verified 2026-07-14), **last-write-wins by `blockNumber`, no refetch, no client math**. This closes the stale-after-swap symptom (a swap now live-updates every card's mcap / vol / Δ% / progress / status). **The patch only updates cards ALREADY in the cache — it never INSERTS a net-new token** (`applyMetricToList`), so a fresh launch surfaces via the `GET /v1/tokens` path (SSR revalidate ~5s / a fresh sort-tab fetch), not a live insert (DISC-2). REST stays source of truth; on WS reconnect / seq-gap ERR-11's `tokens`-family invalidation rebuilds the grid.
 
 **Component tree** *(pre-D-50(f) — superseded, see banner)*
 
@@ -236,7 +262,7 @@ Card metrics (mcap, 24h Δ%, volume) come exclusively from the indexer — compu
 
 ### 3.2 Token Detail `/t/[address]` (section 5.2)
 
-> **SUPERSEDED in part by D-57/D-58 (ROBBED_ redesign, ratified 2026-07-12):** the first-class **Trust panel is DELETED (D-57)**. Its HARD-RULE must-render floor — the D-14 LP-copy sentence, graduation progress, and live curve reserves — **relocates** (never vanishes) into a compact **`widgets/safety-strip`** rendered above the right-column **Top Holders table** (**`widgets/holder-table`**, D-58: rows `rank · address · label · amount · percent`; `label` = Bonding curve / Creator / Vault plus advisory sniper/programmatic bot-flags). The "TrustPanel — all seven items" subsection below is rewritten to the **SafetyStrip + HolderTable** surfaces; the standalone organic-holder RANGE / flow-quality blocks moved off the public page to the internal D-54 endpoint (the surviving public section 8.5 signal is the holder-table flags).
+> **SUPERSEDED in part by D-57/D-58 (ROBBED_ redesign, ratified 2026-07-12):** the first-class **Trust panel is DELETED (D-57)**. Its HARD-RULE must-render floor — graduation progress and live curve reserves (the D-14 LP-copy sentence is **no longer** a required render — D-74) — **relocates** (never vanishes) into a compact **`widgets/safety-strip`** rendered above the right-column **Top Holders table** (**`widgets/holder-table`**, D-58: rows `rank · address · label · amount · percent`; `label` = Bonding curve / Creator / Vault plus advisory sniper/programmatic bot-flags). The "TrustPanel — all seven items" subsection below is rewritten to the **SafetyStrip + HolderTable** surfaces; the standalone organic-holder RANGE / flow-quality blocks moved off the public page to the internal D-54 endpoint (the surviving public section 8.5 signal is the holder-table flags).
 
 **Component tree**
 
@@ -251,7 +277,7 @@ TokenDetailPage (server: SSR shell, meta/OG tags, initialData)
 │                                           //    creator profile link, created-at, metadata JSON link
 └── right rail
     ├── TradeWidget (client)                // section 5.2 invisible venue switch — see below
-    ├── SafetyStrip (client)                // D-57 relocated must-render floor (LP sentence · graduation · reserves · fee) — see below
+    ├── SafetyStrip (client)                // D-57 relocated must-render floor (graduation · reserves · fee; LP sentence NO LONGER required — D-74) — see below
     └── HolderTable (client)                // D-58 Top Holders table (replaces the deleted Trust panel) — see below
 ```
 
@@ -284,7 +310,7 @@ Widget rules:
 
 #### SafetyStrip (section 5.2, section 8.3; D-57) — the relocated must-render floor, exact sourcing
 
-**Supersedes the deleted TrustPanel.** After D-57 deleted the first-class Trust panel, its signals relocate into a compact hairline-bounded **`widgets/safety-strip`** rendered above the Top Holders table (right rail desktop, above the fold on mobile after the widget). Each row: label, value, verify affordance (Blockscout link where applicable). Live reads come from `useCurveReads` (batched viem reads on the per-token curve/token addresses), refetched on every WS trade — **never the API's cached values** (section 5.2). Rows **3, 4, 5** are the D-14 **hard-rule must-render floor** (they may never vanish); rows **1, 2, 6, 7** are the cheap-to-keep verification ticks.
+**Supersedes the deleted TrustPanel.** After D-57 deleted the first-class Trust panel, its signals relocate into a compact hairline-bounded **`widgets/safety-strip`** rendered above the Top Holders table (right rail desktop, above the fold on mobile after the widget). Each row: label, value, verify affordance (Blockscout link where applicable). Live reads come from `useCurveReads` (batched viem reads on the per-token curve/token addresses), refetched on every WS trade — **never the API's cached values** (section 5.2). Rows **3, 4** are the **hard-rule must-render floor** (they may never vanish); row **5** (LP destination) is **no longer a required render** (D-74 — UI-only; the on-chain LP lock + API `trust.lpCopy` are unchanged); rows **1, 2, 6, 7** are the cheap-to-keep verification ticks.
 
 | # | Item | Source | Render |
 |---|---|---|---|
@@ -292,7 +318,7 @@ Widget rules:
 | 2 | **Fixed 1B supply ✓** | **Live** `totalSupply()` read via viem; must equal 1e27 wei (section 6.1) | ✓ + "1,000,000,000 fixed" (derived from the shared supply constant, not a literal; ⚠ mismatch state exists defensively; should be impossible) |
 | 3 | **Live curve reserves** *(hard-rule floor)* | **Live on-chain** `BondingCurve` reads: real ETH reserves + real token reserves (exact getter names from the M1 interface via shared ABIs). Refresh on each WS trade. **Never the API's cached values** (section 5.2). Post-grad: row becomes "curve retired — N ETH held" (live read; section 10 invariant: post-grad curve holds zero value) | "X.XXXX ETH · N tokens — read from chain" |
 | 4 | **Graduation threshold + progress** *(hard-rule floor)* | Threshold: on-chain constant (`GRADUATION_ETH`, section 6.2). Progress: live reserve read ÷ threshold, via the shared `GraduationProgress` (full variant) | ProgressBar + "X of Y ETH raised". Post-grad: "Graduated ✓" + pool link |
-| 5 | **LP destination** *(hard-rule floor)* | The ONE shared `LP_DESTINY_COPY` constant, VERBATIM + LPFeeVault/pool links post-grad | Exactly: **"LP principal permanently locked; trading fees claimable by treasury."** (canonical sentence, ratified D-14 — section 5.2 amended to match; see section 5 of this doc) |
+| 5 | **LP destination** *(no longer a required render — D-74)* | If rendered, the ONE shared `LP_DESTINY_COPY` constant, VERBATIM + LPFeeVault/pool links post-grad — but the on-page render is **no longer required** (D-74; UI-only, the on-chain lock + API `trust.lpCopy` stay) | If shown, exactly: **"LP principal permanently locked; trading fees claimable by treasury."** (canonical sentence, ratified D-14; wording still enforced by `.claude/rules/lp-copy.md` + doc-check gate c) |
 | 6 | **Fee policy** | Fee bps read live from the curve's per-token `TRADE_FEE_BPS` (hard-capped ≤2% in code, section 6.5) | "1% → treasury" — the number rendered from the on-chain value, not a string literal, so copy can never drift from code |
 | 7 | **Metadata hash verdict** | Indexed: on-chain `metadataHash` from `TokenCreated`/token storage vs indexer's keccak256 of the fetched canonical JSON (section 8.3) | ✓ "Metadata matches" or ⚠ "Metadata MISMATCH" (red, prominent). Verdict comes **from the indexer**; the frontend never recomputes-and-overrides it |
 
@@ -464,6 +490,7 @@ The per-token OG image is **the viral share unit** — a link paste into X/Teleg
 - **Density:** base 13px mono, `leading-[1.45]`; hairline `border-soft` row dividers (tape rows ≈45px, pad `11px 24px` desktop); `tabular-nums` for every numeric column; flat — no shadows.
 - **Speed:** skeletons with fixed dimensions (no CLS); WS patches over refetch loops; route prefetch on card hover; `next/image` for token images via R2 CDN; no heavyweight animation lib — CSS transitions only; ticker animates with CSS transform.
 - **lightweight-charts config:** `layout.background: --bg`, grid lines `--border` at low alpha, up/down colors = buy/sell tokens, `timeScale.secondsVisible: true` for 1s/15s intervals, `rightPriceScale` autoscale, crosshair magnet. Chart height 420px desktop / 280px mobile.
+- **Time-scale anchoring (D-71):** the series reads **left→right, oldest bar at the left edge** (Pump.fun / Bonk / DEXScreener), never scrolled to the right with dead space on the left. `timeScale`: `fixLeftEdge: true` + `lockVisibleTimeRangeOnResize: true` (the latter keeps the fill left-anchored when `autoSize` grows the pane after first paint) + a small `rightOffset` for realtime-append headroom; `shiftVisibleRangeOnNewBar` stays the library default so new candles still appear at the right (anchoring left ≠ freezing updates). After each history load the default visible window is the **full loaded history** (`fitContent()`); a fresh token with too few bars uses the **sparse presentation** — `setVisibleLogicalRange` pins the few bars flush-left at a natural width with growth room on the right, instead of over-stretching a handful of bars (the zero-candle "first trades incoming" empty state above is unchanged). The layout constants are pure canvas geometry, not market metrics.
 - **Mobile:** single column — header → chart → TradeWidget (sticky Buy/Sell bottom bar) → SafetyStrip → Top Holders → TradeFeed → info. Discover grid becomes a card list; ticker stays. All tap targets ≥40px despite density.
 - **Numbers:** `Amount` component — ETH to 4 significant decimals, token amounts compact (1.24M), percents 1 decimal; `UsdAmount` renders **only** with a live price object and exposes source+timestamp on hover (section 2).
 
@@ -543,7 +570,7 @@ Plus: LP sentence exists **only** as the single exported constant (grep for the 
 
 - [ ] Four pages (Discover · Token Detail · Create · Portfolio); each matches its section 5 subsection (checklists in section 3 of this doc); Portfolio ships **read-only** — no new tx types, no `collect()` UI; no AA code paths
 - [ ] Chain config: 4663, ETH gas, Blockscout explorer, RPC from env; WETH `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` the only inline literal; all other addresses from generated `addresses.ts`; connectors = injected + WalletConnect + Robinhood Wallet
-- [ ] SafetyStrip (D-57): the D-14 must-render floor (LP sentence · graduation progress · live curve reserves) plus ownerless / fixed-supply / metadata-verdict / fee ticks, with the exact sourcing table (live reads live, indexed verdicts indexed); reserve rows never show cached API values. Top Holders table (D-58): rows `rank · address · label · amount · percent`; `label` = role (creator / curve / vault) + advisory section 8.5 bot-flags; server-authoritative sort (no client re-rank); the standalone organic-range / flow-quality blocks moved off the public page to the D-54 internal endpoint
+- [ ] SafetyStrip (D-57): the must-render floor (graduation progress · live curve reserves; the D-14 LP sentence is **no longer** a required render — D-74) plus ownerless / fixed-supply / metadata-verdict / fee ticks, with the exact sourcing table (live reads live, indexed verdicts indexed); reserve rows never show cached API values. Top Holders table (D-58): rows `rank · address · label · amount · percent`; `label` = role (creator / curve / vault) + advisory section 8.5 bot-flags; server-authoritative sort (no client re-rank); the standalone organic-range / flow-quality blocks moved off the public page to the D-54 internal endpoint
 - [ ] LP sentence verbatim from a single constant at every LP-destiny surface; `burned` absent (grep-verified)
 - [ ] Optimistic trade lifecycle per section 4: immediate soft-confirmed render, WS reconciliation, contradiction handling, posted/finalized surfacing — reconciliation demonstrated in Playwright
 - [ ] Venue-continuous chart across graduation (no seam) and invisible venue switch in the widget; slippage default 2% + deadline on every trade

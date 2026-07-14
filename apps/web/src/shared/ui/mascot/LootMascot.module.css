@@ -1,0 +1,44 @@
+/* LOOT_ mascot idle motion (design exploration 3a).
+   msc-bob  — a slow sway of the whole figure.
+   msc-look — the pupils dart side to side.
+   Both keyframes are scoped by CSS-modules; disabled under reduced-motion. */
+
+.figure {
+  animation: bob 4.4s ease-in-out infinite;
+  transform-origin: 50% 100%;
+}
+
+.pupil {
+  animation: look 6.4s ease-in-out infinite;
+}
+
+@keyframes bob {
+  0%,
+  100% {
+    transform: rotate(-2deg) translateY(0);
+  }
+  50% {
+    transform: rotate(2deg) translateY(-5px);
+  }
+}
+
+@keyframes look {
+  0%,
+  42% {
+    transform: translateX(2.5px);
+  }
+  52%,
+  90% {
+    transform: translateX(-2.5px);
+  }
+  100% {
+    transform: translateX(2.5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .figure,
+  .pupil {
+    animation: none;
+  }
+}

@@ -29,6 +29,8 @@ import { buildOwnContractWhitelist, createPgFlowStore } from "./flags/store";
 import { startFlowJob, FLOW_JOB_INTERVAL_MS } from "./flags/job";
 import { createPgPnlStore } from "./pnl/store";
 import { startPnlJob, PNL_JOB_INTERVAL_MS } from "./pnl/job";
+import { startTokenMetricsCoalescer, WS_METRICS_THROTTLE_MS } from "./tokenMetrics";
+import { createPgMetricsCoalescerStore } from "./tokenMetricsStore";
 import { initClusterShareMetrics, loadClusterAlertThresholds } from "./metrics";
 import { createPgMetricsStore } from "./metricsStore";
 import { startMetricsServer } from "./metricsServer";
@@ -151,6 +153,18 @@ export async function startSidecars(): Promise<void> {
     const pnlIntervalMs = Number(process.env.PNL_JOB_INTERVAL_MS) || PNL_JOB_INTERVAL_MS;
     startPnlJob({ store: createPgPnlStore(pool, schema) }, pnlIntervalMs);
     console.log("[indexer sidecar] address_pnl roll-up job started.");
+
+    // D-70 token_metrics coalescer: handlers enqueue per indexed trade + graduation
+    // (in-memory, no DB); this trailing-edge flush does the ONE batched 24h-anchor
+    // read per window and publishes coalesced `token_metrics` on GLOBAL_METRICS.
+    // Gated by the sidecar (needs the throttled anchor read); with INDEXER_SIDECARS
+    // =off the coalescer is unarmed, so handler enqueues no-op (no leak, no publish).
+    const metricsThrottleMs = Number(process.env.WS_METRICS_THROTTLE_MS) || WS_METRICS_THROTTLE_MS;
+    startTokenMetricsCoalescer(
+      { store: createPgMetricsCoalescerStore(pool, schema), publisher },
+      metricsThrottleMs,
+    );
+    console.log(`[indexer sidecar] token_metrics coalescer started (throttle ${metricsThrottleMs}ms).`);
 
     // ETH/USD snapshot poller (hard rule; Chainlink branch).
     // Own try/catch: a assertion failure is FAIL-CLOSED for the poller —

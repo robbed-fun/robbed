@@ -11,10 +11,14 @@ import {
   waitForIndexed,
 } from "../harness";
 
-// @flow:DISC-1 — TRENDING carousel + event tape: Discover paints (as
-// amended by — the KotH hero / token grid are retired; the shipped
-// surface is the TRENDING carousel over the live event tape)
+// @flow:DISC-1 — TRENDING carousel + token-card grid: Discover paints
 // assertable-layers: on-chain · indexed · UI
+//
+// D-73 (2026-07-14): the live event tape is RETIRED; the D-70 TokenCard grid is
+// the primary browse surface below the carousel (the carousel STAYS). This flow
+// asserts the carousel paints the API's volume-weighted ranking AND the grid
+// renders those ranked cards in the API's returned order VERBATIM (server-
+// authoritative — the client never re-ranks).
 //
 // DECISION (docs-first, playwright.dev/docs/api/class-testoptions →
 // contextOptions, verified 2026-07-12): the carousel is a pure-CSS marquee that
@@ -26,7 +30,7 @@ import {
 test.use({ contextOptions: { reducedMotion: "reduce" } });
 
 test(
-  "DISC-1 TRENDING carousel paints the API ranking and the event tape is live",
+  "DISC-1 TRENDING carousel paints the API ranking and the grid renders those ranked cards",
   { tag: ["@flow:DISC-1", "@layer:on-chain", "@layer:indexed", "@layer:ui"] },
   async ({ page }) => {
     const token = await seedToken({ name: "Trending Heist", ticker: "HEIST" });
@@ -54,10 +58,10 @@ test(
     );
 
     await assertUi(
-      "carousel paints ranked cards over the live tape; rank-1 card navigates",
+      "carousel paints ranked cards; the grid renders the API order verbatim; rank-1 navigates",
       async () => {
         // The Discover shell revalidates ~5s server-side — reload until the
-        // SSR payload includes at least one ranked card.
+        // SSR payload includes at least one ranked carousel card.
         await page.goto(routes.discover);
         await expect(async () => {
           await page.reload();
@@ -66,10 +70,29 @@ test(
           ).toBeVisible({ timeout: 2_000 });
         }).toPass({ timeout: 20_000 });
 
-        // Event tape (live surface) renders alongside the carousel.
-        await expect(page.getByRole("region", { name: /live event tape/i })).toBeVisible();
+        // D-73: the token grid is the browse surface below the carousel (the tape
+        // is retired). The grid paints the API's `sort=trending&filter=all` order
+        // VERBATIM (server-authoritative — no client re-rank). Each TokenCard is a
+        // `role="link"` with `aria-label="<name> (<ticker>)"`; its nested
+        // Blockscout/creator anchors carry no aria-label, so `[role="link"]
+        // [aria-label]` selects cards only. Retry across the ~5s SSR revalidate
+        // window so the SSR cache and a fresh API read converge.
+        const grid = page.getByRole("region", { name: /token grid/i });
+        await expect(grid).toBeVisible();
+        const cards = grid.locator('[role="link"][aria-label]');
+        await expect(async () => {
+          await page.reload();
+          const apiOrder = (
+            await api.tokens("?sort=trending&filter=all&limit=48")
+          ).tokens.map((t) => `${t.name} (${t.ticker})`);
+          expect(apiOrder.length).toBeGreaterThan(0);
+          const rendered = await cards.evaluateAll((els) =>
+            els.map((e) => e.getAttribute("aria-label") ?? ""),
+          );
+          expect(rendered).toEqual(apiOrder);
+        }).toPass({ timeout: 20_000 });
 
-        // Rank-1 card (aria-label "… — rank 1") links to its token detail page.
+        // Rank-1 carousel card (aria-label "… — rank 1") links to its detail page.
         const rank1 = page.getByRole("link", { name: /rank 1$/i }).first();
         await expect(rank1).toBeVisible();
         const href = await rank1.getAttribute("href");

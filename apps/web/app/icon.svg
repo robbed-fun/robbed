@@ -1,8 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="ROBBED_">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="ROBBED_ mascot">
   <title>ROBBED_</title>
   <rect width="32" height="32" rx="6" fill="#0B0D0B"/>
-  <g font-family="ui-monospace,'IBM Plex Mono',Menlo,Consolas,monospace" font-weight="700" font-size="21">
-    <text x="4.5" y="24" fill="#EDF3ED">R</text>
-    <text x="17" y="24" fill="#4ADE80">_<animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.49;0.5;1" dur="1.06s" repeatCount="indefinite"/></text>
+  <!-- LOOT_ mascot (the money bag that robbed itself), scaled from its 232x222 art
+       into the 32px tile; static + eyes/pupils enlarged slightly for favicon legibility. -->
+  <g transform="translate(3.3 3) scale(0.127)">
+    <ellipse cx="82" cy="20" rx="8" ry="14" transform="rotate(-24 82 20)" fill="#16A34A"/>
+    <ellipse cx="118" cy="20" rx="8" ry="14" transform="rotate(24 118 20)" fill="#16A34A"/>
+    <ellipse cx="100" cy="16" rx="9" ry="16" fill="#22C55E"/>
+    <rect x="77" y="26" width="46" height="24" rx="7" fill="#4ADE80"/>
+    <ellipse cx="100" cy="128" rx="90" ry="76" fill="#4ADE80"/>
+    <rect x="70" y="44" width="60" height="13" rx="6.5" fill="#15803D"/>
+    <g transform="rotate(-3 100 112)">
+      <rect x="-2" y="92" width="204" height="40" rx="9" fill="#131A12"/>
+      <ellipse cx="69" cy="112" rx="14" ry="10" fill="#EDF3ED"/>
+      <ellipse cx="131" cy="112" rx="14" ry="10" fill="#EDF3ED"/>
+      <circle cx="69" cy="112" r="5" fill="#0B0D0B"/>
+      <circle cx="131" cy="112" r="5" fill="#0B0D0B"/>
+    </g>
+    <rect x="79" y="168" width="42" height="9" rx="3" fill="#15803D"/>
   </g>
 </svg>

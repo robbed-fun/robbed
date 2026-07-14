@@ -4,7 +4,7 @@
  * Trust panel (exact LP constant + organic RANGE), and the 5 sort keys.
  */
 import { describe, expect, it } from "bun:test";
-import { LP_COPY, tokenCardSchema, tokenDetailSchema } from "@robbed/shared";
+import { LP_COPY, TOKEN_CARD_DESCRIPTION_MAX, tokenCardSchema, tokenDetailSchema } from "@robbed/shared";
 import { toTokenCard } from "../src/projections/card";
 import { toTokenDetail } from "../src/projections/detail";
 import { sortKeyForRow } from "../src/search/sort";
@@ -61,6 +61,17 @@ describe("toTokenCard", () => {
   it("change24hPct is 0 (never null) when no anchor is available", () => {
     const card = toTokenCard(fixtureToken({ last_price_eth: null }), WM, SNAP);
     expect(card.change24hPct).toBe(0);
+  });
+  it("projects description, server-truncated to TOKEN_CARD_DESCRIPTION_MAX (D-70)", () => {
+    const long = "x".repeat(TOKEN_CARD_DESCRIPTION_MAX + 40);
+    const card = toTokenCard(fixtureToken({ description: long }), WM, SNAP);
+    expect(card.description).toBe("x".repeat(TOKEN_CARD_DESCRIPTION_MAX));
+    expect(card.description!.length).toBe(TOKEN_CARD_DESCRIPTION_MAX);
+  });
+  it("description is null (required-nullable) when the token has none", () => {
+    const card = toTokenCard(fixtureToken({ description: null }), WM, SNAP);
+    expect(card.description).toBeNull();
+    expect(() => tokenCardSchema.parse(card)).not.toThrow();
   });
 });
 

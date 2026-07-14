@@ -14,6 +14,7 @@
 import { z } from "zod";
 import { CANDLE_INTERVALS } from "./constants";
 import { confirmationStateSchema } from "./confirmation";
+import { tokenStatusSchema } from "./token-status";
 
 // ── Shared wire scalars ─────────────────────────────────────────────────────
 
@@ -171,6 +172,35 @@ export const wsCreatorFeeClaimedDataSchema = z.object({
   confirmationState: confirmationStateSchema,
 });
 
+/**
+ * `token_metrics` on the new global `global:metrics` channel (D-70; api.md section 3.4 /
+ * web.md section 3.1). A COALESCED per-token snapshot of the ETH-first aggregates the
+ * indexer recomputes on each indexed trade + graduation and publishes throttled
+ * (≤1 / WS_METRICS_THROTTLE_MS ≈ 2 s, trailing-edge, last-write-wins by `blockNumber`).
+ * The frontend patches the cached `tokens` list / tape registry BY REFERENCE via
+ * TanStack Query `setQueryData` — no refetch, no client price math (no-market-metrics).
+ *
+ * Every field REUSES a TokenCard scalar (`addressSchema` / `decimalStringSchema` /
+ * `tokenStatusSchema`) — NO re-declared primitives — so the push payload and the REST
+ * card projection can never drift. ETH-DENOMINATED ONLY: `mcapEth` / `volume24h` are wei
+ * decimal strings (`mcapEth` is REQUIRED here — the indexer always recomputes it —
+ * unlike the card's `.optional()` field, which is absent until materialized); USD is
+ * derived where the live feed exists (never fabricated here). `blockNumber` / `ts` reuse
+ * the block-coordinate convention of the other data schemas.
+ */
+export const wsTokenMetricsDataSchema = z.object({
+  token: addressSchema,
+  priceEth: z.number().nullable(), // display-only float; null before first trade (TokenCard.priceEth)
+  mcapEth: decimalStringSchema, // ETH wei (TokenCard.mcapEth)
+  volume24h: decimalStringSchema, // ETH wei, volume_eth_24h (TokenCard.volume24h)
+  change24hPct: z.number().nullable(), // TokenCard.change24hPct
+  progressPct: z.number(), // real_eth_reserves / graduation_eth (TokenCard.progressPct)
+  status: tokenStatusSchema, // derived venue/status pill (TokenCard.status)
+  graduated: z.boolean(), // TokenCard.graduated
+  blockNumber: z.number().int().nonnegative(), // last-write-wins ordering key
+  ts: z.number().int().nonnegative(),
+});
+
 // ── Envelope + discriminated union ──────────────────────────────────────────
 
 const envelopeBase = {
@@ -192,6 +222,8 @@ export const wsMessageSchema = z.discriminatedUnion("type", [
   // post-grad creator-fee split (DRAFT, parallel with Phase-2) — additive members.
   z.object({ ...envelopeBase, type: z.literal("creator_fee_split"), data: wsCreatorFeeSplitDataSchema }),
   z.object({ ...envelopeBase, type: z.literal("creator_fee_claimed"), data: wsCreatorFeeClaimedDataSchema }),
+  // coalesced per-token live aggregate snapshot on global:metrics (D-70) — additive member.
+  z.object({ ...envelopeBase, type: z.literal("token_metrics"), data: wsTokenMetricsDataSchema }),
 ]);
 
 export type WsMessage = z.infer<typeof wsMessageSchema>;
@@ -206,6 +238,7 @@ export type WsMetadataVerifiedData = z.infer<typeof wsMetadataVerifiedDataSchema
 export type WsFeeCollectedData = z.infer<typeof wsFeeCollectedDataSchema>;
 export type WsCreatorFeeSplitData = z.infer<typeof wsCreatorFeeSplitDataSchema>;
 export type WsCreatorFeeClaimedData = z.infer<typeof wsCreatorFeeClaimedDataSchema>;
+export type WsTokenMetricsData = z.infer<typeof wsTokenMetricsDataSchema>;
 
 // ── Client → server ops (indexer.md; api.md : sub/unsub/ping only) ─
 

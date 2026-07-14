@@ -8,6 +8,7 @@
  * | global:launches | new TokenCreated + graduated announcements |
  * | global:trades                      | every trade (curve + v3), throttle-ready           |
  * | global:confirmations | watermark advances + reorg notices |
+ * | global:metrics | coalesced per-token live aggregate snapshots (token_metrics, D-70) |
  * | token:{address}:trades | trades for one token (feed) |
  * | token:{address}:candles:{interval} | candle upsert per trade per interval               |
  * | token:{address}:events             | graduated / metadata_verified / fee_collected / … |
@@ -22,6 +23,17 @@ import { addressSchema } from "./ws-messages";
 export const GLOBAL_LAUNCHES = "global:launches" as const;
 export const GLOBAL_TRADES = "global:trades" as const;
 export const GLOBAL_CONFIRMATIONS = "global:confirmations" as const;
+
+/**
+ * Coalesced per-token live-metrics snapshots (D-70; web.md section 3.1 / api.md section 3.4).
+ * The indexer publishes a `token_metrics` message (ws-messages.ts
+ * `wsTokenMetricsDataSchema`) here on each indexed trade + graduation, throttled per
+ * token (≤1 / WS_METRICS_THROTTLE_MS ≈ 2 s, trailing-edge, last-write-wins by
+ * `blockNumber`). Discover subscribes (`useWsChannel(GLOBAL_METRICS, …)`) and patches
+ * the cached `tokens` list / tape registry BY REFERENCE via `setQueryData` — the
+ * freshness fix for card aggregates that went stale after a swap (no refetch, no client math).
+ */
+export const GLOBAL_METRICS = "global:metrics" as const;
 
 /**
  * Admin re-verify control channel (findings X-9). `metadata_verifications` is
@@ -44,6 +56,7 @@ export const GLOBAL_CHANNELS = [
   GLOBAL_LAUNCHES,
   GLOBAL_TRADES,
   GLOBAL_CONFIRMATIONS,
+  GLOBAL_METRICS,
 ] as const;
 
 /** Pattern the WS server PSUBSCRIBEs for per-token channels (indexer.md). */

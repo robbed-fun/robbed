@@ -36,6 +36,7 @@ import {
   wsLaunchDataSchema,
   wsTradeDataSchema,
 } from "./ws-messages";
+import { tokenStatusSchema, type TokenStatus } from "./token-status";
 
 // ── Envelope & errors (api.md) ───────────────────────────────────────────
 
@@ -119,8 +120,16 @@ export const metadataVerificationStatusSchema = z.enum([
   "mismatch",
   "unfetched",
 ]);
-/** Derived, not stored (indexer.md) venue/status pill driver. */
-export const tokenStatusSchema = z.enum(["curve", "graduating", "graduated"]);
+/**
+ * Derived, not stored (indexer.md) venue/status pill driver.
+ * MOVED to the cycle-free `token-status.ts` (D-70, 2026-07-14) so `ws-messages.ts`
+ * — the lower-level module api-types imports FROM — can reuse it in the new
+ * `token_metrics` WS payload without an api-types → ws-messages import cycle.
+ * Re-exported here (value + inferred type) so every existing `@robbed/shared` and
+ * `./api-types` importer of `tokenStatusSchema` / `TokenStatus` is unchanged.
+ */
+export { tokenStatusSchema };
+export type { TokenStatus };
 export const candleIntervalParamSchema = z.enum(CANDLE_INTERVALS);
 
 // ── TokenCard (api.md GET /v1/tokens; card fields) ────────────────
@@ -130,6 +139,16 @@ export const tokenCardSchema = z.object({
   name: z.string(),
   ticker: z.string(),
   imageUrl: z.string().nullable(), // null until metadata fetched (indexer.md)
+  /**
+   * Card-preview description blurb (NEW — D-70; api.md section 3.4 / web.md section 3.1).
+   * The API's `toTokenCard` projection truncates the stored `tokens.description` to
+   * TOKEN_CARD_DESCRIPTION_MAX for the card/list variant; `TokenDetail` keeps the FULL
+   * description (same `z.string().nullable()` shape — one description shape). Null when
+   * the token has no description. NO indexer/DB change: `tokens.description` is already
+   * SELECTed (TOKEN_LIST_SELECT) and mapped into `TokenListRow` — only `toTokenCard`
+   * must project it (robbed-indexer follow-up; required key ⇒ every card producer emits it).
+   */
+  description: z.string().nullable(),
   creator: addressSchema,
   createdAt: z.number().int().nonnegative(), // block timestamp, unix seconds
   priceEth: z.number().nullable(), // display-only float; null before first trade

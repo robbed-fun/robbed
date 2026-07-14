@@ -11,10 +11,10 @@ import { Fragment } from "react";
 import {
   EthAmount,
   MonoLabel,
+  PriceEth,
   TokenAvatar,
   UsdAmount,
 } from "@/shared/ui";
-import { formatEthNumber } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
 import { formatBalance } from "../lib/format";
@@ -62,8 +62,10 @@ function TokenCell({ token }: { token: PortfolioHolding["token"] }) {
 }
 
 function PriceText({ priceEth }: { priceEth: number | null }) {
+  // Tiny curve prices render compact (0.0₁₀63); normal magnitudes stay plain —
+  // shared PriceEth (format-price.ts). Null → faint em-dash (never a fake price).
   return (
-    <>{priceEth === null ? <span className="text-faint">—</span> : formatEthNumber(priceEth)}</>
+    <>{priceEth === null ? <span className="text-faint">—</span> : <PriceEth value={priceEth} />}</>
   );
 }
 

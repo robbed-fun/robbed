@@ -53,7 +53,7 @@ export function TableLabel({
   className?: string;
 }) {
   return (
-    <section className={cn("flex flex-col", className)}>
+    <section className={cn("flex flex-col border-1 p-4", className)}>
       <div className="mb-2 flex items-center justify-between gap-2">
         {typeof title === "string" ? (
           <h3 className="text-sm font-semibold text-foreground">{title}</h3>
@@ -140,11 +140,13 @@ export function DataTable<T>({
     ) : (
       <ul className={className} aria-label={ariaLabel}>
         {rows.map((row, index) => {
-          const cells = row.getVisibleCells().map((cell) => (
-            <Fragment key={cell.id}>
-              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-            </Fragment>
-          ));
+          const cells = row
+            .getVisibleCells()
+            .map((cell) => (
+              <Fragment key={cell.id}>
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </Fragment>
+            ));
           return <li key={row.id}>{renderRow({ row, cells, index })}</li>;
         })}
       </ul>

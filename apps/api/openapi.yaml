@@ -1373,7 +1373,7 @@ components:
     TokenCard:
       type: object
       required:
-        [address, name, ticker, imageUrl, creator, createdAt, priceEth, mcap,
+        [address, name, ticker, imageUrl, description, creator, createdAt, priceEth, mcap,
          progressPct, change24hPct, volume24h, graduated, status,
          confirmationState, moderation]
       properties:
@@ -1383,6 +1383,13 @@ components:
         imageUrl:
           oneOf: [{ type: string }, { type: "null" }]
           description: Null until metadata JSON fetched (indexer.md)
+        description:
+          oneOf: [{ type: string }, { type: "null" }]
+          description: >-
+            Card-preview blurb (D-70; api.md section 3.4). Server-truncated to
+            TOKEN_CARD_DESCRIPTION_MAX (160); the FULL text stays on TokenDetail
+            (GET /v1/tokens/{address}). Required-nullable — unlike the optional
+            mcapEth, every card producer emits it (null when the token has none).
         creator: { $ref: "#/components/schemas/Address" }
         createdAt: { type: integer, description: "block timestamp, unix seconds" }
         priceEth:

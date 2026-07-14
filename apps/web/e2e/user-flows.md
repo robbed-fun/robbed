@@ -22,22 +22,22 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 
 ## 1. Discover — `/`
 
-### `@flow:DISC-1` — TRENDING carousel + event tape: Discover paints
+### `@flow:DISC-1` — TRENDING carousel + token-card grid: Discover paints _(D-73: event tape retired; the D-70 grid is the browse surface below the carousel)_
 - **Actors:** Visitor (no wallet required).
-- **Preconditions:** ≥1 token exists; API `GET /v1/tokens?sort=volume24h` (TRENDING — volume-weighted, **API-owned order**; frontend renders the returned order, never ranks) and `GET /v1/tokens?sort=newest` (tape seed + enrichment registry) reachable.
-- **Steps:** (1) SSR fetches both lists via **isolated fetches** (a TRENDING failure never blanks the tape and vice versa) and paints the TRENDING carousel — ranked full-bleed cards: image · #rank · name · ticker · 24h Δ% — over the live event tape (seeded with real LAUNCH rows). (2) Carousel card click → `/t/[address]`. (3) The tape is live over WS `global:trades`/`global:launches` (the WS-driven entry itself is asserted in DISC-2). Card metrics come from indexer payloads only — never client price math (no-market-metrics rule).
+- **Preconditions:** ≥1 token exists; API `GET /v1/tokens?sort=volume24h` (TRENDING carousel — volume-weighted, **API-owned order**; frontend renders the returned order, never ranks) and `GET /v1/tokens?sort=trending&filter=all` (the grid's SSR seed) reachable.
+- **Steps:** (1) SSR fetches both lists via **isolated fetches** (a TRENDING failure never blanks the grid and vice versa) and paints the TRENDING carousel — ranked full-bleed cards: image · #rank · name · ticker · 24h Δ% — over the **token-card grid** (D-70; primary browse surface, the carousel stays). (2) The grid renders the API's returned order **verbatim** — server-authoritative, the client never re-ranks (each `TokenCard` is `role="link"`, aria-label "`<name> (<ticker>)`"). (3) Carousel rank-1 card click → `/t/[address]`. Card metrics come from indexer payloads only — never client price math (no-market-metrics rule).
 - **assertable-layers:** on-chain · indexed · UI.
 
-### `@flow:DISC-2` — Live launch ticker (WebSocket)
+### `@flow:DISC-2` — A new launch surfaces in the Discover grid _(D-73: replaces the retired tape's WS "slide-in")_
 - **Actors:** Visitor.
-- **Preconditions:** WS connected on `global:launches`.
-- **Steps:** (1) A new `launch` message arrives → entry slides in at the head of the event tape (shared in-memory buffer, cap ~60 — `prependCapped`). (2) A `graduated` message updates the corresponding entry. (3) Entry click → `/t/[address]`.
+- **Preconditions:** Discover open; API `GET /v1/tokens` reachable. **The event tape is retired (D-73), so there is no WS "slide-in".** The `global:metrics` sync only PATCHES cards already cached by reference — it never INSERTS a net-new token (`views/discover/model/metrics.ts` `applyMetricToList`) — so a fresh launch surfaces in the grid via the tokens REST path (a fresh sort-tab fetch / SSR revalidate ~5s).
+- **Steps:** (1) A token is launched while Discover is open. (2) The indexer materializes it into `GET /v1/tokens` (the grid's source). (3) Sorting the grid by **Newest** issues a client-side `getTokens({ sort: "newest" })` fetch → the just-launched token surfaces at the head as a `TokenCard`. (4) Card click → `/t/[address]`.
 - **assertable-layers:** on-chain · indexed · UI.
 
-### `@flow:DISC-3` — Event tape: seeded snapshot, tab filter, registry-sourced metrics, navigate _(replaces the retired grid's sort/filter/paginate surface)_
+### `@flow:DISC-3` — Discover grid: view-local sort/filter tabs + card navigation _(D-73: replaces the retired tape's tab filter; the grid regains the sort/filter surface)_
 - **Actors:** Visitor.
-- **Preconditions:** API `GET /v1/tokens?sort=newest&limit=40` reachable (the tape's seed + enrichment registry).
-- **Steps:** (1) The tape seeds with **genuine LAUNCH rows** derived from the token registry (newest-first, real `createdAt` — no synthetic trades are invented to pad the feed). (2) Filter tabs ALL / LAUNCHES / TRADES / GRADUATIONS filter rows client-side (view-local state — the Discover URL-state is retired in the redesign). (3) Row mcap/Δ% resolve **by reference from the registry's indexer aggregates**; a row whose token is unknown to the registry renders "—", never a fabricated value (no-market-metrics rule — a single trade can never justify an aggregate). (4) Row click → `/t/[address]`. (5) Live WS rows (`global:trades`/`global:launches`) prepend into a capped in-memory buffer (~60), newest first.
+- **Preconditions:** API `GET /v1/tokens?sort=&filter=` reachable (D-22). Grid controls are **view-local** (the Discover URL-state stays retired — only `?q=` is a URL param, D-50).
+- **Steps:** (1) The grid renders `TokenCard`s seeded from `GET /v1/tokens` (default `sort=trending&filter=all`); card mcap/Δ%/status resolve **by reference from the indexer aggregates**, never fabricated (no-market-metrics rule). (2) **Sort tabs** {trending, newest, mcap, volume24h} dispatch a `?sort=` refetch — **Newest** floats a just-created token to the head (server order, verbatim). (3) **Filter tabs** {all, pregrad, graduated} dispatch a `?filter=` refetch — **Graduated** server-filters a pre-grad curve token OUT of the grid, **Pre-grad** returns it (never a client-side moderation). (4) Card click → `/t/[address]`.
 - **assertable-layers:** on-chain · indexed · UI.
 
 ### `@flow:DISC-4` — Search (name / ticker / contract / creator)
@@ -274,6 +274,18 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 
 ---
 
+## 4c. Taking fees out — post-graduation withdrawal (creator + 2-of-4 treasury Safe)
+
+> _The withdrawal counterpart to the creator-fee accrual flows (4b) and the LP-fee sweep (COLLECT-1): once a token has graduated and post-grad V3 volume has accrued fees, `collect(tokenId)` splits them 50/50 and PUSHES each side to its home — the creator share to the pull-payment `CreatorVault`, the treasury share (ERC20) to `LPFeeVault.treasury`. This flow proves BOTH sides are actually withdrawable in ONE graduation flow. The treasury is a canonical **2-of-4 Gnosis Safe v1.4.1** on the fork (`LPFeeVault.treasury` is an IMMUTABLE constructor value, so a Safe must be the treasury before the contracts deploy — the mainnet path is `tools/deploy/create-safe.ts` + the `external.treasurySafe` constant, rehearsed end-to-end by `tools/deploy/safe-drill.ts`; on the shared dev fork the harness instead installs a byte-identical canonical Safe onto the deployed contracts' immutable treasury ADDRESS via a pure anvil manipulation — like ERR-5's `setCode`, never a `contracts/src` change). The 2-of-4 withdrawal reuses the `tools/deploy/safe-tx.ts` EIP-712 primitives (`computeSafeTxHash`/`signSafeTxHash`/`orderSignatures`/`sendExecTransaction`)._
+
+### `@flow:TREAS-1` — Post-grad fee withdrawal: creator pull + 2-of-4 treasury Safe `execTransaction` · tx type `collect(tokenId)` + `claimERC20`/`claim` + Safe `execTransaction`
+- **Actors:** Creator (pulls its CreatorVault legs); the 2-of-4 treasury Safe owners (co-sign the withdrawal); any funded EOA (submits the assembled blob); Trader (post-grad V3 volume).
+- **Preconditions:** a graduated token in the creator-fee generation with accrued post-grad V3 fees; the deployed contracts' immutable `LPFeeVault.treasury` address wired to a canonical **2-of-4 Safe v1.4.1** (4 anvil dev signers, threshold 2).
+- **Steps:** (1) Graduate, generate two-sided post-grad V3 volume, and sweep the pre-grad curve creator leg. (2) Install/confirm the treasury is a canonical 2-of-4 Safe v1.4.1 (`VERSION()=="1.4.1"`, `getThreshold()==2`, `getOwners().length==4`) at the LIVE immutable `LPFeeVault.treasury()`. (3) Permissionless `collect(tokenId)` splits the fees 50/50: the treasury's ERC20 share (WETH + token) is PUSHED into the Safe; the creator's legs land in the `CreatorVault`. (4) **Creator withdrawal:** the creator PULLS both ERC20 legs (`claimERC20(creator, WETH)` + `claimERC20(creator, token)`) — wallet balances rise, buckets drain to zero — plus `claim(creator)` for the pre-grad native-ETH curve leg when present. (5) **Treasury 2-of-4 withdrawal:** a Safe `execTransaction` carrying **2 of the 4** owner signatures (ascending) transfers the Safe's WETH fee share OUT to a recipient — recipient balance up, Safe balance down, Safe nonce++. (6) **Threshold enforcement:** the SAME withdrawal with a **single** signature REVERTS (below threshold) and the Safe nonce is unchanged (no partial execution).
+- **assertable-layers:** on-chain. _(indexed · UI N/A — the treasury Safe `execTransaction` has no indexer/UI surface (the indexer does not watch the Safe; treasury tooling has no v1 page — cf. COLLECT-1's UI waiver + CFEE-3/CFEE-4 on-chain-only invariants), and the creator-claim indexed drain is already asserted by CFEE-1; see waivers.)_
+
+---
+
 ## 5. Error & edge paths
 
 ### `@flow:ERR-1` — Slippage revert (buy or sell)
@@ -367,14 +379,14 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 
 ## 6. Traceability — every Discover / Token Detail / Launch feature bullet maps to ≥1 flow
 
-### Discover _(KotH hero / token grid / 5 sorts / 3 filters / URL-state retired from the page; they remain API capabilities)_
+### Discover _(D-73: event tape retired; the D-70 token-card grid is the browse surface below the carousel. KotH hero + URL-state stay retired; grid sort/filter are view-local — all remain API capabilities)_
 | Surface bullet (Discover redesign) | Flow ID(s) |
 |---|---|
-| TRENDING carousel (volume-weighted, API-owned order) | DISC-1 |
-| Live event tape: WS-driven entries (launch/graduate slide in) | DISC-2 |
-| Event tape: seeded snapshot, tab filter, registry-sourced metrics, navigate | DISC-3 |
+| TRENDING carousel (volume-weighted, API-owned order) + token-card grid (D-70, ranked cards below it) | DISC-1 |
+| Token grid: a new launch surfaces via the `GET /v1/tokens` path (tape's WS slide-in retired, D-73) | DISC-2 |
+| Token grid: view-local sort/filter tabs (server `?sort=&filter=` refetch), registry-sourced metrics, navigate | DISC-3 |
 | Search: name, ticker, contract, creator (pg_trgm) + `/?q=` creator deep link | DISC-4 |
-| Carousel card / tape row fields (image · rank · name · ticker · Δ% / age · side · token · amount · mcap · Δ%) — indexer metrics only | DISC-1, DISC-3 |
+| Carousel card / grid card fields (image · rank · name · ticker · Δ% / description · mcap · vol24h · status · creator · age) — indexer metrics only | DISC-1, DISC-3 |
 
 ### Token Detail
 | Feature bullet | Flow ID(s) |
@@ -423,7 +435,8 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 | `graduate()` | TD-6, TD-6b (donation-resilient, F-1 regression), GRAD-AUTO (compose-keeper-driven) |
 | post-grad V3 buy | TD-4 |
 | post-grad V3 sell | TD-5 |
-| `collect(tokenId)` | COLLECT-1 |
+| `collect(tokenId)` | COLLECT-1, CFEE-1, TREAS-1 |
+| fee withdrawal — `claimERC20`/`claim` (creator) + Safe `execTransaction` (2-of-4 treasury) | TREAS-1 |
 
 ### Error-path coverage (task-required)
 | Error path | Flow ID |
@@ -455,8 +468,9 @@ Flows declaring fewer than three layers have a rationale row in `user-flows-waiv
 - Transaction-only: COLLECT-1 (1)
 - Automated graduation (compose keeper, section 4a): GRAD-AUTO (1)
 - Creator fees (post-grad 0.5% split, section 4b; CFEE-1/CFEE-2 on-chain · indexed, CFEE-3/CFEE-4 on-chain invariants): CFEE-1..4 (4)
+- Treasury/creator fee withdrawal (section 4c; on-chain — 2-of-4 Safe `execTransaction`): TREAS-1 (1)
 - Errors/edges: ERR-1..ERR-14 with ERR-6 split a/b, ERR-13 RETIRED (SafetyStrip removal) → 14 active flows
-- **Total: 50 catalogued flows.** The 46-flow baseline = the prior 44 + `TD-6b` (F-1 donation-freeze regression) + `GRAD-AUTO` (compose-keeper auto-graduation), both full three-layer; the four `CFEE-*` creator-fee flows complete the set: `CFEE-1`/`CFEE-2` are **on-chain · indexed** (the split-Collect/CreatorVault roll-up is served over REST; UI waived for the frontend enumerating-endpoint gap), `CFEE-3`/`CFEE-4` are **on-chain invariants** (pull-payment isolation / a set-once mapping). The `e2e:coverage` gate reports 50/50.
+- **Total: 51 catalogued flows.** The 46-flow baseline = the prior 44 + `TD-6b` (F-1 donation-freeze regression) + `GRAD-AUTO` (compose-keeper auto-graduation), both full three-layer; the four `CFEE-*` creator-fee flows extend it: `CFEE-1`/`CFEE-2` are **on-chain · indexed** (the split-Collect/CreatorVault roll-up is served over REST; UI waived for the frontend enumerating-endpoint gap), `CFEE-3`/`CFEE-4` are **on-chain invariants** (pull-payment isolation / a set-once mapping); `TREAS-1` (section 4c) completes the set as an **on-chain** flow — the full creator + 2-of-4 treasury-Safe fee WITHDRAWAL in one graduation flow (indexed · UI waived: the Safe `execTransaction` has no indexer/UI surface). The `e2e:coverage` gate reports 51/51.
 
 See `user-flows-waivers.md` for every flow declaring fewer than three assertable layers.
 

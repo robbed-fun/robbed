@@ -97,28 +97,14 @@ describe("copy-lint · forbidden copy ", () => {
   });
 });
 
-// ── (1b) LP-copy PRESENCE on token detail — must-render floor ──────────
-// The LP sentence must render on /t/[address]. After both the Trust panel
-// and (USER-DIRECTED 2026-07-13) the token-detail SafetyStrip were removed, the
-// sentence survives as the single muted `LP_DESTINY_COPY` footnote in TokenInfo.
-// Since the sentence may exist ONLY via the shared constant (rule 1 above),
-// presence is asserted by a token-detail surface REFERENCING that constant.
-
-describe("copy-lint · LP copy PRESENCE on token detail (floor)", () => {
-  const TD_SURFACES = [join("src", "views", "token-detail")];
-  const LP_CONST = /\bLP_(?:DESTINY_COPY|COPY)\b/;
-
-  it("a token-detail surface references the shared LP constant", () => {
-    const tdFiles = sourceFiles().filter((f) =>
-      TD_SURFACES.some((d) => f.includes(d)),
-    );
-    const referencing = tdFiles.filter((f) => LP_CONST.test(read(f))).map(rel);
-    expect(
-      referencing.length,
-      "no token-detail surface references the shared LP constant (LP floor lost)",
-    ).toBeGreaterThan(0);
-  });
-});
+// ── (1b) LP-copy PRESENCE floor — REMOVED (USER-DIRECTED 2026-07-14, D-74) ─────
+// The token-detail LP-copy must-render floor is RETIRED: the D-14 LP sentence is
+// no longer required to render on /t/[address]. Only the WORDING rules stay in
+// force — section (1) above still bans the forbidden LP verb everywhere and still
+// requires that any rendered LP sentence come ONLY from the shared constant
+// (never inline, never in .json). The presence-on-token-detail assertion that
+// used to live here is intentionally gone; a /t/[address] page with zero
+// LP-copy occurrences is no longer a lint failure. Reverses the D-65 carve-out.
 
 // ── (2) address literals — / web.md ──────────────────────────────
 // Only WETH (in shared/lib/chain.ts, itself sourced from @robbed/shared) and the
@@ -153,6 +139,11 @@ describe("copy-lint · design-token bypass ", () => {
   const COLOR_EXEMPT_SEGMENTS = [
     join("src", "app", "globals.css"),
     join("shared", "ui", "kit") + sep,
+    // The LOOT_ mascot is a fixed-palette brand ILLUSTRATION (verbatim ratified
+    // SVG geometry + fills from ROBBED Explorations.html §3a — see mascot.md).
+    // Its greens are the character, not themeable UI tokens, so — like the kit —
+    // it owns its colour contract and is exempt from the token-bypass lint.
+    join("shared", "ui", "mascot") + sep,
     join("shared", "lib") + sep,
     join("shared", "api") + sep,
     join("shared", "config") + sep,

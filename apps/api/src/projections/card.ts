@@ -4,7 +4,7 @@
  * not yet graduated → the lock window `graduating`; else `curve`. mcap USD
  * is computed at request time from the ETH/USD snapshot — never a constant.
  */
-import { computeChange24hPct, type TokenCard } from "@robbed/shared";
+import { computeChange24hPct, TOKEN_CARD_DESCRIPTION_MAX, type TokenCard } from "@robbed/shared";
 import type { ConfirmationWatermarksRow } from "@robbed/shared";
 import type { Change24hAnchor, TokenListRow } from "../lib/db";
 import { projectConfirmation } from "../lib/confirmation";
@@ -51,6 +51,12 @@ export function toTokenCard(
     name: row.name,
     ticker: row.ticker,
     imageUrl: row.image_url,
+    // Card-preview blurb (D-70; api.md section 3.4). `tokens.description` is already
+    // SELECTed onto TokenListRow — the card just truncates it; the FULL text stays
+    // on TokenDetail (GET /v1/tokens/:address). Required-nullable in the ratified
+    // shared shape: null when absent, else server-truncated to the card cap.
+    description:
+      row.description == null ? null : row.description.slice(0, TOKEN_CARD_DESCRIPTION_MAX),
     creator: row.creator,
     createdAt: row.created_at,
     priceEth: row.last_price_eth,

@@ -12,3 +12,4 @@ export * from "./wallet";
 export { sel, copy, routes, launch, portfolio, portfolioCopy } from "./selectors";
 export * from "./seed";
 export * from "./creator-fee";
+export * from "./safe";

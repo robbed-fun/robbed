@@ -35,9 +35,6 @@ export function TrendingCarousel({ tokens }: { tokens: TokenCard[] }) {
         <MonoText tone="default" size="xs" className="tracking-label">
           TRENDING
         </MonoText>
-        <MonoText tone="faint" size="xs">
-          the day&apos;s biggest heists · by 24h volume
-        </MonoText>
       </div>
       <div className="overflow-hidden">
         <div className="flex w-max animate-feat-scroll hover:[animation-play-state:paused] motion-reduce:animate-none">
@@ -119,7 +116,10 @@ function TrendingCard({
         </div>
         <GraduationProgress
           variant="compact"
-          progressPct={token.progressPct}
+          // `progressPct` is a [0,1] fraction (real_eth/graduation_eth) → ×100 for
+          // the shared GraduationProgress / pctText, which expect 0–100 (same as the
+          // Discover TokenCard; D-70 units caveat).
+          progressPct={token.progressPct * 100}
           status={token.graduated ? "graduated" : token.status}
         />
       </div>

@@ -18,6 +18,7 @@ import { eventId, lower } from "../ids";
 import { curvePriceEth } from "../price";
 import { upsertCandlesForTrade } from "./candlesDb";
 import { publishCandle, publishGate, publishTrade } from "../publish";
+import { enqueueTokenMetrics } from "../tokenMetrics";
 import { observePublishToHeadMs } from "../metrics";
 
 ponder.on("BondingCurve:Trade", async ({ event, context }) => {
@@ -124,6 +125,14 @@ ponder.on("BondingCurve:Trade", async ({ event, context }) => {
   });
   // Gate-7 : observe publish→head latency, realtime only (backfill excluded).
   if (publishGate.enabled) observePublishToHeadMs(Date.now() - Number(ts) * 1000);
+  // D-70: coalesce a live card-aggregate snapshot on GLOBAL_METRICS (throttled per
+  // token; the flush does the 24h-anchor read — NOT here). Pure in-memory push,
+  // self-gated to realtime + armed sidecar (no DB read on the hot path).
+  enqueueTokenMetrics({
+    token: tokenAddress,
+    blockNumber: Number(event.block.number),
+    blockTimestamp: Number(ts),
+  });
   for (const c of candleRows) {
     publishCandle({
       token: tokenAddress,

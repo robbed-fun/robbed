@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 
-import { MonoText } from "@/shared/ui";
+import { LootMascot, MonoText } from "@/shared/ui";
 import { cn } from "@/shared/lib/utils";
 
 import { ACCEPTED_IMAGE_MIME } from "../model/schema";
@@ -60,11 +60,13 @@ export function ImageUpload({
             className="h-full w-full object-cover"
           />
         ) : (
-          <span className="flex flex-col items-center gap-0.5 text-center leading-tight">
-            {/* Mockup 2b: 10.5px dropzone text (template 452). */}
-            <MonoText tone="faint" size="2xs">
-              logo
-            </MonoText>
+          <span className="flex flex-col items-center gap-1 text-center leading-tight">
+            {/* Design §3: "loot hidden in the create form's logo slot" — LOOT_ is
+                the default placeholder art for the empty logo dropzone. STATIC
+                (`animated={false}`) so the slot stays calm; decorative (`label=""`)
+                since the button's aria-label already names the target, and the
+                512×512 hint keeps the upload affordance. */}
+            <LootMascot size={38} animated={false} label="" />
             <MonoText tone="faint" size="2xs" numeric>
               512×512
             </MonoText>

@@ -27,6 +27,7 @@ export * from "./kit/tooltip";
 
 // business-agnostic display UI (pre-redesign set — still consumed by widgets)
 export * from "./Amount";
+export * from "./PriceEth";
 export * from "./UsdAmount";
 export * from "./ProgressBar";
 export * from "./GraduationProgress";
@@ -52,6 +53,11 @@ export * from "./LiveDot";
 export * from "./AmountInput";
 export * from "./ExtLink";
 export * from "./Toaster";
+
+// LOOT_ mascot — fixed-palette brand illustration (design exploration 3a)
+export * from "./mascot/LootMascot";
+// ROBBED_ brand lockup — mascot + wordmark, one unit (design exploration §3/§4)
+export * from "./mascot/MascotLockup";
 
 // reusable headless table (TanStack Table v8 wrapper — stable-ref contract)
 export * from "./DataTable";

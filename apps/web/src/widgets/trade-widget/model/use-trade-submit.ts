@@ -73,7 +73,8 @@ export interface SubmitArgs {
 }
 
 export function useTradeSubmit(token: TokenDetail): {
-  submit: (args: SubmitArgs) => Promise<void>;
+  /** Resolves to `true` only when the tx broadcast AND its receipt succeeded. */
+  submit: (args: SubmitArgs) => Promise<boolean>;
   isSubmitting: boolean;
   error: string | null;
 } {
@@ -91,7 +92,7 @@ export function useTradeSubmit(token: TokenDetail): {
       setError(null);
       if (!account) {
         setError("Connect a wallet to trade.");
-        return;
+        return false;
       }
 
       const tokenAddr = token.address as Address;
@@ -136,11 +137,12 @@ export function useTradeSubmit(token: TokenDetail): {
         optimistic.attachHash(id, hash);
 
         const receipt = await publicClient?.waitForTransactionReceipt({ hash });
-        optimistic.applyReceipt(
-          id,
-          receipt?.status === "success" ? "success" : "reverted",
-          receipt?.blockNumber,
-        );
+        const succeeded = receipt?.status === "success";
+        optimistic.applyReceipt(id, succeeded ? "success" : "reverted", receipt?.blockNumber);
+        // Signal success so the widget can clear the amount input: a stale on-screen
+        // quote must not stay re-submittable after the curve price moved, which is the
+        // "price moved past your slippage" a quick second trade otherwise hits.
+        return succeeded;
       } catch (e) {
         // In-wallet rejection / broadcast failure → remove the optimistic row
         // (it never reached chain) and surface the reason via the central
@@ -153,6 +155,7 @@ export function useTradeSubmit(token: TokenDetail): {
             overrides: { DeadlineExpired: "Trade deadline expired — refresh the quote." },
           }),
         );
+        return false;
       } finally {
         setSubmitting(false);
       }

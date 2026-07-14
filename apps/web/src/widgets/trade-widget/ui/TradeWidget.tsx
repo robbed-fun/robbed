@@ -25,16 +25,7 @@ import {
   type TradeSide,
 } from "@/entities/curve";
 import { WalletConnectButton } from "@/features/connect-wallet";
-import {
-  AddressLink,
-  AmountInput,
-  Chip,
-  CursorTag,
-  MonoLabel,
-  MonoText,
-  SideBadge,
-} from "@/shared/ui";
-import { TAGLINE_TRADE } from "@/shared/config/copy";
+import { AddressLink, AmountInput, Chip, MonoLabel, MonoText, SideBadge } from "@/shared/ui";
 import { formatEthFromWei, formatTokenFromWei } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 
@@ -74,13 +65,7 @@ export function TradeWidget({ token }: { token: TokenDetail }) {
   return <CurveVenue token={token} graduatingLock={graduatingLock} />;
 }
 
-function CurveVenue({
-  token,
-  graduatingLock,
-}: {
-  token: TokenDetail;
-  graduatingLock: boolean;
-}) {
+function CurveVenue({ token, graduatingLock }: { token: TokenDetail; graduatingLock: boolean }) {
   const [side, setSide] = useState<TradeSide>("buy");
   const [raw, setRaw] = useState("");
   const [slippageBps, setSlippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
@@ -131,17 +116,25 @@ function CurveVenue({
     quote !== null &&
     !overCap;
 
-  const onSubmit = () => {
+  const onSubmit = async () => {
     if (!canSubmit || quote === null || amountWei === null) return;
-    void submit({ side, amountWei, expectedOut: quote.amountOut, slippageBps });
+    const ok = await submit({ side, amountWei, expectedOut: quote.amountOut, slippageBps });
+    // Reset the amount on a successful trade so a second trade re-quotes fresh — a
+    // stale quote after the curve price moved was reverting with SlippageExceeded.
+    if (ok) setRaw("");
   };
 
   return (
     // FLAT trade panel (fidelity audit fix 1): no Card border/fill; mockup panel
     // padding 18px 20px (template 2a line 398).
-    <div className="flex flex-col gap-3.5 p-[18px] px-5">
+    <div className="flex w-full flex-col gap-3.5 p-4 px-5 h-full">
       <SideTabs side={side} onChange={setSide} disabled={graduatingLock} />
 
+      {/* ReadyToGraduate lock (D-12 / ERR-7 / web.md section 3.2): a deterministic,
+          permissionlessly-exitable protocol state — NOT a pause. The two-sided
+          interstitial renders here and (with the disabled inputs below) locks BOTH
+          directions; copy must never say "paused". Restored additively — the venue
+          refactor had dropped this render. */}
       {graduatingLock && <GraduatingInterstitial />}
 
       <div className="relative flex flex-col gap-3.5" aria-disabled={graduatingLock}>
@@ -163,14 +156,12 @@ function CurveVenue({
 
         {overCap && reads.maxEarlyBuyWei !== null && (
           <p className="text-xs text-soft-confirmed">
-            Early-launch buy cap: max {formatEthFromWei(reads.maxEarlyBuyWei)} ETH per
-            transaction.
+            Early-launch buy cap: max {formatEthFromWei(reads.maxEarlyBuyWei)} ETH per transaction.
           </p>
         )}
         {!overCap && side === "buy" && inEarlyWindow && reads.maxEarlyBuyWei !== null && (
           <p className="text-xs text-muted">
-            Early-launch window active — max {formatEthFromWei(reads.maxEarlyBuyWei)} ETH
-            per buy.
+            Early-launch window active — max {formatEthFromWei(reads.maxEarlyBuyWei)} ETH per buy.
           </p>
         )}
 
@@ -204,8 +195,6 @@ function CurveVenue({
           isSubmitting={isSubmitting}
           onSubmit={onSubmit}
         />
-
-        <Tagline />
       </div>
     </div>
   );
@@ -407,7 +396,9 @@ function InfoRows({
   return (
     <div className="flex flex-col gap-[7px] border-t border-border-soft pt-3 text-xs-plus text-muted">
       <Row label="Price impact">
-        <span className={cn("tabular-nums", impact !== null && impact > 5 && "text-soft-confirmed")}>
+        <span
+          className={cn("tabular-nums", impact !== null && impact > 5 && "text-soft-confirmed")}
+        >
           {impact === null ? "—" : `${impact.toFixed(2)}%`}
         </span>
       </Row>
@@ -420,8 +411,7 @@ function InfoRows({
           never an inlined knob. */}
       {creatorFeeBps != null && creatorFeeBps > 0 && (
         <p className="text-2xs leading-relaxed text-faint">
-          incl. {formatBpsPercent(creatorFeeBps)} to the creator — before &amp; after
-          graduation
+          incl. {formatBpsPercent(creatorFeeBps)} to the creator — before &amp; after graduation
         </p>
       )}
       {/* Review fix (2026-07-11): the merged label+chips+value+deadline row
@@ -486,13 +476,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
  * the disclosure) but drops the "soft-confirmed" chip framing — it now leads with
  * "wait for posted/finalized", not a soft-confirmed label.
  */
-function LargeValueDisclosure({
-  ethWei,
-  side,
-}: {
-  ethWei: bigint | null;
-  side: TradeSide;
-}) {
+function LargeValueDisclosure({ ethWei, side }: { ethWei: bigint | null; side: TradeSide }) {
   const thresholdWei = largeValueThresholdWei();
   if (ethWei === null || !isLargeValueWei(ethWei, thresholdWei)) return null;
   const noun = side === "buy" ? "buy" : "sale";
@@ -505,8 +489,8 @@ function LargeValueDisclosure({
         </MonoText>
       </div>
       <p className="text-muted">
-        This {noun} is included the instant the sequencer picks it up, then upgrades
-        to <span className="text-posted">posted to L1</span> and{" "}
+        This {noun} is included the instant the sequencer picks it up, then upgrades to{" "}
+        <span className="text-posted">posted to L1</span> and{" "}
         <span className="text-finalized">finalized</span>. At this size, wait for the
         posted/finalized tier in the trades feed before treating it as settled.
       </p>
@@ -548,14 +532,6 @@ function ActionButton({
   );
 }
 
-function Tagline() {
-  return (
-    <div className="pt-0.5 text-center">
-      <CursorTag>{TAGLINE_TRADE}</CursorTag>
-    </div>
-  );
-}
-
 function GraduatingInterstitial() {
   return (
     <div className="border border-soft-confirmed/40 bg-soft-confirmed/10 p-3 text-center">
@@ -565,9 +541,8 @@ function GraduatingInterstitial() {
         <SideBadge side="graduate" label="Graduating to Uniswap V3…" />
       </div>
       <p className="text-xs text-muted">
-        The curve has reached its threshold and is locked while it migrates. Both
-        buying and selling resume on Uniswap V3 in a moment — this is an automatic
-        protocol step, not a pause.
+        The curve has reached its threshold and is locked while it migrates. Both buying and selling
+        resume on Uniswap V3 in a moment — this is an automatic protocol step, not a pause.
       </p>
     </div>
   );
@@ -607,15 +582,19 @@ function V3Venue({ token }: { token: TokenDetail }) {
   const canSubmit =
     isConnected && amountWei !== null && amountWei > 0n && amountOut !== null && amountOut > 0n;
 
-  const onSubmit = () => {
+  const onSubmit = async () => {
     if (!canSubmit || amountOut === null || amountWei === null) return;
-    void submit({ side, amountWei, expectedOut: amountOut, slippageBps });
+    const ok = await submit({ side, amountWei, expectedOut: amountOut, slippageBps });
+    // Reset the amount on a successful trade so a second trade re-quotes fresh.
+    if (ok) setRaw("");
   };
 
   return (
-    <div className="flex flex-col gap-3.5 p-[18px] px-5">
-      <div className="flex items-center justify-between">
-        <SideBadge side="graduate" label="GRADUATED" />
+    <div className="flex w-full flex-col gap-3.5 border p-4 px-5">
+      {/* Post-grad venue footnote (TD-4 / web.md section 3.2): the invisible venue
+          switch surfaces only as this copy + the pool link below — never a user
+          choice. Restored additively — the venue refactor had dropped this copy. */}
+      <div className="flex justify-end">
         <MonoText tone="muted" size="xs">
           Trading on Uniswap V3
         </MonoText>
@@ -635,8 +614,6 @@ function V3Venue({ token }: { token: TokenDetail }) {
         slippageBps={slippageBps}
         onSlippageChange={setSlippageBps}
       />
-
-      <LargeValueDisclosure ethWei={ethNotionalWei} side={side} />
 
       {error && <p className="text-xs text-red">{error}</p>}
 
@@ -659,8 +636,6 @@ function V3Venue({ token }: { token: TokenDetail }) {
           />
         </div>
       ) : null}
-
-      <Tagline />
     </div>
   );
 }
@@ -698,9 +673,7 @@ function computeImpact(
       ? Number(formatEther(quote.acceptedEthGross ?? amountWei))
       : Number(formatEther(quote.amountOut));
   const tokens =
-    side === "buy"
-      ? Number(formatUnits(quote.amountOut, 18))
-      : Number(formatUnits(amountWei, 18));
+    side === "buy" ? Number(formatUnits(quote.amountOut, 18)) : Number(formatUnits(amountWei, 18));
   return priceImpactPct({
     side,
     eth,

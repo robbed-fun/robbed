@@ -17,6 +17,7 @@ import { eventId, lower } from "../ids";
 import { tokenIsToken0 } from "../price";
 import { graduationRegistry } from "../graduationRegistry";
 import { publishGraduated } from "../publish";
+import { enqueueTokenMetrics } from "../tokenMetrics";
 import { incGraduationDoubleFire } from "../metrics";
 
 ponder.on("V3Migrator:Graduated", async ({ event, context }) => {
@@ -66,5 +67,12 @@ ponder.on("V3Migrator:Graduated", async ({ event, context }) => {
     pool: poolAddress,
     blockNumber: Number(event.block.number),
     ts: Number(event.block.timestamp),
+  });
+  // D-70: graduation flips status → graduated and starts venue-continuous V3
+  // pricing; refresh the card's live aggregates on GLOBAL_METRICS (coalesced).
+  enqueueTokenMetrics({
+    token: tokenAddress,
+    blockNumber: Number(event.block.number),
+    blockTimestamp: Number(event.block.timestamp),
   });
 });

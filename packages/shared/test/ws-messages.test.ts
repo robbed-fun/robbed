@@ -192,11 +192,41 @@ describe("per-type payloads (indexer.md)", () => {
     ).toBe(false);
   });
 
-  it("union stays exhaustive — fee-family members are all WsMessageType", () => {
-    const types: WsMessage["type"][] = ["fee_collected", "creator_fee_split", "creator_fee_claimed"];
+  it("token_metrics (D-70 live aggregate snapshot) — reuses card scalars, ETH-denominated", () => {
+    const msg = {
+      ...base, type: "token_metrics", channel: "global:metrics",
+      data: {
+        token: ADDR, priceEth: 8.1e-9, mcapEth: "8100000000000000000",
+        volume24h: "9000000000000000000", change24hPct: -3.2, progressPct: 0.425,
+        status: "curve", graduated: false, blockNumber: 12345, ts: 1767950000,
+      },
+    };
+    expect(wsMessageSchema.safeParse(msg).success).toBe(true);
+    // priceEth/change24hPct are nullable (pre-first-trade)
+    expect(
+      wsMessageSchema.safeParse({ ...msg, data: { ...msg.data, priceEth: null, change24hPct: null } }).success,
+    ).toBe(true);
+    // ETH aggregates are decimal strings (uint256 wei) — floats/numbers rejected
+    expect(wsMessageSchema.safeParse({ ...msg, data: { ...msg.data, mcapEth: 8.1 } }).success).toBe(false);
+    expect(wsMessageSchema.safeParse({ ...msg, data: { ...msg.data, volume24h: 9000 } }).success).toBe(false);
+    // status is the SHARED tokenStatusSchema enum (moved to token-status.ts) — junk rejected
+    expect(wsMessageSchema.safeParse({ ...msg, data: { ...msg.data, status: "v2" } }).success).toBe(false);
+    expect(
+      wsMessageSchema.safeParse({ ...msg, data: { ...msg.data, status: "graduated", graduated: true } }).success,
+    ).toBe(true);
+    // mcapEth is REQUIRED here (indexer always recomputes it) — absent ⇒ reject
+    const { mcapEth: _m, ...noMcap } = msg.data;
+    expect(wsMessageSchema.safeParse({ ...msg, data: noMcap }).success).toBe(false);
+  });
+
+  it("union stays exhaustive — fee-family + token_metrics members are all WsMessageType", () => {
+    const types: WsMessage["type"][] = [
+      "fee_collected", "creator_fee_split", "creator_fee_claimed", "token_metrics",
+    ];
     expect(types).toContain("fee_collected");
     expect(types).toContain("creator_fee_split");
     expect(types).toContain("creator_fee_claimed");
+    expect(types).toContain("token_metrics");
   });
 });
 

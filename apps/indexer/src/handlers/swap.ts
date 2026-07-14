@@ -16,6 +16,7 @@ import { v3PriceEth } from "../price";
 import { graduationRegistry } from "../graduationRegistry";
 import { upsertCandlesForTrade } from "./candlesDb";
 import { publishCandle, publishGate, publishTrade } from "../publish";
+import { enqueueTokenMetrics } from "../tokenMetrics";
 import { observePublishToHeadMs } from "../metrics";
 
 function abs(x: bigint): bigint {
@@ -129,6 +130,13 @@ ponder.on("UniswapV3Pool:Swap", async ({ event, context }) => {
   });
   // Gate-7 : observe publish→head latency, realtime only (backfill excluded).
   if (publishGate.enabled) observePublishToHeadMs(Date.now() - Number(ts) * 1000);
+  // D-70: THE gap this closes — a post-graduation swap now refreshes the card's
+  // live aggregates (mcap/price/change24h) on GLOBAL_METRICS, coalesced per token.
+  enqueueTokenMetrics({
+    token: grad.tokenAddress,
+    blockNumber: Number(event.block.number),
+    blockTimestamp: Number(ts),
+  });
   for (const c of candleRows) {
     publishCandle({
       token: grad.tokenAddress,
