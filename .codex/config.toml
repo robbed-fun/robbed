@@ -1,0 +1,4 @@
+# Make Codex load this repo's existing Claude Code instruction files.
+# Codex still prefers AGENTS.override.md / AGENTS.md when present, then falls back
+# to CLAUDE.md at the repo root and in nested workspace directories.
+project_doc_fallback_filenames = ["CLAUDE.md"]
