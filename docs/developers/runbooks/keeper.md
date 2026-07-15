@@ -12,7 +12,7 @@
 |---|---|---|---|---|
 | dev (`docker-compose.yml`) | **ON** | `ws://anvil:8545` (fork) | anvil account #4 (public dev key) | Chosen outside e2e roles 0–3 (creator/treasury/trader/trader2) to avoid nonce contention |
 | testnet (`docker-compose.testnet.yml`) | **ON** | `TESTNET_RPC_WS_URL` → `TESTNET_RPC_URL` | `TESTNET_KEEPER_PRIVATE_KEY` (funded ops wallet) | Key via `~/.config/robbed/testnet.secrets.env`; ~0.05 ETH; **NOT** the deployer |
-| mainnet (`docker-compose.mainnet.yml`) | **OFF (profile-gated)** | `MAINNET_RPC_WS_URL` → `MAINNET_RPC_URL` | `MAINNET_KEEPER_PRIVATE_KEY` | Key via `~/.config/robbed/mainnet.secrets.env`; start only **after Gate G-A** |
+| mainnet (`docker-compose.mainnet.yml`) | **ON** | `MAINNET_RPC_WS_URL` → `MAINNET_RPC_URL` | `MAINNET_KEEPER_PRIVATE_KEY` | Key via `~/.config/robbed/mainnet.secrets.env`; default `pnpm run dev:mainnet` includes keeper |
 
 WS RPC enables the sub-second `eth_subscribe` detection path. An HTTP-only RPC still works — detection degrades to log polling and the `KEEPER_POLL_MS` sweep remains the safety net.
 
@@ -80,7 +80,7 @@ The WS subscription dropped. viem reconnects; the fallback sweep covers the gap.
 
 1. Generate a new ops wallet; fund it (Funding).
 2. Update the stack's external secrets env file (`TESTNET_KEEPER_PRIVATE_KEY` / `MAINNET_KEEPER_PRIVATE_KEY`) with the new key.
-3. Restart only the keeper: `docker compose -f docker-compose.<stack>.yml up -d --no-deps keeper` (mainnet: add `--profile keeper`). No other service depends on the keeper's identity.
+3. Restart only the keeper: `docker compose -f docker-compose.<stack>.yml up -d --no-deps keeper`. No other service depends on the keeper's identity.
 4. Verify `/healthz` shows the **new** `wallet.address` and `status:"ok"`; drain/retire the old wallet's residual balance.
 5. Rotate immediately if a key is ever exposed — the keeper's only power is calling permissionless `graduate()` and `sweepFees()`, so blast radius is limited to wasted gas / noisy housekeeping, never fund theft, but rotate anyway.
 
@@ -88,5 +88,5 @@ The WS subscription dropped. viem reconnects; the fallback sweep covers the gap.
 
 - dev: starts with `docker compose up` (ON by default).
 - testnet: `pnpm run dev:testnet:d` or `bash scripts/compose-env.sh testnet up -d keeper` (requires `TESTNET_KEEPER_PRIVATE_KEY` in `~/.config/robbed/testnet.secrets.env`).
-- mainnet (post-G-A only): `docker compose -f docker-compose.mainnet.yml --profile keeper up -d keeper`. Without `--profile keeper` the service does not start (Gate G-A guard) — this is intentional.
+- mainnet: `pnpm run dev:mainnet:d` starts keeper with the rest of the stack; restart only keeper with `bash scripts/compose-env.sh mainnet up -d --no-deps keeper`.
 - Stopping the keeper is always safe: it blocks nothing on-chain (graduation and fee sweeping stay permissionless; sells stay open). A future `graduate()` or `sweepFees()` just waits for the next caller.

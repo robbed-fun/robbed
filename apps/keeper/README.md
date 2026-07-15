@@ -59,4 +59,4 @@ test/         gas / db / keeper / health unit tests (bun test) + fakes.ts
 
 - **dev** (`docker-compose.yml`): ON by default; RPC = anvil fork WS; signer = anvil account #4 (public dev key, outside the e2e roles).
 - **testnet** (`docker-compose.testnet.yml`): ON; RPC = testnet (WS preferred); signer = a **funded** ops wallet via the gitignored root `.env` (`TESTNET_KEEPER_PRIVATE_KEY`, ~0.05 ETH, NOT the deployer).
-- **mainnet** (`docker-compose.mainnet.yml`): **profile-gated OFF** (`profiles: ["keeper"]`) until Gate G-A. Start with `--profile keeper` only after G-A.
+- **mainnet** (`docker-compose.mainnet.yml`): ON by default for the local/public mainnet-profile stack; signer = a **funded** ops wallet via external secrets (`MAINNET_KEEPER_PRIVATE_KEY`, NOT the deployer).
