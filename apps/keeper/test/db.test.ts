@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   READY_CURVES_SQL,
+  GRADUATED_LP_POSITIONS_SQL,
   TREASURY_FEE_CURVES_SQL,
+  mapGraduatedLpRows,
   mapReadyRows,
   mapTreasuryFeeRows,
+  queryGraduatedLpPositions,
   queryReadyCurves,
   queryTreasuryFeeCurves,
   type QueryClient,
@@ -65,5 +68,52 @@ describe("treasury-fee sweep query shape", () => {
     const rows = await queryTreasuryFeeCurves(fake);
     expect(calledWith).toBe(TREASURY_FEE_CURVES_SQL);
     expect(rows).toEqual([{ token: "0xtoken02", curve: "0xcurve02" }] as never);
+  });
+});
+
+describe("graduated-LP collect query shape", () => {
+  test("selects graduated LP positions from the graduations table", () => {
+    const sql = GRADUATED_LP_POSITIONS_SQL.replace(/\s+/g, " ").trim();
+    expect(sql).toContain("FROM graduations");
+    expect(sql).toContain("SELECT token_address, pool_address, lp_token_id, token_is_token0");
+    expect(sql).toContain("ORDER BY block_number ASC");
+  });
+
+  test("mapGraduatedLpRows lowercases addresses and parses lp_token_id", () => {
+    const mapped = mapGraduatedLpRows([
+      {
+        token_address: "0xAABBCC",
+        pool_address: "0xDDEEFF",
+        lp_token_id: "70",
+        token_is_token0: true,
+      },
+    ]);
+    expect(mapped).toEqual([
+      { token: "0xaabbcc", pool: "0xddeeff", lpTokenId: 70n, tokenIsToken0: true },
+    ] as never);
+  });
+
+  test("queryGraduatedLpPositions runs the SQL and returns mapped rows", async () => {
+    let calledWith = "";
+    const fake: QueryClient = {
+      async query<R>(text: string): Promise<{ rows: R[] }> {
+        calledWith = text;
+        return {
+          rows: [
+            {
+              token_address: "0xToKeN03",
+              pool_address: "0xPoOl03",
+              lp_token_id: "71",
+              token_is_token0: false,
+            },
+          ] as unknown as R[],
+        };
+      },
+    };
+    const rows = await queryGraduatedLpPositions(fake);
+    expect(calledWith).toBe(GRADUATED_LP_POSITIONS_SQL);
+    expect(rows).toEqual([
+      { token: "0xtoken03", pool: "0xpool03", lpTokenId: 71n, tokenIsToken0: false },
+    ] as never);
   });
 });

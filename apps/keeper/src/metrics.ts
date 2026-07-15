@@ -16,6 +16,11 @@ export interface MetricsSnapshot {
   treasurySweepFailuresTotal: number;
   lastTreasurySweepAt: number | null; // epoch ms
   lastTreasurySweepScanned: number | null;
+  lpFeeCollectSweepsTotal: number;
+  lpFeesCollectedTotal: number;
+  lpFeeCollectFailuresTotal: number;
+  lastLpFeeCollectSweepAt: number | null; // epoch ms
+  lastLpFeeCollectSweepScanned: number | null;
 }
 
 export class KeeperMetrics {
@@ -31,6 +36,11 @@ export class KeeperMetrics {
   private treasurySweepFailures = 0;
   private lastTreasurySweepAt: number | null = null;
   private lastTreasurySweepScanned: number | null = null;
+  private lpFeeCollectSweeps = 0;
+  private lpFeesCollected = 0;
+  private lpFeeCollectFailures = 0;
+  private lastLpFeeCollectSweepAt: number | null = null;
+  private lastLpFeeCollectSweepScanned: number | null = null;
 
   incGraduated(): void {
     this.graduated += 1;
@@ -60,6 +70,17 @@ export class KeeperMetrics {
   incTreasurySweepFailure(): void {
     this.treasurySweepFailures += 1;
   }
+  recordLpFeeCollectSweep(at: number, scanned: number): void {
+    this.lpFeeCollectSweeps += 1;
+    this.lastLpFeeCollectSweepAt = at;
+    this.lastLpFeeCollectSweepScanned = scanned;
+  }
+  incLpFeesCollected(): void {
+    this.lpFeesCollected += 1;
+  }
+  incLpFeeCollectFailure(): void {
+    this.lpFeeCollectFailures += 1;
+  }
 
   snapshot(): MetricsSnapshot {
     return {
@@ -75,6 +96,11 @@ export class KeeperMetrics {
       treasurySweepFailuresTotal: this.treasurySweepFailures,
       lastTreasurySweepAt: this.lastTreasurySweepAt,
       lastTreasurySweepScanned: this.lastTreasurySweepScanned,
+      lpFeeCollectSweepsTotal: this.lpFeeCollectSweeps,
+      lpFeesCollectedTotal: this.lpFeesCollected,
+      lpFeeCollectFailuresTotal: this.lpFeeCollectFailures,
+      lastLpFeeCollectSweepAt: this.lastLpFeeCollectSweepAt,
+      lastLpFeeCollectSweepScanned: this.lastLpFeeCollectSweepScanned,
     };
   }
 }

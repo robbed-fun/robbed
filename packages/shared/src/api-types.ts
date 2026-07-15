@@ -902,14 +902,14 @@ export type TradeSortField = z.infer<typeof tradeSortFieldSchema>;
 
 /**
  * Holder-list sort allowlist (GET /v1/tokens/:address/holders — token-detail
- * HOLDERS table). Each label → its source (balances, indexer.md; address_flags,
- * ). The API MUST reject anything outside this enum:
+ * HOLDERS table). Each label → its source. The API MUST reject anything outside
+ * this enum:
  *   rank    → balance   (rank = ROW_NUMBER() OVER (ORDER BY balance::numeric DESC))
  *   address → holder    (the DTO exposes this column as `address`)
- *   label   → DERIVED    (creator/curve/lp_pool/vault flag-join precedence +
- *                         address_flags.flags — NO physical column; the API builds a
- *                         CASE ORDER BY from the SAME join `toHolderRow` uses, and the
- *                         FE renders the label from `flags`/`botFlags`)
+ *   label   → DERIVED    (creator/curve/lp_pool/vault structural-role precedence —
+ *                         NO physical column; the API builds a CASE ORDER BY from
+ *                         the SAME special-address inputs `toHolderRow` uses, and
+ *                         the FE renders the label from `flags`)
  *   amount  → balance    (balance::numeric)
  *   percent → balance    (pct = balance/total_supply; total_supply is constant per
  *                         token ⇒ percent order == balance order)

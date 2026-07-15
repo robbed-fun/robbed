@@ -43,7 +43,7 @@ import {
   type WebSocketTransport,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { bondingCurveAbi } from "@robbed/shared/abi";
+import { bondingCurveAbi, lpFeeVaultAbi } from "@robbed/shared/abi";
 import { isWebSocketUrl } from "./config";
 import type { Address, ChainPort, ErrorClass, Hash, Hex, Phase } from "./types";
 
@@ -97,7 +97,9 @@ export class ChainClient implements ChainPort {
     this.account = privateKeyToAccount(opts.privateKey);
     this.publicClient = createPublicClient({ chain, transport });
     this.walletClient = createWalletClient({ account: this.account, chain, transport });
-    this.subClient = this.useWs ? createPublicClient({ chain, transport: webSocket(opts.rpcUrl) }) : undefined;
+    this.subClient = this.useWs
+      ? createPublicClient({ chain, transport: webSocket(opts.rpcUrl) })
+      : undefined;
   }
 
   get walletAddress(): Address {
@@ -179,6 +181,47 @@ export class ChainClient implements ChainPort {
     });
   }
 
+  async simulateCollectLpFees(
+    vault: Address,
+    tokenId: bigint,
+  ): Promise<{ amount0: bigint; amount1: bigint } | null> {
+    try {
+      const { result } = await this.publicClient.simulateContract({
+        address: vault,
+        abi: lpFeeVaultAbi,
+        functionName: "collect",
+        args: [tokenId],
+        account: this.account,
+      });
+      const [amount0, amount1] = result as readonly [bigint, bigint];
+      return { amount0, amount1 };
+    } catch {
+      return null;
+    }
+  }
+
+  async estimateCollectLpFeesGas(vault: Address, tokenId: bigint): Promise<bigint> {
+    return this.publicClient.estimateContractGas({
+      address: vault,
+      abi: lpFeeVaultAbi,
+      functionName: "collect",
+      args: [tokenId],
+      account: this.account,
+    });
+  }
+
+  async sendCollectLpFees(vault: Address, tokenId: bigint, gas: bigint): Promise<Hash> {
+    return this.walletClient.writeContract({
+      address: vault,
+      abi: lpFeeVaultAbi,
+      functionName: "collect",
+      args: [tokenId],
+      account: this.account,
+      chain: this.walletClient.chain,
+      gas,
+    });
+  }
+
   async waitForReceipt(hash: Hash): Promise<{ status: "success" | "reverted" }> {
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
     return { status: receipt.status };
@@ -194,7 +237,8 @@ export class ChainClient implements ChainPort {
       if (revert instanceof ContractFunctionRevertedError) return "contract_revert";
       // A plain execution revert with no decoded custom error still means the
       // node executed and rejected the call deterministically.
-      if (/revert|execution reverted/i.test(err.shortMessage ?? err.message)) return "contract_revert";
+      if (/revert|execution reverted/i.test(err.shortMessage ?? err.message))
+        return "contract_revert";
     }
     return "transient";
   }
@@ -204,7 +248,10 @@ export class ChainClient implements ChainPort {
    * curve address (lowercased). Returns an unwatch fn. `onError` surfaces
    * transport drops (the DB sweep is the backstop while it reconnects).
    */
-  watchGraduationReady(onCurve: (curve: Address) => void, onError: (err: unknown) => void): () => void {
+  watchGraduationReady(
+    onCurve: (curve: Address) => void,
+    onError: (err: unknown) => void,
+  ): () => void {
     const onLogs = (logs: Log[]) => {
       for (const log of logs) {
         if (log.address) onCurve(log.address.toLowerCase() as Address);

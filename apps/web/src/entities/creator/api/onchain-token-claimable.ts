@@ -21,9 +21,11 @@ import type { CreatorTokenBucket } from "../lib/token-bucket";
  * has (the CreatorTab's created list), so this is a best-effort partial fallback —
  * the API read is the complete source (it enumerates buckets server-side). Enabled
  * only when a `CreatorVault` exists on the target chain (`CREATOR_VAULT` defined;
- * v1/treasury-only deployments have none). Zero-balance buckets are dropped by the
- * caller via `hasClaimable`. `claimableUsd` is null here (no ETH/USD source on this
+ * v1/treasury-only deployments have none). Zero-balance buckets are kept visible
+ * with a disabled action. `claimableUsd` is null here (no ETH/USD source on this
  * path; the API row carries USD for the WETH leg, — never a fabricated figure).
+ * Zero-balance buckets are returned so the Portfolio can show which claim
+ * denominations exist before the first collect materializes indexed rows.
  */
 export function useOnchainCreatorTokenBuckets({
   creator,

@@ -430,7 +430,7 @@ paths:
         Server-authoritative sort + keyset pagination — never client sort. First page (default
         limit) is the top-N holders view. `sort` is a CLOSED allowlist mapped API-side to a fixed column
         (rank/amount/percent→balance — per-token supply is fixed so all three are one physical key;
-        address→holder; label→a deterministic CASE over creator/curve/lp_pool/vault + flags; tiebreak
+        address→holder; label→a deterministic CASE over creator/curve/lp_pool/vault roles; tiebreak
         holder); out-of-allowlist (or `dir` ≠ asc|desc) ⇒ 400 — no caller string reaches ORDER BY. Each row
         carries `rank` = true balance-desc rank (ROW_NUMBER over the whole token), stable under any sort.
         BREAKING : replaces the pre-redesign `{ holders, holderCount }` with the uniform
@@ -1382,7 +1382,7 @@ components:
       enum: [rank, address, label, amount, percent]
       description: >-
         Closed holders-sort allowlist (packages/shared HOLDER_SORT_FIELDS). Mapped API-side to a
-        fixed column (rank/amount/percent→balance, address→holder, label→role/flag CASE); a value outside
+        fixed column (rank/amount/percent→balance, address→holder, label→role CASE); a value outside
         this enum is 400 — the ORDER BY security boundary.
 
     # ── Envelope ─────────────────────────────────────────────────────────────

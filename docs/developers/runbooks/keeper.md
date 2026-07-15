@@ -4,15 +4,15 @@
 
 ## What the keeper is (one paragraph)
 
-`BondingCurve.graduate()` is permissionless and pays a small caller reward (D-34) sized to ≥10× its gas, so calling it is net-positive. The keeper is the **standing caller**: it watches the on-chain `GraduationReady` event over the Alchemy WS RPC and fires `graduate(curve)` within ~1–2 blocks, with a periodic Postgres sweep as the fallback. It also calls permissionless `BondingCurve.sweepFees()` so treasury ETH-leg fees do not sit on curves forever: sweep immediately at `0.5 ETH`, otherwise once per day for nonzero balances. It never modifies chain, listing, or moderation state and holds no privileged role. If the keeper is down, nothing is broken — graduation and fee sweeping remain callable by anyone.
+`BondingCurve.graduate()` is permissionless and pays a small caller reward (D-34) sized to ≥10× its gas, so calling it is net-positive. The keeper is the **standing caller**: it watches the on-chain `GraduationReady` event over the Alchemy WS RPC and fires `graduate(curve)` within ~1–2 blocks, with a periodic Postgres sweep as the fallback. It also calls permissionless `BondingCurve.sweepFees()` so treasury ETH-leg fees do not sit on curves forever, and permissionless `LPFeeVault.collect(tokenId)` so post-graduation V3 fees are split to the treasury Safe + CreatorVault. It never modifies chain, listing, or moderation state and holds no privileged role. If the keeper is down, nothing is broken — graduation and fee collection remain callable by anyone.
 
 ## Environment matrix
 
-| Stack | Keeper | RPC | Signer | Notes |
-|---|---|---|---|---|
-| dev (`docker-compose.yml`) | **ON** | `ws://anvil:8545` (fork) | anvil account #4 (public dev key) | Chosen outside e2e roles 0–3 (creator/treasury/trader/trader2) to avoid nonce contention |
-| testnet (`docker-compose.testnet.yml`) | **ON** | `TESTNET_RPC_WS_URL` → `TESTNET_RPC_URL` | `TESTNET_KEEPER_PRIVATE_KEY` (funded ops wallet) | Key via `~/.config/robbed/testnet.secrets.env`; ~0.05 ETH; **NOT** the deployer |
-| mainnet (`docker-compose.mainnet.yml`) | **ON** | `MAINNET_RPC_WS_URL` → `MAINNET_RPC_URL` | `MAINNET_KEEPER_PRIVATE_KEY` | Key via `~/.config/robbed/mainnet.secrets.env`; default `pnpm run dev:mainnet` includes keeper |
+| Stack                                  | Keeper | RPC                                      | Signer                                           | Notes                                                                                          |
+| -------------------------------------- | ------ | ---------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| dev (`docker-compose.yml`)             | **ON** | `ws://anvil:8545` (fork)                 | anvil account #4 (public dev key)                | Chosen outside e2e roles 0–3 (creator/treasury/trader/trader2) to avoid nonce contention       |
+| testnet (`docker-compose.testnet.yml`) | **ON** | `TESTNET_RPC_WS_URL` → `TESTNET_RPC_URL` | `TESTNET_KEEPER_PRIVATE_KEY` (funded ops wallet) | Key via `~/.config/robbed/testnet.secrets.env`; ~0.05 ETH; **NOT** the deployer                |
+| mainnet (`docker-compose.mainnet.yml`) | **ON** | `MAINNET_RPC_WS_URL` → `MAINNET_RPC_URL` | `MAINNET_KEEPER_PRIVATE_KEY`                     | Key via `~/.config/robbed/mainnet.secrets.env`; default `pnpm run dev:mainnet` includes keeper |
 
 WS RPC enables the sub-second `eth_subscribe` detection path. An HTTP-only RPC still works — detection degrades to log polling and the `KEEPER_POLL_MS` sweep remains the safety net.
 
@@ -20,20 +20,22 @@ WS RPC enables the sub-second `eth_subscribe` detection path. An HTTP-only RPC s
 
 Required (startup fails closed if missing/invalid; the process also asserts `CHAIN_ID` equals the live RPC `eth_chainId`):
 
-| Var | Meaning |
-|---|---|
-| `KEEPER_RPC_URL` | chain RPC; `ws(s)://` → push detection, `http(s)://` → polling + sweep |
-| `CHAIN_ID` | 4663 mainnet / 46630 testnet / the dev fork — must match the live RPC |
-| `KEEPER_PRIVATE_KEY` | **SECRET** — funded ops wallet; NOT the deployer/treasury |
-| `DATABASE_URL` | Postgres (read-only use) for the fallback sweep |
+| Var                  | Meaning                                                                |
+| -------------------- | ---------------------------------------------------------------------- |
+| `KEEPER_RPC_URL`     | chain RPC; `ws(s)://` → push detection, `http(s)://` → polling + sweep |
+| `CHAIN_ID`           | 4663 mainnet / 46630 testnet / the dev fork — must match the live RPC  |
+| `KEEPER_PRIVATE_KEY` | **SECRET** — funded ops wallet; NOT the deployer/treasury              |
+| `DATABASE_URL`       | Postgres (read-only use) for the fallback sweep                        |
 
-Optional (safe defaults): `KEEPER_POLL_MS`=15000, `KEEPER_GAS_CAP`=30000000, `KEEPER_MAX_ATTEMPTS`=3, `KEEPER_BACKOFF_BASE_MS`=500, `KEEPER_FAILED_COOLDOWN_MS`=300000, `KEEPER_TREASURY_SWEEP_ENABLED`=true, `KEEPER_TREASURY_SWEEP_POLL_MS`=60000, `KEEPER_TREASURY_SWEEP_MIN_WEI`=500000000000000000, `KEEPER_TREASURY_SWEEP_MAX_AGE_MS`=86400000, `KEEPER_BALANCE_POLL_MS`=60000, `KEEPER_BALANCE_WARN_MULTIPLE`=20, `KEEPER_TYPICAL_GRADUATE_GAS`=1500000, `KEEPER_PORT`=3003, `REDIS_URL` (**reserved** — detection is on-chain, not via Redis; see the keeper README). Full descriptions in `apps/keeper/.env.example`.
+Optional (safe defaults): `KEEPER_POLL_MS`=15000, `KEEPER_GAS_CAP`=30000000, `KEEPER_MAX_ATTEMPTS`=3, `KEEPER_BACKOFF_BASE_MS`=500, `KEEPER_FAILED_COOLDOWN_MS`=300000, `KEEPER_TREASURY_SWEEP_ENABLED`=true, `KEEPER_TREASURY_SWEEP_POLL_MS`=60000, `KEEPER_TREASURY_SWEEP_MIN_WEI`=500000000000000000, `KEEPER_TREASURY_SWEEP_MAX_AGE_MS`=86400000, `KEEPER_LP_FEE_COLLECT_ENABLED`=true, `KEEPER_LP_FEE_COLLECT_POLL_MS`=60000, `KEEPER_LP_FEE_COLLECT_MIN_WETH_WEI`=500000000000000000, `KEEPER_LP_FEE_COLLECT_MAX_AGE_MS`=86400000, `KEEPER_BALANCE_POLL_MS`=60000, `KEEPER_BALANCE_WARN_MULTIPLE`=20, `KEEPER_TYPICAL_GRADUATE_GAS`=1500000, `KEEPER_PORT`=3003, `REDIS_URL` (**reserved** — detection is on-chain, not via Redis; see the keeper README). Full descriptions in `apps/keeper/.env.example`.
+
+`LP_FEE_VAULT_ADDRESS` comes from the deploy artifact (`tools/localstack/out/<stack>.env`). `KEEPER_LP_FEE_VAULT_ADDRESS` can override it, but normal compose runs do not need a duplicate value.
 
 > The keeper env vars are **not yet in `env-inventory.md`** (that table is robbed-architect-owned, P-1). Flagged for the architect to add an `<!-- env-sync file=apps/keeper/.env.example -->` section; until then env-sync is green (unreferenced examples are not checked).
 
 ## Funding the wallet
 
-The caller reward offsets gas *per graduation*, but the wallet must **front** each tx's gas before the reward lands in the same tx, and it needs a working balance across many graduations.
+The caller reward offsets gas _per graduation_, but the wallet must **front** each tx's gas before the reward lands in the same tx, and it needs a working balance across many graduations.
 
 1. Pick a dedicated ops wallet — **never the deployer or the treasury Safe**. On testnet, generate one and record only its address here; keep the key out of the repo.
 2. Fund it: **~0.05 ETH on testnet** is a comfortable starting float. On mainnet, size the float from the fork-measured graduate() gas (D-62, ≈0.8M gas worst case) × the live gas price × a healthy multiple; top up when the low-balance alert fires.
@@ -45,35 +47,53 @@ The caller reward offsets gas *per graduation*, but the wallet must **front** ea
 
 Pre-graduation trades accrue the treasury ETH-leg fee inside each `BondingCurve` as `accruedFees`. `sweepFees()` is permissionless and sends that ETH only to the factory's live treasury Safe; the keeper cannot choose another recipient. The keeper scans indexed fee-bearing curves and calls `sweepFees()` when either condition is true:
 
-| Condition | Default | What happens |
-|---|---:|---|
+| Condition         |                                                        Default | What happens                                                               |
+| ----------------- | -------------------------------------------------------------: | -------------------------------------------------------------------------- |
 | Balance threshold | `KEEPER_TREASURY_SWEEP_MIN_WEI=500000000000000000` (`0.5 ETH`) | Sweep immediately once a curve has at least this much unswept treasury fee |
-| Daily catch-up | `KEEPER_TREASURY_SWEEP_MAX_AGE_MS=86400000` | Sweep smaller nonzero balances at least once per day |
-| Scan cadence | `KEEPER_TREASURY_SWEEP_POLL_MS=60000` | Read `accruedFees()` and decide whether to submit `sweepFees()` |
+| Daily catch-up    |                    `KEEPER_TREASURY_SWEEP_MAX_AGE_MS=86400000` | Sweep smaller nonzero balances at least once per day                       |
+| Scan cadence      |                          `KEEPER_TREASURY_SWEEP_POLL_MS=60000` | Read `accruedFees()` and decide whether to submit `sweepFees()`            |
 
 Logs: `treasury_fees_swept` on success, `treasury_fee_read_failed` when RPC cannot read a curve, `treasury_fee_sweep_failed` when estimate/send/receipt fails, and `treasury_sweep_results` as a compact summary. `/healthz.metrics` includes `treasurySweepsTotal`, `treasuryFeesSweptTotal`, `treasurySweepFailuresTotal`, `lastTreasurySweepAt`, and `lastTreasurySweepScanned`.
+
+## Post-graduation LP fee collection
+
+Post-graduation swaps accrue Uniswap V3 fees inside the LP NFT. They are not sent to the treasury or creator on every swap. `LPFeeVault.collect(tokenId)` is permissionless and harvests the fees, then splits each leg 50/50: treasury share goes to the immutable Safe, creator share is credited in CreatorVault for creator claims.
+
+The keeper scans indexed graduated LP positions, simulates `LPFeeVault.collect(tokenId)`, and sends the real tx when either condition is true:
+
+| Condition      |                                                              Default | What happens                                                                           |
+| -------------- | -------------------------------------------------------------------: | -------------------------------------------------------------------------------------- |
+| WETH threshold | `KEEPER_LP_FEE_COLLECT_MIN_WETH_WEI=500000000000000000` (`0.5 WETH`) | Collect immediately once the simulated WETH leg reaches this amount                    |
+| Daily catch-up |                          `KEEPER_LP_FEE_COLLECT_MAX_AGE_MS=86400000` | Collect smaller nonzero fees at least once per day                                     |
+| Scan cadence   |                                `KEEPER_LP_FEE_COLLECT_POLL_MS=60000` | Simulate `collect(tokenId)` and decide whether to submit `LPFeeVault.collect(tokenId)` |
+
+Logs: `lp_fees_collected` on success, `lp_fee_collect_read_failed` when simulation cannot read a position, `lp_fee_collect_failed` when estimate/send/receipt fails, and `lp_fee_collect_results` as a compact summary. `/healthz.metrics` includes `lpFeeCollectSweepsTotal`, `lpFeesCollectedTotal`, `lpFeeCollectFailuresTotal`, `lastLpFeeCollectSweepAt`, and `lastLpFeeCollectSweepScanned`.
 
 ## Health + observability
 
 - `GET /healthz` (host port: dev 4003, testnet 4103, mainnet 4203 → container 3003). Body: `status` (`ok` | `degraded` | `stale`), `detection` (`ws-subscription` | `http-polling`), `inFlight`, `cooldown`, `wallet` (address, balanceWei, warnThresholdWei, low), and `metrics`. HTTP 200 for `ok`/`degraded`, **503** only for `stale` (the sweep loop has not run within ~4× `KEEPER_POLL_MS` — a genuinely stuck loop). The compose healthcheck curls this.
-- **Structured logs** (one JSON line per event, `service:"keeper"`). Key events: `graduated`, `already_graduated_by_other`, `graduate_attempt_failed` (warn, with `kind` + `willRetry`), `graduation_failed_persistent` (**error**), `keeper_wallet_low_balance` (**error**), `sweep_results`, `treasury_fees_swept`, `treasury_fee_sweep_failed`, `graduation_watch_error` (warn — transport drop; the sweep is the backstop while it reconnects).
-- **Counters** in the `/healthz` `metrics` block: `graduatedTotal`, `alreadyGraduatedTotal`, `failedPersistentTotal`, `transientRetriesTotal`, `sweepsTotal`, `lastSweepAt`, `lastSweepScanned`, plus the treasury sweep counters listed above. These feed the gate-7 stuck-graduation monitoring (section 10 gate 7; deploy.md H.5).
+- **Structured logs** (one JSON line per event, `service:"keeper"`). Key events: `graduated`, `already_graduated_by_other`, `graduate_attempt_failed` (warn, with `kind` + `willRetry`), `graduation_failed_persistent` (**error**), `keeper_wallet_low_balance` (**error**), `sweep_results`, `treasury_fees_swept`, `treasury_fee_sweep_failed`, `lp_fees_collected`, `lp_fee_collect_failed`, `graduation_watch_error` (warn — transport drop; the sweep is the backstop while it reconnects).
+- **Counters** in the `/healthz` `metrics` block: `graduatedTotal`, `alreadyGraduatedTotal`, `failedPersistentTotal`, `transientRetriesTotal`, `sweepsTotal`, `lastSweepAt`, `lastSweepScanned`, plus the treasury and LP fee counters listed above. These feed the gate-7 stuck-graduation monitoring (section 10 gate 7; deploy.md H.5).
 
 ## Alerts and responses
 
 ### `keeper_wallet_low_balance`
+
 Top up the ops wallet (see Funding). No graduation is lost meanwhile — the sweep re-attempts once funded.
 
 ### `graduation_failed_persistent` — the donation-brick signature (escalate)
+
 Meaning: `graduate()` reverted for the full retry budget while the curve's `phase()` stayed `ReadyToGraduate`. This is the section 6.3/D-33 case — the V3 pool's tick was pushed outside the migrator's arb-back tolerance (a donation/swap grief on the pre-graduation pool), so the migrator refuses to mint into a hostile ratio and reverts rather than lose value. It is **uneconomic and self-correcting** (D-62): the attacker profits nothing, and a harmed holder can sell into the polluted band to restore the tick, after which `graduate()` succeeds.
 
 Response:
+
 1. **Do not hot-loop or manually spam `graduate()`** — the keeper already set a `KEEPER_FAILED_COOLDOWN_MS` cooldown on that curve; repeated reverts just burn gas.
 2. Confirm on the explorer (Blockscout) that the curve is `ReadyToGraduate` and inspect the token's V3 pool `slot0` tick vs the target — a large offset confirms the grief.
 3. Escalate to robbed-security / robbed-contracts per the gate-7 stuck-graduation procedure (deploy.md H.5). The sanctioned fix is a corrector swap (permissionless) that restores the tick, then graduation proceeds — the keeper's next post-cooldown sweep will pick it up automatically. A periphery **correct-and-graduate** path is a contracts-owned option (the decision record UM-2 Part-2, disposition (a)); the keeper never edits the curve.
 4. Track it: a rash of persistent alerts across many tokens is a coordinated-grief signal, not a keeper bug.
 
 ### `graduation_watch_error` (warn)
+
 The WS subscription dropped. viem reconnects; the fallback sweep covers the gap. Only escalate if it repeats continuously **and** `sweepsTotal` stops advancing (then treat as a stuck loop / RPC outage — check the RPC provider).
 
 ## Key rotation
@@ -82,11 +102,11 @@ The WS subscription dropped. viem reconnects; the fallback sweep covers the gap.
 2. Update the stack's external secrets env file (`TESTNET_KEEPER_PRIVATE_KEY` / `MAINNET_KEEPER_PRIVATE_KEY`) with the new key.
 3. Restart only the keeper: `docker compose -f docker-compose.<stack>.yml up -d --no-deps keeper`. No other service depends on the keeper's identity.
 4. Verify `/healthz` shows the **new** `wallet.address` and `status:"ok"`; drain/retire the old wallet's residual balance.
-5. Rotate immediately if a key is ever exposed — the keeper's only power is calling permissionless `graduate()` and `sweepFees()`, so blast radius is limited to wasted gas / noisy housekeeping, never fund theft, but rotate anyway.
+5. Rotate immediately if a key is ever exposed — the keeper's only power is calling permissionless `graduate()`, `sweepFees()`, and `LPFeeVault.collect()`, so blast radius is limited to wasted gas / noisy housekeeping, never fund theft, but rotate anyway.
 
 ## Starting / stopping
 
 - dev: starts with `docker compose up` (ON by default).
 - testnet: `pnpm run dev:testnet:d` or `bash scripts/compose-env.sh testnet up -d keeper` (requires `TESTNET_KEEPER_PRIVATE_KEY` in `~/.config/robbed/testnet.secrets.env`).
 - mainnet: `pnpm run dev:mainnet:d` starts keeper with the rest of the stack; restart only keeper with `bash scripts/compose-env.sh mainnet up -d --no-deps keeper`.
-- Stopping the keeper is always safe: it blocks nothing on-chain (graduation and fee sweeping stay permissionless; sells stay open). A future `graduate()` or `sweepFees()` just waits for the next caller.
+- Stopping the keeper is always safe: it blocks nothing on-chain (graduation and fee collection stay permissionless; sells stay open). A future `graduate()`, `sweepFees()`, or `LPFeeVault.collect()` just waits for the next caller.

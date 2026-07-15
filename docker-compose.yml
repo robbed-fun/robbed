@@ -28,8 +28,7 @@ x-dev-base: &dev-base
   image: robbed-dev
   init: true
   working_dir: /workspace
-  environment: &dev-env
-    # pnpm content-addressable store on a volume — re-installs are cheap.
+  environment: &dev-env # pnpm content-addressable store on a volume — re-installs are cheap.
     npm_config_store_dir: /pnpm-store
   volumes:
     - .:/workspace
@@ -106,7 +105,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-robbed}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-robbed_dev_secret}
     ports:
-      - "${MINIO_PORT:-4900}:9000"        # S3 API
+      - "${MINIO_PORT:-4900}:9000" # S3 API
       - "${MINIO_CONSOLE_PORT:-4901}:9001" # web console
     volumes:
       - robbed_miniodata:/data
@@ -411,7 +410,13 @@ services:
   keeper:
     <<: *dev-base
     working_dir: /workspace/apps/keeper
-    command: ["bun", "run", "--hot", "src/index.ts"]
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        set -a; . /workspace/tools/localstack/out/local.env; set +a
+        exec bun run --hot src/index.ts
     environment:
       <<: *dev-env
       KEEPER_RPC_URL: ws://anvil:8545
@@ -424,6 +429,10 @@ services:
       KEEPER_TREASURY_SWEEP_POLL_MS: "${KEEPER_TREASURY_SWEEP_POLL_MS:-60000}"
       KEEPER_TREASURY_SWEEP_MIN_WEI: "${KEEPER_TREASURY_SWEEP_MIN_WEI:-500000000000000000}"
       KEEPER_TREASURY_SWEEP_MAX_AGE_MS: "${KEEPER_TREASURY_SWEEP_MAX_AGE_MS:-86400000}"
+      KEEPER_LP_FEE_COLLECT_ENABLED: "${KEEPER_LP_FEE_COLLECT_ENABLED:-true}"
+      KEEPER_LP_FEE_COLLECT_POLL_MS: "${KEEPER_LP_FEE_COLLECT_POLL_MS:-60000}"
+      KEEPER_LP_FEE_COLLECT_MIN_WETH_WEI: "${KEEPER_LP_FEE_COLLECT_MIN_WETH_WEI:-500000000000000000}"
+      KEEPER_LP_FEE_COLLECT_MAX_AGE_MS: "${KEEPER_LP_FEE_COLLECT_MAX_AGE_MS:-86400000}"
       KEEPER_PORT: "3003"
     ports:
       - "${KEEPER_PORT:-4003}:3003"

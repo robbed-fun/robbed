@@ -31,7 +31,7 @@ export type Phase = "trading" | "ready" | "graduated" | "unknown";
  */
 export type ErrorClass = "contract_revert" | "transient";
 
-/** The chain surface the keeper needs — curve graduation + fee-sweep calls. */
+/** The chain surface the keeper needs — curve graduation + permissionless fee calls. */
 export interface ChainPort {
   /** Read `BondingCurve.phase()`; never throws (maps RPC failure → 'unknown'). */
   readPhase(curve: Address): Promise<Phase>;
@@ -45,6 +45,15 @@ export interface ChainPort {
   estimateSweepFeesGas(curve: Address): Promise<bigint>;
   /** Send permissionless `sweepFees()` with an explicit gas limit; returns tx hash. */
   sendSweepFees(curve: Address, gas: bigint): Promise<Hash>;
+  /** Simulate `LPFeeVault.collect(tokenId)`; never throws (maps RPC/simulation failure → null). */
+  simulateCollectLpFees(
+    vault: Address,
+    tokenId: bigint,
+  ): Promise<{ amount0: bigint; amount1: bigint } | null>;
+  /** `estimateContractGas(LPFeeVault.collect)`; THROWS on revert. */
+  estimateCollectLpFeesGas(vault: Address, tokenId: bigint): Promise<bigint>;
+  /** Send permissionless `LPFeeVault.collect(tokenId)` with an explicit gas limit; returns tx hash. */
+  sendCollectLpFees(vault: Address, tokenId: bigint, gas: bigint): Promise<Hash>;
   /** Wait for the receipt; `reverted` is a normal (non-throwing) outcome. */
   waitForReceipt(hash: Hash): Promise<{ status: "success" | "reverted" }>;
   /** Keeper wallet balance (wei) — for the balance-watch alert + healthz. */
@@ -65,12 +74,23 @@ export interface TreasuryFeeCurve {
   curve: Address;
 }
 
+/** One graduated LP position whose fees can be permissionlessly collected. */
+export interface GraduatedLpPosition {
+  token: Address;
+  pool: Address;
+  lpTokenId: bigint;
+  /** true when the launch token is token0, so the WETH leg is amount1. */
+  tokenIsToken0: boolean;
+}
+
 /** The DB surface the fallback sweeps need. */
 export interface DbPort {
   /** Tokens crossed to ReadyToGraduate but not yet Graduated (see db.ts SQL). */
   findReadyCurves(): Promise<ReadyCurve[]>;
   /** Curves that can accrue treasury ETH-leg fees (see db.ts SQL). */
   findTreasuryFeeCurves(): Promise<TreasuryFeeCurve[]>;
+  /** Graduated LP positions whose V3 fees can be split by LPFeeVault.collect(). */
+  findGraduatedLpPositions(): Promise<GraduatedLpPosition[]>;
 }
 
 /** Injected clock — deterministic in tests (no real timers/sleep). */
@@ -107,17 +127,32 @@ export type AttemptSource = "event" | "sweep";
 
 /** Terminal status of a single treasury fee sweep decision. */
 export type TreasurySweepStatus =
-  | "swept"
-  | "no_fees"
-  | "below_threshold"
-  | "fee_read_unavailable"
-  | "skipped_in_flight"
-  | "failed";
+  "swept" | "no_fees" | "below_threshold" | "fee_read_unavailable" | "skipped_in_flight" | "failed";
 
 export interface TreasurySweepResult {
   curve: Address;
   token?: Address;
   status: TreasurySweepStatus;
   amountWei?: bigint;
+  txHash?: Hash;
+}
+
+/** Terminal status of a single LP fee collect decision. */
+export type LpFeeCollectStatus =
+  | "collected"
+  | "no_fees"
+  | "below_threshold"
+  | "fee_read_unavailable"
+  | "skipped_in_flight"
+  | "failed";
+
+export interface LpFeeCollectResult {
+  token: Address;
+  pool: Address;
+  lpTokenId: bigint;
+  status: LpFeeCollectStatus;
+  amount0?: bigint;
+  amount1?: bigint;
+  wethAmount?: bigint;
   txHash?: Hash;
 }

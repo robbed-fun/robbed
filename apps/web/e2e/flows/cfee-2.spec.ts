@@ -92,20 +92,24 @@ test(
         const gradEv = await readGraduatedEvent(token.token);
         const tokenId = gradEv!.args.tokenId;
 
-        const postVolume = parseEther("0.05");
+        const targetPostVolume = parseEther("0.05");
         const creatorWethBefore = await readCreatorTokenClaimable(creator, WETH);
-        await generatePostGradFees(token.token, { ethIn: postVolume, by: ROLES.trader2 });
+        const { wethNotional: postVolume } = await generatePostGradFees(token.token, {
+          ethIn: targetPostVolume,
+          by: ROLES.trader2,
+        });
         const collectHash = await collectOnChain(tokenId, ROLES.trader);
         const collectReceipt = await publicClient.waitForTransactionReceipt({ hash: collectHash });
         const collected = parseCollectSplit(collectReceipt.logs, token.token);
         const postCreatorWethCredit =
           (await readCreatorTokenClaimable(creator, WETH)) - creatorWethBefore;
 
-        // The creator's WETH-leg credit is EXACTLY the FeesSplit creator share
-        // (F(i)) — and that WETH-leg ≈ 1% of the buy volume, so the credit ≈
-        // 0.5% of `postVolume`. Assert the venue-invariant absolute rate: the
-        // post-grad creator rate lands in a tight band around the pre-grad 0.5%.
-        expect(postCreatorWethCredit).toBe(collected.creatorWeth);
+        // The creator's WETH-leg credit includes every successful V3 buy attempt
+        // since `creatorWethBefore`. The manual collect receipt is a lower bound
+        // because the compose keeper can collect the same position first.
+        expect(postCreatorWethCredit).toBeGreaterThanOrEqual(collected.creatorWeth);
+        // The WETH leg ≈ 1% of the successful buy notional, so the creator's 50%
+        // split lands around 0.5% of the actual notional.
         const lo = (postVolume * 40n) / 10_000n; // 0.40%
         const hi = (postVolume * 60n) / 10_000n; // 0.60%
         expect(postCreatorWethCredit >= lo && postCreatorWethCredit <= hi).toBe(true);

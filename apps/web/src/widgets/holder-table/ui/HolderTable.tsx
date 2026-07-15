@@ -11,7 +11,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { ColumnDef, HeaderContext } from "@tanstack/react-table";
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import { BOT_FLAG_LABELS, HOLDER_FLAG_LABELS } from "@/entities/holder";
+import { HOLDER_FLAG_LABELS } from "@/entities/holder";
 import { AddressLink, Badge, DataTable, SortHeader } from "@/shared/ui";
 import { getHolders } from "@/shared/api";
 import { HOLDERS_PAGE_SIZE } from "@/shared/config/tables";
@@ -29,10 +29,8 @@ import { formatPercent, formatTokenFromWei, shortAddress } from "@/shared/lib/fo
 /**
  * Top Holders table — the right-column table that REPLACES the
  * deleted Trust panel. RULED row shape: `rank · address · label · amount
- * · percent`, where **label** is the account role (Bonding curve / Creator / LP
- * fee vault) PLUS the advisory sniper / programmatic bot-flags —
- * this is now the surviving PUBLIC organic-flow surface (the standalone
- * organic-range / flow-quality blocks moved to the internal endpoint).
+ * · percent`, where **label** is only the structural account role (Bonding curve
+ * / Creator / LP fee vault). Advisory bot flags stay off this public table.
  *
  * SERVER-AUTHORITATIVE : the DataTable is `manualSorting` — column
  * headers dispatch a `?sort=&dir=` refetch, the browser NEVER re-ranks. Keyset
@@ -111,25 +109,14 @@ const holderColumns: ColumnDef<HolderRowView>[] = [
   },
 ];
 
-/** Structural role chips (creator/curve/vault) + advisory bot-flag chips. */
+/** Structural role chips (creator/curve/vault) only. */
 function LabelCell({ holder }: { holder: HolderRow }) {
-  const hasAny = holder.flags.length > 0 || (holder.botFlags?.length ?? 0) > 0;
-  if (!hasAny) return <span className="text-text-tertiary">—</span>;
+  if (holder.flags.length === 0) return <span className="text-text-tertiary">—</span>;
   return (
     <span className="flex flex-wrap items-center justify-end gap-1">
       {holder.flags.map((f) => (
         <Badge key={f} variant="outline" className="px-1 py-0 text-[10px]">
           {HOLDER_FLAG_LABELS[f]}
-        </Badge>
-      ))}
-      {holder.botFlags?.map((b) => (
-        <Badge
-          key={b}
-          variant="soft-confirmed"
-          className="px-1 py-0 text-[10px]"
-          title="Advisory heuristic label — not a fact, gates nothing"
-        >
-          {BOT_FLAG_LABELS[b]}
         </Badge>
       ))}
     </span>

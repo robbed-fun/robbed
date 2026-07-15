@@ -12,16 +12,16 @@ The product is **soft-confirmed trading UX** on Robinhood Chain (chain ID 4663):
 
 > This is an **AMM / bonding curve with soft confirmations** — never an order book, never a "real-time exchange." Copy, marketing strings, tooltips, and docs must not claim order-book or exchange semantics (section 1).
 
-We win on **perceived speed, transparency, and a tight, focused product** (section 1). The v1 app ships **four pages** (section 5, as ratified by the ROBBED_ redesign — D-50/D-56/D-57/D-58; the fourth, Portfolio, is a read-only surface that supersedes the earlier section 5.4 Phase-2 deferral):
+We win on **perceived speed, transparency, and a tight, focused product** (section 1). The v1 app ships **four pages** (section 5, as ratified by the ROBBED_ redesign — D-50/D-56/D-57/D-58; the fourth, Portfolio, supersedes the earlier section 5.4 Phase-2 deferral and now includes the self-only D-78 creator-fee claim surface):
 
 | Page | Route | Spec |
 |---|---|---|
 | Discover | `/` | section 5.1 |
 | Token Detail | `/t/[address]` | section 5.2 |
 | Create | `/create` | section 5.3 (renamed from `/launch`) |
-| Portfolio | `/portfolio` | section 5.4 (read-only) |
+| Portfolio | `/portfolio` | section 5.4 + creator-fee claims |
 
-**Portfolio ships read-only** (section 5.4/D-50): it introduces **no new transaction types and no `collect()` UI** — it renders holdings/activity for an address from live data only. ERC-4337 is still Phase 2 (D-2) — no AA code paths, classic wagmi/RainbowKit only.
+**Portfolio stays non-treasury / no-AA** (section 5.4/D-50/D-78): it has no `collect()` UI and no ERC-4337 code paths; creator-fee claims render only for the connected user's own CREATED tab. Holdings/activity remain live data only.
 
 Cross-cutting product rules implemented by this app:
 
@@ -120,7 +120,7 @@ apps/web/e2e/                     // Playwright specs (section 8 of this doc)
 | `/` | Server component (D-50(f) surface); TRENDING (`sort=volume24h`) + newest lists fetched server-side via **isolated fetches** (short revalidate, ~5s) so the page paints with content; `TrendingCarousel` is server-rendered (CSS-only marquee, no hydration) | `EventTape` (WS), header `UrlSeededSearchBox` (reads `?q=` under Suspense) |
 | `/t/[address]` | **SSR required** (section 5.2): server component fetches token summary + metadata for full HTML + OG/meta tags (og:image → the API-served PNG, section 6); must be meaningful without client JS (crawlers see name, ticker, mcap, progress, description) | `PriceChart`, `TradeWidget`, `SafetyStrip` (live on-chain reads — the relocated must-render floor, D-57), `TradeFeed` (WS), `HolderTable` (D-58) |
 | `/create` | (renamed from `/launch` — ROBBED_ redesign; `/launch` redirects) Server shell (economics copy is static-per-deploy except fee values, which are read live); form is a client component | `LaunchForm` (entire flow) |
-| `/portfolio` | NEW (ROBBED_ redesign; was section 5.4 Phase-2). Phase-F shell; Phase-P page agent fills: address header, stat cells, HOLDINGS/ACTIVITY/CREATED tabs, holdings table — live data only (section 2) | wallet-derived content (entire screen) |
+| `/portfolio` | NEW (ROBBED_ redesign; was section 5.4 Phase-2). Address header, stat cells, HOLDINGS/ACTIVITY/CREATED tabs, holdings table, and the self-only Creator earnings surface (D-78) — live data only (section 2) | wallet-derived content (entire screen) |
 
 Rules:
 - Server components fetch via `lib/api.ts` with `fetch` caching (`revalidate`), never through TanStack Query.
@@ -262,7 +262,7 @@ Card metrics (mcap, 24h Δ%, volume) come exclusively from the indexer — compu
 
 ### 3.2 Token Detail `/t/[address]` (section 5.2)
 
-> **SUPERSEDED in part by D-57/D-58 (ROBBED_ redesign, ratified 2026-07-12):** the first-class **Trust panel is DELETED (D-57)**. Its HARD-RULE must-render floor — graduation progress and live curve reserves (the D-14 LP-copy sentence is **no longer** a required render — D-74) — **relocates** (never vanishes) into a compact **`widgets/safety-strip`** rendered above the right-column **Top Holders table** (**`widgets/holder-table`**, D-58: rows `rank · address · label · amount · percent`; `label` = Bonding curve / Creator / Vault plus advisory sniper/programmatic bot-flags). The "TrustPanel — all seven items" subsection below is rewritten to the **SafetyStrip + HolderTable** surfaces; the standalone organic-holder RANGE / flow-quality blocks moved off the public page to the internal D-54 endpoint (the surviving public section 8.5 signal is the holder-table flags).
+> **SUPERSEDED in part by D-57/D-58 (ROBBED_ redesign, ratified 2026-07-12):** the first-class **Trust panel is DELETED (D-57)**. Its HARD-RULE must-render floor — graduation progress and live curve reserves (the D-14 LP-copy sentence is **no longer** a required render — D-74) — **relocates** (never vanishes) into a compact **`widgets/safety-strip`** rendered above the right-column **Top Holders table** (**`widgets/holder-table`**, D-58/D-77: rows `rank · address · label · amount · percent`; `label` = Bonding curve / Creator / Vault structural roles only). The "TrustPanel — all seven items" subsection below is rewritten to the **SafetyStrip + HolderTable** surfaces; the standalone organic-holder RANGE / flow-quality blocks moved off the public page to the internal D-54 endpoint.
 
 **Component tree**
 
@@ -324,7 +324,7 @@ Widget rules:
 
 Items 2, 3, 4, 6 are **live on-chain reads**; 1 and 7 are indexer verdicts; 5 is fixed copy. If RPC reads fail, rows 2–4/6 show "on-chain read unavailable — retry" (a "Retry reads" button re-drives `useCurveReads`), never a cached substitute.
 
-**Organic-flow metrics — REMOVED from the public page (D-57).** The standalone organic-holder RANGE + flow-quality blocks (formerly appended here, from `GET /v1/tokens/:address` `trust.organic`, indexer `token_flow_stats`, section 8.5) are **no longer rendered on Token Detail**; they are preserved on the internal D-54 endpoint. The **only surviving public section 8.5 signal** is the advisory **bot-flags on the Top Holders table** (below) — heuristic, labeling-only, never gating anything (section 8.5), framed as such and never over-stating confidence.
+**Organic-flow metrics — REMOVED from the public page (D-57/D-77).** The standalone organic-holder RANGE + flow-quality blocks (formerly appended here, from `GET /v1/tokens/:address` `trust.organic`, indexer `token_flow_stats`, section 8.5) are **no longer rendered on Token Detail**; they are preserved on the internal D-54 endpoint. Advisory bot flags may stay in API/internal data, but they do not render as public Top Holders labels.
 
 #### TradeFeed (section 5.2, section 2.1)
 
@@ -336,7 +336,7 @@ Items 2, 3, 4, 6 are **live on-chain reads**; 1 and 7 are indexer verdicts; 5 is
 
 The right-column **Top Holders table** is the D-57/D-58 transparency surface that replaces the deleted Trust panel. RULED row shape: **`rank · address · label · amount · percent`**. `GET /v1/tokens/:address/holders` is **server-authoritative** (D-59/D-22): column headers dispatch a `?sort=&dir=` refetch and pagination is an opaque keyset cursor — the **browser never re-ranks**. Balances are the indexer's Transfer-derived truth (D-16) — no new on-chain surface. Refresh on WS trade events (throttled ≥5s). Empty pre-first-trade: message that the bonding curve holds the full supply until the first trade.
 
-The **`label`** column carries the structural role (**Bonding curve / Creator / LP fee vault**, D-16) **plus** the advisory section 8.5 bot-flags (`farm`/`sniper`/`programmatic`/`wash`/`arb_exit`) rendered as small badges — heuristic labels only, never presented as fact, never gating anything. This is now the surviving **public** organic-flow signal (the standalone organic-range / flow-quality blocks moved to the internal D-54 endpoint).
+The **`label`** column carries only the structural role (**Bonding curve / Creator / LP fee vault**, D-16/D-77). Advisory section 8.5 bot-flags (`farm`/`sniper`/`programmatic`/`wash`/`arb_exit`) may remain in the `/holders` response and internal flow surfaces, but they are not rendered as public holder-table labels.
 
 **Page states**
 - SSR 404 → `not-found.tsx` ("Token not found on ROBBED_" + address echo + Blockscout link).
@@ -483,7 +483,7 @@ The per-token OG image is **the viral share unit** — a link paste into X/Teleg
   - surfaces `--color-bg #0B0D0B` · `--color-surface #0F130F` · `--color-surface-2 #141914` · `--color-border #1C221C` · `--color-border-soft #141914` (row hairlines) · `--color-border-strong #2A342A` · `--color-active #1C221C` (active tab/chip fill)
   - text ramp `--color-text #EDF3ED` · `--color-text-secondary #C9D3C9` · `--color-text-tertiary #8FA08F` · `--color-muted #6E7A6E` · `--color-faint #54604F`
   - accents `--color-green #4ADE80` (primary/BUY/+Δ/CTAs) · `--color-green-dim #16301F` · `--color-green-soft #2E4A34` (up-candles) · `--color-red #F87171` (SELL/−Δ) · `--color-red-dim #4A2E2E` (down-candles) · `--color-purple #A78BFA` (GRADUATE) · `--color-accent = green`, `--color-accent-foreground #0B0D0B`
-  - tiers (section 2.1) `--color-soft-confirmed #F59E0B` · `--color-posted #3B82F6` · `--color-finalized #4ADE80` (kept distinct from trade hues; mockup shows none — Phase-F decision). **D-56:** the soft tier no longer renders a status chip on a trade — the amber `--color-soft-confirmed` token now only backs the transient pre-inclusion "Pending" pulse and the advisory holder bot-flag chips; `--color-posted`/`--color-finalized` still surface.
+  - tiers (section 2.1) `--color-soft-confirmed #F59E0B` · `--color-posted #3B82F6` · `--color-finalized #4ADE80` (kept distinct from trade hues; mockup shows none — Phase-F decision). **D-56/D-77:** the soft tier no longer renders a status chip on a trade, and holder bot-flag chips no longer render; the amber `--color-soft-confirmed` token now backs the transient pre-inclusion "Pending" pulse. `--color-posted`/`--color-finalized` still surface.
   - type: **IBM Plex Mono self-hosted** (`next/font/local`, `src/app/fonts/`, OFL — no external fetch/CSP-safe), weights 400/500/600; mono-everywhere (`--font-sans` == `--font-mono`); scale `--text-2xs 10.5px` / `xs 11` / `sm 12` / `base 13` / `md 14` (wordmark) / `lg 15` / `xl 17`; `--tracking-label 0.12em` (wordmark + micro-labels)
   - radii: **square** — `--radius-sm/md/lg/xl: 0px` (every sampled control is 0); `rounded-full` only for avatars + the live dot; `--animate-blink` = the cursor motif
   - RainbowKit theme: `darkTheme({ accentColor: "var(--color-green)", borderRadius: "none" })` — CSS-var indirection keeps hexes out of `providers.tsx`.
@@ -568,9 +568,9 @@ Plus: LP sentence exists **only** as the single exported constant (grep for the 
 
 ## Definition of done (M3 exit for `apps/web`)
 
-- [ ] Four pages (Discover · Token Detail · Create · Portfolio); each matches its section 5 subsection (checklists in section 3 of this doc); Portfolio ships **read-only** — no new tx types, no `collect()` UI; no AA code paths
+- [ ] Four pages (Discover · Token Detail · Create · Portfolio); each matches its section 5 subsection (checklists in section 3 of this doc); Portfolio has no `collect()` UI and no AA code paths; creator-fee claims render only on the self CREATED tab (D-78)
 - [ ] Chain config: 4663, ETH gas, Blockscout explorer, RPC from env; WETH `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` the only inline literal; all other addresses from generated `addresses.ts`; connectors = injected + WalletConnect + Robinhood Wallet
-- [ ] SafetyStrip (D-57): the must-render floor (graduation progress · live curve reserves; the D-14 LP sentence is **no longer** a required render — D-74) plus ownerless / fixed-supply / metadata-verdict / fee ticks, with the exact sourcing table (live reads live, indexed verdicts indexed); reserve rows never show cached API values. Top Holders table (D-58): rows `rank · address · label · amount · percent`; `label` = role (creator / curve / vault) + advisory section 8.5 bot-flags; server-authoritative sort (no client re-rank); the standalone organic-range / flow-quality blocks moved off the public page to the D-54 internal endpoint
+- [ ] SafetyStrip (D-57): the must-render floor (graduation progress · live curve reserves; the D-14 LP sentence is **no longer** a required render — D-74) plus ownerless / fixed-supply / metadata-verdict / fee ticks, with the exact sourcing table (live reads live, indexed verdicts indexed); reserve rows never show cached API values. Top Holders table (D-58/D-77): rows `rank · address · label · amount · percent`; `label` = structural role only (creator / curve / vault / LP pool); server-authoritative sort (no client re-rank); the standalone organic-range / flow-quality blocks moved off the public page to the D-54 internal endpoint
 - [ ] LP sentence verbatim from a single constant at every LP-destiny surface; `burned` absent (grep-verified)
 - [ ] Optimistic trade lifecycle per section 4: immediate soft-confirmed render, WS reconciliation, contradiction handling, posted/finalized surfacing — reconciliation demonstrated in Playwright
 - [ ] Venue-continuous chart across graduation (no seam) and invisible venue switch in the widget; slippage default 2% + deadline on every trade

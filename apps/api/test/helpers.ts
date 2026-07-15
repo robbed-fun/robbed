@@ -404,10 +404,7 @@ export class FakeDb implements Db {
     });
     ranked.forEach((r, i) => {
       r.rank = i + 1;
-      r.label_rank = holderLabelRank(
-        { holder: r.holder, botFlags: r.flags?.flags ?? null },
-        input.special,
-      );
+      r.label_rank = holderLabelRank({ holder: r.holder }, input.special);
     });
     const cursor =
       input.cursorKey != null && input.cursorId != null

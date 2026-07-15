@@ -18,7 +18,10 @@ const m = vi.hoisted(() => ({
   useOnchainCreatorTokenBuckets: vi.fn(),
   useClaimCreatorFee: vi.fn(),
   useClaimCreatorTokenFee: vi.fn(),
+  useClaimCreatorTokenFees: vi.fn(),
   useWsChannel: vi.fn(),
+  routerPush: vi.fn(),
+  routerPrefetch: vi.fn(),
 }));
 
 const CREATOR = m.CREATOR;
@@ -39,6 +42,13 @@ vi.mock("@/shared/lib/ws", () => ({
   useWsChannel: m.useWsChannel,
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: m.routerPush,
+    prefetch: m.routerPrefetch,
+  }),
+}));
+
 vi.mock("@/entities/creator", async (importActual) => {
   const actual = await importActual<typeof import("@/entities/creator")>();
   return {
@@ -49,6 +59,7 @@ vi.mock("@/entities/creator", async (importActual) => {
     useOnchainCreatorTokenBuckets: m.useOnchainCreatorTokenBuckets,
     useClaimCreatorFee: m.useClaimCreatorFee,
     useClaimCreatorTokenFee: m.useClaimCreatorTokenFee,
+    useClaimCreatorTokenFees: m.useClaimCreatorTokenFees,
   };
 });
 
@@ -107,6 +118,9 @@ beforeEach(() => {
   m.useOnchainCreatorTokenBuckets.mockReset();
   m.useClaimCreatorFee.mockReset();
   m.useClaimCreatorTokenFee.mockReset();
+  m.useClaimCreatorTokenFees.mockReset();
+  m.routerPush.mockReset();
+  m.routerPrefetch.mockReset();
 
   m.useCreatorClaimable.mockReturnValue({ data: ethClaimable(), isSuccess: true });
   m.useCreatorCurveClaimable.mockReturnValue({ data: [], isSuccess: true });
@@ -116,6 +130,7 @@ beforeEach(() => {
         token: WETH,
         claimable: "2000000000000000000",
         claimableUsd: usdValue({ usd: "6900" }),
+        totalAccrued: "2000000000000000000",
       }),
       tokenBucket(),
     ],
@@ -132,6 +147,11 @@ beforeEach(() => {
     reset: vi.fn(),
     state: { phase: "idle", txHash: null, blockNumber: null, confirmationState: null, error: null },
   }));
+  m.useClaimCreatorTokenFees.mockImplementation((metas) => ({
+    claim: () => metas.forEach((meta: unknown) => m.claimToken(meta)),
+    reset: vi.fn(),
+    state: { phase: "idle", txHash: null, blockNumber: null, confirmationState: null, error: null },
+  }));
 });
 
 afterEach(() => {
@@ -144,23 +164,25 @@ describe("CreatorEarningsPanel", () => {
     expect(screen.queryByText("Creator earnings")).toBeNull();
   });
 
-  it("renders claim buttons for ETH, WETH, and launch-token creator buckets", () => {
+  it("renders one claim button per claim section", () => {
     renderPanel();
 
     expect(screen.getByText("Creator earnings")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Claim 1.0000 ETH" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Claim WETH" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Claim MOON" })).toBeTruthy();
-    expect(screen.getByText("2.0000 WETH")).toBeTruthy();
-    expect(screen.getByText("3K MOON")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Claim ETH" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Claim post-graduation LP fees" })).toBeTruthy();
+    expect(screen.getAllByText("1.0000 ETH").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("2.0000 WETH").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("3K MOON").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("In vault")).toBeNull();
+    expect(screen.queryByText("Accrued")).toBeNull();
+    expect(screen.queryByText("Claimed")).toBeNull();
   });
 
-  it("submits the correct CreatorVault claim calls from each button", () => {
+  it("submits the pre-grad claim and both post-grad ERC20 claims from two buttons", () => {
     renderPanel();
 
-    fireEvent.click(screen.getByRole("button", { name: "Claim 1.0000 ETH" }));
-    fireEvent.click(screen.getByRole("button", { name: "Claim WETH" }));
-    fireEvent.click(screen.getByRole("button", { name: "Claim MOON" }));
+    fireEvent.click(screen.getByRole("button", { name: "Claim ETH" }));
+    fireEvent.click(screen.getByRole("button", { name: "Claim post-graduation LP fees" }));
 
     expect(m.claimEth).toHaveBeenCalledWith(
       {
@@ -185,6 +207,7 @@ describe("CreatorEarningsPanel", () => {
       vault: VAULT,
       amount: "3000000000000000000000",
     });
+    expect(m.claimToken).toHaveBeenCalledTimes(2);
   });
 
   it("shows a disabled empty-state button for a creator vault with zero pre-grad balance", () => {
@@ -194,9 +217,80 @@ describe("CreatorEarningsPanel", () => {
 
     renderPanel();
 
-    const button = screen.getByRole("button", { name: "Nothing to claim" });
-    expect(button).toBeTruthy();
-    expect((button as HTMLButtonElement).disabled).toBe(true);
+    const ethButton = screen.getByRole("button", { name: "Nothing to claim ETH" });
+    const postGradButton = screen.getByRole("button", {
+      name: "Nothing to claim post-graduation LP fees",
+    });
+    expect((ethButton as HTMLButtonElement).disabled).toBe(true);
+    expect((postGradButton as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("shows available post-grad token buckets even before the API has materialized accrued rows", () => {
+    m.useCreatorClaimable.mockReturnValue({ data: ethClaimable("0"), isSuccess: true });
+    m.useCreatorTokenClaimable.mockReturnValue({ data: [], isSuccess: true });
+    m.useOnchainCreatorTokenBuckets.mockReturnValue({
+      buckets: [
+        {
+          creator: CREATOR,
+          token: WETH,
+          vault: VAULT,
+          claimable: "0",
+          claimableUsd: null,
+          isWeth: true,
+        },
+        {
+          creator: CREATOR,
+          token: TOKEN,
+          vault: VAULT,
+          claimable: "0",
+          claimableUsd: null,
+          isWeth: false,
+        },
+      ],
+      isLoading: false,
+    });
+
+    renderPanel();
+
+    expect(screen.getByText("Post-graduation LP fees")).toBeTruthy();
+    expect(screen.getByText("0.0000 WETH")).toBeTruthy();
+    expect(screen.getByText("0 MOON")).toBeTruthy();
+    const buttons = screen.getAllByRole("button", { name: /Nothing to claim/i });
+    expect(buttons).toHaveLength(2);
+    expect(buttons.every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+  });
+
+  it("keeps the created token section when the API has only the shared WETH bucket", () => {
+    m.useCreatorTokenClaimable.mockReturnValue({
+      data: [
+        tokenBucket({
+          token: WETH,
+          claimable: "5000000000000",
+          claimableUsd: usdValue({ usd: "0.01725" }),
+          totalAccrued: "5000000000000",
+        }),
+      ],
+      isSuccess: true,
+    });
+    m.useOnchainCreatorTokenBuckets.mockReturnValue({
+      buckets: [
+        {
+          creator: CREATOR,
+          token: TOKEN,
+          vault: VAULT,
+          claimable: "0",
+          claimableUsd: null,
+          isWeth: false,
+        },
+      ],
+      isLoading: false,
+    });
+
+    renderPanel();
+
+    expect(screen.getAllByText("0.0000050 WETH").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("0 MOON")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Claim post-graduation LP fees" })).toBeTruthy();
   });
 
   it("includes unswept curve fees in the pre-grad claim and sweeps before claim", () => {
@@ -218,8 +312,9 @@ describe("CreatorEarningsPanel", () => {
 
     renderPanel();
 
-    expect(screen.getByText("0.000040 ETH pending sweep")).toBeTruthy();
-    expect(screen.getByText("1 sweep tx + 1 claim tx")).toBeTruthy();
+    expect(screen.getByText("Pending sweep")).toBeTruthy();
+    expect(screen.getAllByText("0.000040 ETH").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/sweep tx/i)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Sweep \+ claim/i }));
 

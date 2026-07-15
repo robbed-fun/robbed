@@ -20,7 +20,10 @@ export {
   type ClaimPhase,
   type ClaimState,
 } from "./model/use-claim-creator-fee";
-export { useClaimCreatorTokenFee } from "./model/use-claim-creator-token-fee";
+export {
+  useClaimCreatorTokenFee,
+  useClaimCreatorTokenFees,
+} from "./model/use-claim-creator-token-fee";
 export {
   type CreatorTokenBucket,
   bucketFromApiRow,

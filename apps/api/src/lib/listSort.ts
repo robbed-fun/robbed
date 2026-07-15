@@ -75,7 +75,7 @@ export function tradeSortKey(field: TradeSortField, row: TradeRowDb): string {
 // enum → fixed column. rank/amount/percent all resolve to `balance::numeric`
 // (per-token total supply is constant ⇒ percent order == balance order == rank
 // order — distinct UI columns, one physical sort key). `label` sorts by a
-// deterministic role/flag CASE (see `holderLabelRank`), materialized as the
+// deterministic structural-role CASE (see `holderLabelRank`), materialized as the
 // `label_rank` column in the holders CTE. Tiebreak for every holder sort is the
 // `holder` address.
 export const HOLDER_SORT_COLUMNS: Record<HolderSortField, SortColumn> = {
@@ -95,14 +95,12 @@ export const HOLDER_DIR_DEFAULT: SortDir = "desc";
  * rank sorts first under `desc`... no: it is a plain integer key ordered by the
  * active `dir` like any other column. The GROUPING is what matters and it is
  * fixed here: protocol accounts first (bonding curve, creator, LP pool, vault),
- * then bot-flagged holders, then unlabeled. This function is the SINGLE
+ * then unlabeled holders. This function is the SINGLE
  * source; the SQL CASE in db.bun.ts and the test fake both reproduce these exact
  * integers — a change here is a change in both by construction (drift guard).
  */
 export interface HolderLabelInput {
   holder: string;
-  /** advisory bot flags, if the address carries any. */
-  botFlags?: readonly string[] | null;
 }
 export interface HolderSpecialAddresses {
   creator: string;
@@ -120,8 +118,7 @@ export function holderLabelRank(
   if (addr === special.creator.toLowerCase()) return 1; // Creator
   if (special.pool && addr === special.pool.toLowerCase()) return 2; // LP pool
   if (special.vaults.has(addr)) return 3; // Vault
-  if (row.botFlags && row.botFlags.length > 0) return 4; // flagged
-  return 5; // unlabeled
+  return 4; // unlabeled
 }
 
 /**

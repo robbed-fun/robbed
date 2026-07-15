@@ -27,6 +27,7 @@ import {
   createWalletClient,
   defineChain,
   erc721Abi,
+  parseEventLogs,
   parseEther,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -289,7 +290,11 @@ export async function readAccruedFees(curve: Address): Promise<{
   total: bigint;
 }> {
   const [accruedFees, accruedCreatorFees] = (await Promise.all([
-    publicClient.readContract({ address: curve, abi: bondingCurveAbi, functionName: "accruedFees" }),
+    publicClient.readContract({
+      address: curve,
+      abi: bondingCurveAbi,
+      functionName: "accruedFees",
+    }),
     publicClient.readContract({
       address: curve,
       abi: bondingCurveAbi,
@@ -347,26 +352,23 @@ export async function createTokenOnChain(args: {
   const { router } = loadDeployedAddresses();
   const deadline = await txDeadline();
   const value = args.deployFeeWei + (args.initialBuyWei ?? 0n);
+  const account = (args.creator ?? ROLES.creator).address;
   const txHash = await wallet.writeContract({
     address: router,
     abi: routerAbi,
     functionName: "createToken",
     args: [args.name, args.symbol, args.metadataHash, args.metadataUri, 0n, deadline],
     value,
+    nonce: await publicClient.getTransactionCount({ address: account, blockTag: "pending" }),
   });
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-  // The Router returns (token, curve); decode from logs is indexer's job, but for
-  // seeding we simulate to recover the return values deterministically.
-  const { result } = await publicClient.simulateContract({
-    account: (args.creator ?? ROLES.creator).address,
-    address: router,
-    abi: routerAbi,
-    functionName: "createToken",
-    args: [args.name, args.symbol, args.metadataHash, args.metadataUri, 0n, deadline],
-    value,
-    blockNumber: receipt.blockNumber - 1n,
+  const [created] = parseEventLogs({
+    abi: curveFactoryAbi,
+    eventName: "TokenCreated",
+    logs: receipt.logs,
   });
-  const [token, curve] = result as unknown as [Address, Address, bigint];
+  if (!created) throw new Error("[e2e seed] createToken receipt did not include TokenCreated");
+  const { token, curve } = created.args;
   return { token, curve, txHash };
 }
 

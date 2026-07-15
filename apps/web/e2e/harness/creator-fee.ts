@@ -140,10 +140,7 @@ export async function readCreatorEthClaimable(creator: Address): Promise<bigint>
  *  — BOTH post-grad V3 legs land here as ERC20 (the launch-token leg AND the WETH
  *  leg; `collect()` routes each via `depositERC20`, NOT unwrapped — `LPFeeVault.
  *  _route`). Pass `token = WETH` for the WETH leg. `CreatorVault.tokenBalanceOf`. */
-export async function readCreatorTokenClaimable(
-  creator: Address,
-  token: Address,
-): Promise<bigint> {
+export async function readCreatorTokenClaimable(creator: Address, token: Address): Promise<bigint> {
   const vault = await readCreatorVaultAddress();
   return (await publicClient.readContract({
     address: vault,
@@ -414,6 +411,7 @@ export async function generatePostGradFees(
   await ensureFunded(by.address);
 
   let bought = 0n;
+  let wethNotional = 0n;
   let lastReason = "";
   for (let attempt = 0; attempt < 5 && bought === 0n; attempt++) {
     const before = await readTokenBalance(by.address, token);
@@ -422,10 +420,9 @@ export async function generatePostGradFees(
       return null;
     });
     if (buyHash) {
-      const r = await publicClient
-        .waitForTransactionReceipt({ hash: buyHash })
-        .catch(() => null);
+      const r = await publicClient.waitForTransactionReceipt({ hash: buyHash }).catch(() => null);
       if (r?.status === "success") {
+        wethNotional += ethIn;
         bought = (await readTokenBalance(by.address, token)) - before;
       } else if (r?.status === "reverted") {
         // Replay the reverted call to recover the on-chain reason for the report.
@@ -445,7 +442,7 @@ export async function generatePostGradFees(
   // leg alone already produced a collectable WETH-leg fee).
   const sellHash = await v3SellExactToken(token, bought / 2n, by).catch(() => null);
   if (sellHash) await publicClient.waitForTransactionReceipt({ hash: sellHash }).catch(() => {});
-  return { wethNotional: ethIn };
+  return { wethNotional };
 }
 
 /** Replay a reverted tx via `eth_call` at its block to recover the revert reason. */

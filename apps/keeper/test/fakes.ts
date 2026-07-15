@@ -9,6 +9,7 @@ import type {
   Hash,
   KeeperClock,
   KeeperLogger,
+  GraduatedLpPosition,
   Phase,
   ReadyCurve,
   TreasuryFeeCurve,
@@ -40,6 +41,9 @@ export interface FakeChainOptions {
   treasuryFees?: Scripted<bigint | null>[];
   sweepEstimates?: Scripted<bigint>[];
   sweepSends?: Scripted<Hash>[];
+  lpFeeQuotes?: Scripted<{ amount0: bigint; amount1: bigint } | null>[];
+  lpCollectEstimates?: Scripted<bigint>[];
+  lpCollectSends?: Scripted<Hash>[];
   classify?: (err: unknown) => ErrorClass;
   balanceWei?: bigint;
   /** When set, estimateGraduateGas awaits this before returning (in-flight test). */
@@ -53,6 +57,9 @@ export class FakeChain implements ChainPort {
   treasuryFeeReads = 0;
   sweepSendCount = 0;
   sweepEstimateCount = 0;
+  lpFeeQuoteCount = 0;
+  lpCollectSendCount = 0;
+  lpCollectEstimateCount = 0;
   private lastPhase: Phase;
   private readonly phases: Phase[];
   private readonly estimates: Scripted<bigint>[];
@@ -61,6 +68,9 @@ export class FakeChain implements ChainPort {
   private readonly treasuryFees: Scripted<bigint | null>[];
   private readonly sweepEstimates: Scripted<bigint>[];
   private readonly sweepSends: Scripted<Hash>[];
+  private readonly lpFeeQuotes: Scripted<{ amount0: bigint; amount1: bigint } | null>[];
+  private readonly lpCollectEstimates: Scripted<bigint>[];
+  private readonly lpCollectSends: Scripted<Hash>[];
   private readonly classifyFn: (err: unknown) => ErrorClass;
   private readonly balance: bigint;
   private readonly gate?: Deferred<void>;
@@ -74,6 +84,9 @@ export class FakeChain implements ChainPort {
     this.treasuryFees = [...(opts.treasuryFees ?? [])];
     this.sweepEstimates = [...(opts.sweepEstimates ?? [])];
     this.sweepSends = [...(opts.sweepSends ?? [])];
+    this.lpFeeQuotes = [...(opts.lpFeeQuotes ?? [])];
+    this.lpCollectEstimates = [...(opts.lpCollectEstimates ?? [])];
+    this.lpCollectSends = [...(opts.lpCollectSends ?? [])];
     this.classifyFn = opts.classify ?? (() => "transient");
     this.balance = opts.balanceWei ?? 1_000_000_000_000_000_000n;
     this.gate = opts.gate;
@@ -113,6 +126,21 @@ export class FakeChain implements ChainPort {
     return take(this.sweepSends, "0xsweep");
   }
 
+  async simulateCollectLpFees(): Promise<{ amount0: bigint; amount1: bigint } | null> {
+    this.lpFeeQuoteCount += 1;
+    return take(this.lpFeeQuotes, { amount0: 0n, amount1: 0n });
+  }
+
+  async estimateCollectLpFeesGas(): Promise<bigint> {
+    this.lpCollectEstimateCount += 1;
+    return take(this.lpCollectEstimates, 100_000n);
+  }
+
+  async sendCollectLpFees(): Promise<Hash> {
+    this.lpCollectSendCount += 1;
+    return take(this.lpCollectSends, "0xcollect");
+  }
+
   async waitForReceipt(): Promise<{ status: "success" | "reverted" }> {
     return take(this.receipts, { status: "success" as const });
   }
@@ -129,9 +157,11 @@ export class FakeChain implements ChainPort {
 export class FakeDb implements DbPort {
   calls = 0;
   treasuryCalls = 0;
+  lpCalls = 0;
   constructor(
     private readonly rows: ReadyCurve[] = [],
     private readonly treasuryRows: TreasuryFeeCurve[] = [],
+    private readonly lpRows: GraduatedLpPosition[] = [],
   ) {}
   async findReadyCurves(): Promise<ReadyCurve[]> {
     this.calls += 1;
@@ -140,6 +170,10 @@ export class FakeDb implements DbPort {
   async findTreasuryFeeCurves(): Promise<TreasuryFeeCurve[]> {
     this.treasuryCalls += 1;
     return this.treasuryRows;
+  }
+  async findGraduatedLpPositions(): Promise<GraduatedLpPosition[]> {
+    this.lpCalls += 1;
+    return this.lpRows;
   }
 }
 
@@ -179,3 +213,4 @@ export class FakeClock implements KeeperClock {
 }
 
 export const CURVE = "0xABCdef0000000000000000000000000000000001" as Address;
+export const POOL = "0xABCdef0000000000000000000000000000000003" as Address;

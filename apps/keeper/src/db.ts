@@ -18,7 +18,7 @@
  *   sending (idempotency + guards against a stale/lagging row), so a false
  *   positive here is a cheap read, never a bad tx.
  */
-import type { Address, ReadyCurve, TreasuryFeeCurve } from "./types";
+import type { Address, GraduatedLpPosition, ReadyCurve, TreasuryFeeCurve } from "./types";
 
 /**
  * Minimal node-postgres-shaped client — lets db.pg.ts (Pool) AND unit tests
@@ -54,9 +54,27 @@ export const TREASURY_FEE_CURVES_SQL = `
   ORDER BY block_number ASC
 `;
 
+/**
+ * Graduated LP positions owned by LPFeeVault. The keeper uses this as a hint set:
+ * it simulates `LPFeeVault.collect(lp_token_id)` before sending, so stale or
+ * already-collected rows only cost an RPC call.
+ */
+export const GRADUATED_LP_POSITIONS_SQL = `
+  SELECT token_address, pool_address, lp_token_id, token_is_token0
+  FROM graduations
+  ORDER BY block_number ASC
+`;
+
 interface ReadyRow {
   address: string;
   curve_address: string;
+}
+
+interface GraduatedLpRow {
+  token_address: string;
+  pool_address: string;
+  lp_token_id: string | number | bigint;
+  token_is_token0: boolean;
 }
 
 /** Map raw rows → lowercased `{ token, curve }` (addresses are lowercase everywhere). */
@@ -75,6 +93,16 @@ export function mapTreasuryFeeRows(rows: ReadyRow[]): TreasuryFeeCurve[] {
   }));
 }
 
+/** Map raw graduation rows → lowercased LP-position collect candidates. */
+export function mapGraduatedLpRows(rows: GraduatedLpRow[]): GraduatedLpPosition[] {
+  return rows.map((r) => ({
+    token: r.token_address.toLowerCase() as Address,
+    pool: r.pool_address.toLowerCase() as Address,
+    lpTokenId: BigInt(r.lp_token_id),
+    tokenIsToken0: r.token_is_token0,
+  }));
+}
+
 /** Run the sweep query against any QueryClient and map the result. */
 export async function queryReadyCurves(client: QueryClient): Promise<ReadyCurve[]> {
   const { rows } = await client.query<ReadyRow>(READY_CURVES_SQL);
@@ -85,4 +113,12 @@ export async function queryReadyCurves(client: QueryClient): Promise<ReadyCurve[
 export async function queryTreasuryFeeCurves(client: QueryClient): Promise<TreasuryFeeCurve[]> {
   const { rows } = await client.query<ReadyRow>(TREASURY_FEE_CURVES_SQL);
   return mapTreasuryFeeRows(rows);
+}
+
+/** Run the graduated-LP query against any QueryClient and map the result. */
+export async function queryGraduatedLpPositions(
+  client: QueryClient,
+): Promise<GraduatedLpPosition[]> {
+  const { rows } = await client.query<GraduatedLpRow>(GRADUATED_LP_POSITIONS_SQL);
+  return mapGraduatedLpRows(rows);
 }

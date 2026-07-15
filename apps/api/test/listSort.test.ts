@@ -117,20 +117,18 @@ describe("cursor-key extractors (k transport form matches the SQL column)", () =
   });
 });
 
-describe("holderLabelRank — deterministic role/flag ordering ", () => {
+describe("holderLabelRank — deterministic structural-role ordering ", () => {
   const special = {
     creator: "0x" + "c1".repeat(20),
     curve: "0x" + "c2".repeat(20),
     pool: "0x" + "c3".repeat(20),
     vaults: new Set(["0x" + "c4".repeat(20)]),
   };
-  it("ranks curve<creator<pool<vault<flagged<unlabeled and is case-insensitive", () => {
+  it("ranks curve<creator<pool<vault<unlabeled and is case-insensitive", () => {
     expect(holderLabelRank({ holder: special.curve.toUpperCase() }, special)).toBe(0);
     expect(holderLabelRank({ holder: special.creator }, special)).toBe(1);
     expect(holderLabelRank({ holder: special.pool! }, special)).toBe(2);
     expect(holderLabelRank({ holder: "0x" + "c4".repeat(20) }, special)).toBe(3);
-    expect(holderLabelRank({ holder: "0x" + "ee".repeat(20), botFlags: ["sniper"] }, special)).toBe(4);
-    expect(holderLabelRank({ holder: "0x" + "ee".repeat(20) }, special)).toBe(5);
-    expect(holderLabelRank({ holder: "0x" + "ee".repeat(20), botFlags: [] }, special)).toBe(5);
+    expect(holderLabelRank({ holder: "0x" + "ee".repeat(20) }, special)).toBe(4);
   });
 });

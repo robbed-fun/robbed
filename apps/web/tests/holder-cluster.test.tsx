@@ -12,8 +12,7 @@ import { holderRow, tokenDetail } from "./fixtures";
  * Holder funding-cluster grouping (v1.2) — the PURE grouping helper is
  * preserved (public entity API). NOTE : the redesigned Top Holders
  * table NO LONGER re-groups client-side (that would re-rank a server-authoritative
- * list); the surviving public signal is the per-row advisory bot-flag chips,
- * proven in the render block below.
+ * list); the public table now renders structural role labels only.
  */
 
 vi.mock("@/shared/lib/ws", () => ({ useWsChannel: () => {} }));
@@ -43,8 +42,8 @@ describe("groupHoldersByCluster (pure)", () => {
   });
 });
 
-describe("HolderTable render — row shape + advisory botFlags ", () => {
-  it("renders rank/label/amount rows with structural + advisory flag chips", async () => {
+describe("HolderTable render — structural labels only", () => {
+  it("renders structural role chips and hides advisory bot flags", async () => {
     vi.doMock("@/shared/api", () => ({
       getHolders: vi.fn(async () => ({ items: [], nextCursor: null })),
     }));
@@ -54,7 +53,7 @@ describe("HolderTable render — row shape + advisory botFlags ", () => {
     const holders = [
       holderRow({
         address: "0x00000000000000000000000000000000000000b1",
-        botFlags: ["farm"],
+        botFlags: ["sniper", "programmatic"],
       }),
       holderRow({
         address: "0x00000000000000000000000000000000000000b3",
@@ -68,10 +67,11 @@ describe("HolderTable render — row shape + advisory botFlags ", () => {
       </QueryClientProvider>,
     );
 
-    // Titled table + the RULED row surface : advisory bot-flag chip
-    // (surviving public organic-flow signal) + structural role chip.
+    // Titled table + structural role chip. Advisory bot flags are API data, but
+    // no longer public label chips on the holder table.
     expect(screen.getByText("Top holders")).toBeTruthy();
-    expect(screen.getByText("farm")).toBeTruthy(); // advisory botFlag chip
     expect(screen.getByText("Bonding curve")).toBeTruthy(); // structural flag chip
+    expect(screen.queryByText("sniper")).toBeNull();
+    expect(screen.queryByText("programmatic")).toBeNull();
   });
 });

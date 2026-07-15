@@ -2,7 +2,7 @@
  * Top-holders table — SERVER-side sorted + keyset-paginated
  *. `?sort` comes from the shared closed allowlist (`holderListQuerySchema`
  * → 400 on anything else — the ORDER BY security boundary): rank/amount/percent →
- * balance, address → holder, label → a deterministic role/flag CASE. First page
+ * balance, address → holder, label → a deterministic structural-role CASE. First page
  * (default limit) is the top-N view. Every row carries its true balance-desc
  * `rank` (ROW_NUMBER over the whole token) plus the creator/curve/lp_pool/vault
  * flags and v1.2 advisory `botFlags`/`clusterId` from indexer `address_flags`
@@ -34,9 +34,9 @@ export function holderRoutes(deps: AppDeps) {
     const vaults = new Set<string>();
     if (deps.config.TREASURY_ADDRESS) vaults.add(deps.config.TREASURY_ADDRESS.toLowerCase());
     if (deps.config.LP_FEE_VAULT_ADDRESS) vaults.add(deps.config.LP_FEE_VAULT_ADDRESS.toLowerCase());
-    // ONE special-address object feeds both the label-sort CASE (getHolders) and
-    // the flag projection (toHolderRow) — the label shown and the label sorted by
-    // are single-sourced (projections/holder.ts SpecialAddresses).
+    // ONE special-address object feeds both the structural label-sort CASE
+    // (getHolders) and the flag projection (toHolderRow) — the label shown and
+    // the label sorted by are single-sourced (projections/holder.ts SpecialAddresses).
     const special: SpecialAddresses = {
       creator: token.creator,
       curve: token.curve_address,

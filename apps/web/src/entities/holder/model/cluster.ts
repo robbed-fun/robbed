@@ -1,10 +1,8 @@
-import type { BotFlag, HolderRow } from "@robbed/shared";
+import type { HolderRow } from "@robbed/shared";
 
 /**
- * Holder-list domain helpers (HolderTable + v1.2 funding-cluster grouping).
- * PURE — unit-testable (tests/holder-cluster.test.tsx). All labels here are
- * ADVISORY heuristics : they describe indexer estimates, never gate
- * anything, and must be framed as heuristic, never as fact.
+ * Holder-list domain helpers (HolderTable structural labels + v1.2
+ * funding-cluster grouping). PURE — unit-testable (tests/holder-cluster.test.tsx).
  */
 
 /** Human label for a structural holder flag ("creator/curve/vault flagged"). */
@@ -13,15 +11,6 @@ export const HOLDER_FLAG_LABELS: Record<HolderRow["flags"][number], string> = {
   curve: "Bonding curve",
   lp_pool: "LP pool",
   vault: "LP fee vault",
-};
-
-/** Human label for an advisory bot/farm flag. Heuristic framing only. */
-export const BOT_FLAG_LABELS: Record<BotFlag, string> = {
-  farm: "farm",
-  sniper: "sniper",
-  programmatic: "programmatic",
-  wash: "wash",
-  arb_exit: "arb exit",
 };
 
 export interface HolderCluster {

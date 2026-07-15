@@ -199,7 +199,7 @@ GET /v1/tokens/:address/holders
   limit) IS the top-N view. Flags computed at query time by joining creator/curve/pool/vault addresses.
   sort ∉ allowlist OR dir ∉ {asc,desc} ⇒ 400 invalid_request (closed allowlist = the ORDER BY security boundary).
   sort→column (API-local map): rank/amount/percent→balance::numeric (per-token supply fixed ⇒ ONE physical
-    key), address→holder, label→CASE over creator/curve/lp_pool/vault + section 8.5 flags (deterministic order);
+    key), address→holder, label→CASE over creator/curve/lp_pool/vault structural roles (deterministic order);
     tiebreak holder. Keyset: `(sort_col, holder) < (k,i)` for desc / `>` for asc.
   Each row carries `rank` = true balance-desc rank (ROW_NUMBER over the WHOLE token), stable even when the
   page is sorted by address/label (position ≠ rank there).

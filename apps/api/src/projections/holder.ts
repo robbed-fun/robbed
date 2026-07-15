@@ -2,7 +2,8 @@
  * HolderJoinedRow → `HolderRow` (frozen shared DTO). Flags are computed at query
  * time (indexer.md — not stored) by comparing the holder against the
  * token's creator / curve / pool addresses and configured vault addresses.
- * `botFlags`/`clusterId` are the v1.2 advisory labels from `address_flags`.
+ * `botFlags`/`clusterId` are the v1.2 advisory labels from `address_flags`;
+ * they stay on the wire but are not part of the public holder-table label.
  */
 import type { HolderRow } from "@robbed/shared";
 import type { HolderJoinedRow } from "../lib/db";
@@ -10,8 +11,8 @@ import type { HolderSpecialAddresses } from "../lib/listSort";
 import { ratio } from "./common";
 
 /**
- * Creator/curve/pool/vault addresses used BOTH by the flag projection here and
- * the holders `label` sort CASE (lib/listSort.ts) — single-sourced as
+ * Creator/curve/pool/vault addresses used BOTH by the structural flag projection
+ * here and the holders `label` sort CASE (lib/listSort.ts) — single-sourced as
  * `HolderSpecialAddresses` so the label the row shows and the label it sorts by
  * can't drift. The route builds ONE of these and passes it to `getHolders`
  * (SQL CASE) and `toHolderRow` (flags).

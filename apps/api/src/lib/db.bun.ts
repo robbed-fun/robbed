@@ -540,7 +540,8 @@ export function createBunDb(config: Config): Db {
       // balance DESC) and the label CASE are materialized in a CTE so a page
       // sorted by address/label still carries the true balance rank, and the
       // outer keyset/ORDER BY reference them by name. `sort` is pre-validated;
-      // the label CASE ordering integers MUST match listSort.ts holderLabelRank.
+      // the structural-label CASE ordering integers MUST match listSort.ts
+      // holderLabelRank.
       const { special } = input;
       const col = HOLDER_SORT_COLUMNS[input.sort];
       const params: unknown[] = [input.token]; // $1
@@ -563,8 +564,7 @@ export function createBunDb(config: Config): Db {
           WHEN lower(b.holder) = $${pCreator} THEN 1
           WHEN $${pPool} <> '' AND lower(b.holder) = $${pPool} THEN 2
           ${vaultWhen}
-          WHEN af.flags IS NOT NULL AND cardinality(af.flags) > 0 THEN 4
-          ELSE 5 END`;
+          ELSE 4 END`;
       const outerWhere: string[] = [];
       if (input.cursorKey != null && input.cursorId != null) {
         params.push(input.cursorKey, input.cursorId);

@@ -1,6 +1,7 @@
 "use client";
 
 import type { TokenCard as TokenCardType, UsdValue } from "@robbed/shared";
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { CopyAddressButton } from "@/shared/ui";
@@ -57,9 +58,11 @@ function gradStatusLabel(token: TokenCardType, pct100: number): string {
 export function TokenCard({
   token,
   flashing = false,
+  children,
 }: {
   token: TokenCardType;
   flashing?: boolean;
+  children?: ReactNode;
 }) {
   const router = useRouter();
   const href = `/t/${token.address}`;
@@ -89,16 +92,9 @@ export function TokenCard({
       )}
     >
       <div className="flex items-start gap-2">
-        <TokenAvatar
-          imageUrl={token.imageUrl}
-          name={token.name}
-          ticker={token.ticker}
-          size={40}
-        />
+        <TokenAvatar imageUrl={token.imageUrl} name={token.name} ticker={token.ticker} size={40} />
         <div className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-foreground">
-            {token.name}
-          </span>
+          <span className="block truncate text-sm font-semibold text-foreground">{token.name}</span>
           <span className="text-xs uppercase tracking-wide text-muted-foreground">
             {token.ticker}
           </span>
@@ -115,9 +111,7 @@ export function TokenCard({
 
       <div className="flex items-end justify-between">
         <div className="flex min-w-0 flex-col">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            Mcap
-          </span>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Mcap</span>
           {/* ETH-first (D-70); live USD mirror only where a real feed exists. */}
           <span className="flex items-baseline gap-1.5">
             <EthAmount
@@ -131,9 +125,7 @@ export function TokenCard({
           </span>
         </div>
         <div className="flex flex-col items-end">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            24h
-          </span>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">24h</span>
           <span className={cn("text-sm font-medium tabular-nums", deltaClass)}>
             {formatPercent(delta, { signed: true })}
           </span>
@@ -167,6 +159,16 @@ export function TokenCard({
           <CopyAddressButton value={token.address} />
         </span>
       </div>
+
+      {children ? (
+        <div
+          className="border-t border-border/70 pt-3"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 }

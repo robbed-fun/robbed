@@ -22,6 +22,10 @@ export interface CreatorTokenBucket {
   claimable: string;
   /** USD mirror — populated only for the WETH leg; null for launch-token legs. */
   claimableUsd: UsdValue | null;
+  /** Lifetime accrued when the indexed API row is available. */
+  totalAccrued?: string | null;
+  /** Lifetime claimed when the indexed API row is available. */
+  totalClaimed?: string | null;
   /** True when `token` is canonical WETH (the aggregated buy-leg bucket). */
   isWeth: boolean;
 }
@@ -34,11 +38,13 @@ export function bucketFromApiRow(row: CreatorTokenClaimable, weth: string): Crea
     vault: row.vault,
     claimable: row.claimable,
     claimableUsd: row.claimableUsd,
+    totalAccrued: row.totalAccrued,
+    totalClaimed: row.totalClaimed,
     isWeth: row.token.toLowerCase() === weth.toLowerCase(),
   };
 }
 
-/** True when a bucket has a nonzero live balance — zero-balance buckets are hidden. */
+/** True when a bucket has a nonzero live balance — controls claim-button enablement. */
 export function hasClaimable(b: CreatorTokenBucket): boolean {
   try {
     return BigInt(b.claimable) > 0n;

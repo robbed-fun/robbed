@@ -169,13 +169,12 @@ describe("GET /v1/tokens/:address/holders — sort + keyset + rank ", () => {
     expect(data.items.map((r: { rank: number }) => r.rank)).toEqual([2, 5, 1, 4, 3]);
   });
 
-  it("sort=label orders protocol roles → flagged → unlabeled (deterministic)", async () => {
+  it("sort=label orders protocol roles → unlabeled by address", async () => {
     const data = (await readJson(await get(app, url("?sort=label&dir=asc")))).data;
     const items = data.items as { address: string; flags: string[]; botFlags?: string[] }[];
-    expect(items.map((r) => r.address)).toEqual([TEST_CURVE, TEST_CREATOR, FLAGGED, REG1, REG2]);
-    // label ranks: curve 0, creator 1, flagged 4, then unlabeled 5s tiebroken by
-    // holder asc (0xa1 < 0xb2).
-    expect(items[2]?.botFlags).toEqual(["sniper"]);
+    expect(items.map((r) => r.address)).toEqual([TEST_CURVE, TEST_CREATOR, REG1, REG2, FLAGGED]);
+    // Bot flags stay on the wire, but they no longer affect the public label sort.
+    expect(items[4]?.botFlags).toEqual(["sniper"]);
   });
 
   it("out-of-allowlist sort ⇒ 400 (physical column name is NOT a field label)", async () => {

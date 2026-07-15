@@ -36,7 +36,7 @@ import {
 // `CreatorVault.tokenBalanceOf` over the `creator_token_claimable` accrual) and
 // reconciles it to the on-chain vault credit. CreatorEarningsPanel now enumerates
 // post-grad buckets through `GET /v1/creators/:a/token-claimable`; the UI leg below
-// proves the Portfolio CREATED claim buttons submit the pull-payment txs.
+// proves the Portfolio CREATED claim action submits the pull-payment txs.
 //
 // Routing (LPFeeVault._route): BOTH post-grad legs (the launch token AND WETH) are
 // credited to the creator as ERC20 via `depositERC20` per `(creator, token)` —
@@ -77,15 +77,24 @@ test(
         const shareBps = await readCreatorLpShareBps();
         expect(shareBps).toBe(EXPECTED_CREATOR_LP_SHARE_BPS);
 
+        // Both legs land in the CreatorVault as ERC20, per (creator, token).
+        const creatorWethBeforeVolume = await readCreatorTokenClaimable(creator, WETH);
+        const creatorTokBeforeVolume = await readCreatorTokenClaimable(creator, token.token);
+        const treasuryWethBeforeVolume = await readTokenBalance(ROLES.treasury.address, WETH);
+        const treasuryTokBeforeVolume = await readTokenBalance(ROLES.treasury.address, token.token);
+
         // Generate REAL two-sided post-grad V3 volume so BOTH legs accrue a fee
-        // (a WETH-in buy → WETH-leg, a token-in sell → token-leg).
+        // (a WETH-in buy → WETH-leg, a token-in sell → token-leg). The compose
+        // keeper may collect between this point and our manual collect below.
         await generatePostGradFees(token.token, { by: ROLES.trader2 });
 
-        // Both legs land in the CreatorVault as ERC20, per (creator, token).
-        const creatorWethBefore = await readCreatorTokenClaimable(creator, WETH);
-        const creatorTokBefore = await readCreatorTokenClaimable(creator, token.token);
-        const treasuryWethBefore = await readTokenBalance(ROLES.treasury.address, WETH);
-        const treasuryTokBefore = await readTokenBalance(ROLES.treasury.address, token.token);
+        const creatorWethBeforeCollect = await readCreatorTokenClaimable(creator, WETH);
+        const creatorTokBeforeCollect = await readCreatorTokenClaimable(creator, token.token);
+        const treasuryWethBeforeCollect = await readTokenBalance(ROLES.treasury.address, WETH);
+        const treasuryTokBeforeCollect = await readTokenBalance(
+          ROLES.treasury.address,
+          token.token,
+        );
 
         // Permissionless split collect() — the vault routes the treasury share
         // to the fixed treasury and the creator share to the CreatorVault (creatorOf).
@@ -93,8 +102,6 @@ test(
         const collectReceipt = await publicClient.waitForTransactionReceipt({ hash: collectHash });
         expect(collectReceipt.status).toBe("success");
         const collected = parseCollectSplit(collectReceipt.logs, token.token);
-        // A two-sided volume must have produced a fee in at least one leg.
-        expect(collected.wethLeg + collected.tokenLeg > 0n).toBe(true);
 
         // : the FeesSplit sums EXACTLY to the collected amount per leg —
         // no leakage / rounding drain — and the beneficiary is the creator.
@@ -108,20 +115,39 @@ test(
 
         // The creator's cut landed in the CreatorVault ERC20 buckets (both legs);
         // the treasury received the complementary ERC20 shares directly.
-        const creatorWethCredit = (await readCreatorTokenClaimable(creator, WETH)) - creatorWethBefore;
-        creatorTokCredit = (await readCreatorTokenClaimable(creator, token.token)) - creatorTokBefore;
-        expect(creatorWethCredit).toBe(collected.creatorWeth);
-        expect(creatorTokCredit).toBe(collected.creatorToken);
-        expect((await readTokenBalance(ROLES.treasury.address, WETH)) - treasuryWethBefore).toBe(
+        const creatorWethAfter = await readCreatorTokenClaimable(creator, WETH);
+        const creatorTokAfter = await readCreatorTokenClaimable(creator, token.token);
+        const treasuryWethAfter = await readTokenBalance(ROLES.treasury.address, WETH);
+        const treasuryTokAfter = await readTokenBalance(ROLES.treasury.address, token.token);
+        const creatorWethCredit = creatorWethAfter - creatorWethBeforeVolume;
+        creatorTokCredit = creatorTokAfter - creatorTokBeforeVolume;
+
+        // The manual collect receipt may be zero if the keeper won the race, but
+        // this run's total post-volume credits must be nonzero and the receipt's
+        // own split is still a lower bound on the delta after our manual call.
+        expect(creatorWethCredit + creatorTokCredit > 0n).toBe(true);
+        expect(
+          treasuryWethAfter -
+            treasuryWethBeforeVolume +
+            (treasuryTokAfter - treasuryTokBeforeVolume) >
+            0n,
+        ).toBe(true);
+        expect(creatorWethAfter - creatorWethBeforeCollect).toBeGreaterThanOrEqual(
+          collected.creatorWeth,
+        );
+        expect(creatorTokAfter - creatorTokBeforeCollect).toBeGreaterThanOrEqual(
+          collected.creatorToken,
+        );
+        expect(treasuryWethAfter - treasuryWethBeforeCollect).toBeGreaterThanOrEqual(
           collected.treasuryWeth,
         );
-        expect(
-          (await readTokenBalance(ROLES.treasury.address, token.token)) - treasuryTokBefore,
-        ).toBe(collected.treasuryToken);
+        expect(treasuryTokAfter - treasuryTokBeforeCollect).toBeGreaterThanOrEqual(
+          collected.treasuryToken,
+        );
 
         // Standing balances (pre-claim), read on-chain for the indexed reconcile below.
-        vaultTokenBalance = await readCreatorTokenClaimable(creator, token.token);
-        creatorWethStanding = await readCreatorTokenClaimable(creator, WETH);
+        vaultTokenBalance = creatorTokAfter;
+        creatorWethStanding = creatorWethAfter;
         expect(vaultTokenBalance).toBe(creatorTokCredit); // fresh token → no residual
         expect(creatorWethStanding >= creatorWethCredit).toBe(true); // WETH aggregates
       },
@@ -167,28 +193,24 @@ test(
           timeout: 30_000,
         });
 
-        const claimWeth = page.getByRole("button", { name: /^Claim WETH$/i }).first();
-        const claimToken = page
-          .getByRole("button", { name: new RegExp(`^Claim ${token.ticker}$`, "i") })
+        const claimPostGrad = page
+          .getByRole("button", { name: /^Claim post-graduation LP fees$/i })
           .first();
 
-        await expect(claimWeth).toBeVisible({ timeout: 30_000 });
-        await expect(claimToken).toBeVisible({ timeout: 30_000 });
+        await expect(claimPostGrad).toBeVisible({ timeout: 30_000 });
 
-        // WETH leg: `claimERC20(creator, WETH)` drains the WHOLE standing (aggregated)
-        // balance; the follow-up on-chain marker asserts the wallet delta.
         creatorWethWalletBefore = await readTokenBalance(creator, WETH);
-        await claimWeth.click();
+        creatorTokWalletBefore = await readTokenBalance(creator, token.token);
+        await claimPostGrad.click();
+
+        // The single post-grad UI action submits the required ERC20 claims. WETH is
+        // the aggregated standing balance; the launch-token leg is unique per token.
         await expect
           .poll(() => readCreatorTokenClaimable(creator, WETH), {
             message: "WETH creator-fee bucket drains after the Portfolio claim",
             timeout: 60_000,
           })
           .toBe(0n);
-
-        // Token leg: unique per token → the claim delivers exactly this collect's credit.
-        creatorTokWalletBefore = await readTokenBalance(creator, token.token);
-        await claimToken.click();
         await expect
           .poll(() => readCreatorTokenClaimable(creator, token.token), {
             message: "launch-token creator-fee bucket drains after the Portfolio claim",

@@ -429,7 +429,17 @@ services:
   keeper:
     <<: *dev-base
     working_dir: /workspace/apps/keeper
-    command: ["bun", "run", "--hot", "src/index.ts"]
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        if [ ! -f /workspace/tools/localstack/out/mainnet.env ]; then
+          echo "FATAL: tools/localstack/out/mainnet.env not found; keeper needs LP_FEE_VAULT_ADDRESS for LPFeeVault.collect automation." >&2
+          exit 1
+        fi
+        set -a; . /workspace/tools/localstack/out/mainnet.env; set +a
+        exec bun run --hot src/index.ts
     environment:
       <<: *dev-env
       # WS preferred; MAINNET_RPC_URL is the indexer-guarded value on any real up.
@@ -444,6 +454,10 @@ services:
       KEEPER_TREASURY_SWEEP_POLL_MS: "${KEEPER_TREASURY_SWEEP_POLL_MS:-60000}"
       KEEPER_TREASURY_SWEEP_MIN_WEI: "${KEEPER_TREASURY_SWEEP_MIN_WEI:-500000000000000000}"
       KEEPER_TREASURY_SWEEP_MAX_AGE_MS: "${KEEPER_TREASURY_SWEEP_MAX_AGE_MS:-86400000}"
+      KEEPER_LP_FEE_COLLECT_ENABLED: "${KEEPER_LP_FEE_COLLECT_ENABLED:-true}"
+      KEEPER_LP_FEE_COLLECT_POLL_MS: "${KEEPER_LP_FEE_COLLECT_POLL_MS:-60000}"
+      KEEPER_LP_FEE_COLLECT_MIN_WETH_WEI: "${KEEPER_LP_FEE_COLLECT_MIN_WETH_WEI:-500000000000000000}"
+      KEEPER_LP_FEE_COLLECT_MAX_AGE_MS: "${KEEPER_LP_FEE_COLLECT_MAX_AGE_MS:-86400000}"
       KEEPER_PORT: "3003"
     ports:
       - "${KEEPER_PORT:-4203}:3003"

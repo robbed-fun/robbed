@@ -42,7 +42,9 @@ export function createPgMetadataStore(pool: Pool, schema: string): MetadataStore
           WHERE v.token_address IS NULL
              OR v.last_attempt_at IS NULL
              OR v.last_attempt_at < now() - interval '1 minute'
-          ORDER BY t.block_number
+          -- Fresh tokens must not starve behind old fake/external URIs that
+          -- become retry-due every minute during the e2e matrix.
+          ORDER BY (v.token_address IS NOT NULL), t.block_number
           LIMIT $1`,
         [Math.max(limit * 4, limit)],
       );

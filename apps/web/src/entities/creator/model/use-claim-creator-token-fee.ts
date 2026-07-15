@@ -46,6 +46,14 @@ export function useClaimCreatorTokenFee(meta: ClaimCreatorTokenFeeTxMeta): {
   reset: () => void;
   state: ClaimState;
 } {
+  return useClaimCreatorTokenFees([meta]);
+}
+
+export function useClaimCreatorTokenFees(metas: ClaimCreatorTokenFeeTxMeta[]): {
+  claim: () => Promise<void>;
+  reset: () => void;
+  state: ClaimState;
+} {
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
   const watermarks = useConfirmationWatermarks();
@@ -54,32 +62,36 @@ export function useClaimCreatorTokenFee(meta: ClaimCreatorTokenFeeTxMeta): {
   const reset = useCallback(() => setState(INITIAL), []);
 
   const claim = useCallback(async () => {
-    // Validate the shared tx-metadata shape (fail loud on a malformed vault/token).
-    const parsed = claimCreatorTokenFeeTxMetaSchema.parse(meta);
-    setState({ ...INITIAL, phase: "signing" });
     try {
-      const hash = await writeContractAsync({
-        address: parsed.vault as Address,
-        abi: creatorVaultAbi,
-        functionName: "claimERC20",
-        args: [parsed.creator as Address, parsed.token as Address],
-      });
-      setState((s) => ({ ...s, phase: "pending", txHash: hash }));
+      // Validate every shared tx-metadata shape before asking the wallet to sign.
+      const parsedMetas = metas.map((m) => claimCreatorTokenFeeTxMetaSchema.parse(m));
+      if (parsedMetas.length === 0) return;
 
-      const receipt = await publicClient?.waitForTransactionReceipt({ hash });
-      if (receipt && receipt.status === "success") {
-        setState((s) => ({
-          ...s,
-          phase: "confirmed",
-          blockNumber: Number(receipt.blockNumber),
-        }));
-      } else {
-        setState((s) => ({ ...s, phase: "error", error: "Claim reverted." }));
+      let lastBlock: number | null = null;
+      for (const parsed of parsedMetas) {
+        setState({ ...INITIAL, phase: "signing", step: "claim" });
+        const hash = await writeContractAsync({
+          address: parsed.vault as Address,
+          abi: creatorVaultAbi,
+          functionName: "claimERC20",
+          args: [parsed.creator as Address, parsed.token as Address],
+        });
+        setState((s) => ({ ...s, phase: "pending", step: "claim", txHash: hash }));
+
+        const receipt = await publicClient?.waitForTransactionReceipt({ hash });
+        if (receipt && receipt.status === "success") {
+          lastBlock = Number(receipt.blockNumber);
+        } else {
+          setState((s) => ({ ...s, phase: "error", error: "Claim reverted." }));
+          return;
+        }
       }
+
+      setState((s) => ({ ...s, phase: "confirmed", step: "claim", blockNumber: lastBlock }));
     } catch (e) {
       setState((s) => ({ ...s, phase: "error", error: humanizeClaimError(e) }));
     }
-  }, [meta, publicClient, writeContractAsync]);
+  }, [metas, publicClient, writeContractAsync]);
 
   // Derive the live tier from the indexed block via the watermark (never self-reported).
   const confirmationState: ConfirmationState | null =

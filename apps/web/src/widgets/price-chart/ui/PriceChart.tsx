@@ -97,7 +97,7 @@ export function PriceChart({
     initialData: initialCandles,
     // Right-edge anchor for the idle-token fallback window (D-72): only used when
     // the live now-window comes back empty. Token detail may pass the latest SSR
-    // trade timestamp (D-75) to cover launch bursts after createdAt.
+    // trade timestamp (D-76) to cover launch bursts after createdAt.
     anchorSec: activityAnchorSec ?? lastActivityAnchor(token),
   });
   const containerRef = useRef<HTMLDivElement | null>(null);

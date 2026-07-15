@@ -11,10 +11,9 @@ import { Button, EmptyState, ErrorState, Skeleton } from "@/shared/ui";
  * we reuse the `entities/token` card verbatim (anti-drift) in a responsive grid.
  * Listing-gated server-side — the client renders whatever the API lists.
  *
- * : for the connected user's OWN created tokens the Creator earnings
- * widget (claim creator fees) sits above the grid — self-gated + vault-gated
- * inside the widget, so it renders nothing for a treasury-only deployment or when
- * viewing someone else.
+ * For the connected user's OWN created tokens, Creator earnings owns the token
+ * grid and nests the two claim sections into each token card (D-78). Visitors
+ * still get the plain reusable TokenCard grid.
  */
 export function CreatedTab({ address, isSelf = false }: { address: string; isSelf?: boolean }) {
   const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
@@ -22,7 +21,7 @@ export function CreatedTab({ address, isSelf = false }: { address: string; isSel
 
   const tokens = data?.pages.flatMap((p) => p.tokens) ?? [];
 
-  // Own-earnings claim widget above the grid (self-/vault-gated inside the widget).
+  // Own-earnings token list (self-/vault-gated inside the widget).
   // `createdTokens` feeds the post-grad buckets: the graduated ones seed the
   // on-chain `tokenBalanceOf` fallback + the live `:events` WS subscriptions, and the
   // whole list is the ticker/avatar registry for bucket rows.
@@ -77,29 +76,37 @@ export function CreatedTab({ address, isSelf = false }: { address: string; isSel
     );
   }
 
-  return (
-    <>
-      {earnings}
-      <div className="px-4 pb-6 md:px-6">
-        <div className="grid grid-cols-1 gap-3 py-4 sm:grid-cols-2 lg:grid-cols-3">
-          {tokens.map((token) => (
-            <TokenCard key={token.address} token={token} />
-          ))}
-        </div>
+  const loadMore = hasNextPage ? (
+    <div className="flex justify-center pt-2">
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => void fetchNextPage()}
+        disabled={isFetchingNextPage}
+      >
+        {isFetchingNextPage ? "Loading…" : "Load more"}
+      </Button>
+    </div>
+  ) : null;
 
-        {hasNextPage && (
-          <div className="flex justify-center pt-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void fetchNextPage()}
-              disabled={isFetchingNextPage}
-            >
-              {isFetchingNextPage ? "Loading…" : "Load more"}
-            </Button>
-          </div>
-        )}
+  if (isSelf) {
+    return (
+      <>
+        {earnings}
+        {loadMore && <div className="px-4 pb-6 md:px-6">{loadMore}</div>}
+      </>
+    );
+  }
+
+  return (
+    <div className="px-4 pb-6 md:px-6">
+      <div className="grid grid-cols-1 gap-3 py-4 sm:grid-cols-2 lg:grid-cols-3">
+        {tokens.map((token) => (
+          <TokenCard key={token.address} token={token} />
+        ))}
       </div>
-    </>
+
+      {loadMore}
+    </div>
   );
 }

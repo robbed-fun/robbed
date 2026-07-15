@@ -4,8 +4,8 @@
  * state (moderation/listing gates only; chain state is the source of truth).
  */
 import { Pool } from "pg";
-import { queryReadyCurves, queryTreasuryFeeCurves } from "./db";
-import type { DbPort, ReadyCurve, TreasuryFeeCurve } from "./types";
+import { queryGraduatedLpPositions, queryReadyCurves, queryTreasuryFeeCurves } from "./db";
+import type { DbPort, GraduatedLpPosition, ReadyCurve, TreasuryFeeCurve } from "./types";
 
 export class PgKeeperDb implements DbPort {
   private readonly pool: Pool;
@@ -20,6 +20,10 @@ export class PgKeeperDb implements DbPort {
 
   findTreasuryFeeCurves(): Promise<TreasuryFeeCurve[]> {
     return queryTreasuryFeeCurves(this.pool);
+  }
+
+  findGraduatedLpPositions(): Promise<GraduatedLpPosition[]> {
+    return queryGraduatedLpPositions(this.pool);
   }
 
   async close(): Promise<void> {

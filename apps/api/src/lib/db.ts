@@ -89,7 +89,7 @@ export interface HolderJoinedRow extends BalanceRow {
    */
   rank: number;
   /**
-   * Deterministic label-sort key from the role/flag CASE
+   * Deterministic label-sort key from the structural-role CASE
    * (listSort.ts `holderLabelRank`) — only consumed as the `label` sort's keyset
    * value; not a wire field.
    */
