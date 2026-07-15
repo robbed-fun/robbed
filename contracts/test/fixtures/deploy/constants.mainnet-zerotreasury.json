@@ -1,0 +1,53 @@
+{
+  "chainId": 4663,
+  "notes": [
+    "TEST FIXTURE (unit/DeployModes.t.sol) — same economics shape as the deploy-mode fixtures but with chainId 4663 and external.treasurySafe = zero address.",
+    "Used only to prove an unaffirmed 4663 fork run reaches the keyless signer fallback and then fails closed at O-6, independent of the real mainnet constants file's treasury value."
+  ],
+  "curve": {
+    "virtualEthWei": "2852303954560041089",
+    "virtualTokenWei": "1073179114341976436170422978",
+    "curveSupplyWei": "793100000000000000000000000",
+    "lpTrancheWei": "206900000000000000000000000",
+    "graduationEthWei": "8076868822140981824"
+  },
+  "fees": {
+    "tradeFeeBps": 100,
+    "creatorFeeBps": 0,
+    "creationFeeWei": "847000000000000",
+    "maxCreationFeeWei": "16940000000000000",
+    "graduationFeeWei": "450000000000000",
+    "maxGraduationFeeWei": "4500000000000000",
+    "callerRewardWei": "2822000000000000",
+    "maxCallerRewardWei": "14110000000000000"
+  },
+  "antiSniper": {
+    "windowSeconds": 8,
+    "maxEarlyBuyWei": "201922000000000000"
+  },
+  "v3": {
+    "feeTier": 10000,
+    "tickSpacing": 200,
+    "sqrtPriceX96Token0": "15650667588154918705036412",
+    "sqrtPriceX96Token1": "401075653803896166612957246818246",
+    "targetTickToken0": -170600,
+    "targetTickToken1": 170600,
+    "fullRangeTickLower": -887200,
+    "fullRangeTickUpper": 887200,
+    "toleranceTicks": 100,
+    "maxArbIterations": 8,
+    "migrationSlippageBps": 100
+  },
+  "beta": {
+    "perTokenEthCapWei": "12115303233211472736",
+    "globalEthCapWei": "403843441107049091200"
+  },
+  "external": {
+    "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "v3Factory": "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+    "positionManager": "0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3",
+    "swapRouter02": "0xCaf681a66D020601342297493863E78C959E5cb2",
+    "quoterV2": "0x33e885eD0Ec9bF04EcfB19341582aADCb4c8A9E7",
+    "treasurySafe": "0x0000000000000000000000000000000000000000"
+  }
+}

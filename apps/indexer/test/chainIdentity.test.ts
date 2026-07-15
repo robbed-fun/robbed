@@ -8,8 +8,8 @@
  *   (c) chain-dependent addresses resolve from the registry entry (external
  *       set registry-ONLY; robbed contracts = live deploy artifact env wins,
  *       registry fills otherwise).
- *   known limit: 4663's registry entry is a mainnet-fork artifact — refused
- *       without the LOCAL-fork opt-in (INDEXER_ALLOW_FORK_4663=1).
+ *   4663 fork/live split: fork artifacts are refused without the LOCAL-fork opt-in
+ *       (INDEXER_ALLOW_FORK_4663=1); live artifacts are allowed.
  */
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { getDeployment } from "@robbed/shared/addresses";
@@ -60,16 +60,36 @@ describe("+(b) static half — explicit selection, registry-validated, no defaul
   });
 });
 
-describe(" known limit — 4663 registry entry is a mainnet-fork artifact", () => {
-  it("refuses INDEXER_CHAIN_ID=4663 without the LOCAL-fork opt-in", () => {
+describe("4663 fork/live split", () => {
+  it("accepts INDEXER_CHAIN_ID=4663 without the LOCAL-fork opt-in when the registry entry is live", () => {
     process.env.INDEXER_CHAIN_ID = "4663";
-    expect(() => loadConfig()).toThrow(/forbidden outside a LOCAL fork stack/);
+    expect(getDeployment(4663)!.mode).toBe("live");
+    expect(() => loadConfig()).not.toThrow();
   });
 
-  it("accepts 4663 when the LOCAL fork stack declares itself (INDEXER_ALLOW_FORK_4663=1)", () => {
+  it("refuses a 4663 fork artifact without the LOCAL-fork opt-in", () => {
+    process.env.INDEXER_CHAIN_ID = "4663";
+    const deployment = getDeployment(4663)! as { mode: string };
+    const savedMode = deployment.mode;
+    deployment.mode = "fork";
+    try {
+      expect(() => loadConfig()).toThrow(/mainnet-fork pipeline artifact/);
+    } finally {
+      deployment.mode = savedMode;
+    }
+  });
+
+  it("accepts a 4663 fork artifact when the LOCAL fork stack declares itself", () => {
     process.env.INDEXER_CHAIN_ID = "4663";
     process.env.INDEXER_ALLOW_FORK_4663 = "1";
-    expect(() => loadConfig()).not.toThrow();
+    const deployment = getDeployment(4663)! as { mode: string };
+    const savedMode = deployment.mode;
+    deployment.mode = "fork";
+    try {
+      expect(() => loadConfig()).not.toThrow();
+    } finally {
+      deployment.mode = savedMode;
+    }
   });
 
   it("does not require the opt-in for non-4663 chains", () => {

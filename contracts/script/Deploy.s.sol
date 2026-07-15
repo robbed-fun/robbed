@@ -597,8 +597,7 @@ contract Deploy is Script {
 
     /// @dev Blockscout verification is env-gated (M1-2 / Phase-T, O-5); print the exact command per
     /// contracts.md step 8 rather than run it here (verification needs a public repo +
-    ///      settled bytecode). Documented, not executed. Testnet additionally points at the
-    ///      testnet.env emitter (docker-compose.testnet.yml contract — docs/developers/runbooks/docker.md).
+    ///      settled bytecode). Public modes additionally point at the compose env emitter.
     function _logVerifyHints() internal view {
         // No Blockscout verification for the dev contexts (local anvil smoke OR a 4663 fork).
         if (mode == Mode.Local || mode == Mode.Fork) return;
@@ -608,13 +607,17 @@ contract Deploy is Script {
                 "  forge verify-contract <addr> <Contract> --verifier blockscout"
                 " --verifier-url https://robinhoodchain.blockscout.com/api --chain-id 4663"
             );
+            console2.log(
+                "[deploy] next: bun contracts/script/emit-deployment-env.ts --network mainnet"
+                " -> tools/deployments/mainnet.json + tools/localstack/out/mainnet.env"
+            );
         } else {
             console2.log(
                 "  forge verify-contract <addr> <Contract> --verifier blockscout"
                 " --verifier-url $TESTNET_BLOCKSCOUT_URL/api --chain-id 46630"
             );
             console2.log(
-                "[deploy] next (Phase T-3): bun contracts/script/emit-testnet-env.ts"
+                "[deploy] next (Phase T-3): bun contracts/script/emit-deployment-env.ts --network testnet"
                 " -> tools/deployments/testnet.json + tools/localstack/out/testnet.env"
             );
         }

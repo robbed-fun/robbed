@@ -1,141 +1,48 @@
-# Testnet Operator Signing
+# Operator Signing And Deployment
 
-Short runbook for Robinhood Chain testnet only. Private keys are never pasted into chat and never
-stored in repo files.
+Private keys are never pasted into chat and never stored in repo files. The deployer signs through a
+Foundry wallet or hardware wallet. The keeper key lives only in the operator secrets file.
 
-## Addresses
+## Files
 
-| Address | Purpose | Where it goes |
-|---|---|---|
-| Deployer EOA | Pays gas and signs contract deployment txs | `config/env/testnet.env` as `DEPLOYER_ADDRESS` |
-| Keeper EOA | Pays gas for auto-graduation keeper txs | `~/.config/robbed/testnet.secrets.env` as `TESTNET_KEEPER_PRIVATE_KEY` |
-| Safe address | Factory owner and treasury / fee recipient | `tools/m0/external.testnet.json` as `external.treasurySafe` |
+| Network | Public env               | Safe config                      | Constants output                      | Deploy output                      | Compose output                     | Keeper secret                          |
+| ------- | ------------------------ | -------------------------------- | ------------------------------------- | ---------------------------------- | ---------------------------------- | -------------------------------------- |
+| Testnet | `config/env/testnet.env` | `tools/m0/external.testnet.json` | `tools/m0/out/constants.testnet.json` | `contracts/deployments/46630.json` | `tools/localstack/out/testnet.env` | `~/.config/robbed/testnet.secrets.env` |
+| Mainnet | `config/env/mainnet.env` | `tools/m0/external.mainnet.json` | `tools/m0/out/constants.mainnet.json` | `contracts/deployments/4663.json`  | `tools/localstack/out/mainnet.env` | `~/.config/robbed/mainnet.secrets.env` |
 
-## 1. Create Deployer Wallet
+## Steps
 
-Create a new throwaway EOA:
+| Step                           | What happens                                                                                                                                   | Testnet command                                                                                                                                                                                                                         | Mainnet command                                                                                                                                                                                                                         |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Create deployer EOA         | A funded public address pays deployment gas. The private key stays in an encrypted Foundry keystore.                                           | `cast wallet new`<br>`cast wallet import robbed-testnet-deployer --interactive`<br>`cast wallet address --account robbed-testnet-deployer`                                                                                              | `cast wallet new`<br>`cast wallet import robbed-mainnet-deployer --interactive`<br>`cast wallet address --account robbed-mainnet-deployer`                                                                                              |
+| 2. Put deployer address in env | Compose and deploy scripts know the public deployer address.                                                                                   | Edit `config/env/testnet.env`:<br>`DEPLOYER_ADDRESS=0xYourDeployer`                                                                                                                                                                     | Edit `config/env/mainnet.env`:<br>`DEPLOYER_ADDRESS=0xYourDeployer`                                                                                                                                                                     |
+| 3. Create keeper EOA           | A separate funded wallet pays keeper gas for graduation and fee collection.                                                                    | `cast wallet new`<br>`mkdir -p ~/.config/robbed`<br>`chmod 700 ~/.config/robbed`<br>Edit `~/.config/robbed/testnet.secrets.env`:<br>`TESTNET_KEEPER_PRIVATE_KEY=0xKeeperPrivateKey`<br>`chmod 600 ~/.config/robbed/testnet.secrets.env` | `cast wallet new`<br>`mkdir -p ~/.config/robbed`<br>`chmod 700 ~/.config/robbed`<br>Edit `~/.config/robbed/mainnet.secrets.env`:<br>`MAINNET_KEEPER_PRIVATE_KEY=0xKeeperPrivateKey`<br>`chmod 600 ~/.config/robbed/mainnet.secrets.env` |
+| 4. Create Safe in Safe UI      | The Safe becomes factory owner and treasury fee recipient. Owners sign Safe transactions in the UI.                                            | Create Safe on Robinhood testnet, then set `external.treasurySafe` in `tools/m0/external.testnet.json`.                                                                                                                                 | Create Safe on Robinhood mainnet, then set `external.treasurySafe` in `tools/m0/external.mainnet.json`.                                                                                                                                 |
+| 5. Rebuild constants           | Deploy script consumes the network-specific constants JSON and fails if Safe is missing.                                                       | `bun run --cwd tools/m0 derive --network=testnet --reuse-snapshot`                                                                                                                                                                      | `bun run --cwd tools/m0 derive --network=mainnet --reuse-snapshot`                                                                                                                                                                      |
+| 6. Deploy contracts            | Deployer signs all deployment transactions. The script writes `contracts/deployments/<chainId>.json` and initiates ownership transfer to Safe. | `bash scripts/deploy-onchain.sh protocol --network testnet --deployer 0xYourDeployer --verify --account robbed-testnet-deployer`                                                                                                        | `bash scripts/deploy-onchain.sh protocol --network mainnet --deployer 0xYourDeployer --verify --account robbed-mainnet-deployer`                                                                                                        |
+| 7. Emit runtime env            | Address artifacts and `START_BLOCK` are generated for compose/api/indexer/web. Mainnet refuses fork artifacts.                                 | `bun contracts/script/emit-deployment-env.ts --network testnet`<br>`bun contracts/script/codegen-addresses.ts`                                                                                                                          | `bun contracts/script/emit-deployment-env.ts --network mainnet`<br>`bun contracts/script/codegen-addresses.ts`                                                                                                                          |
+| 8. Accept ownership in Safe UI | Safe executes `acceptOwnership()` on the new `CurveFactory`; after this, only Safe can call owner functions.                                   | Use Safe UI custom transaction on the new `curveFactory`.                                                                                                                                                                               | Use Safe UI custom transaction on the new `curveFactory`.                                                                                                                                                                               |
+| 9. Reset stack                 | Indexer starts from the new `START_BLOCK`; frontend/API use the new addresses.                                                                 | `bash scripts/compose-env.sh testnet down -v`<br>`bash scripts/compose-env.sh testnet up -d --build`                                                                                                                                    | `bash scripts/compose-env.sh mainnet down -v`<br>`bash scripts/compose-env.sh mainnet up -d --build`                                                                                                                                    |
 
-```bash
-cast wallet new
-```
+## Safe UI Ownership Transaction
 
-Save the private key outside the repo, then import it into a Foundry encrypted keystore:
-
-```bash
-cast wallet import robbed-testnet-deployer --interactive
-cast wallet address --account robbed-testnet-deployer
-```
-
-Put the printed public address in `config/env/testnet.env`:
-
-```env
-DEPLOYER_ADDRESS=0xYourDeployer
-TESTNET_CHAIN_ID=46630
-TESTNET_RPC_URL=https://rpc.testnet.chain.robinhood.com
-TESTNET_BLOCKSCOUT_URL=https://explorer.testnet.chain.robinhood.com
-```
-
-Fund the deployer from the faucet. Target `0.05 ETH`.
-
-```bash
-cast balance 0xYourDeployer --ether --rpc-url https://rpc.testnet.chain.robinhood.com
-```
-
-## 2. Create Keeper Wallet
-
-Create a separate EOA for the keeper:
-
-```bash
-cast wallet new
-```
-
-Save the private key outside the repo, then put it in the external secrets file:
-
-```bash
-mkdir -p ~/.config/robbed
-nano ~/.config/robbed/testnet.secrets.env
-chmod 600 ~/.config/robbed/testnet.secrets.env
-```
-
-File contents:
-
-```env
-TESTNET_KEEPER_PRIVATE_KEY=0xKeeperPrivateKey
-```
-
-Fund the keeper address from the faucet. Target `0.05 ETH`.
-
-## 3. Create Safe In UI
-
-Use Safe UI on Robinhood testnet.
-
-| Field | Value |
-|---|---|
-| Network | Robinhood Chain Testnet |
-| Owners | Your test owner addresses |
-| Threshold | `2` recommended |
-
-Copy the created Safe address into:
-
-```json
-{
-  "external": {
-    "treasurySafe": "0xYourSafe"
-  }
-}
-```
-
-File:
-
-```text
-tools/m0/external.testnet.json
-```
-
-Then re-derive constants:
-
-```bash
-bun run --cwd tools/m0 derive --network=testnet --reuse-snapshot
-```
-
-## 4. Deploy Contracts
-
-Deploy with the Foundry keystore:
-
-```bash
-bash scripts/deploy-onchain.sh protocol \
-  --network testnet \
-  --deployer 0xYourDeployer \
-  --verify \
-  --account robbed-testnet-deployer
-```
-
-Then regenerate address artifacts:
-
-```bash
-bun contracts/script/emit-testnet-env.ts
-bun contracts/script/codegen-addresses.ts
-```
-
-## 5. Accept Ownership In Safe UI
-
-The deployer only nominates the Safe. The Safe must accept ownership.
-
-Use the new `curveFactory` from:
+Use the new `curveFactory` address from the deploy artifact:
 
 ```bash
 cat contracts/deployments/46630.json
+cat contracts/deployments/4663.json
 ```
 
-Safe UI transaction:
+Safe UI values:
 
-| Field | Value |
-|---|---|
-| To | new `curveFactory` |
-| Value | `0` |
-| ABI | `function acceptOwnership()` |
-| Data | `0x79ba5097` |
+| Field | Value                                                                                                    |
+| ----- | -------------------------------------------------------------------------------------------------------- |
+| To    | new `curveFactory`                                                                                       |
+| Value | `0`                                                                                                      |
+| ABI   | `[{"type":"function","name":"acceptOwnership","stateMutability":"nonpayable","inputs":[],"outputs":[]}]` |
+| Data  | `0x79ba5097`                                                                                             |
 
-After execution, verify:
+After the Safe transaction executes:
 
 ```bash
 cast call 0xCurveFactory "owner()(address)" --rpc-url https://rpc.testnet.chain.robinhood.com
@@ -143,44 +50,31 @@ cast call 0xCurveFactory "pendingOwner()(address)" --rpc-url https://rpc.testnet
 cast call 0xCurveFactory "treasury()(address)" --rpc-url https://rpc.testnet.chain.robinhood.com
 ```
 
+For mainnet, use the same calls with `https://rpc.mainnet.chain.robinhood.com`.
+
 Expected:
 
 ```text
-owner()        = Safe address
+owner()         = Safe address
 pendingOwner() = 0x0000000000000000000000000000000000000000
-treasury()     = Safe address
+treasury()      = Safe address
 ```
 
-## 6. Reset Indexer And Frontend
+## Funding Targets
 
-After every redeploy, addresses and `START_BLOCK` change. Rebuild and reset the testnet stack:
+| Wallet   | Testnet target | Mainnet target before first deploy |
+| -------- | -------------: | ---------------------------------: |
+| Deployer |     `0.05 ETH` |          `0.05 ETH` minimum buffer |
+| Keeper   |     `0.05 ETH` |          `0.02 ETH` minimum buffer |
 
-```bash
-bash scripts/compose-env.sh testnet down -v
-bash scripts/compose-env.sh testnet up -d --build
-```
+The latest testnet protocol deploy used about `18,405,584` gas and paid `0.00018405584 ETH` at
+`0.01 gwei`. Keep the larger buffers above because mainnet gas price can differ and failed deploy
+attempts still burn gas.
 
-For the interim `robbed.fun` stack that still points at testnet, sync
-`tools/localstack/out/mainnet.env` to `tools/localstack/out/testnet.env`, then rebuild:
+## Rules
 
-```bash
-bash scripts/compose-env.sh mainnet down -v
-bash scripts/compose-env.sh mainnet up -d --build
-```
-
-Check readiness:
-
-```bash
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost:4101/v1/readyz
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost:4169/ready
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost:4201/v1/readyz
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost:4229/ready
-```
-
-## Notes
-
-- Deployer private key: encrypted Foundry keystore, outside repo.
-- Keeper private key: `~/.config/robbed/testnet.secrets.env`, mode `600`.
-- Safe owner keys: stay with owners; Safe UI handles signatures.
-- Do not use `DEPLOYER_PRIVATE_KEY` for deploys.
-- Do not run keeper with the deployer key.
+- Do not use `DEPLOYER_PRIVATE_KEY` for public deploys.
+- Do not run the keeper with the deployer key.
+- Do not commit `config/env/*.env` or `~/.config/robbed/*.secrets.env`.
+- Safe owner keys stay with each owner; Safe UI handles collection of signatures.
+- Mainnet deploy env emission works only after a real `mode: "live"` artifact exists.

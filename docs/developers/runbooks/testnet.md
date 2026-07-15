@@ -10,15 +10,15 @@ Everything in this document is either (a) verified against an official source �
 
 Source: [docs.robinhood.com/chain/connecting](https://docs.robinhood.com/chain/connecting/), retrieved 2026-07-11.
 
-| Parameter | Value |
-|---|---|
-| Chain ID | **46630** |
-| Native gas token | ETH |
-| Public RPC (HTTP) | `https://rpc.testnet.chain.robinhood.com` (rate-limited) |
-| Provider RPC (HTTP/WS) | `https://robinhood-testnet.g.alchemy.com/v2/{API_KEY}` / `wss://…` (Alchemy is the documented recommendation; QuickNode, Blockdaemon, dRPC, Validation Cloud also listed) |
-| Block explorer (Blockscout) | `https://explorer.testnet.chain.robinhood.com` |
-| Sequencer feed | `wss://feed.testnet.chain.robinhood.com` |
-| Faucet | `https://faucet.testnet.chain.robinhood.com` |
+| Parameter                   | Value                                                                                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chain ID                    | **46630**                                                                                                                                                                 |
+| Native gas token            | ETH                                                                                                                                                                       |
+| Public RPC (HTTP)           | `https://rpc.testnet.chain.robinhood.com` (rate-limited)                                                                                                                  |
+| Provider RPC (HTTP/WS)      | `https://robinhood-testnet.g.alchemy.com/v2/{API_KEY}` / `wss://…` (Alchemy is the documented recommendation; QuickNode, Blockdaemon, dRPC, Validation Cloud also listed) |
+| Block explorer (Blockscout) | `https://explorer.testnet.chain.robinhood.com`                                                                                                                            |
+| Sequencer feed              | `wss://feed.testnet.chain.robinhood.com`                                                                                                                                  |
+| Faucet                      | `https://faucet.testnet.chain.robinhood.com`                                                                                                                              |
 
 ⚠ Some third-party RPC lists print chain ID **46646** for this testnet. The official docs say **46630**. When in doubt: `cast chain-id --rpc-url https://rpc.testnet.chain.robinhood.com` — the compose `chaincheck` one-shot performs exactly this assertion on every `dev:testnet` bring-up.
 
@@ -41,13 +41,13 @@ cast wallet address --account robbed-testnet-deployer
 
 Add the network to MetaMask/Rabby manually (or via the "Add network to your wallet" page in the official docs):
 
-| Field | Value |
-|---|---|
-| Network name | Robinhood Chain Testnet |
-| RPC URL | `https://rpc.testnet.chain.robinhood.com` |
-| Chain ID | `46630` |
-| Currency symbol | ETH |
-| Block explorer | `https://explorer.testnet.chain.robinhood.com` |
+| Field           | Value                                          |
+| --------------- | ---------------------------------------------- |
+| Network name    | Robinhood Chain Testnet                        |
+| RPC URL         | `https://rpc.testnet.chain.robinhood.com`      |
+| Chain ID        | `46630`                                        |
+| Currency symbol | ETH                                            |
+| Block explorer  | `https://explorer.testnet.chain.robinhood.com` |
 
 The web app's wallet plumbing (RainbowKit/wagmi) needs no secret for injected wallets; `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` is only required for WalletConnect QR flows (the open items web-6, NEEDS-USER).
 
@@ -99,13 +99,13 @@ What it does (full detail: `docs/developers/runbooks/docker.md` → "Testnet sta
 
 **Fail-closed prerequisites** (the stack refuses to start without them, by design):
 
-| Prerequisite | Produced by | Status |
-|---|---|---|
-| The four `TESTNET_*` env vars | you (section 4) | ✅ values known (this doc) |
-| `tools/localstack/out/testnet.env` — contract addresses + `START_BLOCK` | **T-3** testnet deploy (section 6) | ⛔ does not exist until the deploy runs |
-| Testnet constants in `@robbed/shared` (indexer/web chain gates currently pin mainnet 4663) | **T-1** (robbed-shared, architect-ratified) | ⛔ PENDING |
+| Prerequisite                                                                               | Produced by                                 | Status                                  |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------- | --------------------------------------- |
+| The four `TESTNET_*` env vars                                                              | you (section 4)                             | ✅ values known (this doc)              |
+| `tools/localstack/out/testnet.env` — contract addresses + `START_BLOCK`                    | **T-3** testnet deploy (section 6)          | ⛔ does not exist until the deploy runs |
+| Testnet constants in `@robbed/shared` (indexer/web chain gates currently pin mainnet 4663) | **T-1** (robbed-shared, architect-ratified) | ⛔ PENDING                              |
 
-So today the *infra* runs but the indexer will fail its chain-gate assertions — expected and honest. The two ⛔ rows are exactly the Phase-T engineering in flight.
+So today the _infra_ runs but the indexer will fail its chain-gate assertions — expected and honest. The two ⛔ rows are exactly the Phase-T engineering in flight.
 
 ## 6. Deploying the contracts to testnet (Phase T-3)
 
@@ -127,13 +127,13 @@ bash scripts/deploy-onchain.sh protocol \
   --verify \
   --account robbed-testnet-deployer
 
-bun contracts/script/emit-testnet-env.ts
+bun contracts/script/emit-deployment-env.ts --network testnet
 bun contracts/script/codegen-addresses.ts
 ```
 
 ⚠ **`--skip-simulation --slow` are MANDATORY on this chain (incident 2026-07-12, first T-3 attempt).**
 Robinhood testnet is an Arbitrum Orbit L2: every tx's `gasUsed` includes an ArbOS **L1 data-fee
-component** (`gasUsedForL1` in receipts) that Foundry's *local* simulation cannot model. With the
+component** (`gasUsedForL1` in receipts) that Foundry's _local_ simulation cannot model. With the
 default flow (local sim × 1.3 multiplier) all four top-level CREATEs ran out of gas exactly at their
 limits (e.g. CurveFactory: limit 6,103,116 hit, of which 2,764,298 was `gasUsedForL1`), while the
 follow-up CALLs "succeeded" as value-transferring no-ops against the codeless addresses — stranding
@@ -143,7 +143,7 @@ forge take gas limits from the node's `eth_estimateGas` (ArbOS includes the L1 c
 receipt and **stops on the first failure**, preventing the no-op cascade. The 2026-07-12 T-3 deploy
 succeeded with exactly these flags.
 
-which per contracts.md section 7.2 deploys all six contracts in order, runs the runtime V3/WETH assertions, executes the canary create+buy, initiates the Ownable2Step handoff to the treasury Safe (the Safe must `acceptOwnership()`), and Blockscout-verifies everything (this doubles as the **M1-2/O-5** solc-0.8.35+cancun verification check). *(Verifier endpoint: **RESOLVED — D-52:** the testnet explorer runs the **Blockscout v2 verifier, no API key required, with `solc v0.8.35+commit.47b9dedd` in its supported list**.)* The `emit-testnet-env.ts` step (contracts-owned, mirrors the local `deploychain` one-shot) reads the canonical deploy artifact `contracts/deployments/46630.json` + the broadcast receipts (for `START_BLOCK` = first deploy block, so the indexer backfill includes the canary events) and writes `tools/localstack/out/testnet.env` with the **same keys as the local `local.env`** (`CURVE_FACTORY_ADDRESS`, `ROUTER_ADDRESS`, `MIGRATOR_ADDRESS`, `TREASURY_ADDRESS`, `LP_FEE_VAULT_ADDRESS`, `CREATOR_VAULT_ADDRESS`, `WETH_ADDRESS`, `START_BLOCK`) — the fail-closed prerequisite of the section 5 stack. (`contracts/deployments/<chainId>.json`, i.e. `46630.json`, is the **canonical** deploy artifact — D-2, D-49 annotation.)
+which per contracts.md section 7.2 deploys all six contracts in order, runs the runtime V3/WETH assertions, executes the canary create+buy, initiates the Ownable2Step handoff to the treasury Safe (the Safe must `acceptOwnership()`), and Blockscout-verifies everything (this doubles as the **M1-2/O-5** solc-0.8.35+cancun verification check). _(Verifier endpoint: **RESOLVED — D-52:** the testnet explorer runs the **Blockscout v2 verifier, no API key required, with `solc v0.8.35+commit.47b9dedd` in its supported list**.)_ The `emit-deployment-env.ts --network testnet` step (contracts-owned, mirrors the local `deploychain` one-shot) reads the canonical deploy artifact `contracts/deployments/46630.json` + the broadcast receipts (for `START_BLOCK` = first deploy block, so the indexer backfill includes the canary events) and writes `tools/localstack/out/testnet.env` with the **same keys as the local `local.env`** (`CURVE_FACTORY_ADDRESS`, `ROUTER_ADDRESS`, `MIGRATOR_ADDRESS`, `TREASURY_ADDRESS`, `LP_FEE_VAULT_ADDRESS`, `CREATOR_VAULT_ADDRESS`, `WETH_ADDRESS`, `START_BLOCK`) — the fail-closed prerequisite of the section 5 stack. (`contracts/deployments/<chainId>.json`, i.e. `46630.json`, is the **canonical** deploy artifact — D-2, D-49 annotation.)
 
 **Treasury (T-2):** the constants file's `treasurySafe` is the zero address until the dev-signer Safe exists, and the deploy fails closed without it. Testnet uses **canonical Safe v1.4.1 contracts with dev signers** (section 6.6 — canonical, never bespoke; CONFIRMED on 46630, D-52). The mainnet signer set stays OPEN (the open items O-6, NEEDS-USER).
 
@@ -176,10 +176,10 @@ cast balance $ADDR --rpc-url https://rpc.testnet.chain.robinhood.com   # faucet 
 cast code  $CONTRACT --rpc-url …                                       # deployed?
 ```
 
-| I want to… | Do |
-|---|---|
-| get funds | faucet (section 3) |
-| point my wallet at testnet | section 2.2 table |
-| run the off-chain stack against testnet | `bun run dev:testnet` (section 5) |
-| deploy the contracts | verify the Safe/constants, import/fund the deployer keystore, run the section 6 `scripts/deploy-onchain.sh protocol` command, then emit/codegen the address artifacts |
-| see a tx / verify a contract | `https://explorer.testnet.chain.robinhood.com` |
+| I want to…                              | Do                                                                                                                                                                    |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| get funds                               | faucet (section 3)                                                                                                                                                    |
+| point my wallet at testnet              | section 2.2 table                                                                                                                                                     |
+| run the off-chain stack against testnet | `bun run dev:testnet` (section 5)                                                                                                                                     |
+| deploy the contracts                    | verify the Safe/constants, import/fund the deployer keystore, run the section 6 `scripts/deploy-onchain.sh protocol` command, then emit/codegen the address artifacts |
+| see a tx / verify a contract            | `https://explorer.testnet.chain.robinhood.com`                                                                                                                        |

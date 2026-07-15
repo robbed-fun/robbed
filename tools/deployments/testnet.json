@@ -6,7 +6,7 @@
   "source": {
     "artifact": "contracts/deployments/46630.json",
     "broadcast": "contracts/broadcast/Deploy.s.sol/46630/run-latest.json",
-    "emitter": "contracts/script/emit-testnet-env.ts"
+    "emitter": "contracts/script/emit-deployment-env.ts --network testnet"
   },
   "robbed": {
     "curveFactory": "0x5Bf96c640793a3DDB1181b34f6E501771Eb7A79a",

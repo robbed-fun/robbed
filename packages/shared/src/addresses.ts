@@ -63,15 +63,15 @@ export interface Deployment {
 export const ROBBED_DEPLOYMENTS = {
   "4663": {
     chainId: 4663,
-    mode: "fork",
-    deployedAt: 1784120861,
+    mode: "live",
+    deployedAt: 1784149586,
     robbed: {
-      curveFactory: "0x49fd2BE640DB2910c2fAb69bB8531Ab6E76127ff",
-      router: "0xf953b3A269d80e3eB0F2947630Da976B896A8C5b",
-      v3Migrator: "0xA4899D35897033b927acFCf422bc745916139776",
-      lpFeeVault: "0x86A2EE8FAf9A840F7a2c64CA3d51209F9A02081D",
-      treasury: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-      creatorVault: "0x4631BCAbD6dF18D94796344963cB60d44a4136b6",
+      curveFactory: "0xba97fb098Cd85890f764acf260D0c152cBF1ad30",
+      router: "0x0Ce4D916898FaDcCDB0a7e1335B28852e9fAF2F5",
+      v3Migrator: "0xE76E7C7fc08a3cD6C8bc23dED36DAA1928B6E433",
+      lpFeeVault: "0x85CD81d1fDF1a40b6060Cc75d18F07DDD97057BA",
+      treasury: "0x5e884B8B23a1176bE95B536399F333bD8652547C",
+      creatorVault: "0x56Cd8Db022Ce736961a67224575E1e673322e2e4",
     },
     external: {
       weth: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
@@ -81,8 +81,8 @@ export const ROBBED_DEPLOYMENTS = {
       quoterV2: "0x33e885eD0Ec9bF04EcfB19341582aADCb4c8A9E7",
     },
     canary: {
-      token: "0xD781C44726058d2971B58408c492192877FAAC17",
-      curve: "0x31C425D38753A2F04cb3B7924C33CfF7EC8288fB",
+      token: "0x188d0BB913e28292cd985F97feCDd31daF198a0D",
+      curve: "0xd9bE99FCa7fCA9a5F2F35A4a3e3C1647331f1449",
     },
   },
   "31337": {

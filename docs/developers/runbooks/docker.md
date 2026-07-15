@@ -23,18 +23,18 @@ the indexer (required) and api (best-effort) source at start. Anvil state is eph
 
 ## Host-port convention: everything on 4XXX
 
-| Host port | Service | Container port | What |
-|---|---|---|---|
-| `4000` | `web` | 3000 | Next.js 16 dev server |
-| `4001` | `api` | 3001 | Hono API (`/v1/healthz`, `/v1/readyz`) |
-| `4002` | `ws` | 3002 | Bun WS fanout (plain GET answers 426 — expected) |
-| `4269` | `indexer` | 42069 | Ponder dev UI / GraphQL |
-| `4379` | `redis` | 6379 | Redis |
-| `4432` | `postgres` | 5432 | Postgres 17 |
-| `4545` | `anvil` | 8545 | anvil fork of Robinhood Chain (chainId 4663; http + ws on one port) |
-| `4900` | `minio` | 9000 | S3 API (R2-compatible) |
-| `4901` | `minio` | 9001 | minio web console |
-| `4964` | `indexer` | 9464 | Gate-7 `/metrics` |
+| Host port | Service    | Container port | What                                                                |
+| --------- | ---------- | -------------- | ------------------------------------------------------------------- |
+| `4000`    | `web`      | 3000           | Next.js 16 dev server                                               |
+| `4001`    | `api`      | 3001           | Hono API (`/v1/healthz`, `/v1/readyz`)                              |
+| `4002`    | `ws`       | 3002           | Bun WS fanout (plain GET answers 426 — expected)                    |
+| `4269`    | `indexer`  | 42069          | Ponder dev UI / GraphQL                                             |
+| `4379`    | `redis`    | 6379           | Redis                                                               |
+| `4432`    | `postgres` | 5432           | Postgres 17                                                         |
+| `4545`    | `anvil`    | 8545           | anvil fork of Robinhood Chain (chainId 4663; http + ws on one port) |
+| `4900`    | `minio`    | 9000           | S3 API (R2-compatible)                                              |
+| `4901`    | `minio`    | 9001           | minio web console                                                   |
+| `4964`    | `indexer`  | 9464           | Gate-7 `/metrics`                                                   |
 
 Container-internal ports keep each tool's default; only the host mapping follows 4XXX. Every mapping is
 overridable via env (`WEB_PORT`, `API_PORT`, `WS_PORT`, `PONDER_PORT`, `ANVIL_PORT`, `REDIS_PORT`,
@@ -42,19 +42,19 @@ overridable via env (`WEB_PORT`, `API_PORT`, `WS_PORT`, `PONDER_PORT`, `ANVIL_PO
 
 ## Services
 
-| Service | Image | Purpose | Healthcheck |
-|---|---|---|---|
-| `postgres` | `postgres:17` | Relational store; `pg_trgm` + API tables applied at first init | `pg_isready` |
-| `redis` | `redis:7-alpine` | Pub/sub fanout + rate-limit windows | `redis-cli ping` |
-| `minio` | `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z` | R2-compatible object store | `mc ready local` |
-| `createbuckets` | `minio/mc:RELEASE.2025-08-13T08-35-41Z` | One-shot: default bucket + public-download policy, then exits 0 | — |
-| `anvil` | `ghcr.io/foundry-rs/foundry:v1.7.1` | Fork of Robinhood Chain (RPC from the official Blockscout config, verified `eth_chainId`=4663); `--block-time 2` | `cast chain-id == 4663` |
-| `deploychain` | `ghcr.io/foundry-rs/foundry:v1.7.1` | One-shot: `Deploy.s.sol` against the fork (canary create+buy included), emits `tools/localstack/out/local.env`, exits 0 | — |
-| `deps` | `robbed-dev` (built) | One-shot: `pnpm install --frozen-lockfile` for the workspace, then exits 0 | — |
-| `api` | `robbed-dev` | `bun run --hot src/index.ts` (apps/api); sources `local.env` best-effort | `curl /v1/healthz` |
-| `ws` | `robbed-dev` | `bun run --hot src/ws.ts` (apps/api, Redis-only fanout) | TCP connect |
-| `indexer` | `robbed-dev` | offchain `migrate` then `ponder dev` (apps/indexer); requires `local.env` from deploychain | `curl /ready` (200 == backfill complete) |
-| `web` | `robbed-dev` | `next dev` (apps/web); browser RPC → `http://localhost:4545` | `curl /` |
+| Service         | Image                                              | Purpose                                                                                                                 | Healthcheck                              |
+| --------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `postgres`      | `postgres:17`                                      | Relational store; `pg_trgm` + API tables applied at first init                                                          | `pg_isready`                             |
+| `redis`         | `redis:7-alpine`                                   | Pub/sub fanout + rate-limit windows                                                                                     | `redis-cli ping`                         |
+| `minio`         | `quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z` | R2-compatible object store                                                                                              | `mc ready local`                         |
+| `createbuckets` | `minio/mc:RELEASE.2025-08-13T08-35-41Z`            | One-shot: default bucket + public-download policy, then exits 0                                                         | —                                        |
+| `anvil`         | `ghcr.io/foundry-rs/foundry:v1.7.1`                | Fork of Robinhood Chain (RPC from the official Blockscout config, verified `eth_chainId`=4663); `--block-time 2`        | `cast chain-id == 4663`                  |
+| `deploychain`   | `ghcr.io/foundry-rs/foundry:v1.7.1`                | One-shot: `Deploy.s.sol` against the fork (canary create+buy included), emits `tools/localstack/out/local.env`, exits 0 | —                                        |
+| `deps`          | `robbed-dev` (built)                               | One-shot: `pnpm install --frozen-lockfile` for the workspace, then exits 0                                              | —                                        |
+| `api`           | `robbed-dev`                                       | `bun run --hot src/index.ts` (apps/api); sources `local.env` best-effort                                                | `curl /v1/healthz`                       |
+| `ws`            | `robbed-dev`                                       | `bun run --hot src/ws.ts` (apps/api, Redis-only fanout)                                                                 | TCP connect                              |
+| `indexer`       | `robbed-dev`                                       | offchain `migrate` then `ponder dev` (apps/indexer); requires `local.env` from deploychain                              | `curl /ready` (200 == backfill complete) |
+| `web`           | `robbed-dev`                                       | `next dev` (apps/web); browser RPC → `http://localhost:4545`                                                            | `curl /`                                 |
 
 **Image-tag choices (docs-first, verified 2026-07-10):** Postgres 17 (fully-supported, Ponder-proven major;
 18 is `latest`), Redis 7 (battle-tested pub/sub; 8.x is `latest`), minio tag verified against the quay.io tag
@@ -124,12 +124,12 @@ docker compose config   # parses + interpolates env; exit 0 == valid. Does NOT s
 All credentials are dev defaults baked in via `${VAR:-default}`; override from a root `.env`
 (auto-loaded by compose) or the shell.
 
-| Variable | Default | Used by |
-|---|---|---|
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `robbed` / `robbed_dev_pw` / `robbed` | postgres, api, indexer |
-| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | `robbed` / `robbed_dev_secret` | minio, createbuckets, api |
-| `R2_BUCKET` | `robbed-assets` | createbuckets, api, web |
-| `ROBINHOOD_RPC_URL`, `NEXT_PUBLIC_RPC_HTTP/WS`, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | empty | api / web passthrough |
+| Variable                                                                               | Default                               | Used by                   |
+| -------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------- |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`                                  | `robbed` / `robbed_dev_pw` / `robbed` | postgres, api, indexer    |
+| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`                                              | `robbed` / `robbed_dev_secret`        | minio, createbuckets, api |
+| `R2_BUCKET`                                                                            | `robbed-assets`                       | createbuckets, api, web   |
+| `ROBINHOOD_RPC_URL`, `NEXT_PUBLIC_RPC_HTTP/WS`, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | empty                                 | api / web passthrough     |
 
 In-network wiring (service DNS names) is set inside the compose file; browser-visible URLs
 (`NEXT_PUBLIC_*`, `R2_PUBLIC_BASE_URL`) point at the host-mapped 4XXX ports. From the **host**, the stack is:
@@ -224,31 +224,31 @@ review with `diff docker-compose.yml docker-compose.testnet.yml` (services are a
 distinct **41XX block** (dev keeps 40XX/44XX), so **both stacks run simultaneously** with no
 `*_PORT` overrides:
 
-| Service | Testnet host port | (dev stack) |
-|---|---|---|
-| web | **4100** | 4000 |
-| api | **4101** | 4001 |
-| ws | **4102** | 4002 |
-| postgres | **4132** | 4432 |
-| indexer metrics | **4164** | 4964 |
-| ponder dev UI/GraphQL | **4169** | 4269 |
-| redis | **4179** | 4379 |
-| minio S3 | **4190** | 4900 |
-| minio console | **4191** | 4901 |
+| Service               | Testnet host port | (dev stack) |
+| --------------------- | ----------------- | ----------- |
+| web                   | **4100**          | 4000        |
+| api                   | **4101**          | 4001        |
+| ws                    | **4102**          | 4002        |
+| postgres              | **4132**          | 4432        |
+| indexer metrics       | **4164**          | 4964        |
+| ponder dev UI/GraphQL | **4169**          | 4269        |
+| redis                 | **4179**          | 4379        |
+| minio S3              | **4190**          | 4900        |
+| minio console         | **4191**          | 4901        |
 
 Env-var **names** are identical to the dev stack (only the `:-` defaults differ) — an exported
 `*_PORT` in your shell/`.env` applies to BOTH stacks and re-collides them.
 
 ### Prerequisites (the open items / Phase-T artifacts — the stack fails closed without them)
 
-| Artifact | Produced by | Consumed as |
-|---|---|---|
+| Artifact                                     | Produced by                                                                                    | Consumed as                                                                                                                        |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Official testnet chain ID / RPC URL / WS URL | the open items item, pulled from official Robinhood docs at Phase-T start — **never invented** | `TESTNET_CHAIN_ID`, `TESTNET_RPC_URL`, `TESTNET_RPC_WS_URL` env (no defaults; `${VAR:?}` aborts `config`/`up` when unset or empty) |
-| Official testnet Blockscout URL | same the open items item | **Not consumed by compose** — used by the T-3 `forge` verification step and the T-4 lifecycle runbook |
+| Official testnet Blockscout URL              | same the open items item                                                                       | **Not consumed by compose** — used by the T-3 `forge` verification step and the T-4 lifecycle runbook                              |
 
 Canonical chain-46630 network params: see `testnet.md` section 1.
 | Testnet constants in `@robbed/shared` | **T-1** (via robbed-shared, architect-ratified) | Unblocks the indexer + web chain gates (see limitation below) |
-| Contract addresses + deploy block | **T-3** deploy (`contracts/deployments/46630.json` — canonical `contracts/deployments/<chainId>.json` per **D-2** (2026-07-12; record: D-49 annotation); supersedes the earlier `tools/deployments/testnet.json` wording) | `tools/localstack/out/testnet.env` — same keys as the local `local.env` (`CURVE_FACTORY_ADDRESS`, `ROUTER_ADDRESS`, `MIGRATOR_ADDRESS`, `TREASURY_ADDRESS`, `LP_FEE_VAULT_ADDRESS`, `START_BLOCK`), emitted/derived from the T-3 artifact via `emit-testnet-env.ts`. `api` and `indexer` refuse to start without it, with an error pointing here — there is no best-effort mode (no local deploy one-shot can fill the gap) |
+| Contract addresses + deploy block | **T-3** deploy (`contracts/deployments/46630.json` — canonical `contracts/deployments/<chainId>.json` per **D-2** (2026-07-12; record: D-49 annotation); supersedes the earlier `tools/deployments/testnet.json` wording) | `tools/localstack/out/testnet.env` — same keys as the local `local.env` (`CURVE_FACTORY_ADDRESS`, `ROUTER_ADDRESS`, `MIGRATOR_ADDRESS`, `TREASURY_ADDRESS`, `LP_FEE_VAULT_ADDRESS`, `CREATOR_VAULT_ADDRESS`, `WETH_ADDRESS`, `START_BLOCK`), emitted/derived from the T-3 artifact via `emit-deployment-env.ts --network testnet`. `api` and `indexer` refuse to start without it, with an error pointing here — there is no best-effort mode (no local deploy one-shot can fill the gap) |
 
 ### Env contract
 
@@ -257,11 +257,11 @@ interpolation error message when missing/empty (verified: `docker compose -f
 docker-compose.testnet.yml config` exits 1 with a message naming the variable and this section —
 never a silent default).
 
-| Variable | Required | Meaning |
-|---|---|---|
-| `TESTNET_RPC_URL` | yes | Official testnet JSON-RPC → indexer `INDEXER_RPC_HTTP`, api `ROBINHOOD_RPC_URL`, web `NEXT_PUBLIC_RPC_HTTP`, `chaincheck` preflight |
+| Variable             | Required                                    | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| -------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TESTNET_RPC_URL`    | yes                                         | Official testnet JSON-RPC → indexer `INDEXER_RPC_HTTP`, api `ROBINHOOD_RPC_URL`, web `NEXT_PUBLIC_RPC_HTTP`, `chaincheck` preflight                                                                                                                                                                                                                                                                                                                         |
 | `TESTNET_RPC_WS_URL` | **no — WS optional, HTTP polling fallback** | WS JSON-RPC → indexer `INDEXER_RPC_WS`, web `NEXT_PUBLIC_RPC_WS`. Empty/unset is fine: `apps/indexer/src/config.ts` treats `INDEXER_RPC_WS` as optional (`\|\| undefined` → Ponder falls back to HTTP polling) and the web env layer tolerates empty. Set it to the **Alchemy wss** endpoint (`wss://robinhood-testnet.g.alchemy.com/v2/{KEY}`) when a key is provided — **never the sequencer feed** (`wss://feed.testnet…` is a block feed, not JSON-RPC) |
-| `TESTNET_CHAIN_ID` | yes | Official testnet chain id — asserted by the `chaincheck` one-shot (`cast chain-id` against `TESTNET_RPC_URL` must match; api/indexer gate on it via `depends_on`) |
+| `TESTNET_CHAIN_ID`   | yes                                         | Official testnet chain id — asserted by the `chaincheck` one-shot (`cast chain-id` against `TESTNET_RPC_URL` must match; api/indexer gate on it via `depends_on`)                                                                                                                                                                                                                                                                                           |
 
 Everything else (`POSTGRES_*`, `MINIO_*`, `R2_BUCKET`, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`,
 `NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD`) keeps the same dev defaults as the local stack; `*_PORT`
@@ -293,7 +293,7 @@ but the compose services are canonical). How it is wired:
   `docker logs <stack>-cloudflared-1` — expect 4 × "Registered tunnel connection" and
   `Settings: map[config:/etc/cloudflared/config.yml …]`.
 - **API hostname RENAMED 2026-07-12: `api.testnet.robbed.fun` → `api-testnet.robbed.fun`.**
-  The old host is a *second-level* subdomain, outside Universal SSL's
+  The old host is a _second-level_ subdomain, outside Universal SSL's
   `robbed.fun`/`*.robbed.fun` coverage — the edge answered TLS with handshake-failure
   (alert 40); fixing it in place needed a paid Advanced Certificate / Total TLS cert. The
   first-level `api-testnet.robbed.fun` is covered by the existing Universal SSL wildcard, so
@@ -315,11 +315,11 @@ External visitors' browsers cannot reach `http://localhost:4101`,
 so the web service's three browser-visible URLs are override-able with localhost defaults
 (root `.env` carries the live values; the public URLs also work for local browsing):
 
-| Override (root `.env`) | Wired to | Live value |
-|---|---|---|
-| `TESTNET_PUBLIC_API_BASE_URL` | `NEXT_PUBLIC_API_BASE_URL` | `https://api-testnet.robbed.fun` |
-| `TESTNET_PUBLIC_WS_URL` | `NEXT_PUBLIC_WS_URL` | `wss://api-testnet.robbed.fun/ws` |
-| `TESTNET_PUBLIC_R2_BASE_URL` | `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` | *(unset — see limitation)* |
+| Override (root `.env`)        | Wired to                         | Live value                        |
+| ----------------------------- | -------------------------------- | --------------------------------- |
+| `TESTNET_PUBLIC_API_BASE_URL` | `NEXT_PUBLIC_API_BASE_URL`       | `https://api-testnet.robbed.fun`  |
+| `TESTNET_PUBLIC_WS_URL`       | `NEXT_PUBLIC_WS_URL`             | `wss://api-testnet.robbed.fun/ws` |
+| `TESTNET_PUBLIC_R2_BASE_URL`  | `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` | _(unset — see limitation)_        |
 
 **Known limitation:** R2 stays on the `http://localhost:4190/robbed-assets` default, so
 **external visitors see broken images** (token logos/metadata assets). Fix options, either works:
@@ -400,16 +400,16 @@ on Komodo (`prod-images.md`).
 
 Host ports — **42XX block** (dev 40XX/44XX, testnet 41XX; all three stacks can run at once):
 
-| Service | Mainnet host port | (testnet) | (dev) |
-|---|---|---|---|
-| web | **4200** | 4100 | 4000 |
-| api | **4201** | 4101 | 4001 |
-| ws | **4202** | 4102 | 4002 |
-| ponder dev UI/GraphQL | **4229** (4269 is dev-owned) | 4169 | 4269 |
-| postgres | **4232** | 4132 | 4432 |
-| indexer metrics | **4264** | 4164 | 4964 |
-| redis | **4279** | 4179 | 4379 |
-| minio S3 / console | **4290 / 4291** | 4190 / 4191 | 4900 / 4901 |
+| Service               | Mainnet host port            | (testnet)   | (dev)       |
+| --------------------- | ---------------------------- | ----------- | ----------- |
+| web                   | **4200**                     | 4100        | 4000        |
+| api                   | **4201**                     | 4101        | 4001        |
+| ws                    | **4202**                     | 4102        | 4002        |
+| ponder dev UI/GraphQL | **4229** (4269 is dev-owned) | 4169        | 4269        |
+| postgres              | **4232**                     | 4132        | 4432        |
+| indexer metrics       | **4264**                     | 4164        | 4964        |
+| redis                 | **4279**                     | 4179        | 4379        |
+| minio S3 / console    | **4290 / 4291**              | 4190 / 4191 | 4900 / 4901 |
 
 ## Not in this file (deferred)
 

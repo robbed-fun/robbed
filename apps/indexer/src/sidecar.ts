@@ -1,10 +1,11 @@
 /**
  * Side-process boot (M2-6 + M2-7) — starts the confirmation tracker and the
  * metadata verifier inside the indexer container, independent of Ponder's sync
- * (indexer.md). Wired from a Ponder `:setup` handler (runs once before
- * indexing) so no separate entrypoint is needed; every start is guarded, and any
- * failure is logged, NEVER thrown into the indexing pipeline (these loops label
- * and derive — they never gate chain state).
+ * (indexer.md). Compose eagerly starts this at handler-module import because
+ * `ponder start` crash recovery does not replay `:setup`; the `:setup` handler
+ * remains an idempotent fallback. Every start is guarded, and any failure is
+ * logged, NEVER thrown into the indexing pipeline (these loops label and derive
+ * — they never gate chain state).
  *
  * Transport note (RESOLVED — prod-images.md fix, 2026-07-11) the Redis
  * publisher and the `control:reverify` subscriber are RUNTIME-SELECTED — Bun's

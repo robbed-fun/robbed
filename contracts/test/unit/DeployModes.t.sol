@@ -71,6 +71,25 @@ contract DeployHarness is Deploy {
         _resolveExternals();
         return (weth, v3Factory, npm, swapRouter02, quoterV2, treasury);
     }
+
+    /// @dev Path-explicit pre-broadcast subset of {Deploy.run}: mode + signer resolution, constants
+    ///      loading, then external resolution. Keeps this unit test deterministic without using the
+    ///      process-global ROBBED_CONSTANTS env override.
+    function signerAndResolveFrom(string memory path) external {
+        mode = _selectMode(block.chainid, _isMainnetAffirmed());
+        uint256 pk = vm.envOr("DEPLOYER_PRIVATE_KEY", uint256(0));
+        if (pk != 0) {
+            deployer = vm.addr(pk);
+        } else {
+            deployer = vm.envOr("DEPLOYER_ADDRESS", address(0));
+            if (deployer == address(0)) {
+                if (mode == Mode.Live || mode == Mode.Testnet) revert MissingDeployerAddress();
+                deployer = vm.addr(ANVIL_ACCOUNT0_PK);
+            }
+        }
+        _loadConstantsFrom(path);
+        _resolveExternals();
+    }
 }
 
 /// @title DeployModesTest — Phase-T deploy-script mode selection (live 4663 / testnet 46630 / local)
@@ -88,6 +107,7 @@ contract DeployModesTest is Test {
     // `vm.readFile` uses for the real `../tools/m0/out/…` defaults.
     string internal constant FIXTURE = "test/fixtures/deploy/constants.testnet-mode.json";
     string internal constant FIXTURE_ZERO_TREASURY = "test/fixtures/deploy/constants.testnet-zerotreasury.json";
+    string internal constant FORK_ZERO_TREASURY_FIXTURE = "test/fixtures/deploy/constants.mainnet-zerotreasury.json";
     // The real dev-fork constants (chainId 4663, canonical WETH externals, anvil-1 treasury
     // stand-in) the docker `deploychain` one-shot feeds a FORK run — used to prove a fork resolves.
     string internal constant FORK_FIXTURE = "../tools/localstack/constants.fork.json";
@@ -201,13 +221,13 @@ contract DeployModesTest is Test {
 
     /// @notice A 4663 FORK run (no affirmation) does NOT demand a real key — it uses the keyless
     ///         anvil fallback like Local (the docker one-shot supplies account-0). It therefore
-    ///         proceeds past the signer gate; with the default mainnet constants (zero treasury Safe,
-    ///         O-6) it then fails closed at `TreasurySafeUnset`, never at `MissingDeployerAddress`.
+    ///         proceeds past the signer gate; with a 4663 zero-treasury fixture it then fails closed
+    ///         at `TreasurySafeUnset`, never at `MissingDeployerAddress`.
     function test_run_forkMode_usesKeylessFallback_thenO6FailClosed() public {
         vm.chainId(4663);
         harness.setAffirm(false);
         vm.expectRevert(Deploy.TreasurySafeUnset.selector);
-        harness.run();
+        harness.signerAndResolveFrom(FORK_ZERO_TREASURY_FIXTURE);
     }
 
     // ── (c) testnet externals come from the constants file, never hardcodes ───

@@ -155,8 +155,11 @@ describe("applyMigrationsAtBoot (sidecar entry)", () => {
     const pool = poolOf(() => client);
     const errors: string[] = [];
     const ok = await applyMigrationsAtBoot(pool, "wrong_schema", {
+      attempts: 1,
+      delayMs: 1,
       log: noop,
-      error: (m) => errors.push(m),
+      error: (m, err) =>
+        errors.push(`${m} ${err instanceof Error ? err.message : String(err)}`),
     });
     expect(ok).toBe(false);
     expect(errors.some((m) => m.includes("DATABASE_SCHEMA"))).toBe(true);

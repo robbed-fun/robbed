@@ -50,7 +50,8 @@ function req(name: string): string {
 function envAddressOr(name: string, registryValue: string): string {
   const raw = process.env[name];
   const v = (raw && raw !== "" ? raw : registryValue).toLowerCase();
-  if (!ADDRESS_RE.test(v)) throw new Error(`[indexer config] ${name} is not a 20-byte address: ${v}`);
+  if (!ADDRESS_RE.test(v))
+    throw new Error(`[indexer config] ${name} is not a 20-byte address: ${v}`);
   if (v === ZERO_ADDRESS) throw new Error(`[indexer config] ${name} must be non-zero`);
   return v;
 }
@@ -69,7 +70,8 @@ function optAddressOr(name: string, registryValue: string | undefined): string |
   const chosen = raw && raw !== "" ? raw : registryValue;
   if (!chosen) return undefined;
   const v = chosen.toLowerCase();
-  if (!ADDRESS_RE.test(v)) throw new Error(`[indexer config] ${name} is not a 20-byte address: ${v}`);
+  if (!ADDRESS_RE.test(v))
+    throw new Error(`[indexer config] ${name} is not a 20-byte address: ${v}`);
   if (v === ZERO_ADDRESS) throw new Error(`[indexer config] ${name} must be non-zero`);
   return v;
 }
@@ -78,7 +80,10 @@ function optAddressOr(name: string, registryValue: string | undefined): string |
 function reqInt(name: string): number {
   const v = req(name);
   const n = Number(v);
-  if (!Number.isInteger(n) || n <= 0) throw new Error(`[indexer config] ${name} must be a positive integer, got ${JSON.stringify(v)}`);
+  if (!Number.isInteger(n) || n <= 0)
+    throw new Error(
+      `[indexer config] ${name} must be a positive integer, got ${JSON.stringify(v)}`,
+    );
   return n;
 }
 
@@ -86,7 +91,8 @@ function optInt(name: string, dflt: number): number {
   const v = process.env[name];
   if (v === undefined || v === "") return dflt;
   const n = Number(v);
-  if (!Number.isInteger(n) || n < 0) throw new Error(`[indexer config] ${name} must be a non-negative integer`);
+  if (!Number.isInteger(n) || n < 0)
+    throw new Error(`[indexer config] ${name} must be a non-negative integer`);
   return n;
 }
 
@@ -159,16 +165,19 @@ export function loadConfig(): IndexerConfig {
         `: the env var SELECTS a chain, it never defines one; nothing can be invented via env.`,
     );
   }
-  // ── known limit: the "4663" registry entry is a mainnet-FORK pipeline artifact ──
-  // (anvil dev-account treasury; contracts/deployments/4663.json is fork-evidence-only under
-  // D-2). Until a real Phase-B deploy replaces it, 4663 is FORBIDDEN outside a LOCAL fork
-  // stack; the fork stack declares itself via INDEXER_ALLOW_FORK_4663=1 (docker-compose.yml).
-  // Follow-up for a mode-based assertion is routed to robbed-contracts in the ruling text.
-  if (chainId === 4663 && process.env.INDEXER_ALLOW_FORK_4663 !== "1") {
+  // ── fork/live split for chain 4663 ──
+  // A 4663 fork artifact is allowed only in the LOCAL fork stack, which declares
+  // itself via INDEXER_ALLOW_FORK_4663=1. A real Phase-B deploy emits
+  // `mode: "live"` and is allowed without that local-only opt-in.
+  if (
+    chainId === 4663 &&
+    deployment.mode === "fork" &&
+    process.env.INDEXER_ALLOW_FORK_4663 !== "1"
+  ) {
     throw new Error(
       `[indexer config] INDEXER_CHAIN_ID=4663 refused (known limit) the registry's 4663 entry ` +
-        `is a mainnet-fork pipeline artifact — 4663 is forbidden outside a LOCAL fork stack until a real ` +
-        `Phase-B deploy replaces it. A LOCAL fork stack sets INDEXER_ALLOW_FORK_4663=1 (compose-injected).`,
+        `is a mainnet-fork pipeline artifact. A LOCAL fork stack sets INDEXER_ALLOW_FORK_4663=1 ` +
+        `(compose-injected); a real mainnet deployment must be recorded as mode "live".`,
     );
   }
   return {

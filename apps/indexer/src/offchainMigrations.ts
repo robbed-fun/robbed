@@ -4,8 +4,8 @@
  *
  *  - `scripts/migrate.ts` (ops/manual + compose pre-start): applies both phases
  *    when possible, plus the runtime assertions;
- *  - `src/sidecar.ts` (`startSidecars`, wired from the Ponder `:setup` hook):
- *    re-applies both phases at EVERY indexer boot.
+ *  - `src/sidecar.ts` (`startSidecars`, wired from eager compose boot plus the
+ *    Ponder `:setup` fallback): re-applies both phases at EVERY indexer boot.
  *
  * Phases:
  *  - PHASE 1 (offchain tables → schema `public`): stable side-process tables
@@ -18,12 +18,11 @@
  * DESIGN DECISION (2026-07-12, robbed-indexer — replaces the I-5b compose
  * stopgap that re-ran `migrate` in a `/ready`-polling shell loop):
  * phase 2's first-class home is SIDECAR BOOT, because
- *  1. by the `:setup` hook the Ponder tables are GUARANTEED to exist — verified
- *     against the pinned ponder 0.16.8 source: `database.migrate()` (table
- *     create/recreate) completes before indexing starts
- *     (dist/esm/bin/commands/start.js:176), and `:setup` events are the first
- *     indexing events. No `/ready` polling (that waits for *historical sync*,
- *     far later than table creation) and no compose orchestration needed;
+ *  1. compose eagerly starts sidecars on process boot (Ponder crash recovery
+ *     does not replay `:setup`), and the boot migration waits/retries until
+ *     Ponder's `database.migrate()` has created the tables. The `:setup` hook
+ *     remains a fallback and is idempotent. No `/ready` polling (that waits for
+ *     *historical sync*, far later than table creation);
  *  2. ponder drops its tables WITH CASCADE on a dev schema rebuild
  *     (dist/esm/database/index.js:432), silently dropping these external
  *     views/indexes — so they must be RE-applied on every start, which only an
@@ -145,14 +144,10 @@ export async function applyMigrationsAtBoot(
       try {
         const result = await applyOffchainMigrations(client, { ponderSchema, log: opts.log });
         if (!result.phase2Applied) {
-          // :setup runs after Ponder's table migration — tokens missing here is
-          // a real anomaly (wrong DATABASE_SCHEMA?), not an ordering race.
-          error(
+          throw new Error(
             `[indexer migrations] phase 2 skipped at sidecar boot — "${ponderSchema}".tokens absent. ` +
-              `Check DATABASE_SCHEMA matches Ponder's schema.`,
-            null,
+              `Waiting for Ponder to build its tables; if this repeats, check DATABASE_SCHEMA matches Ponder's schema.`,
           );
-          return false;
         }
         return true;
       } finally {

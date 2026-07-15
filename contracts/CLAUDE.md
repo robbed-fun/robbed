@@ -10,7 +10,8 @@ Read first: `docs/developers/contracts.md` (curve math, graduation, fees, on-cha
 - `FOUNDRY_PROFILE=fork forge test` — fork tests vs the live chain; required for lifecycle changes
 - `slither . --config-file slither.config.json --fail-low` — zero unexplained findings; dispositions live in `slither.triage.json` / `slither.db.json` (re-triage after line shifts)
 - `bun script/codegen-abi.ts` / `bun script/codegen-addresses.ts` — regenerate the COMMITTED artifacts in `packages/shared` after any interface/deploy change (owned by robbed-shared; never hand-edit)
-- Deploys: `script/Deploy.s.sol`; testnet env emit: `bun script/emit-testnet-env.ts`
+- Deploys: `script/Deploy.s.sol`; public-chain env emit:
+  `bun script/emit-deployment-env.ts --network <testnet|mainnet>`
 
 ## Security gates (all 10 required before caps lift — `docs/developers/threat-model.md`)
 

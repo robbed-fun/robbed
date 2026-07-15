@@ -357,6 +357,9 @@ services:
       DATABASE_URL: "postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}?options=-c%20search_path%3D${TESTNET_DATABASE_SCHEMA:-robbed_testnet_ponder}%2Cpublic"
       REDIS_URL: redis://redis:6379
       METRICS_PORT: "9464"
+      # Sidecars must start on every process boot. Ponder crash recovery does
+      # not replay :setup, so the handler module eagerly boots them when this is set.
+      INDEXER_SIDECAR_BOOT: eager
       # MIRROR of docker-compose.yml — split-horizon metadata fetch. This
       # staging stack still uses minio, so the stored metadata_uri is the BROWSER
       # base (host-mapped localhost:${MINIO_PORT}), unreachable from inside this

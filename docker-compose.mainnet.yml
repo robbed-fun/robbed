@@ -22,7 +22,8 @@
 # ── PHASE-B SWAP CHECKLIST (replace testnet by mainnet; nothing else changes) ──
 #   1. Real 4663 deploy lands `contracts/deployments/4663.json` (replacing the fork artifact;
 # registry re-codegen'd via robbed-shared; Gate G-A governs —).
-#   2. Emit `tools/localstack/out/mainnet.env` from that artifact (CURVE_FACTORY_ADDRESS,
+#   2. Run `bun contracts/script/emit-deployment-env.ts --network mainnet` to emit
+#      `tools/localstack/out/mainnet.env` from that artifact (CURVE_FACTORY_ADDRESS,
 #      ROUTER_ADDRESS, MIGRATOR_ADDRESS, TREASURY_ADDRESS, LP_FEE_VAULT_ADDRESS,
 #      CREATOR_VAULT_ADDRESS, WETH_ADDRESS, START_BLOCK), replacing the INTERIM testnet copy.
 #   3. `config/env/mainnet.env`: MAINNET_RPC_URL=https://rpc.mainnet.chain.robinhood.com,
@@ -383,6 +384,9 @@ services:
       DATABASE_URL: "postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}?options=-c%20search_path%3D${MAINNET_DATABASE_SCHEMA:-robbed_mainnet_ponder}%2Cpublic"
       REDIS_URL: redis://redis:6379
       METRICS_PORT: "9464"
+      # Sidecars must start on every process boot. Ponder crash recovery does
+      # not replay :setup, so the handler module eagerly boots them when this is set.
+      INDEXER_SIDECAR_BOOT: eager
       # MIRROR of docker-compose.yml — split-horizon metadata fetch. This
       # staging stack still uses minio, so the stored metadata_uri is the BROWSER
       # base (host-mapped localhost:${MINIO_PORT}), unreachable from inside this

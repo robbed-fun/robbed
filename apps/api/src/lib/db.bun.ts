@@ -49,6 +49,60 @@ import {
   orderByClause,
 } from "./listSort";
 
+type BunSql = InstanceType<typeof SQL>;
+
+const API_DB_POOL_MAX = 4;
+const API_DB_IDLE_TIMEOUT_SECONDS = 10;
+const SQL_STATE_KEY = Symbol.for("robbed.api.bunSql");
+
+interface SqlState {
+  ro?: BunSql;
+  rw?: BunSql;
+  roUrl?: string;
+  rwUrl?: string;
+  shutdownHookRegistered?: boolean;
+}
+
+function sqlState(): SqlState {
+  const g = globalThis as typeof globalThis & { [SQL_STATE_KEY]?: SqlState };
+  g[SQL_STATE_KEY] ??= {};
+  return g[SQL_STATE_KEY];
+}
+
+function closeSql(client: BunSql | undefined) {
+  if (!client) return;
+  void client.close().catch(() => {});
+}
+
+function registerSqlShutdown(state: SqlState) {
+  if (state.shutdownHookRegistered) return;
+  state.shutdownHookRegistered = true;
+  const closeAll = () => {
+    closeSql(state.ro);
+    closeSql(state.rw);
+  };
+  process.once("SIGTERM", closeAll);
+  process.once("SIGINT", closeAll);
+}
+
+function getSqlClient(role: "ro" | "rw", url: string): BunSql {
+  const state = sqlState();
+  registerSqlShutdown(state);
+
+  const key = role;
+  const urlKey = `${role}Url` as const;
+  if (state[key] && state[urlKey] === url) return state[key];
+
+  closeSql(state[key]);
+  state[urlKey] = url;
+  state[key] = new SQL({
+    url,
+    max: API_DB_POOL_MAX,
+    idleTimeout: API_DB_IDLE_TIMEOUT_SECONDS,
+  });
+  return state[key];
+}
+
 const num = (v: unknown): number => (v == null ? 0 : Number(v));
 const str = (v: unknown): string => (v == null ? "0" : String(v));
 const nstr = (v: unknown): string | null => (v == null ? null : String(v));
@@ -197,8 +251,8 @@ function mapModeration(r: Record<string, unknown>): ModerationStatusRow {
 }
 
 export function createBunDb(config: Config): Db {
-  const ro = new SQL(config.databaseUrlRo);
-  const rw = new SQL(config.databaseUrlRw);
+  const ro = getSqlClient("ro", config.databaseUrlRo);
+  const rw = getSqlClient("rw", config.databaseUrlRw);
 
   return {
     async getWatermarks() {
