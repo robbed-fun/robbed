@@ -31,7 +31,7 @@ export type Phase = "trading" | "ready" | "graduated" | "unknown";
  */
 export type ErrorClass = "contract_revert" | "transient";
 
-/** The chain surface the keeper needs — one curve's `graduate()` lifecycle. */
+/** The chain surface the keeper needs — curve graduation + fee-sweep calls. */
 export interface ChainPort {
   /** Read `BondingCurve.phase()`; never throws (maps RPC failure → 'unknown'). */
   readPhase(curve: Address): Promise<Phase>;
@@ -39,6 +39,12 @@ export interface ChainPort {
   estimateGraduateGas(curve: Address): Promise<bigint>;
   /** Send `graduate()` with an explicit gas limit; returns the tx hash. */
   sendGraduate(curve: Address, gas: bigint): Promise<Hash>;
+  /** Read unswept treasury ETH-leg fees; never throws (maps RPC failure → null). */
+  readTreasuryFees(curve: Address): Promise<bigint | null>;
+  /** `estimateContractGas(sweepFees)`; THROWS on revert. */
+  estimateSweepFeesGas(curve: Address): Promise<bigint>;
+  /** Send permissionless `sweepFees()` with an explicit gas limit; returns tx hash. */
+  sendSweepFees(curve: Address, gas: bigint): Promise<Hash>;
   /** Wait for the receipt; `reverted` is a normal (non-throwing) outcome. */
   waitForReceipt(hash: Hash): Promise<{ status: "success" | "reverted" }>;
   /** Keeper wallet balance (wei) — for the balance-watch alert + healthz. */
@@ -53,10 +59,18 @@ export interface ReadyCurve {
   curve: Address;
 }
 
-/** The DB surface the fallback sweep needs. */
+/** One fee-bearing curve row for the treasury fee sweeper. */
+export interface TreasuryFeeCurve {
+  token: Address;
+  curve: Address;
+}
+
+/** The DB surface the fallback sweeps need. */
 export interface DbPort {
   /** Tokens crossed to ReadyToGraduate but not yet Graduated (see db.ts SQL). */
   findReadyCurves(): Promise<ReadyCurve[]>;
+  /** Curves that can accrue treasury ETH-leg fees (see db.ts SQL). */
+  findTreasuryFeeCurves(): Promise<TreasuryFeeCurve[]>;
 }
 
 /** Injected clock — deterministic in tests (no real timers/sleep). */
@@ -90,3 +104,20 @@ export interface AttemptResult {
 
 /** Why an attempt was triggered — for logs/metrics only. */
 export type AttemptSource = "event" | "sweep";
+
+/** Terminal status of a single treasury fee sweep decision. */
+export type TreasurySweepStatus =
+  | "swept"
+  | "no_fees"
+  | "below_threshold"
+  | "fee_read_unavailable"
+  | "skipped_in_flight"
+  | "failed";
+
+export interface TreasurySweepResult {
+  curve: Address;
+  token?: Address;
+  status: TreasurySweepStatus;
+  amountWei?: bigint;
+  txHash?: Hash;
+}

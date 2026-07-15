@@ -543,6 +543,67 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /v1/creators/{address}/curve-claimable:
+    get:
+      tags: [tokens]
+      operationId: getCreatorCurveClaimable
+      summary: Unswept pre-graduation creator fees, per curve
+      description: |
+        Pre-graduation creator fees first accrue on each BondingCurve as
+        `accruedCreatorFees`. They are not withdrawable from CreatorVault until
+        `sweepCreatorFees()` is called. This read returns creator-owned curves with
+        a live nonzero `accruedCreatorFees()` value so the Portfolio claim button can
+        submit sweep transaction(s) before the final `CreatorVault.claim(creator)`.
+        Read-only — never touches chain state.
+      parameters:
+        - $ref: "#/components/parameters/TokenAddress"
+      responses:
+        "200":
+          description: Nonzero unswept creator-fee escrows for the creator's curves
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/CreatorCurveClaimable" }
+                  error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/creators/{address}/token-claimable:
+    get:
+      tags: [tokens]
+      operationId: listCreatorTokenClaimable
+      summary: Post-graduation creator-fee split claimable buckets
+      description: |
+        Enumerable companion to `/v1/creators/{address}/claimable/{token}` for the
+        Portfolio Created tab. Returns every indexed `(creator, ERC20-token)` claim
+        bucket, overlaying the AUTHORITATIVE live
+        `CreatorVault.tokenBalanceOf(creator, token)` before responding. The ERC20 is
+        either a graduated launch token or canonical WETH. Read-only — never touches
+        chain state.
+      parameters:
+        - $ref: "#/components/parameters/TokenAddress"
+      responses:
+        "200":
+          description: All post-graduation per-token claimable buckets for this creator
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, error]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/CreatorTokenClaimable" }
+                  error: { type: "null" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
   /v1/creators/{address}/claimable/{token}:
     get:
       tags: [tokens]
@@ -1801,6 +1862,25 @@ components:
           allOf: [{ $ref: "#/components/schemas/DecimalString" }]
           description: Lifetime claimed (Σ CreatorFeeClaimed), wei
         asOf: { type: string, format: date-time, description: Timestamp of the live balanceOf read }
+
+    CreatorCurveClaimable:
+      type: object
+      required: [creator, token, ticker, curve, unsweptEth, asOf]
+      description: >-
+        Unswept pre-graduation creator fees still sitting on a BondingCurve.
+        `unsweptEth` = live BondingCurve.accruedCreatorFees and must be swept
+        before CreatorVault.claim can withdraw it.
+      properties:
+        creator: { $ref: "#/components/schemas/Address" }
+        token: { $ref: "#/components/schemas/Address" }
+        ticker: { type: string }
+        curve:
+          allOf: [{ $ref: "#/components/schemas/Address" }]
+          description: BondingCurve address to call sweepCreatorFees on
+        unsweptEth:
+          allOf: [{ $ref: "#/components/schemas/DecimalString" }]
+          description: Live accruedCreatorFees(), wei of native ETH
+        asOf: { type: string, format: date-time, description: Timestamp of the live curve read }
 
     CreatorTokenClaimable:
       type: object

@@ -36,8 +36,8 @@ import {
 // pre-grad native-ETH leg reconciles on `GET /v1/creators/:creator/claimable`
 // (`CreatorVault.balanceOf` over the `creator_claimable` roll-up) and the post-grad
 // WETH leg on `GET /v1/creators/:creator/claimable/:weth` (`tokenBalanceOf` over
-// `creator_token_claimable`). UI stays waived (the frontend enumerating endpoint gap
-// — see cfee-1 + the waiver rationale).
+// `creator_token_claimable`). The Portfolio list endpoint exists; the browser
+// claim-button assertion is owned by CFEE-1.
 test(
   "CFEE-2 the creator earns ~0.5% of volume on the curve (pre-grad) AND ~0.5% post-grad (V3 split) — venue-invariant, indexed both legs",
   { tag: ["@flow:CFEE-2", "@layer:on-chain", "@layer:indexed"] },

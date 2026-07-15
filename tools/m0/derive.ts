@@ -5,7 +5,9 @@
  * the V3 graduation price/tick in both token orderings, LP tranche
  * sizing, and fee / anti-sniper proposals; validates with randomized
  * round-trip simulations; emits:
- * out/constants.json — canonical artifact (schema: docs/developers/contracts.md)
+ * out/constants.mainnet.json — canonical mainnet artifact (schema: docs/developers/contracts.md)
+ *   out/constants.testnet.json — canonical testnet artifact
+ *   out/constants.json — legacy alias of constants.mainnet.json
  *   out/Constants.sol.txt — generated Solidity rendering (never hand-edited)
  *   out/constants.ts      — generated TS rendering for apps/web / packages/shared
  *   out/plots/*.svg + out/plots/checkpoints.md
@@ -24,7 +26,7 @@
  *     M0_MAINNET_GRADUATION_ETH=<decimal ETH>  — mainnet only; overrides the flat 5.7-ETH default.
  *     M0_TESTNET_GRADUATION_ETH=<decimal ETH>  — testnet only; faucet-scale small-G rescale.
  *   --reuse-snapshot re-derives from the ETH/USD snapshot already recorded in
- *   out/constants.json (recompute-only mode; provenance is preserved).
+ *   out/constants.mainnet.json (or legacy out/constants.json) in recompute-only mode; provenance is preserved.
  *   --network=testnet (Phase T-1) emits out/constants.testnet.json — same schema,
  *   same validations, chainId 46630, with external.* taken from the checked-in
  * fixture external.testnet.json (ratified set; derive FAILS CLOSED
@@ -381,10 +383,11 @@ async function fetchGasPriceWei(): Promise<GasPriceSnapshot> {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // External addresses per network (canonical/ratified, NEVER invented).
-// MAINNET (4663) the -confirmed set, inline here as before (this is the
-// canonical, architect-reviewed record). TESTNET (46630): read from the checked-in
-// fixture external.testnet.json (ratified set) — fail-closed while any
-// value is null, so "fill the fixture, re-run derive" is the entire T-1 step.
+// External addresses are network-specific checked-in fixtures:
+//   mainnet: external.mainnet.json
+//   testnet: external.testnet.json
+// Both fail closed while any required value is null. treasurySafe may be the
+// explicit zero address in a fixture, but Deploy.s.sol refuses it for live deploys.
 // ─────────────────────────────────────────────────────────────────────────────
 interface ExternalAddresses {
   weth: string;
@@ -405,33 +408,22 @@ const EXTERNAL_KEYS = [
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-const MAINNET_EXTERNAL: ExternalAddresses = {
-  weth: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
-  v3Factory: "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
-  positionManager: "0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3",
-  swapRouter02: "0xcaf681a66d020601342297493863e78c959e5cb2",
-  quoterV2: "0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7",
-  treasurySafe: "0x0000000000000000000000000000000000000000",
-};
-
+const MAINNET_FIXTURE = join(import.meta.dir, "external.mainnet.json");
 const TESTNET_FIXTURE = join(import.meta.dir, "external.testnet.json");
 
 /**
- * Load + validate the testnet external set from the fixture. FAIL-CLOSED design
- * (Phase-T requirement): any missing file, null value, or malformed address exits 1
- * with an error naming the fixture — constants.testnet.json simply cannot exist
- * until the ratified addresses are present. treasurySafe MAY be the explicit zero
- * address (same convention as the mainnet canonical constants.json: zero on purpose
- * until the T-2 dev-signer Safe exists; Deploy.s.sol then fails closed with
- * TreasurySafeUnset). All other keys must be real non-zero addresses.
+ * Load + validate a network external set from its fixture. FAIL-CLOSED design:
+ * any missing file, null value, or malformed address exits 1 with an error naming
+ * the fixture. treasurySafe MAY be the explicit zero address; Deploy.s.sol then
+ * fails closed with TreasurySafeUnset. All other keys must be real non-zero addresses.
  */
-function loadTestnetExternal(): ExternalAddresses {
-  if (!existsSync(TESTNET_FIXTURE)) {
-    console.error(`FATAL: testnet external fixture not found: ${TESTNET_FIXTURE}`);
-    console.error("Author it with the ratified 46630 addresses (), then re-run.");
+function loadExternalFixture(network: "mainnet" | "testnet", fixture: string): ExternalAddresses {
+  if (!existsSync(fixture)) {
+    console.error(`FATAL: ${network} external fixture not found: ${fixture}`);
+    console.error(`Author it with the ratified ${network} addresses, then re-run.`);
     process.exit(1);
   }
-  const j = JSON.parse(readFileSync(TESTNET_FIXTURE, "utf8")) as {
+  const j = JSON.parse(readFileSync(fixture, "utf8")) as {
     external?: Record<string, string | null>;
     status?: string;
   };
@@ -439,9 +431,8 @@ function loadTestnetExternal(): ExternalAddresses {
   const nulls = EXTERNAL_KEYS.filter((k) => ext[k] == null);
   if (nulls.length > 0) {
     console.error(
-      `FATAL: ${TESTNET_FIXTURE} still contains null externals: ${nulls.join(", ")} — ` +
-        "PENDING Phase-T inventory. Fill them with the ratified 46630 addresses " +
-        "(never invented), then re-run: bun run derive --network=testnet --reuse-snapshot",
+      `FATAL: ${fixture} still contains null externals: ${nulls.join(", ")}. ` +
+        `Fill them with the ratified ${network} addresses, then re-run: bun run derive --network=${network}`,
     );
     if (j.status) console.error(`fixture status: ${j.status}`);
     process.exit(1);
@@ -449,11 +440,11 @@ function loadTestnetExternal(): ExternalAddresses {
   for (const k of EXTERNAL_KEYS) {
     const v = ext[k]!;
     if (!ADDRESS_RE.test(v)) {
-      console.error(`FATAL: ${TESTNET_FIXTURE}: external.${k} is not a valid address: ${v}`);
+      console.error(`FATAL: ${fixture}: external.${k} is not a valid address: ${v}`);
       process.exit(1);
     }
     if (k !== "treasurySafe" && v === ZERO_ADDRESS) {
-      console.error(`FATAL: ${TESTNET_FIXTURE}: external.${k} is the zero address (only treasurySafe may be).`);
+      console.error(`FATAL: ${fixture}: external.${k} is the zero address (only treasurySafe may be).`);
       process.exit(1);
     }
   }
@@ -498,8 +489,10 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   // Resolve externals FIRST (fail-closed on a pending fixture before any network fetch).
-  const external: ExternalAddresses = isTestnet ? loadTestnetExternal() : MAINNET_EXTERNAL;
-  const outName = isTestnet ? "constants.testnet.json" : "constants.json";
+  const external: ExternalAddresses = isTestnet
+    ? loadExternalFixture("testnet", TESTNET_FIXTURE)
+    : loadExternalFixture("mainnet", MAINNET_FIXTURE);
+  const outName = isTestnet ? "constants.testnet.json" : "constants.mainnet.json";
 
   // ── graduation-target resolution (network-scoped, fail-closed cross-network) ──────────────────
   //   TESTNET: M0_TESTNET_GRADUATION_ETH override → faucet-scale small-G rescale (smallGOverride).
@@ -564,9 +557,11 @@ async function main(): Promise<void> {
     // Always reuses the CANONICAL mainnet artifact's snapshot (ETH/USD is chain-agnostic):
     // for --network=testnet this makes the testnet economics byte-equal to the reviewed
     // mainnet constants — only chainId + external differ.
-    const prev = join(OUT_DIR, "constants.json");
+    const mainnetJson = join(OUT_DIR, "constants.mainnet.json");
+    const legacyMainnetJson = join(OUT_DIR, "constants.json");
+    const prev = existsSync(mainnetJson) ? mainnetJson : legacyMainnetJson;
     if (!existsSync(prev)) {
-      console.error("--reuse-snapshot requested but out/constants.json does not exist. Exiting 1.");
+      console.error("--reuse-snapshot requested but no mainnet constants file exists. Exiting 1.");
       process.exit(1);
     }
     const j = JSON.parse(readFileSync(prev, "utf8")) as { ethUsdSnapshot: EthUsdSnapshot };
@@ -1007,11 +1002,11 @@ async function main(): Promise<void> {
     ...(isTestnet
       ? [
           "external.weth / v3Factory / positionManager / swapRouter02 / quoterV2: TESTNET 46630 set — RATIFIED (2026-07-11), sourced from tools/m0/external.testnet.json (never inlined in source). WETH is official (docs.robinhood.com/chain/protocol-contracts); the V3 set is a Blockscout-VERIFIED community deployment, TESTNET-ONLY with the trust caveat (deployer EOA owns the factory) — FORBIDDEN on mainnet/local. Deploy script still runtime-asserts feeAmountTickSpacing(10000)==200, NPM.factory(), NPM.WETH9() (contracts.md) so a wrong address fails closed.",
-          "external.treasurySafe: UNSET (T-2) — zero address on purpose; canonical Safe v1.4.1 contracts are CONFIRMED on 46630 but the dev-signer treasury Safe is not created yet. Create it, fill external.testnet.json, re-run derive; Deploy.s.sol fails closed (TreasurySafeUnset) until then. Never invented.",
+          "external.treasurySafe: TESTNET Safe set in tools/m0/external.testnet.json; Deploy.s.sol still fails closed if this is ever reverted to the zero address. Never invented.",
         ]
       : [
-          "external.v3Factory / positionManager / swapRouter02 / quoterV2: CONFIRMED on 4663 (O-4 RESOLVED) — registry-sourced + on-chain verified, never invented; deploy script still runtime-asserts feeAmountTickSpacing(10000)==200, NPM.factory(), NPM.WETH9() (contracts.md) so a wrong address fails closed.",
-          "external.treasurySafe: UNSET (O-6) — zero address on purpose; deploy script's zero-address guard must fail until filled from the official Safe deployment on 4663. Never invented.",
+          "external.weth / v3Factory / positionManager / swapRouter02 / quoterV2: MAINNET 4663 set — sourced from tools/m0/external.mainnet.json (never inlined in source), registry-sourced + on-chain verified, never invented; deploy script still runtime-asserts feeAmountTickSpacing(10000)==200, NPM.factory(), NPM.WETH9() (contracts.md) so a wrong address fails closed.",
+          "external.treasurySafe: UNSET (O-6) — zero address on purpose in external.mainnet.json; deploy script's zero-address guard must fail until filled from the official Safe deployment on 4663. Never invented.",
         ]),
     "Graduation threshold counts NET-of-1%-fee real reserves — resolved; restated so the deploy reviewer re-confirms.",
   ];
@@ -1090,11 +1085,10 @@ async function main(): Promise<void> {
       },
     },
     // ── external addresses (canonical + registry-sourced, NEVER invented) ──────
-    // MAINNET (4663) WETH + the four Uniswap V3 addresses are CONFIRMED (,
-    // O-4 RESOLVED 2026-07-09), inlined in MAINNET_EXTERNAL above; treasurySafe stays
-    // ZERO on purpose (O-6 OPEN — deploy fails closed until the official Safe exists).
-    // TESTNET (46630) the -ratified set from external.testnet.json (fail-closed
-    // loader above); treasurySafe ZERO until the T-2 dev-signer Safe is created.
+    // MAINNET (4663): external.mainnet.json (fail-closed loader above).
+    // TESTNET (46630): external.testnet.json (fail-closed loader above).
+    // treasurySafe may be explicit ZERO in a fixture while pending, but deploy
+    // fails closed until the network's Safe address is filled.
     // Both networks: the deploy script runtime-asserts feeAmountTickSpacing(10000)==200,
     // NPM.factory(), NPM.WETH9() (contracts.md), so a wrong address fails closed.
     external,
@@ -1209,11 +1203,13 @@ async function main(): Promise<void> {
 
   mkdirSync(OUT_DIR, { recursive: true });
   const jsonPath = join(OUT_DIR, outName);
-  writeFileSync(jsonPath, JSON.stringify(constants, null, 2) + "\n");
+  const serializedConstants = JSON.stringify(constants, null, 2) + "\n";
+  writeFileSync(jsonPath, serializedConstants);
 
   // ── 8. Generated renderings (never hand-edited; MAINNET ONLY — see section 6
   //       note. The deploy script consumes the JSON, so testnet needs nothing else.)
   if (!isTestnet) {
+    writeFileSync(join(OUT_DIR, "constants.json"), serializedConstants);
     writeFileSync(join(OUT_DIR, "Constants.sol.txt"), renderSol(constants));
     writeFileSync(join(OUT_DIR, "constants.ts"), renderTs(constants));
   }
@@ -1221,6 +1217,7 @@ async function main(): Promise<void> {
   console.log(`\nEmitted:`);
   console.log(`  ${jsonPath}`);
   if (!isTestnet) {
+    console.log(`  ${join(OUT_DIR, "constants.json")} (legacy alias)`);
     console.log(`  ${join(OUT_DIR, "Constants.sol.txt")}`);
     console.log(`  ${join(OUT_DIR, "constants.ts")}`);
     console.log(`  ${join(PLOTS_DIR, "price-vs-tokens-sold.svg")}`);
@@ -1263,7 +1260,7 @@ function header(c: C, comment: string): string {
 function renderSol(c: C): string {
   return `${header(c, "//")}
 // Ready to paste/import into contracts/script/ — the deploy script's canonical
-// source remains out/constants.json via vm.readFile + vm.parseJson (contracts.md).
+// mainnet source is out/constants.mainnet.json via vm.readFile + vm.parseJson.
 
 // SPDX-License-Identifier: MIT
 // pragma solidity <exact pin per — candidate 0.8.35, confirm vs Blockscout (O-5)>;
@@ -1322,7 +1319,7 @@ library RobbedConstants {
 
 function renderTs(c: C): string {
   return `${header(c, "//")}
-// TS rendering for apps/web / packages/shared. Canonical source: tools/m0/out/constants.json.
+// TS rendering for apps/web / packages/shared. Canonical source: tools/m0/out/constants.mainnet.json.
 // All wei values are decimal strings (safe across Solidity/JS); convert with BigInt(...).
 
 export const ROBBED_CONSTANTS = ${JSON.stringify(

@@ -6,7 +6,7 @@ import {
   claimCreatorFeeTxMetaSchema,
   stateForBlock,
 } from "@robbed/shared";
-import { creatorVaultAbi } from "@robbed/shared/abi";
+import { bondingCurveAbi, creatorVaultAbi } from "@robbed/shared/abi";
 import { useCallback, useState } from "react";
 import type { Address } from "viem";
 import { usePublicClient, useWriteContract } from "wagmi";
@@ -38,6 +38,7 @@ export type ClaimPhase = "idle" | "signing" | "pending" | "confirmed" | "error";
 export interface ClaimState {
   phase: ClaimPhase;
   txHash: `0x${string}` | null;
+  step?: "sweep" | "claim" | null;
   /** Indexed block of the mined claim (drives the watermark tier). Null until mined. */
   blockNumber: number | null;
   /** Live tier for the mined claim; null until confirmed. */
@@ -48,12 +49,16 @@ export interface ClaimState {
 const INITIAL: ClaimState = {
   phase: "idle",
   txHash: null,
+  step: null,
   blockNumber: null,
   confirmationState: null,
   error: null,
 };
 
-export function useClaimCreatorFee(meta: ClaimCreatorFeeTxMeta): {
+export function useClaimCreatorFee(
+  meta: ClaimCreatorFeeTxMeta,
+  opts: { sweepCurves?: string[] } = {},
+): {
   claim: () => Promise<void>;
   reset: () => void;
   state: ClaimState;
@@ -62,27 +67,45 @@ export function useClaimCreatorFee(meta: ClaimCreatorFeeTxMeta): {
   const { writeContractAsync } = useWriteContract();
   const watermarks = useConfirmationWatermarks();
   const [state, setState] = useState<ClaimState>(INITIAL);
+  const sweepCurves = opts.sweepCurves ?? [];
 
   const reset = useCallback(() => setState(INITIAL), []);
 
   const claim = useCallback(async () => {
     // Validate the shared tx-metadata shape (fail loud on a malformed vault/creator).
     const parsed = claimCreatorFeeTxMetaSchema.parse(meta);
-    setState({ ...INITIAL, phase: "signing" });
     try {
+      const uniqueCurves = [...new Set(sweepCurves.map((curve) => curve.toLowerCase()))];
+      for (const curve of uniqueCurves) {
+        setState({ ...INITIAL, phase: "signing", step: "sweep" });
+        const sweepHash = await writeContractAsync({
+          address: curve as Address,
+          abi: bondingCurveAbi,
+          functionName: "sweepCreatorFees",
+        });
+        setState((s) => ({ ...s, phase: "pending", step: "sweep", txHash: sweepHash }));
+        const sweepReceipt = await publicClient?.waitForTransactionReceipt({ hash: sweepHash });
+        if (!sweepReceipt || sweepReceipt.status !== "success") {
+          setState((s) => ({ ...s, phase: "error", error: "Fee sweep reverted." }));
+          return;
+        }
+      }
+
+      setState({ ...INITIAL, phase: "signing", step: "claim" });
       const hash = await writeContractAsync({
         address: parsed.vault as Address,
         abi: creatorVaultAbi,
         functionName: "claim",
         args: [parsed.creator as Address],
       });
-      setState((s) => ({ ...s, phase: "pending", txHash: hash }));
+      setState((s) => ({ ...s, phase: "pending", step: "claim", txHash: hash }));
 
       const receipt = await publicClient?.waitForTransactionReceipt({ hash });
       if (receipt && receipt.status === "success") {
         setState((s) => ({
           ...s,
           phase: "confirmed",
+          step: "claim",
           blockNumber: Number(receipt.blockNumber),
         }));
       } else {
@@ -91,7 +114,7 @@ export function useClaimCreatorFee(meta: ClaimCreatorFeeTxMeta): {
     } catch (e) {
       setState((s) => ({ ...s, phase: "error", error: humanizeClaimError(e) }));
     }
-  }, [meta, publicClient, writeContractAsync]);
+  }, [meta, publicClient, sweepCurves, writeContractAsync]);
 
   // Derive the live tier from the indexed block via the watermark (never self-reported).
   const confirmationState: ConfirmationState | null =

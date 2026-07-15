@@ -59,8 +59,8 @@ const fail = (msg: string): never => {
 if (!existsSync(artifactPath)) {
   fail(
     `${artifactPath} not found — run the T-3 deploy first:\n` +
-      `  cd contracts && forge script script/Deploy.s.sol --rpc-url "$TESTNET_RPC_URL" --broadcast\n` +
-      `(needs DEPLOYER_ADDRESS + Foundry wallet signing + tools/m0/out/constants.testnet.json — testnet.md)`,
+      `  bash scripts/deploy-onchain.sh protocol --network testnet --deployer 0xDeployer --verify --account robbed-testnet-deployer\n` +
+      `(needs funded DEPLOYER_ADDRESS + Foundry wallet signing + tools/m0/out/constants.testnet.json — testnet.md)`,
   );
 }
 type Artifact = {

@@ -1,20 +1,20 @@
 {
   "chainId": 46630,
   "mode": "testnet",
-  "deployedAt": 1783987487,
-  "startBlock": "90007098",
+  "deployedAt": 1784121530,
+  "startBlock": "90464232",
   "source": {
     "artifact": "contracts/deployments/46630.json",
     "broadcast": "contracts/broadcast/Deploy.s.sol/46630/run-latest.json",
     "emitter": "contracts/script/emit-testnet-env.ts"
   },
   "robbed": {
-    "curveFactory": "0xC5cD74C1859f36348419AF93B0a07D1d9a3b51A5",
-    "router": "0x05A5dCDaf40F8fdf99383FdB5A1B75E389B2034b",
-    "v3Migrator": "0xA073942ECc0cc0EF8FD052043F407D27509C4F7B",
-    "lpFeeVault": "0xeCeBD131493f7FdFF904C2b05B82820A40B0F708",
-    "creatorVault": "0xdF305aF83fbF70fe0d99a8553b2e0Da03b4d4c9a",
-    "treasury": "0x4ae5b5Ae7D2edd7A2d43054246D6aaAcAAFC1000"
+    "curveFactory": "0x5Bf96c640793a3DDB1181b34f6E501771Eb7A79a",
+    "router": "0x5C5A4Abd34f8A6484b8eF4D3a587B0bB2e22f1e8",
+    "v3Migrator": "0x571102fa88AEa1951187C0C6F08CE6c24886f17c",
+    "lpFeeVault": "0xF8786BdB1a579362e0CA3A5883886A22b091faD4",
+    "creatorVault": "0x407013930670289ad7a6dAdFfBEc5dcBF35B6CcF",
+    "treasury": "0x9b318513D626b25C39Ae3416F23EAF5566998805"
   },
   "external": {
     "weth": "0x7943e237c7F95DA44E0301572D358911207852Fa",
@@ -24,8 +24,8 @@
     "quoterV2": "0xDDcBe4989C8171F721c5e683C9C6339B59718213"
   },
   "canary": {
-    "token": "0x925e104a8c94ae8b9c2A5F914dAF4cb24eab0f22",
-    "curve": "0x72405d63A96CeCAb6F7964192d08b717a0D0446A"
+    "token": "0xC9aC053A269790A653D143f4AD7168CD2fd787ad",
+    "curve": "0xB6237Af2a89D460761299269927c1805366CcB48"
   },
   "verification": {
     "status": "PENDING",

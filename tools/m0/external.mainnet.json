@@ -1,0 +1,21 @@
+{
+  "network": "mainnet",
+  "chainId": 4663,
+  "status": "MAINNET canonical external-contract inventory for Robinhood Chain mainnet (4663), consumed by `bun run derive --network=mainnet` -> out/constants.mainnet.json. Derive fails closed if any external value below is null. treasurySafe may remain the explicit zero address until the production Safe is created; Deploy.s.sol then fails closed with TreasurySafeUnset.",
+  "provenance": {
+    "specRef": "docs/developers/design-decisions.md / mainnet O-4 external contract inventory",
+    "verification": "Mainnet WETH and Uniswap V3 addresses were migrated from the former derive.ts inline set into this operator-editable source of truth.",
+    "notes": [
+      "weth / v3Factory / positionManager / swapRouter02 / quoterV2: Robinhood Chain mainnet external contracts used by the mainnet constant derivation.",
+      "treasurySafe: zero address until the production Safe is created. Set this to the real mainnet Safe before mainnet deploy; the deploy script refuses zero treasurySafe."
+    ]
+  },
+  "external": {
+    "weth": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "v3Factory": "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+    "positionManager": "0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3",
+    "swapRouter02": "0xcaf681a66d020601342297493863e78c959e5cb2",
+    "quoterV2": "0x33e885ed0ec9bf04ecfb19341582aadcb4c8a9e7",
+    "treasurySafe": "0x0000000000000000000000000000000000000000"
+  }
+}

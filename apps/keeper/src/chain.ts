@@ -146,6 +146,39 @@ export class ChainClient implements ChainPort {
     });
   }
 
+  async readTreasuryFees(curve: Address): Promise<bigint | null> {
+    try {
+      const raw = await this.publicClient.readContract({
+        address: curve,
+        abi: bondingCurveAbi,
+        functionName: "accruedFees",
+      });
+      return raw as bigint;
+    } catch {
+      return null;
+    }
+  }
+
+  async estimateSweepFeesGas(curve: Address): Promise<bigint> {
+    return this.publicClient.estimateContractGas({
+      address: curve,
+      abi: bondingCurveAbi,
+      functionName: "sweepFees",
+      account: this.account,
+    });
+  }
+
+  async sendSweepFees(curve: Address, gas: bigint): Promise<Hash> {
+    return this.walletClient.writeContract({
+      address: curve,
+      abi: bondingCurveAbi,
+      functionName: "sweepFees",
+      account: this.account,
+      chain: this.walletClient.chain,
+      gas,
+    });
+  }
+
   async waitForReceipt(hash: Hash): Promise<{ status: "success" | "reverted" }> {
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
     return { status: receipt.status };

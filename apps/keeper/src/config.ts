@@ -11,6 +11,14 @@
 import { z } from "zod";
 
 const hex32 = z.string().regex(/^0x[0-9a-fA-F]{64}$/, "must be a 0x-prefixed 32-byte hex private key");
+const boolish = z.preprocess((value) => {
+  if (value === undefined) return value;
+  if (typeof value !== "string") return value;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1" || normalized === "yes") return true;
+  if (normalized === "false" || normalized === "0" || normalized === "no") return false;
+  return value;
+}, z.boolean());
 
 const schema = z.object({
   KEEPER_RPC_URL: z.string().url("KEEPER_RPC_URL must be a ws(s):// or http(s):// URL"),
@@ -25,6 +33,11 @@ const schema = z.object({
   KEEPER_MAX_ATTEMPTS: z.coerce.number().int().positive().default(3),
   KEEPER_BACKOFF_BASE_MS: z.coerce.number().int().positive().default(500),
   KEEPER_FAILED_COOLDOWN_MS: z.coerce.number().int().positive().default(300_000),
+  // Permissionless treasury fee sweep: BondingCurve.accruedFees() → sweepFees().
+  KEEPER_TREASURY_SWEEP_ENABLED: boolish.default(true),
+  KEEPER_TREASURY_SWEEP_POLL_MS: z.coerce.number().int().positive().default(60_000),
+  KEEPER_TREASURY_SWEEP_MIN_WEI: z.coerce.bigint().positive().default(500_000_000_000_000_000n),
+  KEEPER_TREASURY_SWEEP_MAX_AGE_MS: z.coerce.number().int().positive().default(86_400_000),
   // Balance watch: warn when balance < MULTIPLE × (typicalGraduateGas × gasPrice).
   KEEPER_BALANCE_POLL_MS: z.coerce.number().int().positive().default(60_000),
   KEEPER_BALANCE_WARN_MULTIPLE: z.coerce.number().int().positive().default(20),

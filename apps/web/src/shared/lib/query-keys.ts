@@ -44,6 +44,9 @@ export const qk = {
   /** Creator-fee claimable roll-up — per creator address (pre-grad ETH leg). */
   creatorClaimable: (address: string) =>
     ["creator-claimable", address.toLowerCase()] as const,
+  /** Unswept pre-grad creator-fee escrows still sitting on creator-owned curves. */
+  creatorCurveClaimable: (address: string) =>
+    ["creator-curve-claimable", address.toLowerCase()] as const,
   /**
    * Post-grad creator LP-fee per-`(creator, ERC20)` claimable rows —
    * served by the indexer `token-claimable` endpoint. Invalidated live by the

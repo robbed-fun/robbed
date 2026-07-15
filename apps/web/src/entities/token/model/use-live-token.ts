@@ -14,6 +14,8 @@ import {
   tradeMovesBondingProgress,
 } from "./live";
 
+const TOKEN_DETAIL_LIVE_REFETCH_MS = 3_000;
+
 /**
  * LIVE TokenDetail (TD-6). The SSR token summary is a
  * snapshot — nothing re-engined the venue after a permissionless `graduate()`
@@ -36,6 +38,9 @@ import {
  * - WS reconnect / seq-gap: the WsClient invalidates the whole `token` family
  *   (LIVE_QUERY_PREFIXES) → this active query refetches → the status flip is
  *   never lost across a disconnect (proven by tests/ws-reconnect.test.ts).
+ * - Bounded REST fallback while not graduated: if the one-shot `graduated` WS
+ *   event races page subscription, the active detail page still converges to
+ *   indexed truth within a few seconds and stops polling once graduated.
  */
 export function useLiveTokenDetail(initial: TokenDetail): TokenDetail {
   const queryClient = useQueryClient();
@@ -56,6 +61,12 @@ export function useLiveTokenDetail(initial: TokenDetail): TokenDetail {
     queryFn: ({ signal }) => getToken(address, { signal }),
     initialData: initial,
     staleTime: 5_000,
+    refetchInterval: (q) => {
+      const data = q.state.data;
+      return data?.graduated || data?.status === "graduated"
+        ? false
+        : TOKEN_DETAIL_LIVE_REFETCH_MS;
+    },
   });
 
   useWsChannel(tokenEvents(address), (msg) => {

@@ -22,7 +22,7 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 
 /// @title Deploy — ROBBED_ deploy script + constants loader + canary smoke (M1-14)
 /// @notice One script drives every environment (contracts.md) it reads EVERY market-dependent
-/// parameter from `tools/m0/out/constants.json` (nothing inlined), runs the
+/// parameter from the network-scoped M0 constants JSON (nothing inlined), runs the
 /// V3 runtime sanity assertions + the absolute canonical-WETH require (F-2), deploys
 /// the six-contract topology in order (1) LPFeeVault → (2) CurveFactory →
 ///         (3) V3Migrator → (4) Router → (5) one-time setters → (6) canary create+buy, writes a
@@ -33,7 +33,7 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 ///          `forge script … --broadcast` verify command still works out of the box for the dev
 ///          contexts; only a real mainnet deploy needs the affirmation, decision #5):
 ///        - LIVE (`block.chainid == 4663` AND `ROBBED_DEPLOY_ENV == "mainnet"`): the four V3
-///          addresses + WETH come from `constants.json.external.*`; `require(weth == 0x0Bd7…AD73)`
+///          addresses + WETH come from `constants.mainnet.json.external.*`; `require(weth == 0x0Bd7…AD73)`
 ///          (F-2), a real public `DEPLOYER_ADDRESS`/CLI signer, and a non-zero treasury Safe
 ///          (O-6 fail-closed) are enforced; the artifact is written to the canonical `deployments/4663.json` with
 ///          `mode:"live"`.
@@ -104,7 +104,7 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 ///           unambiguous and lets the indexer assert `mode == "live"` for a genuine mainnet entry.
 contract Deploy is Script {
     /// @notice Canonical WETH9 on chain 4663 (CLAUDE.md /). The ONLY address literal
-    ///         allowed in the codebase; asserted equal to `constants.json.external.weth` on live.
+    ///         allowed in the codebase; asserted equal to `constants.mainnet.json.external.weth` on live.
     address internal constant CANONICAL_WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
 
     /// @notice Canonical Uniswap V3 Factory on chain 4663 (confirmed on-chain). Asserted
@@ -278,13 +278,13 @@ contract Deploy is Script {
         return keccak256(bytes(vm.envOr("ROBBED_DEPLOY_ENV", string("")))) == keccak256(bytes("mainnet"));
     }
 
-    /// @dev Default constants file per mode (`ROBBED_CONSTANTS` env overrides). Testnet defaults to
-    ///      the T-1 derive output `constants.testnet.json` so the bare forge command deploys the
-    ///      right externals; that file only exists once the Phase-T inventory fixture is filled and
-    ///      `bun run derive --network=testnet` succeeds — until then the deploy stays blocked (the
-    ///      readFile fails loudly), by design.
+    /// @dev Default constants file per mode (`ROBBED_CONSTANTS` env overrides). Public networks default
+    ///      to explicit network-scoped M0 outputs (`constants.mainnet.json` / `constants.testnet.json`)
+    ///      so the bare forge command deploys the right externals. The legacy mainnet alias
+    ///      `constants.json` is still emitted by derive for non-deploy consumers.
     function _defaultConstantsPath() internal view returns (string memory) {
-        return mode == Mode.Testnet ? "../tools/m0/out/constants.testnet.json" : "../tools/m0/out/constants.json";
+        return
+            mode == Mode.Testnet ? "../tools/m0/out/constants.testnet.json" : "../tools/m0/out/constants.mainnet.json";
     }
 
     /// @dev Load the constants blob + fail-closed pre-spend checks. Public modes additionally pin
@@ -414,8 +414,8 @@ contract Deploy is Script {
         p.graduationEth = vm.parseJsonUint(cj, ".curve.graduationEthWei");
         p.tradeFeeBps = uint16(vm.parseJsonUint(cj, ".fees.tradeFeeBps"));
         // Creator-fee leg — read from constants, NEVER inlined.
-        // Mainnet `constants.json` = 0 (Phase-2 disabled until a re-derivation); testnet
-        // `constants.testnet.json` = the ratified 50 (treasury 100 + creator 50 = 150 ≤ 200 cap).
+        // Mainnet/testnet constants both carry the ratified 50 bps creator leg
+        // (treasury 100 + creator 50 = 150 <= 200 cap).
         p.creatorFeeBps = uint16(vm.parseJsonUint(cj, ".fees.creatorFeeBps"));
         p.creationFee = vm.parseJsonUint(cj, ".fees.creationFeeWei");
         p.maxCreationFee = vm.parseJsonUint(cj, ".fees.maxCreationFeeWei");

@@ -411,6 +411,10 @@ services:
       KEEPER_PRIVATE_KEY: ${TESTNET_KEEPER_PRIVATE_KEY:?TESTNET_KEEPER_PRIVATE_KEY is required — a FUNDED testnet ops-wallet private key (~0.05 ETH; NOT the deployer). Set it in ~/.config/robbed/testnet.secrets.env. See docs/developers/runbooks/keeper.md.}
       DATABASE_URL: "postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}?options=-c%20search_path%3D${TESTNET_DATABASE_SCHEMA:-robbed_testnet_ponder}%2Cpublic"
       REDIS_URL: redis://redis:6379
+      KEEPER_TREASURY_SWEEP_ENABLED: "${KEEPER_TREASURY_SWEEP_ENABLED:-true}"
+      KEEPER_TREASURY_SWEEP_POLL_MS: "${KEEPER_TREASURY_SWEEP_POLL_MS:-60000}"
+      KEEPER_TREASURY_SWEEP_MIN_WEI: "${KEEPER_TREASURY_SWEEP_MIN_WEI:-500000000000000000}"
+      KEEPER_TREASURY_SWEEP_MAX_AGE_MS: "${KEEPER_TREASURY_SWEEP_MAX_AGE_MS:-86400000}"
       KEEPER_PORT: "3003"
     ports:
       - "${KEEPER_PORT:-4103}:3003"

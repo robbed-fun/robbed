@@ -11,6 +11,7 @@ import type {
   KeeperLogger,
   Phase,
   ReadyCurve,
+  TreasuryFeeCurve,
 } from "../src/types";
 
 export interface Deferred<T> {
@@ -36,6 +37,9 @@ export interface FakeChainOptions {
   estimates?: Scripted<bigint>[];
   sends?: Scripted<Hash>[];
   receipts?: Scripted<{ status: "success" | "reverted" }>[];
+  treasuryFees?: Scripted<bigint | null>[];
+  sweepEstimates?: Scripted<bigint>[];
+  sweepSends?: Scripted<Hash>[];
   classify?: (err: unknown) => ErrorClass;
   balanceWei?: bigint;
   /** When set, estimateGraduateGas awaits this before returning (in-flight test). */
@@ -46,11 +50,17 @@ export class FakeChain implements ChainPort {
   phaseReads = 0;
   sendCount = 0;
   estimateCount = 0;
+  treasuryFeeReads = 0;
+  sweepSendCount = 0;
+  sweepEstimateCount = 0;
   private lastPhase: Phase;
   private readonly phases: Phase[];
   private readonly estimates: Scripted<bigint>[];
   private readonly sends: Scripted<Hash>[];
   private readonly receipts: Scripted<{ status: "success" | "reverted" }>[];
+  private readonly treasuryFees: Scripted<bigint | null>[];
+  private readonly sweepEstimates: Scripted<bigint>[];
+  private readonly sweepSends: Scripted<Hash>[];
   private readonly classifyFn: (err: unknown) => ErrorClass;
   private readonly balance: bigint;
   private readonly gate?: Deferred<void>;
@@ -61,6 +71,9 @@ export class FakeChain implements ChainPort {
     this.estimates = [...(opts.estimates ?? [])];
     this.sends = [...(opts.sends ?? [])];
     this.receipts = [...(opts.receipts ?? [])];
+    this.treasuryFees = [...(opts.treasuryFees ?? [])];
+    this.sweepEstimates = [...(opts.sweepEstimates ?? [])];
+    this.sweepSends = [...(opts.sweepSends ?? [])];
     this.classifyFn = opts.classify ?? (() => "transient");
     this.balance = opts.balanceWei ?? 1_000_000_000_000_000_000n;
     this.gate = opts.gate;
@@ -85,6 +98,21 @@ export class FakeChain implements ChainPort {
     return take(this.sends, "0xhash");
   }
 
+  async readTreasuryFees(): Promise<bigint | null> {
+    this.treasuryFeeReads += 1;
+    return take(this.treasuryFees, 0n);
+  }
+
+  async estimateSweepFeesGas(): Promise<bigint> {
+    this.sweepEstimateCount += 1;
+    return take(this.sweepEstimates, 50_000n);
+  }
+
+  async sendSweepFees(): Promise<Hash> {
+    this.sweepSendCount += 1;
+    return take(this.sweepSends, "0xsweep");
+  }
+
   async waitForReceipt(): Promise<{ status: "success" | "reverted" }> {
     return take(this.receipts, { status: "success" as const });
   }
@@ -100,10 +128,18 @@ export class FakeChain implements ChainPort {
 
 export class FakeDb implements DbPort {
   calls = 0;
-  constructor(private readonly rows: ReadyCurve[] = []) {}
+  treasuryCalls = 0;
+  constructor(
+    private readonly rows: ReadyCurve[] = [],
+    private readonly treasuryRows: TreasuryFeeCurve[] = [],
+  ) {}
   async findReadyCurves(): Promise<ReadyCurve[]> {
     this.calls += 1;
     return this.rows;
+  }
+  async findTreasuryFeeCurves(): Promise<TreasuryFeeCurve[]> {
+    this.treasuryCalls += 1;
+    return this.treasuryRows;
   }
 }
 

@@ -1,9 +1,16 @@
 "use client";
 
-import type { CreatorClaimable, TokenCard, WsMessage } from "@robbed/shared";
+import type {
+  CreatorClaimable,
+  CreatorCurveClaimable,
+  TokenCard,
+  UsdValue,
+  WsMessage,
+} from "@robbed/shared";
 import { tokenEvents } from "@robbed/shared";
 import { useCallback, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { formatEther } from "viem";
 
 import {
   type ClaimState,
@@ -14,6 +21,7 @@ import {
   useClaimCreatorFee,
   useClaimCreatorTokenFee,
   useCreatorClaimable,
+  useCreatorCurveClaimable,
   useCreatorTokenClaimable,
   useOnchainCreatorTokenBuckets,
 } from "@/entities/creator";
@@ -39,9 +47,9 @@ import { isCreatorFeeUpdateFor } from "../model/ws";
  * `balanceOf` roll-up (`useCreatorClaimable`), unchanged from.
  * - POST-GRAD (V3 LP fees) per-`(creator, ERC20)` buckets — the
  *    aggregated WETH leg + each graduated launch-token leg — each pulled with
- *    `CreatorVault.claimERC20(creator, token)`. Buckets come from the indexer
+ *    `CreatorVault.claimERC20(creator, token)`. Buckets come from the API
  *    `token-claimable` endpoint (AUTHORITATIVE), falling back to on-chain
- *    `tokenBalanceOf` (over the creator's graduated tokens) until that lands.
+ *    `tokenBalanceOf` for older stacks.
  *
  * Every claim surfaces the shared confirmation TIERS via the reused
  * `ConfirmationBadge` (never final while soft-confirmed).
@@ -51,8 +59,9 @@ import { isCreatorFeeUpdateFor } from "../model/ws";
  * for this creator (reconcile-to-indexed-truth; `model/ws`).
  *
  * GUARDS: hidden entirely unless `isSelf`; renders nothing when there is no vault
- * / nothing accrued on either leg (treasury-only deployments have no vault). Every
- * claim button is disabled when its balance is 0. It never blocks anything else.
+ * (treasury-only deployments). A vault with zero pre-grad balance renders a
+ * disabled "Nothing to claim" button, so creators can see where claims will appear.
+ * Every claim button is disabled while its tx is pending. It never blocks anything else.
  */
 export function CreatorEarningsPanel({
   address,
@@ -64,6 +73,7 @@ export function CreatorEarningsPanel({
   createdTokens?: TokenCard[];
 }) {
   const ethLeg = useCreatorClaimable(isSelf ? address : undefined);
+  const curveFees = useCreatorCurveClaimable(isSelf ? address : undefined);
 
   // Post-grad buckets: API first, on-chain tokenBalanceOf fallback in dev.
   const tokenApi = useCreatorTokenClaimable(isSelf ? address : undefined);
@@ -118,8 +128,9 @@ export function CreatorEarningsPanel({
   const hasEth = !!ethLeg.data;
   const hasBuckets = buckets.length > 0;
 
-  // No vault / nothing accrued on either leg → no visible card (subscriptions
-  // stay live for the first event).
+  // No vault → no visible card (subscriptions stay live for the first event).
+  // A vault with zero pre-grad balance still returns `ethLeg.data` and renders a
+  // disabled "Nothing to claim" button.
   if (!hasEth && !hasBuckets) return <>{subscriptions}</>;
 
   return (
@@ -129,7 +140,13 @@ export function CreatorEarningsPanel({
         Creator earnings
       </MonoLabel>
 
-      {hasEth && <EthLegCard address={address} claimable={ethLeg.data!} />}
+      {hasEth && (
+        <EthLegCard
+          address={address}
+          claimable={ethLeg.data!}
+          curveFees={curveFees.data ?? []}
+        />
+      )}
 
       {hasBuckets && (
         <div className="flex flex-col gap-2.5">
@@ -170,28 +187,45 @@ function CreatorFeeEventsSubscription({
 function EthLegCard({
   address,
   claimable,
+  curveFees,
 }: {
   address: string;
   claimable: CreatorClaimable;
+  curveFees: CreatorCurveClaimable[];
 }) {
   const queryClient = useQueryClient();
+  const pendingSweepEth = useMemo(
+    () => sumWei(curveFees.map((row) => row.unsweptEth)),
+    [curveFees],
+  );
+  const sweepCurves = useMemo(
+    () =>
+      curveFees
+        .filter((row) => safeBigInt(row.unsweptEth) > 0n)
+        .map((row) => row.curve),
+    [curveFees],
+  );
+  const totalClaimableEth = (BigInt(claimable.claimableEth) + pendingSweepEth).toString();
   const { claim, state } = useClaimCreatorFee({
     type: "CLAIM_CREATOR_FEE",
     creator: claimable.creator,
     vault: claimable.vault,
-    amountEth: claimable.claimableEth,
-  });
+    amountEth: totalClaimableEth,
+  }, { sweepCurves });
 
   // On a confirmed claim, refetch the roll-up so the balance settles to 0.
   useEffect(() => {
     if (state.phase === "confirmed") {
       void queryClient.invalidateQueries({ queryKey: qk.creatorClaimable(address) });
+      void queryClient.invalidateQueries({ queryKey: qk.creatorCurveClaimable(address) });
     }
   }, [state.phase, queryClient, address]);
 
-  const nothingToClaim = BigInt(claimable.claimableEth) === 0n;
+  const nothingToClaim = BigInt(totalClaimableEth) === 0n;
   const busy = state.phase === "signing" || state.phase === "pending";
   const badgeState = claimDisplayState(state);
+  const pendingSweepCount = sweepCurves.length;
+  const displayUsd = usdForEthWei(totalClaimableEth, claimable.claimable);
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -206,14 +240,19 @@ function EthLegCard({
         <div className="flex flex-col gap-0.5">
           <MonoLabel size="2xs">Claimable</MonoLabel>
           <MonoText numeric size="lg" className="font-semibold">
-            {formatEthFromWei(claimable.claimableEth)} ETH
+            {formatEthFromWei(totalClaimableEth)} ETH
           </MonoText>
-          <UsdAmount value={claimable.claimable} className="text-xs text-muted" />
+          <UsdAmount value={displayUsd} className="text-xs text-muted" />
         </div>
         <div className="flex flex-col gap-0.5 text-right">
           <MonoText tone="faint" size="xs" numeric>
-            {formatEthFromWei(claimable.totalAccruedEth)} ETH accrued
+            {formatEthFromWei(claimable.claimableEth)} ETH in vault
           </MonoText>
+          {pendingSweepEth > 0n && (
+            <MonoText tone="faint" size="xs" numeric>
+              {formatEthFromWei(pendingSweepEth)} ETH pending sweep
+            </MonoText>
+          )}
           <MonoText tone="faint" size="xs" numeric>
             {formatEthFromWei(claimable.totalClaimedEth)} ETH claimed
           </MonoText>
@@ -226,8 +265,14 @@ function EthLegCard({
         disabled={nothingToClaim || busy}
         onClick={() => void claim()}
       >
-        {claimLabel(state, nothingToClaim, claimable.claimableEth)}
+        {claimLabel(state, nothingToClaim, totalClaimableEth, pendingSweepCount)}
       </Button>
+
+      {pendingSweepCount > 0 && !nothingToClaim && (
+        <MonoText tone="faint" size="xs">
+          {pendingSweepCount} sweep tx{pendingSweepCount === 1 ? "" : "s"} + 1 claim tx
+        </MonoText>
+      )}
 
       {state.phase === "error" && state.error && (
         <MonoText tone="red" size="xs">
@@ -331,11 +376,24 @@ export function claimDisplayState(state: ClaimState): TradeDisplayState | null {
   }
 }
 
-function claimLabel(state: ClaimState, nothingToClaim: boolean, claimableEth: string): string {
-  if (state.phase === "signing") return "Confirm in wallet…";
-  if (state.phase === "pending") return "Claiming…";
+function claimLabel(
+  state: ClaimState,
+  nothingToClaim: boolean,
+  claimableEth: string,
+  pendingSweepCount = 0,
+): string {
+  if (state.phase === "signing") {
+    if (state.step === "sweep") return "Confirm sweep…";
+    if (state.step === "claim") return "Confirm claim…";
+    return "Confirm in wallet…";
+  }
+  if (state.phase === "pending") {
+    if (state.step === "sweep") return "Sweeping…";
+    return "Claiming…";
+  }
   if (state.phase === "confirmed") return "Claimed";
   if (nothingToClaim) return "Nothing to claim";
+  if (pendingSweepCount > 0) return `Sweep + claim ${formatEthFromWei(claimableEth)} ETH`;
   return `Claim ${formatEthFromWei(claimableEth)} ETH`;
 }
 
@@ -344,4 +402,25 @@ function tokenClaimLabel(state: ClaimState, label: string): string {
   if (state.phase === "pending") return "Claiming…";
   if (state.phase === "confirmed") return "Claimed";
   return `Claim ${label}`;
+}
+
+function safeBigInt(value: string): bigint {
+  try {
+    return BigInt(value);
+  } catch {
+    return 0n;
+  }
+}
+
+function sumWei(values: string[]): bigint {
+  return values.reduce((acc, value) => acc + safeBigInt(value), 0n);
+}
+
+function usdForEthWei(wei: string, base: UsdValue): UsdValue {
+  const eth = Number(formatEther(BigInt(wei)));
+  const ethUsd = Number(base.ethUsd);
+  return {
+    ...base,
+    usd: Number.isFinite(eth) && Number.isFinite(ethUsd) ? String(eth * ethUsd) : "0",
+  };
 }

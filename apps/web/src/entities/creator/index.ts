@@ -8,6 +8,7 @@
  * entity may not import a sibling entity, so the widget composes the two.
  */
 export { getCreatorClaimable, useCreatorClaimable } from "./api/claimable";
+export { getCreatorCurveClaimable, useCreatorCurveClaimable } from "./api/curve-claimable";
 export {
   getCreatorTokenClaimable,
   useCreatorTokenClaimable,

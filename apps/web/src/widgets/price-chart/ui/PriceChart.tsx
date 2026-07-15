@@ -80,9 +80,11 @@ const CHART_SPARSE_SLOTS = 24;
 export function PriceChart({
   token,
   initialCandles,
+  activityAnchorSec,
 }: {
   token: TokenDetail;
   initialCandles?: { candles: Candle[] };
+  activityAnchorSec?: number;
 }) {
   // Mount interval. Also the ONLY interval the SSR `initialCandles` seed is valid
   // for (it was fetched for exactly this interval) — threaded into the feed so the
@@ -94,8 +96,9 @@ export function PriceChart({
     initialInterval,
     initialData: initialCandles,
     // Right-edge anchor for the idle-token fallback window (D-72): only used when
-    // the live now-window comes back empty.
-    anchorSec: lastActivityAnchor(token),
+    // the live now-window comes back empty. Token detail may pass the latest SSR
+    // trade timestamp (D-75) to cover launch bursts after createdAt.
+    anchorSec: activityAnchorSec ?? lastActivityAnchor(token),
   });
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -115,6 +118,10 @@ export function PriceChart({
         textColor: palette.text,
         fontSize: 11,
       },
+      // lightweight-charts defaults to `navigator.language` for date tick labels.
+      // Some Chromium/Linux environments expose `en-US@posix`, which Intl rejects
+      // and aborts canvas painting; use the product's existing valid locale.
+      localization: { locale: "en-US" },
       grid: {
         vertLines: { color: palette.grid },
         horzLines: { color: palette.grid },
@@ -164,7 +171,12 @@ export function PriceChart({
       // don't collapse.
       priceFormat: {
         type: "custom",
-        minMove: 0.00000001,
+        // ETH price values can be far below 1e-8 on fresh curve launches. If
+        // minMove is coarser than the token price, lightweight-charts collapses
+        // the price-scale tick generation around 0 and leaves only the last-price
+        // label. Use ETH's wei-level step so tiny-price axes still get ticks.
+        minMove: 0.000000000000000001,
+        base: 1_000_000_000_000_000_000,
         formatter: (price: number) =>
           formatPriceCompact(price, { subscript: "unicode", plain: chartAxisPrice }),
       },

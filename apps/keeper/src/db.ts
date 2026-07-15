@@ -18,7 +18,7 @@
  *   sending (idempotency + guards against a stale/lagging row), so a false
  *   positive here is a cheap read, never a bad tx.
  */
-import type { Address, ReadyCurve } from "./types";
+import type { Address, ReadyCurve, TreasuryFeeCurve } from "./types";
 
 /**
  * Minimal node-postgres-shaped client — lets db.pg.ts (Pool) AND unit tests
@@ -42,6 +42,18 @@ export const READY_CURVES_SQL = `
   ORDER BY block_number ASC
 `;
 
+/**
+ * Curves that can accrue the treasury ETH-leg trade fee. Include graduated rows:
+ * `graduate()` deliberately leaves unswept `accruedFees` on the curve, and the
+ * permissionless `sweepFees()` path remains valid after graduation.
+ */
+export const TREASURY_FEE_CURVES_SQL = `
+  SELECT address, curve_address
+  FROM tokens
+  WHERE trade_fee_bps > 0
+  ORDER BY block_number ASC
+`;
+
 interface ReadyRow {
   address: string;
   curve_address: string;
@@ -55,8 +67,22 @@ export function mapReadyRows(rows: ReadyRow[]): ReadyCurve[] {
   }));
 }
 
+/** Map raw rows → lowercased `{ token, curve }` for treasury fee sweeps. */
+export function mapTreasuryFeeRows(rows: ReadyRow[]): TreasuryFeeCurve[] {
+  return rows.map((r) => ({
+    token: r.address.toLowerCase() as Address,
+    curve: r.curve_address.toLowerCase() as Address,
+  }));
+}
+
 /** Run the sweep query against any QueryClient and map the result. */
 export async function queryReadyCurves(client: QueryClient): Promise<ReadyCurve[]> {
   const { rows } = await client.query<ReadyRow>(READY_CURVES_SQL);
   return mapReadyRows(rows);
+}
+
+/** Run the treasury-fee candidate query against any QueryClient and map the result. */
+export async function queryTreasuryFeeCurves(client: QueryClient): Promise<TreasuryFeeCurve[]> {
+  const { rows } = await client.query<ReadyRow>(TREASURY_FEE_CURVES_SQL);
+  return mapTreasuryFeeRows(rows);
 }

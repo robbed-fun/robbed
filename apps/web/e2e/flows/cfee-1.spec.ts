@@ -8,12 +8,14 @@ import {
   api,
   assertIndexed,
   assertOnChain,
-  claimCreatorToken,
+  assertUi,
+  connectAs,
   collectOnChain,
   expect,
   generatePostGradFees,
   graduateToken,
   parseCollectSplit,
+  portfolio,
   publicClient,
   readCreatorLpShareBps,
   readCreatorOf,
@@ -25,19 +27,16 @@ import {
 } from "../harness";
 
 // @flow:CFEE-1 — Post-grad creator-fee accrual + claim (LP-fee 50/50 split → CreatorVault → claim) ·
-// assertable-layers: on-chain · indexed   (UI waived — see waivers)
+// assertable-layers: on-chain · indexed · UI
 //
 // WIDENED 2026-07-13 (creator-fee generation DEPLOYED to the fork) the /
 // factory generation is live, so this un-skips and widens from on-chain-only
 // to on-chain · INDEXED. The indexed leg polls the split roll-up the indexer now
 // materializes (`GET /v1/creators/:creator/claimable/:token`, authoritative live
 // `CreatorVault.tokenBalanceOf` over the `creator_token_claimable` accrual) and
-// reconciles it to the on-chain vault credit. The UI leg stays WAIVED: the frontend
-// CreatorEarningsPanel exists but enumerates post-grad buckets from a
-// `GET /v1/creators/:a/token-claimable` LIST endpoint the API does NOT implement (it
-// serves the single-row `/claimable/:token`), so the widget degrades to an on-chain
-// `tokenBalanceOf` fallback that does not reliably surface the bucket end-to-end —
-// a DOC-LOCKSTEP endpoint-shape gap reported to robbed-indexer/robbed-frontend.
+// reconciles it to the on-chain vault credit. CreatorEarningsPanel now enumerates
+// post-grad buckets through `GET /v1/creators/:a/token-claimable`; the UI leg below
+// proves the Portfolio CREATED claim buttons submit the pull-payment txs.
 //
 // Routing (LPFeeVault._route): BOTH post-grad legs (the launch token AND WETH) are
 // credited to the creator as ERC20 via `depositERC20` per `(creator, token)` —
@@ -45,8 +44,8 @@ import {
 // (treasury-first, keeps the odd wei).
 test(
   "CFEE-1 post-grad V3 fees split 50/50 → creator token+WETH legs land in the CreatorVault, are indexed, and are claimable",
-  { tag: ["@flow:CFEE-1", "@layer:on-chain", "@layer:indexed"] },
-  async ({}) => {
+  { tag: ["@flow:CFEE-1", "@layer:on-chain", "@layer:indexed", "@layer:ui"] },
+  async ({ page }) => {
     test.setTimeout(240_000);
 
     const creator = ROLES.creator.address;
@@ -154,30 +153,61 @@ test(
       },
     );
 
-    await assertOnChain(
-      "the creator PULLS both ERC20 legs; each bucket drains to zero (pull-payment, C)",
+    let creatorWethWalletBefore = 0n;
+    let creatorTokWalletBefore = 0n;
+
+    await assertUi(
+      "the creator claims both post-grad buckets from Portfolio → CREATED",
       async () => {
+        await page.goto(portfolio.route());
+        await connectAs(page, "creator");
+        await portfolio.createdTab(page).click();
+
+        await expect(page.getByText("Creator earnings").first()).toBeVisible({
+          timeout: 30_000,
+        });
+
+        const claimWeth = page.getByRole("button", { name: /^Claim WETH$/i }).first();
+        const claimToken = page
+          .getByRole("button", { name: new RegExp(`^Claim ${token.ticker}$`, "i") })
+          .first();
+
+        await expect(claimWeth).toBeVisible({ timeout: 30_000 });
+        await expect(claimToken).toBeVisible({ timeout: 30_000 });
+
         // WETH leg: `claimERC20(creator, WETH)` drains the WHOLE standing (aggregated)
-        // balance; assert the wallet delta equals it and the bucket empties.
-        const creatorWethWalletBefore = await readTokenBalance(creator, WETH);
-        const claimWethHash = await claimCreatorToken(creator, WETH, ROLES.trader);
-        expect(
-          (await publicClient.waitForTransactionReceipt({ hash: claimWethHash })).status,
-        ).toBe("success");
-        expect((await readTokenBalance(creator, WETH)) - creatorWethWalletBefore).toBe(
-          creatorWethStanding,
-        );
-        expect(await readCreatorTokenClaimable(creator, WETH)).toBe(0n);
+        // balance; the follow-up on-chain marker asserts the wallet delta.
+        creatorWethWalletBefore = await readTokenBalance(creator, WETH);
+        await claimWeth.click();
+        await expect
+          .poll(() => readCreatorTokenClaimable(creator, WETH), {
+            message: "WETH creator-fee bucket drains after the Portfolio claim",
+            timeout: 60_000,
+          })
+          .toBe(0n);
 
         // Token leg: unique per token → the claim delivers exactly this collect's credit.
-        const creatorTokWalletBefore = await readTokenBalance(creator, token.token);
-        const claimTokHash = await claimCreatorToken(creator, token.token, ROLES.trader);
-        expect((await publicClient.waitForTransactionReceipt({ hash: claimTokHash })).status).toBe(
-          "success",
+        creatorTokWalletBefore = await readTokenBalance(creator, token.token);
+        await claimToken.click();
+        await expect
+          .poll(() => readCreatorTokenClaimable(creator, token.token), {
+            message: "launch-token creator-fee bucket drains after the Portfolio claim",
+            timeout: 60_000,
+          })
+          .toBe(0n);
+      },
+    );
+
+    await assertOnChain(
+      "the UI-submitted creator PULLS deliver both ERC20 legs to the creator wallet",
+      async () => {
+        expect((await readTokenBalance(creator, WETH)) - creatorWethWalletBefore).toBe(
+          creatorWethStanding,
         );
         expect((await readTokenBalance(creator, token.token)) - creatorTokWalletBefore).toBe(
           creatorTokCredit,
         );
+        expect(await readCreatorTokenClaimable(creator, WETH)).toBe(0n);
         expect(await readCreatorTokenClaimable(creator, token.token)).toBe(0n);
       },
     );

@@ -110,6 +110,13 @@ export interface TokenFlagSummary {
   byFlag: Partial<Record<BotFlag, number>>;
 }
 
+/** A creator-owned curve whose pre-grad fee escrow can be swept into CreatorVault. */
+export interface CreatorCurveFeeSourceRow {
+  token: string;
+  ticker: string;
+  curve_address: string;
+}
+
 /**
  * A Portfolio HOLDINGS row: `balances` (Transfer-truth balance + cost-basis
  * accumulators) JOINed to the token pricing/ref columns. NOT a new wire shape —
@@ -299,6 +306,17 @@ export interface Db {
     creator: string,
     token: string,
   ): Promise<CreatorTokenClaimableRow | null>;
+  /**
+   * All post-graduation split buckets for one creator, backing
+   * GET /v1/creators/:address/token-claimable. The route still overlays the live
+   * `CreatorVault.tokenBalanceOf` read for each row before returning it.
+   */
+  listCreatorTokenClaimable(creator: string): Promise<CreatorTokenClaimableRow[]>;
+  /**
+   * Creator-owned curves with a creator-fee leg enabled. The route overlays live
+   * `BondingCurve.accruedCreatorFees()` before returning pending-sweep rows.
+   */
+  listCreatorCurveFeeSources(creator: string): Promise<CreatorCurveFeeSourceRow[]>;
 
   // ── portfolio (api.md) ──────────────────────────────────────
   /** Per-address materialized roll-up backing GET /v1/portfolio/:address; null when the address never appeared. */

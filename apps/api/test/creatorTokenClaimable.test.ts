@@ -6,17 +6,20 @@
  */
 import { describe, expect, it } from "bun:test";
 import {
+  creatorCurveClaimableSchema,
   creatorTokenClaimableSchema,
+  type CreatorTokenClaimable,
   type CreatorTokenClaimableRow,
 } from "@robbed/shared";
 import { createApp } from "../src/app";
 import type { CreatorVaultBalanceReader } from "../src/lib/creator-vault";
-import { FakeDb, makeTestDeps, readJson, testConfig } from "./helpers";
+import { FakeDb, fixtureToken, makeTestDeps, readJson, testConfig } from "./helpers";
 
 const CREATOR = "0x1111111111111111111111111111111111111111";
 const TOKEN = "0x3333333333333333333333333333333333333333"; // a graduated launch token
 const WETH = "0x4444444444444444444444444444444444444444";
 const VAULT = "0x2222222222222222222222222222222222222222";
+const CURVE = "0x5555555555555555555555555555555555555555";
 
 function tokenRow(overrides: Partial<CreatorTokenClaimableRow> = {}): CreatorTokenClaimableRow {
   return {
@@ -33,18 +36,20 @@ function tokenRow(overrides: Partial<CreatorTokenClaimableRow> = {}): CreatorTok
 }
 
 function setup(opts: {
-  row?: CreatorTokenClaimableRow | null;
-  live?: string | null;
+  row?: CreatorTokenClaimableRow | CreatorTokenClaimableRow[] | null;
+  live?: string | null | Record<string, string | null>;
   configVault?: string;
   wethAddress?: string;
 } = {}) {
   const db = new FakeDb();
-  if (opts.row) db.creatorTokenClaimable.set(`${opts.row.creator}:${opts.row.token}`, opts.row);
+  const rows = Array.isArray(opts.row) ? opts.row : opts.row ? [opts.row] : [];
+  for (const row of rows) db.creatorTokenClaimable.set(`${row.creator}:${row.token}`, row);
   const reader: CreatorVaultBalanceReader = {
     async read() {
       return null;
     },
-    async readToken() {
+    async readToken({ token }) {
+      if (opts.live && typeof opts.live === "object") return opts.live[token] ?? null;
       return opts.live ?? null;
     },
   };
@@ -131,5 +136,118 @@ describe("GET /v1/creators/:address/claimable/:token", () => {
       new Request(`http://x/v1/creators/${CREATOR}/claimable/not-an-address`),
     );
     expect(bad2.status).toBe(400);
+  });
+});
+
+describe("GET /v1/creators/:address/token-claimable", () => {
+  it("lists all creator buckets with live claimable balances for the Portfolio claim widget", async () => {
+    const tokenLeg = tokenRow();
+    const wethLeg = tokenRow({ token: WETH, claimable: "0" });
+    const deps = setup({
+      row: [wethLeg, tokenLeg],
+      live: {
+        [TOKEN]: (4n * 10n ** 18n).toString(),
+        [WETH]: (1n * 10n ** 18n).toString(),
+      },
+      wethAddress: WETH,
+    });
+    const res = await createApp(deps).request(
+      new Request(`http://x/v1/creators/${CREATOR}/token-claimable`),
+    );
+    expect(res.status).toBe(200);
+    const body = (await readJson(res)).data;
+    const parsed = creatorTokenClaimableSchema.array().parse(body);
+    expect(parsed).toHaveLength(2);
+    const byToken = new Map<string, CreatorTokenClaimable>(
+      parsed.map((row) => [row.token, row]),
+    );
+    const tokenBucket = byToken.get(TOKEN);
+    const wethBucket = byToken.get(WETH);
+    expect(tokenBucket).toBeDefined();
+    expect(wethBucket).toBeDefined();
+    expect(tokenBucket!.claimable).toBe((4n * 10n ** 18n).toString());
+    expect(tokenBucket!.claimableUsd).toBeNull();
+    expect(wethBucket!.claimable).toBe((1n * 10n ** 18n).toString());
+    expect(wethBucket!.claimableUsd).not.toBeNull();
+  });
+
+  it("returns an empty list when the creator has no post-grad buckets yet but the deployment has a vault", async () => {
+    const deps = setup({ row: null, configVault: VAULT });
+    const res = await createApp(deps).request(
+      new Request(`http://x/v1/creators/${CREATOR}/token-claimable`),
+    );
+    expect(res.status).toBe(200);
+    expect((await readJson(res)).data).toEqual([]);
+  });
+
+  it("404s when no vault exists anywhere", async () => {
+    const deps = setup({ row: null });
+    const res = await createApp(deps).request(
+      new Request(`http://x/v1/creators/${CREATOR}/token-claimable`),
+    );
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /v1/creators/:address/curve-claimable", () => {
+  it("lists unswept pre-grad creator fees that still sit on creator-owned curves", async () => {
+    const db = new FakeDb([
+      fixtureToken({
+        address: TOKEN,
+        creator: CREATOR,
+        curve_address: CURVE,
+        creator_fee_bps: 50,
+        ticker: "CFEE",
+      }),
+    ]);
+    const deps = makeTestDeps({
+      db,
+      creatorCurveFees: {
+        async read({ curve }) {
+          return curve === CURVE ? "123000000000000" : "0";
+        },
+      },
+    });
+
+    const res = await createApp(deps).request(
+      new Request(`http://x/v1/creators/${CREATOR}/curve-claimable`),
+    );
+    expect(res.status).toBe(200);
+    const parsed = creatorCurveClaimableSchema.array().parse((await readJson(res)).data);
+    expect(parsed).toEqual([
+      {
+        creator: CREATOR,
+        token: TOKEN,
+        ticker: "CFEE",
+        curve: CURVE,
+        unsweptEth: "123000000000000",
+        asOf: new Date(1_700_000_300_000).toISOString(),
+      },
+    ]);
+  });
+
+  it("filters zero or unreadable curve escrows", async () => {
+    const db = new FakeDb([
+      fixtureToken({
+        address: TOKEN,
+        creator: CREATOR,
+        curve_address: CURVE,
+        creator_fee_bps: 50,
+      }),
+    ]);
+    const deps = makeTestDeps({
+      db,
+      creatorCurveFees: {
+        async read() {
+          return null;
+        },
+      },
+    });
+
+    const res = await createApp(deps).request(
+      new Request(`http://x/v1/creators/${CREATOR}/curve-claimable`),
+    );
+    expect(res.status).toBe(200);
+    expect((await readJson(res)).data).toEqual([]);
   });
 });

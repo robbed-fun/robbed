@@ -5,8 +5,8 @@
 #
 # ── STATUS (2026-07-12): INTERIM — this stack RUNS, pointed at TESTNET (46630) values ──
 # robbed.fun must be alive before a real 4663 deploy exists, so this stack currently boots
-# with TESTNET parameters supplied via env ("later we will replace testnet by mainnet"):
-#   • root `.env` (gitignored):  MAINNET_RPC_URL=https://rpc.testnet.chain.robinhood.com,
+# with TESTNET parameters supplied via the mainnet env file ("later we will replace testnet by mainnet"):
+#   • `config/env/mainnet.env` (gitignored):  MAINNET_RPC_URL=https://rpc.testnet.chain.robinhood.com,
 #     MAINNET_CHAIN_ID=46630, MAINNET_INDEXER_CHAIN_ID=46630, plus the public-URL overrides
 #     (https://api.robbed.fun / wss://api.robbed.fun/ws) — each marked INTERIM there.
 #   • `tools/localstack/out/mainnet.env` — INTERIM copy of the 46630 (testnet) deploy artifact
@@ -25,7 +25,7 @@
 #   2. Emit `tools/localstack/out/mainnet.env` from that artifact (CURVE_FACTORY_ADDRESS,
 #      ROUTER_ADDRESS, MIGRATOR_ADDRESS, TREASURY_ADDRESS, LP_FEE_VAULT_ADDRESS,
 #      CREATOR_VAULT_ADDRESS, WETH_ADDRESS, START_BLOCK), replacing the INTERIM testnet copy.
-#   3. Root `.env`: MAINNET_RPC_URL=https://rpc.mainnet.chain.robinhood.com,
+#   3. `config/env/mainnet.env`: MAINNET_RPC_URL=https://rpc.mainnet.chain.robinhood.com,
 #      MAINNET_CHAIN_ID=4663; DELETE MAINNET_INDEXER_CHAIN_ID (compose default 4663 takes over).
 #      Public-URL overrides stay as-is (api.robbed.fun does not change).
 #   4. `docker compose -f docker-compose.mainnet.yml down` + wipe volumes (`down -v` — the DB
@@ -51,7 +51,7 @@
 #                         advertised to wallets as NEXT_PUBLIC_CHAIN_ID (one source of truth;
 #                         4663 at Phase B, INTERIM 46630)
 #   MAINNET_INDEXER_CHAIN_ID  OPTIONAL — indexer chain selection seam; default 4663 (Phase-B
-# value). INTERIM: root.env sets 46630 so the registry gate
+# value). INTERIM: `config/env/mainnet.env` sets 46630 so the registry gate
 #                         resolves the REAL testnet entry (see STATUS; no gate is bypassed).
 #
 # ── Contract addresses + START_BLOCK: fail-closed on tools/localstack/out/mainnet.env ──
@@ -251,10 +251,10 @@ services:
       API_ENV: development
       DATABASE_URL: "postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}?options=-c%20search_path%3D${MAINNET_DATABASE_SCHEMA:-robbed_mainnet_ponder}%2Cpublic"
       REDIS_URL: redis://redis:6379
-      # Object storage. DEFAULTS = the local minio (dev/CI); OVERRIDE via root .env
+      # Object storage. DEFAULTS = the local minio (dev/CI); OVERRIDE via config/env/mainnet.env
       # to a real Cloudflare R2 bucket so uploaded images are publicly reachable from
       # robbed.fun (the minio default only resolves on the host — localhost:4290 — so
-      # images 404 for any real browser). To use R2, set in root .env:
+      # images 404 for any real browser). To use R2, set in config/env/mainnet.env:
       #   R2_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
       #   R2_ACCESS_KEY_ID=<R2 S3 API token key>   R2_SECRET_ACCESS_KEY=<secret>
       #   MAINNET_PUBLIC_R2_BASE_URL=https://pub-<hash>.r2.dev   (bucket public-read URL)
@@ -319,7 +319,7 @@ services:
   # (fail-closed — see header STATUS).
   #
   # chain-identity gate: INDEXER_CHAIN_ID is a SEAM (${MAINNET_INDEXER_CHAIN_ID:-4663})
-  # whose default is the Phase-B value. INTERIM: root .env sets 46630, which the registry gate
+  # whose default is the Phase-B value. INTERIM: config/env/mainnet.env sets 46630, which the registry gate
   # resolves against the REAL testnet entry and asserts against the live RPC — honest, nothing
   # bypassed. The 4663 default remains DELIBERATELY without INDEXER_ALLOW_FORK_4663: the
   # registry's 4663 entry is still the mainnet-FORK pipeline artifact, so loadConfig REFUSES
@@ -446,6 +446,10 @@ services:
       KEEPER_PRIVATE_KEY: ${MAINNET_KEEPER_PRIVATE_KEY:-}
       DATABASE_URL: "postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}?options=-c%20search_path%3D${MAINNET_DATABASE_SCHEMA:-robbed_mainnet_ponder}%2Cpublic"
       REDIS_URL: redis://redis:6379
+      KEEPER_TREASURY_SWEEP_ENABLED: "${KEEPER_TREASURY_SWEEP_ENABLED:-true}"
+      KEEPER_TREASURY_SWEEP_POLL_MS: "${KEEPER_TREASURY_SWEEP_POLL_MS:-60000}"
+      KEEPER_TREASURY_SWEEP_MIN_WEI: "${KEEPER_TREASURY_SWEEP_MIN_WEI:-500000000000000000}"
+      KEEPER_TREASURY_SWEEP_MAX_AGE_MS: "${KEEPER_TREASURY_SWEEP_MAX_AGE_MS:-86400000}"
       KEEPER_PORT: "3003"
     ports:
       - "${KEEPER_PORT:-4203}:3003"
@@ -477,11 +481,11 @@ services:
       # env var SELECTS the target chain, the shared deployment registry DEFINES it (apps/web
       # env.ts throws on a non-registry id). ONE source of truth with chaincheck: the id the
       # browser advertises to wallets is exactly the id chaincheck asserted the RPC serves
-      # (INTERIM 46630; 4663 at Phase B — flips with root .env, no compose edit).
+      # (INTERIM 46630; 4663 at Phase B — flips with config/env/mainnet.env, no compose edit).
       NEXT_PUBLIC_CHAIN_ID: ${MAINNET_CHAIN_ID:?MAINNET_CHAIN_ID is required — asserted live by chaincheck and advertised as NEXT_PUBLIC_CHAIN_ID (INTERIM 46630; 4663 at Phase B). See docs/developers/runbooks/docker.md 'Mainnet stack'.}
       # Public-origin overrides (Cloudflare Tunnel: robbed.fun → web, api.robbed.fun → api
       # with /ws → ws; see the cloudflared service below): browser-visible URLs must be
-      # reachable from EXTERNAL browsers, so the MAINNET_PUBLIC_* env (root .env) overrides
+      # reachable from EXTERNAL browsers, so the MAINNET_PUBLIC_* env (config/env/mainnet.env) overrides
       # the host-mapped localhost defaults. The public URLs also work for local browsing;
       # unset ⇒ localhost defaults, and port re-bases still flow via the nested ${*_PORT}.
       # R2 stays on the localhost default until minio gets a tunnel hostname or real R2

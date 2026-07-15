@@ -12,6 +12,7 @@ import { loadConfig, isWebSocketUrl } from "./config";
 import { ChainClient } from "./chain";
 import { PgKeeperDb } from "./db.pg";
 import { GraduationKeeper } from "./keeper";
+import { TreasuryFeeSweeper } from "./treasury-sweeper";
 import { KeeperMetrics } from "./metrics";
 import { jsonLogger } from "./logger";
 import { startHealthServer, type WalletState } from "./health";
@@ -39,6 +40,18 @@ async function main(): Promise<void> {
       failedCooldownMs: cfg.KEEPER_FAILED_COOLDOWN_MS,
     },
   });
+  const treasurySweeper = new TreasuryFeeSweeper({
+    chain,
+    db,
+    metrics,
+    log,
+    clock,
+    tuning: {
+      gasCap: cfg.KEEPER_GAS_CAP,
+      minSweepWei: cfg.KEEPER_TREASURY_SWEEP_MIN_WEI,
+      maxSweepAgeMs: cfg.KEEPER_TREASURY_SWEEP_MAX_AGE_MS,
+    },
+  });
 
   // Fail-closed chain-identity gate (mirrors the indexer discipline).
   const liveChainId = await chain.getChainId();
@@ -46,7 +59,16 @@ async function main(): Promise<void> {
     throw new Error(`[keeper] chain-id mismatch: RPC reports ${liveChainId}, CHAIN_ID=${cfg.CHAIN_ID}`);
   }
   const detection = isWebSocketUrl(cfg.KEEPER_RPC_URL) ? "ws-subscription" : "http-polling";
-  log.info("startup", { wallet: chain.walletAddress, chainId: cfg.CHAIN_ID, detection, pollMs: cfg.KEEPER_POLL_MS });
+  log.info("startup", {
+    wallet: chain.walletAddress,
+    chainId: cfg.CHAIN_ID,
+    detection,
+    pollMs: cfg.KEEPER_POLL_MS,
+    treasurySweepEnabled: cfg.KEEPER_TREASURY_SWEEP_ENABLED,
+    treasurySweepPollMs: cfg.KEEPER_TREASURY_SWEEP_POLL_MS,
+    treasurySweepMinWei: cfg.KEEPER_TREASURY_SWEEP_MIN_WEI.toString(),
+    treasurySweepMaxAgeMs: cfg.KEEPER_TREASURY_SWEEP_MAX_AGE_MS,
+  });
 
   // ── balance watch ──────────────────────────────────────────────────────────
   const wallet: WalletState = { address: chain.walletAddress, balanceWei: 0n, warnThresholdWei: 0n, low: false, updatedAt: null };
@@ -100,6 +122,32 @@ async function main(): Promise<void> {
   await runSweep();
   const sweepTimer = setInterval(() => void runSweep(), cfg.KEEPER_POLL_MS);
 
+  // ── treasury fee sweep ───────────────────────────────────────────────────────
+  async function runTreasurySweep(): Promise<void> {
+    if (!cfg.KEEPER_TREASURY_SWEEP_ENABLED) return;
+    try {
+      const results = await treasurySweeper.sweep();
+      const acted = results.filter((r) => r.status === "swept" || r.status === "failed");
+      if (acted.length > 0) {
+        log.info("treasury_sweep_results", {
+          acted: acted.map((r) => ({
+            curve: r.curve,
+            token: r.token,
+            status: r.status,
+            amountWei: r.amountWei?.toString(),
+            txHash: r.txHash,
+          })),
+        });
+      }
+    } catch (err) {
+      log.error("treasury_sweep_failed", { err: String(err) });
+    }
+  }
+  await runTreasurySweep();
+  const treasurySweepTimer = cfg.KEEPER_TREASURY_SWEEP_ENABLED
+    ? setInterval(() => void runTreasurySweep(), cfg.KEEPER_TREASURY_SWEEP_POLL_MS)
+    : null;
+
   // ── primary detection: on-chain GraduationReady ──────────────────────────────
   const unwatch = chain.watchGraduationReady(
     (curve) => {
@@ -116,6 +164,7 @@ async function main(): Promise<void> {
     shuttingDown = true;
     log.info("shutdown", { signal });
     clearInterval(sweepTimer);
+    if (treasurySweepTimer) clearInterval(treasurySweepTimer);
     clearInterval(balanceTimer);
     try {
       unwatch();

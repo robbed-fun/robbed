@@ -10,13 +10,13 @@ declared `assertable-layers` (on-chain → indexed → UI), honouring `user-flow
 **`CFEE-1..4` are DEPLOYED + running (2026-07-13).** The post-graduation creator-fee generation
 (: new CurveFactory + BondingCurve + Router + `CreatorVault` + creator-aware
 `LPFeeVault`; `creatorLpShareBps == 5000`, `CREATOR_FEE_BPS == 50`) is deployed to the fork, so the
-`test.fixme`/`@pending:phase2` guards are removed and all four run green. `CFEE-1`/`CFEE-2` are widened
-to **on-chain · indexed** — the split-Collect/CreatorVault roll-up is served over REST (`GET /v1/creators/
-:a/claimable[/:token]`, authoritative live vault balances) and reconciled to the on-chain credit;
-`CFEE-3`/`CFEE-4` stay **on-chain** invariants. The **UI leg of CFEE-1/CFEE-2 stays waived** — the
-frontend `CreatorEarningsPanel` enumerates post-grad buckets from a `GET /v1/creators/:a/token-claimable`
-LIST endpoint the API does not implement (it serves single-row `/claimable/:token`), so its buckets fall
-back to an on-chain read that doesn't reliably surface end-to-end (reported to robbed-indexer/robbed-frontend).
+`test.fixme`/`@pending:phase2` guards are removed and all four run green. `CFEE-1` is widened
+to **on-chain · indexed · UI** — the split-Collect/CreatorVault roll-up is served over REST
+(`GET /v1/creators/:a/claimable[/:token]` + `GET /v1/creators/:a/token-claimable`, authoritative
+live vault balances), reconciled to the on-chain credit, and claimed from Portfolio → CREATED.
+`CFEE-2` stays **on-chain · indexed** for the venue-invariant 0.5% rate; `CFEE-3`/`CFEE-4`
+stay **on-chain** invariants. The frontend `CreatorEarningsPanel` enumerates post-grad buckets
+from `GET /v1/creators/:a/token-claimable`, with a bounded on-chain fallback for older stacks.
 **Dev-stack dependency:** the deploychain one-shot now emits `CREATOR_VAULT_ADDRESS` + `WETH_ADDRESS`
 into `local.env` — without them the indexer never registers the `CreatorVault`/`FeesSplit` sources and the
 CFEE-1/2 indexed leg is silent.
@@ -98,10 +98,8 @@ ABI stub remains).
   original hash). Needs docker access to `robbed-minio-1` (override via `E2E_MINIO_CONTAINER`);
   a remote stack can supply `E2E_MISMATCH_TOKEN` instead. Skips with a clear message when neither
   is available.
-- **Upload rate limit:** the API caps `POST /v1/uploads/image` at 10/h per IP (`uploads_h`).
-  A full matrix run consumes ~5 (LAUNCH-1/2, ERR-6a, TD-11, ERR-6b) — more than one full run per
-  hour against the same API instance can trip 429s; restart the api container to reset (in-memory
-  limiter in dev).
+- **Uploads:** `POST /v1/uploads/image` is not rate-limited. The API still enforces max bytes,
+  magic-byte MIME sniffing, re-encoding, content-addressing, and moderation.
 - **Web must be served with the SSR seam + fork addresses:** compose now runs an `apiproxy`
   sidecar (SSR's `localhost:4001` inside the web container) and the web service sources
   `tools/localstack/out/local.env` into `NEXT_PUBLIC_E2E_*` at boot — `docker compose up web`

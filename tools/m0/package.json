@@ -3,7 +3,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Milestone 0 parameter notebook - derives all deploy-time curve constants (spec 11.0, 6.2, 6.4). Output: out/constants.json (canonical), Constants.sol.txt, constants.ts, plots.",
+  "description": "Milestone 0 parameter notebook - derives all deploy-time curve constants (spec 11.0, 6.2, 6.4). Output: out/constants.mainnet.json, out/constants.testnet.json, legacy out/constants.json alias, Constants.sol.txt, constants.ts, plots.",
   "scripts": {
     "derive": "bun run derive.ts"
   }

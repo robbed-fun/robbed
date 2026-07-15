@@ -11,6 +11,11 @@ export interface MetricsSnapshot {
   sweepsTotal: number;
   lastSweepAt: number | null; // epoch ms
   lastSweepScanned: number | null;
+  treasurySweepsTotal: number;
+  treasuryFeesSweptTotal: number;
+  treasurySweepFailuresTotal: number;
+  lastTreasurySweepAt: number | null; // epoch ms
+  lastTreasurySweepScanned: number | null;
 }
 
 export class KeeperMetrics {
@@ -21,6 +26,11 @@ export class KeeperMetrics {
   private sweeps = 0;
   private lastSweepAt: number | null = null;
   private lastSweepScanned: number | null = null;
+  private treasurySweeps = 0;
+  private treasuryFeesSwept = 0;
+  private treasurySweepFailures = 0;
+  private lastTreasurySweepAt: number | null = null;
+  private lastTreasurySweepScanned: number | null = null;
 
   incGraduated(): void {
     this.graduated += 1;
@@ -39,6 +49,17 @@ export class KeeperMetrics {
     this.lastSweepAt = at;
     this.lastSweepScanned = scanned;
   }
+  recordTreasurySweep(at: number, scanned: number): void {
+    this.treasurySweeps += 1;
+    this.lastTreasurySweepAt = at;
+    this.lastTreasurySweepScanned = scanned;
+  }
+  incTreasuryFeesSwept(): void {
+    this.treasuryFeesSwept += 1;
+  }
+  incTreasurySweepFailure(): void {
+    this.treasurySweepFailures += 1;
+  }
 
   snapshot(): MetricsSnapshot {
     return {
@@ -49,6 +70,11 @@ export class KeeperMetrics {
       sweepsTotal: this.sweeps,
       lastSweepAt: this.lastSweepAt,
       lastSweepScanned: this.lastSweepScanned,
+      treasurySweepsTotal: this.treasurySweeps,
+      treasuryFeesSweptTotal: this.treasuryFeesSwept,
+      treasurySweepFailuresTotal: this.treasurySweepFailures,
+      lastTreasurySweepAt: this.lastTreasurySweepAt,
+      lastTreasurySweepScanned: this.lastTreasurySweepScanned,
     };
   }
 }

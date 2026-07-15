@@ -442,6 +442,20 @@ export class FakeDb implements Db {
   ): Promise<CreatorTokenClaimableRow | null> {
     return this.creatorTokenClaimable.get(`${creator}:${token}`) ?? null;
   }
+  async listCreatorTokenClaimable(creator: string): Promise<CreatorTokenClaimableRow[]> {
+    return [...this.creatorTokenClaimable.values()]
+      .filter((row) => row.creator === creator)
+      .sort((a, b) => a.token.localeCompare(b.token));
+  }
+  async listCreatorCurveFeeSources(creator: string) {
+    return [...this.tokens.values()]
+      .filter((row) => row.creator === creator && row.creator_fee_bps > 0)
+      .map((row) => ({
+        token: row.address,
+        ticker: row.ticker,
+        curve_address: row.curve_address,
+      }));
+  }
   async getAddressPnl(a: string) {
     return this.pnl.get(a) ?? null;
   }
@@ -655,6 +669,11 @@ export function makeTestDeps(overrides: Partial<AppDeps> = {}): AppDeps {
         return null;
       },
       async readToken() {
+        return null;
+      },
+    },
+    creatorCurveFees: overrides.creatorCurveFees ?? {
+      async read() {
         return null;
       },
     },

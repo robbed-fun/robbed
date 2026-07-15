@@ -174,14 +174,14 @@ contract DeployModesTest is Test {
         vm.chainId(46_630);
         assertEq(harness.defaultConstantsPath(), "../tools/m0/out/constants.testnet.json", "testnet default");
         vm.chainId(4663);
-        // Both a live and a fork 4663 run default to the mainnet constants file (fork ↦ same
+        // Both a live and a fork 4663 run default to the mainnet constants file (fork -> same
         // economics); the docker one-shot overrides to the fork fixture via ROBBED_CONSTANTS.
         harness.setAffirm(true);
-        assertEq(harness.defaultConstantsPath(), "../tools/m0/out/constants.json", "live default");
+        assertEq(harness.defaultConstantsPath(), "../tools/m0/out/constants.mainnet.json", "live default");
         harness.setAffirm(false);
-        assertEq(harness.defaultConstantsPath(), "../tools/m0/out/constants.json", "fork default");
+        assertEq(harness.defaultConstantsPath(), "../tools/m0/out/constants.mainnet.json", "fork default");
         vm.chainId(31_337);
-        assertEq(harness.defaultConstantsPath(), "../tools/m0/out/constants.json", "local default");
+        assertEq(harness.defaultConstantsPath(), "../tools/m0/out/constants.mainnet.json", "local default");
     }
 
     // ── (b) no account-0 fallback on ANY public chain ─────────────────────────

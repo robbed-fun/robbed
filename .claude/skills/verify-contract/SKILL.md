@@ -82,16 +82,16 @@ cast chain-id --rpc-url "$TESTNET_RPC_URL"   # MUST print 46630 before you verif
 ## Mode 1 — Inline at deploy (preferred)
 
 Fold verification into the broadcast so each contract is verified **as it lands**, with constructor
-args recovered automatically. This is what `/testnet-redeploy` Step 1 does; add these three flags to the
-`forge script … --broadcast` (keep that skill's mandatory Orbit gas flags — they belong to the deploy,
-not the verify):
+args recovered automatically. This is what `/testnet-redeploy` Step 1 does through the operator
+wrapper; pass `--verify` to `scripts/deploy-onchain.sh` so the wrapper adds the Blockscout verifier
+flags while also preserving the mandatory Orbit gas flags:
 
 ```bash
-cd contracts
-forge script script/Deploy.s.sol \
-  --rpc-url "$TESTNET_RPC_URL" --broadcast \
-  --verify --verifier blockscout \
-  --verifier-url "$TESTNET_BLOCKSCOUT_URL/api"
+bash scripts/deploy-onchain.sh protocol \
+  --network testnet \
+  --deployer 0xDeployer \
+  --verify \
+  --account robbed-testnet-deployer
 ```
 
 Inline verify handles most contracts. When a constructor is too complex for the inline path

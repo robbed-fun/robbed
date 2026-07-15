@@ -261,13 +261,19 @@ GET /v1/portfolio/:address/created?cursor=&limit=             (section 5.4 CREAT
 
 ### 3.4b Creator-fee claim surface (section 7 / D-63 pre-grad; D-69 post-grad — additive, Phase-2)
 
-Read-only pull-payment claim reads for the Portfolio CreatedTab. Never mutate or depend on mutating chain state (section 8.4). Shapes are the frozen `@robbed/shared` DTOs (`creatorClaimableSchema`, `creatorTokenClaimableSchema`) — never redeclared. Both serve the **live** on-chain vault read as the AUTHORITATIVE claimable, falling back to the event-derived accrued − claimed mirror only when no RPC is configured (exactly as `/fees` reads live `tokensOwed`). Vault resolves from the indexed roll-up row, else the configured `CREATOR_VAULT_ADDRESS`; a deployment with no vault (v1/treasury-only) and no accrual is 404. Additive/absent on v1.
+Read-only pull-payment claim reads for the Portfolio CreatedTab. Never mutate or depend on mutating chain state (section 8.4). Shapes are the frozen `@robbed/shared` DTOs (`creatorClaimableSchema`, `creatorCurveClaimableSchema`, `creatorTokenClaimableSchema`) — never redeclared. Vault endpoints serve the **live** on-chain vault read as the AUTHORITATIVE claimable, falling back to the event-derived accrued − claimed mirror only when no RPC is configured (exactly as `/fees` reads live `tokensOwed`). Vault resolves from the indexed roll-up row, else the configured `CREATOR_VAULT_ADDRESS`; a deployment with no vault (v1/treasury-only) and no accrual is 404. `curve-claimable` serves pre-grad creator fees still sitting on curves; the Portfolio claim button sweeps these first, then claims from the vault. Additive/absent on v1.
 
 ```
 GET /v1/creators/:address/claimable                            (D-63 pre-grad native-ETH leg)
   200 → CreatorClaimable: creator, vault, claimableEth (live CreatorVault.balanceOf, mirror fallback),
         claimable{usd,ethUsd,asOf}, totalAccruedEth, totalClaimedEth, asOf
   Source: indexer `creator_claimable` roll-up (section 3.12) + live balanceOf. USD derived (section 2). No confirmationState (roll-up).
+
+GET /v1/creators/:address/curve-claimable                      (D-63 pre-grad pending sweep)
+  200 → CreatorCurveClaimable[]: creator, token, ticker, curve,
+        unsweptEth (live BondingCurve.accruedCreatorFees), asOf
+  Source: indexed creator-owned `tokens.curve_address` rows + live curve read. Returns only nonzero unswept rows.
+  Portfolio claim flow: for each returned curve call `sweepCreatorFees()`, then call `CreatorVault.claim(creator)`.
 
 GET /v1/creators/:address/claimable/:token                     (D-69 post-grad 50/50 split, per ERC20)
   200 → CreatorTokenClaimable: creator, token, vault,
@@ -277,9 +283,13 @@ GET /v1/creators/:address/claimable/:token                     (D-69 post-grad 5
   One (creator, token) pair — matches claimERC20(creator, token) 1:1. `token` ∈ {graduated launch token, WETH}.
   Source: indexer `creator_token_claimable` roll-up (section 3.13) + live tokenBalanceOf. No confirmationState (roll-up).
   WETH classification uses config `WETH_ADDRESS`; unset ⇒ claimableUsd null for every leg (fail-safe, never invents a price section 2).
-```
 
-> **Endpoint shape (flagged for robbed-architect, D-69 doc-lockstep):** both endpoint shapes are sensible defaults pending ratification. The per-ERC20 shape mirrors the single-asset `claimERC20`/`tokenBalanceOf` entrypoints 1:1 (one live read per request); a LIST variant enumerating all of a creator's `(token)` rows is a follow-up (would need N live reads or a mirror-only listing) — deferred, not self-resolved.
+GET /v1/creators/:address/token-claimable                      (D-69 post-grad list, Portfolio CreatedTab)
+  200 → CreatorTokenClaimable[] for every indexed `(creator, token)` bucket,
+        each row overlaid with live CreatorVault.tokenBalanceOf before return.
+  Empty list when this deployment has a CreatorVault but the creator has no post-grad buckets yet.
+  404 when no CreatorVault exists anywhere (v1/treasury-only deployment with no rows).
+```
 
 ### 3.5 Confirmation & meta
 
@@ -499,13 +509,13 @@ moderation_audit_log(
 
 | Route class | Limit (default, config) |
 |---|---|
-| `POST /uploads/image` | 10/hour/IP, 3/min/IP |
+| `POST /uploads/image` | none; bounded by size/type/re-encode/content-addressing/moderation |
 | `POST /metadata` | 20/hour/IP |
 | `GET /search` | 60/min/IP |
 | read endpoints | 300/min/IP |
 | admin | 60/min/session |
 
-429 with `Retry-After`. Additionally: upload endpoint requires a lightweight proof-of-intent in v1? **No** — keep it simple; content-addressing dedupes storage spam and the hourly cap bounds abuse (interpretation; revisit if beta shows abuse).
+429 with `Retry-After`. Additionally: upload endpoint requires a lightweight proof-of-intent in v1? **No** — keep it simple; content-addressing dedupes repeat bytes, `MAX_IMAGE_BYTES` bounds per-request cost, and moderation/storage controls handle abuse without blocking legitimate launch retries.
 
 ### 6.4 Abuse surface inventory
 

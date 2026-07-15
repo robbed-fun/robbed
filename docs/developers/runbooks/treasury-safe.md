@@ -12,10 +12,16 @@ The mainnet treasury is a **2-of-4 Gnosis Safe**: it is the `Ownable2Step` owner
 
 Production signing uses [`operator-signing.md`](operator-signing.md): private keys stay in a Foundry keystore, hardware wallet, browser wallet, KMS, or unlocked RPC signer. The older Bun + viem scripts remain useful for local fork drills, but production Safe creation goes through `scripts/deploy-onchain.sh safe` and `contracts/script/CreateSafe.s.sol` so Codex never needs to see a deployer key.
 
+For Robinhood testnet redeploy rehearsals, Safe UI is the preferred coordination surface when its
+network support is available: one owner proposes the Safe transaction in the UI, the other owner
+opens the same Safe from their own machine and signs, and either owner executes after the threshold
+is met. The local `safe-sign.sh` / `safe-exec.sh` flow remains the fallback when the hosted Safe
+Transaction Service cannot queue a Robinhood testnet transaction.
+
 | Command | Script | What it does |
 |---|---|---|
 | `bash scripts/deploy-onchain.sh safe …` | [`CreateSafe.s.sol`](../../../contracts/script/CreateSafe.s.sol) | Production Safe deployment via Foundry wallet signing (`--account`, `--ledger`, `--trezor`, `--unlocked`, etc.). Requires only public `DEPLOYER_ADDRESS` + owner addresses; asserts canonical Safe v1.4.1 code and read-back. |
-| `bun run safe:create` | [`create-safe.ts`](../../../tools/deploy/create-safe.ts) | Legacy/dev helper used by fork drills. It takes `DEPLOYER_PRIVATE_KEY` and should not be used for production operator ceremonies. |
+| `bun run safe:create` | [`create-safe.ts`](../../../tools/deploy/create-safe.ts) | Local-only fork drill helper. It takes `DEPLOYER_PRIVATE_KEY` and must not be used for operator ceremonies. |
 | `bun run safe:tx` | [`safe-tx.ts`](../../../tools/deploy/safe-tx.ts) | Build / co-sign / execute a SafeTx. Subcommands `hash` / `sign` / `exec`; presets `accept-ownership`, `transfer-eth`, and a raw `--to/--value/--data`. Uses only the on-chain v1.4.1 primitives (`getTransactionHash` / `execTransaction`) — never the hosted Safe Transaction Service (not deployed for 4663). |
 | `bash scripts/safe-sign.sh …` | [`safe-sign.sh`](../../../scripts/safe-sign.sh) | Production owner-signature wrapper. Uses `cast wallet sign --no-hash` with a Foundry wallet and then wraps/verifies the signature JSON through `safe-tx.ts`; no `SIGNER_PRIVATE_KEY` needed. |
 | `bash scripts/safe-exec.sh …` | [`safe-exec.sh`](../../../scripts/safe-exec.sh) | Production executor wrapper. Uses `safe-tx.ts exec-data` to validate signatures + build `execTransaction` calldata, then submits with `cast send` through a Foundry wallet; no `EXECUTOR_PRIVATE_KEY` needed. |
@@ -24,8 +30,8 @@ Production signing uses [`operator-signing.md`](operator-signing.md): private ke
 ### How `safe:tx` signing works (the load-bearing details)
 
 - **`hash`** builds the SafeTx (a plain `CALL`, `operation=0`, all gas-refund params zero — the Safe self-executes and pays no relayer), computes the EIP-712 digest locally, and **cross-checks it against the Safe's own `getTransactionHash()` on chain** before anyone signs. The contract is the arbiter, so any viem-vs-Solidity encoding drift fails loud instead of producing an unusable signature. It writes a tx JSON for the signers.
-- **Production signing** uses `bash scripts/safe-sign.sh --tx tx.json --signer <owner> --out sig.json --ledger` or `--account <name>`. It signs the already-verified SafeTx hash through Foundry and writes the same **signature JSON** format. The legacy `safe:tx sign` raw-key path remains for local drills.
-- **Production execution** uses `bash scripts/safe-exec.sh --tx tx.json --sig a.json --sig b.json --executor <addr> --account <name>`. It validates each signature (current owner, no duplicates, correct Safe / chain / nonce), enforces `count ≥ threshold`, sorts signatures ascending by address, builds `execTransaction` calldata, and submits it via `cast send`. The legacy `safe:tx exec` raw-key path remains for local drills.
+- **Production signing** uses `bash scripts/safe-sign.sh --tx tx.json --signer <owner> --out sig.json --ledger` or `--account <name>`. It signs the already-verified SafeTx hash through Foundry and writes the same **signature JSON** format. Raw-key `safe:tx sign` is local-drill only.
+- **Production execution** uses `bash scripts/safe-exec.sh --tx tx.json --sig a.json --sig b.json --executor <addr> --account <name>`. It validates each signature (current owner, no duplicates, correct Safe / chain / nonce), enforces `count ≥ threshold`, sorts signatures ascending by address, builds `execTransaction` calldata, and submits it via `cast send`. Raw-key `safe:tx exec` is local-drill only.
 
 ## Validation — the fork drill (DONE)
 

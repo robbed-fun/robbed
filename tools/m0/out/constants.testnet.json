@@ -1,6 +1,6 @@
 {
   "chainId": 46630,
-  "generatedAt": "2026-07-13T17:26:55.528Z",
+  "generatedAt": "2026-07-15T12:53:48.219Z",
   "ethUsdSnapshot": {
     "source": "coingecko (https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd&precision=8)",
     "timestamp": "2026-07-13T17:26:32.436Z",
@@ -70,11 +70,11 @@
     "positionManager": "0xFFe6CFc4f759b65f9B62c9D05A9E21a78cE93e12",
     "swapRouter02": "0xb79cB26e90EBBD9bC02c75267c9a86dBa1AFedB7",
     "quoterV2": "0xDDcBe4989C8171F721c5e683C9C6339B59718213",
-    "treasurySafe": "0x4ae5b5Ae7D2edd7A2d43054246D6aaAcAAFC1000"
+    "treasurySafe": "0x9b318513D626b25C39Ae3416F23EAF5566998805"
   },
   "provenance": {
     "generator": "tools/m0/derive.ts (@robbed/m0)",
-    "gitSha": "025e51ad801e04a41520186340f82d6ca5e93922",
+    "gitSha": "75fb29f48112bd690db8dac7937df8038047cbe1",
     "ethUsdSource": "coingecko (https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd&precision=8)",
     "ethUsdPrice": "1770.29593304",
     "fetchedAt": "2026-07-13T17:26:32.436Z",
@@ -134,12 +134,12 @@
     "graduationFeeModel": {
       "basis": "cost-based — migrationGasEstimate × gasPriceWei × (marginNum/marginDen); NOT %-of-raise, no hardcoded USD",
       "migrationGasEstimate": "1500000",
-      "migrationGasBasis": "MEASURED on a mainnet-fork of chain 4663 at the latest block via the real V3 factory/NPM (contracts/test/fork/Lifecycle.t.sol, 2026-07-12) graduate()+V3 migration = 814729 gas clean / 817845 gas with arb-back. Estimate rounded up to 1500000 (~1.83× measured) to cover the full MAX_ARB_ITERATIONS=8 loop.",
+      "migrationGasBasis": "MEASURED on a mainnet-fork of chain 4663 at the latest block via the real V3 factory/NPM (contracts/test/fork/Lifecycle.t.sol, 2026-07-12): graduate()+V3 migration = 814729 gas clean / 817845 gas with arb-back. Estimate rounded up to 1500000 (~1.83× measured) to cover the full MAX_ARB_ITERATIONS=8 loop.",
       "measuredGraduateGas": "817845",
       "gasPriceWei": "100000000",
       "gasPriceBasis": "placeholder",
       "gasPriceSource": "ROBINHOOD_RPC_URL unset — M0 placeholder (finalize at M1 vs real testnet gas)",
-      "gasPriceFetchedAt": "2026-07-13T17:26:55.527Z",
+      "gasPriceFetchedAt": "2026-07-15T12:53:48.218Z",
       "marginNum": 3,
       "marginDen": 2,
       "graduationFeeWei": "225000000000000",
@@ -181,7 +181,7 @@
     "virtualEth0": "0.002201 ETH",
     "virtualToken0": "1141.0570e6 tokens",
     "graduationEth": "0.005016 ETH (net-of-fee) ≈ $8.88 @snapshot",
-    "graduationMcap": "0.0207 ETH ≈ $36.72 @snapshot (target 0.005000 ETH flat raise ())",
+    "graduationMcap": "0.0207 ETH ≈ $36.72 @snapshot (target 0.005000 ETH flat raise )",
     "initialMcap": "0.0019 ETH ≈ $3.41 @snapshot",
     "graduationFee": "0.000225 ETH ≈ $0.40 @snapshot — cost-based flat, gas placeholder (USD shown is informational only)",
     "creationFee": "0.000847 ETH ≈ $1.50 @snapshot",
@@ -201,7 +201,7 @@
     "governance.organicVolumeFloor: M0-4 DEFAULT (Gate G-A.1) — floor = 5 × GRADUATION_ETH / 7d of OWN-INDEXER organic curve volume; NOT a headline metric. The magnitude ('what counts as not-collapsed') is a product/policy call → robbed-architect ratifies before Gate G-A; recalibrate at M2 with real organic series.",
     "governance.clusterAlertThresholds: M0-4 DEFAULT (gate 7 amend) — per-token X=25% / platform Y=10% of curve volume over 24h; ADVISORY alert only, never gates chain state. Final tuning with robbed-security before beta.",
     "external.weth / v3Factory / positionManager / swapRouter02 / quoterV2: TESTNET 46630 set — RATIFIED (2026-07-11), sourced from tools/m0/external.testnet.json (never inlined in source). WETH is official (docs.robinhood.com/chain/protocol-contracts); the V3 set is a Blockscout-VERIFIED community deployment, TESTNET-ONLY with the trust caveat (deployer EOA owns the factory) — FORBIDDEN on mainnet/local. Deploy script still runtime-asserts feeAmountTickSpacing(10000)==200, NPM.factory(), NPM.WETH9() (contracts.md) so a wrong address fails closed.",
-    "external.treasurySafe: UNSET (T-2) — zero address on purpose; canonical Safe v1.4.1 contracts are CONFIRMED on 46630 but the dev-signer treasury Safe is not created yet. Create it, fill external.testnet.json, re-run derive; Deploy.s.sol fails closed (TreasurySafeUnset) until then. Never invented.",
+    "external.treasurySafe: TESTNET Safe set in tools/m0/external.testnet.json; Deploy.s.sol still fails closed if this is ever reverted to the zero address. Never invented.",
     "Graduation threshold counts NET-of-1%-fee real reserves — resolved; restated so the deploy reviewer re-confirms."
   ]
 }

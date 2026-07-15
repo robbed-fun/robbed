@@ -178,14 +178,12 @@ function nonce(): string {
 
 /**
  * Compute a metadata commitment LOCALLY (shared canonicalizer + keccak) without
- * the API. The API's image-upload path is hourly-rate-limited (`uploads_h`) and
- * `POST /v1/metadata` requires a real uploaded image, so pinning per-seed is
- * infeasible for a 36-flow suite. On-chain `createToken` only needs the bytes32
+ * the API. `POST /v1/metadata` requires a real uploaded image, so pinning every
+ * synthetic seed would add avoidable API/storage work to the suite. On-chain `createToken` only needs the bytes32
  * hash + a URI string; the indexer lists the token from the `TokenCreated` event
  * regardless of whether the JSON is pinned (metadata verification just reads
  * "unfetched", exactly like the seeded canary). Flows that must exercise the REAL
- * upload/pin path (LAUNCH-1/2, ERR-6a) drive the browser form and are gated by
- * the same rate limit — reported as an environmental constraint.
+ * upload/pin path (LAUNCH-1/2, ERR-6a) drive the browser form.
  */
 export function localMetadata(fields: {
   name: string;
@@ -242,7 +240,7 @@ export async function ensureBuysEnabled(): Promise<void> {
 }
 
 /** Full happy fixture: local hash → createToken → wait until the indexer lists it.
- * `pin: true` routes through the REAL API upload+pin path (rate-limited 10/h!) so
+ * `pin: true` routes through the REAL API upload+pin path so
  * the metadata JSON exists in object storage and the indexer's verifier can fetch
  * it (description/links render only then) — use it ONLY where a flow asserts
  * fetched-metadata display (TD-11). */

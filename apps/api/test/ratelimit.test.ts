@@ -65,8 +65,8 @@ describe("RATE_LIMIT_SCALE (dev/e2e multiplier — never a bypass)", () => {
   // the multiplier is a clamped integer ≥ 1.
   it("limits are the base values times one shared integer scale ≥ 1", async () => {
     const { ROUTE_LIMITS } = await import("../src/mw/ratelimit");
-    const base = { uploadsHour: 10, uploadsMin: 3, metadata: 20, search: 60, reads: 300, admin: 60 };
-    const scale = ROUTE_LIMITS.uploadsHour.limit / base.uploadsHour;
+    const base = { metadata: 20, search: 60, reads: 300, admin: 60 };
+    const scale = ROUTE_LIMITS.metadata.limit / base.metadata;
     expect(Number.isInteger(scale)).toBe(true);
     expect(scale).toBeGreaterThanOrEqual(1);
     for (const [k, b] of Object.entries(base)) {
@@ -75,7 +75,9 @@ describe("RATE_LIMIT_SCALE (dev/e2e multiplier — never a bypass)", () => {
   });
   it("windows are never scaled", async () => {
     const { ROUTE_LIMITS } = await import("../src/mw/ratelimit");
-    expect(ROUTE_LIMITS.uploadsHour.windowMs).toBe(60 * 60 * 1000);
-    expect(ROUTE_LIMITS.uploadsMin.windowMs).toBe(60 * 1000);
+    expect(ROUTE_LIMITS.metadata.windowMs).toBe(60 * 60 * 1000);
+    expect(ROUTE_LIMITS.search.windowMs).toBe(60 * 1000);
+    expect(ROUTE_LIMITS.reads.windowMs).toBe(60 * 1000);
+    expect(ROUTE_LIMITS.admin.windowMs).toBe(60 * 1000);
   });
 });

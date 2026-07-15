@@ -30,6 +30,8 @@ vi.mock("@/entities/trade", () => ({
 }));
 vi.mock("@/widgets/price-chart", () => ({
   PriceChart: () => <div data-testid="chart-stub" />,
+  lastActivityAnchor: (t: { createdAt: number; graduatedAt?: number | null }) =>
+    t.graduatedAt ?? t.createdAt,
 }));
 vi.mock("@/widgets/trade-widget", () => ({
   TradeWidget: () => <div data-testid="form-stub" />,

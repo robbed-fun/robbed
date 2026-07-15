@@ -8,7 +8,7 @@
     "notes": [
       "weth: OFFICIAL (docs.robinhood.com/chain/protocol-contracts) — TransparentUpgradeableProxy bridge pattern matching mainnet; symbol() == \"WETH\" verified live.",
       "v3Factory/positionManager/swapRouter02/quoterV2: Blockscout-VERIFIED community Uniswap V3 deployment — TESTNET-ONLY per the trust caveat (deployer EOA 0xe7A35BD49997E10c51B5e1dea4de366dA7F831F3 owns the factory: can enableFeeAmount/setFeeProtocol, canNOT upgrade/pause/break pools or touch LP principal; acceptable only at zero real value). FORBIDDEN in any mainnet or LOCAL path — mainnet stays, LOCAL stays mock/fork. The official Uniswap registry covers 4663 mainnet only; the addresses carry zero code on 46630.",
-      "treasurySafe: CREATED 2026-07-12 (T-2) — canonical Safe v1.4.1 proxy via `bun run safe:create` (SafeProxyFactory 0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67 → SafeL2 singleton 0x29fcB43b46531BcA003ddC8FCB67FFE91900C762, CompatibilityFallbackHandler 0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99; canonical set, never bespoke). 1-of-1 DEV-SIGNER (testnet-sanctioned per testnet.md T-2; owner = throwaway deployer 0xfD6A3a8E829140b02192D3154A6D53c2662E0704, threshold 1, saltNonce 1783855206087). Creation tx 0x0e33a98c53c8688997dd5b728334c031714c93a9723d826fc3d4e49b93f8db57, block 89644966; read-back verified on-chain: getOwners()/getThreshold() match input exactly, VERSION 1.4.1. Mainnet signer set stays OPEN (O-6, NEEDS-USER)."
+      "treasurySafe: UPDATED 2026-07-15 for testnet redeploy rehearsal — canonical Safe v1.4.1 proxy 0x9b318513D626b25C39Ae3416F23EAF5566998805, threshold 2-of-2, owners 0x483382242c9Cd1791b3Fa87938412C1c96fDA620 and 0x9307271Ed786B50EcC45C112B5Fae70f20d68943. Live read-back verified on Robinhood testnet: VERSION 1.4.1, getThreshold()==2, getOwners() match. This replaces the old 1-of-1 dev Safe for the next testnet redeploy; existing deployed artifacts still point at the old Safe until redeployed."
     ]
   },
   "external": {
@@ -17,6 +17,6 @@
     "positionManager": "0xFFe6CFc4f759b65f9B62c9D05A9E21a78cE93e12",
     "swapRouter02": "0xb79cB26e90EBBD9bC02c75267c9a86dBa1AFedB7",
     "quoterV2": "0xDDcBe4989C8171F721c5e683C9C6339B59718213",
-    "treasurySafe": "0x4ae5b5Ae7D2edd7A2d43054246D6aaAcAAFC1000"
+    "treasurySafe": "0x9b318513D626b25C39Ae3416F23EAF5566998805"
   }
 }

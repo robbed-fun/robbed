@@ -75,4 +75,13 @@ describe("POST /v1/uploads/image hostile fixtures", () => {
     expect(storage.objects.size).toBe(1); // deduped by hash
     expect(r1.data.imageUrl).toContain(r1.data.imageHash.slice(2));
   });
+
+  it("does not rate-limit repeated upload attempts during token creation", async () => {
+    const app = createApp(makeTestDeps());
+    for (let i = 0; i < 8; i++) {
+      const res = await app.request(uploadReq(PNG, `logo-${i}.png`));
+      expect(res.status).toBe(200);
+      expect((await readJson(res)).error).toBeNull();
+    }
+  });
 });

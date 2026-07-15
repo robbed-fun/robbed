@@ -1,6 +1,6 @@
 /**
  * Hono app assembly (api.md). Wires cross-cutting middleware (rate limiting
- * per route class, central error→envelope handler, 404), then mounts every
+ * for non-upload route classes, central error→envelope handler, 404), then mounts every
  * route group. All response DTOs are the frozen `@robbed/shared` schemas.
  *
  * NO chain-write capability is importable from any route — the route-inventory
@@ -57,7 +57,10 @@ export function createApp(deps: AppDeps) {
   app.use("/v1/*", publicCors(deps.config.corsAllowedOrigins));
 
   // ── rate limits per route class ────────────────────────────────────
-  app.use("/v1/uploads/*", rateLimit(rlDeps, ROUTE_LIMITS.uploadsHour, ROUTE_LIMITS.uploadsMin));
+  // Uploads are intentionally not rate-limited: token creation eagerly uploads
+  // logos, and retrying/reselecting images must not burn a launcher's minute
+  // bucket. Abuse remains bounded by MAX_IMAGE_BYTES, MIME sniff/re-encode,
+  // content addressing, moderation, and storage-level controls.
   app.use("/v1/metadata", rateLimit(rlDeps, ROUTE_LIMITS.metadata));
   app.use("/v1/search", rateLimit(rlDeps, ROUTE_LIMITS.search));
   app.use("/v1/admin/*", rateLimit(rlDeps, ROUTE_LIMITS.admin));

@@ -11,11 +11,12 @@
  *   entities/trade/ui/ConfirmationBadge.tsx — "Posted to L1" / "Finalized"
  * (: the "Soft-confirmed" chip is REMOVED — `softConfirmed` is now an
  *     ABSENCE assertion in TD-9, not a presence selector).
- * views/token-detail/ui/TokenInfo.tsx — the shared LP sentence (floor).
- * (, 2026-07-13: the token-detail SafetyStrip was DELETED; "Ownerless
+ * views/token-detail/ui/TokenInfo.tsx — "Token info" table.
+ * (, 2026-07-13/14: the token-detail SafetyStrip was DELETED, then the
+ *     temporary LP footnote in TokenInfo was also DELETED; "Ownerless
  *     token"/"read from chain"/"1,000,000,000 fixed"/"Metadata MISMATCH"/"on-chain
  *     read unavailable" no longer render on /t/[address], so those selectors are
- *     removed — the LP line survives here in TokenInfo. ERR-13, which asserted the
+ *     removed. ERR-13, which asserted the
  *     strip's "read unavailable" degradation, was RETIRED with the strip.)
  *   features/launch-token/ui/LaunchForm.tsx — "New launches are temporarily paused."
  */
@@ -35,10 +36,8 @@ export const copy = {
   // : the visible soft-confirmed chip is REMOVED — used for ABSENCE checks.
   softConfirmed: /Soft-confirmed/i,
   postedToL1: /Posted to L1/i,
-  // must-render floor: the single shared LP sentence on token detail. The
-  // SafetyStrip removal (2026-07-13) relocated it to `TokenInfo`, verbatim
-  // via the shared constant — asserted by the re-scoped TD-7. (The removed strip's
-  // `rpcUnavailable`/"on-chain read unavailable" selector went with retired ERR-13.)
+  // Retired on token detail (D-74), but still useful for absence checks and for
+  // surfaces that intentionally render the LP sentence from the shared constant.
   lpCopy: LP_COPY,
   // ConfirmationBadge WS-silence note (web.md) "Awaiting the indexer —
   // retrying." CAVEAT — this note is APPENDED to a rendered badge's tooltip,

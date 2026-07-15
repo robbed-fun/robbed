@@ -639,6 +639,23 @@ export const creatorClaimableSchema = z.object({
 export type CreatorClaimable = z.infer<typeof creatorClaimableSchema>;
 
 /**
+ * Unswept pre-graduation creator fees still sitting on each BondingCurve.
+ * These are not yet `CreatorVault.balanceOf(creator)`, but the Portfolio claim
+ * button can sweep them permissionlessly before calling `CreatorVault.claim`.
+ */
+export const creatorCurveClaimableSchema = z.object({
+  creator: addressSchema,
+  token: addressSchema,
+  ticker: z.string(),
+  curve: addressSchema,
+  /** Live `BondingCurve.accruedCreatorFees()`, wei of native ETH. */
+  unsweptEth: decimalStringSchema,
+  /** ISO-8601 timestamp of the live curve read. */
+  asOf: z.string(),
+});
+export type CreatorCurveClaimable = z.infer<typeof creatorCurveClaimableSchema>;
+
+/**
  * `CLAIM_CREATOR_FEE` transaction metadata. The shared shape the
  * frontend attaches to a pending `CreatorVault.claim(creator)` tx so the
  * confirmation-tier tracker/toast can label and reconcile it. `type` is a

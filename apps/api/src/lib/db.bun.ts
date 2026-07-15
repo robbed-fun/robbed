@@ -875,6 +875,47 @@ export function createBunDb(config: Config): Db {
       };
     },
 
+    async listCreatorTokenClaimable(creator) {
+      // Enumerable keyset for the Portfolio Created-tab claim widget. The route
+      // still overlays live CreatorVault.tokenBalanceOf for each row.
+      const rows = (await ro.unsafe(
+        `SELECT creator, token, vault, total_accrued, total_claimed, claimable,
+                last_claim_at, updated_at
+         FROM creator_token_claimable
+         WHERE creator = $1
+         ORDER BY token ASC`,
+        [creator],
+      )) as Record<string, unknown>[];
+      return rows.map((r) => ({
+        creator: String(r.creator),
+        token: String(r.token),
+        vault: String(r.vault),
+        total_accrued: str(r.total_accrued),
+        total_claimed: str(r.total_claimed),
+        claimable: str(r.claimable),
+        last_claim_at: r.last_claim_at == null ? null : num(r.last_claim_at),
+        updated_at: String(r.updated_at ?? ""),
+      }));
+    },
+
+    async listCreatorCurveFeeSources(creator) {
+      // Curves can hold unswept pre-grad creator fees before they are deposited
+      // into CreatorVault. Do not listing-gate this: creator fees remain owed even
+      // if a token is hidden from public browse surfaces.
+      const rows = (await ro.unsafe(
+        `SELECT address, ticker, curve_address
+           FROM tokens
+          WHERE creator = $1 AND creator_fee_bps > 0
+          ORDER BY created_at DESC, address DESC`,
+        [creator],
+      )) as Record<string, unknown>[];
+      return rows.map((r) => ({
+        token: String(r.address),
+        ticker: String(r.ticker ?? ""),
+        curve_address: String(r.curve_address),
+      }));
+    },
+
     async getModerationStatus(token) {
       const rows = (await rw.unsafe(
         "SELECT * FROM moderation_status WHERE token_address = $1",

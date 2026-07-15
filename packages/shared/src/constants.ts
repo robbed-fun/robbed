@@ -21,7 +21,7 @@ export const WETH_ADDRESS = "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73" as cons
  * Canonical Uniswap V3 deployment on Robinhood Chain (chain 4663) — confirmed
  * and recorded in the design decisions log (2026-07-09; closes O-4 /
  * OI-13 / web-11 / E-1). Transcribed VERBATIM — never invented,
- * casing preserved as recorded (also mirrored in M0 `out/constants.json.external`
+ * casing preserved as recorded (also mirrored in M0 `out/constants.mainnet.json.external`
  * and contracts.md). These are the FIXED external registry addresses (the
  * chain's Uniswap deployment), distinct from the per-deployment robbed contract
  * addresses that M1-14 codegen emits — no overlap; downstream imports here.

@@ -9,8 +9,8 @@
 #   ~/.config/robbed/testnet.secrets.env
 #   ~/.config/robbed/mainnet.secrets.env
 #
-# If the split file is not present yet, this falls back to the legacy root .env so
-# existing local setups keep working during migration.
+# If the split file is not present yet, this falls back to the root .env so existing
+# local setups keep working while operators migrate to config/env/<network>.env.
 set -euo pipefail
 
 usage() {
@@ -64,9 +64,9 @@ if [ -f "$env_file" ]; then
     args+=(--env-file "$secrets_file")
   fi
 elif [ -f ".env" ]; then
-  echo "[compose-env] $env_file not found; falling back to legacy root .env" >&2
+  echo "[compose-env] $env_file not found; falling back to root .env" >&2
 else
-  echo "[compose-env] $env_file not found and no legacy .env exists." >&2
+  echo "[compose-env] $env_file not found and no root .env exists." >&2
   echo "[compose-env] Copy config/env/${network}.env.example to $env_file and fill it." >&2
   exit 1
 fi

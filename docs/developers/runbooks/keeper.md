@@ -1,10 +1,10 @@
 # Runbook — Auto-graduation keeper (`apps/keeper`)
 
-**Status:** v1 (2026-07-13). Ops procedures for the off-chain auto-graduation keeper — funding the wallet, reading alerts, responding to a persistent-revert (donation-brick) alert, and rotating the key. Design context: [`apps/keeper/README.md`](../../../apps/keeper/README.md) + [`architecture.md`](../architecture.md) (Keeper service). Root authority: the design docs + [`design-decisions.md`](../design-decisions.md) — D-12 (`ReadyToGraduate` two-way lock), D-34 (caller reward), D-62 (gas model), and gate 7 monitoring. A runbook never overrides the design docs.
+**Status:** v1 (2026-07-15). Ops procedures for the off-chain keeper — graduation, treasury fee sweeping, funding the wallet, reading alerts, responding to a persistent-revert (donation-brick) alert, and rotating the key. Design context: [`apps/keeper/README.md`](../../../apps/keeper/README.md) + [`architecture.md`](../architecture.md) (Keeper service). Root authority: the design docs + [`design-decisions.md`](../design-decisions.md) — D-12 (`ReadyToGraduate` two-way lock), D-34 (caller reward), D-62 (gas model), and gate 7 monitoring. A runbook never overrides the design docs.
 
 ## What the keeper is (one paragraph)
 
-`BondingCurve.graduate()` is permissionless and pays a small caller reward (D-34) sized to ≥10× its gas, so calling it is net-positive. The keeper is the **standing caller**: it watches the on-chain `GraduationReady` event over the Alchemy WS RPC and fires `graduate(curve)` within ~1–2 blocks, with a periodic Postgres sweep as the fallback. It never modifies chain, listing, or moderation state — it only calls `graduate()`. If the keeper is down, graduation is not *broken* — it is merely not automatic (anyone, including a re-started keeper's next sweep, can still graduate any `ReadyToGraduate` curve and collect the reward). Sells are never blocked by any of this (section 6.5).
+`BondingCurve.graduate()` is permissionless and pays a small caller reward (D-34) sized to ≥10× its gas, so calling it is net-positive. The keeper is the **standing caller**: it watches the on-chain `GraduationReady` event over the Alchemy WS RPC and fires `graduate(curve)` within ~1–2 blocks, with a periodic Postgres sweep as the fallback. It also calls permissionless `BondingCurve.sweepFees()` so treasury ETH-leg fees do not sit on curves forever: sweep immediately at `0.5 ETH`, otherwise once per day for nonzero balances. It never modifies chain, listing, or moderation state and holds no privileged role. If the keeper is down, nothing is broken — graduation and fee sweeping remain callable by anyone.
 
 ## Environment matrix
 
@@ -27,7 +27,7 @@ Required (startup fails closed if missing/invalid; the process also asserts `CHA
 | `KEEPER_PRIVATE_KEY` | **SECRET** — funded ops wallet; NOT the deployer/treasury |
 | `DATABASE_URL` | Postgres (read-only use) for the fallback sweep |
 
-Optional (safe defaults): `KEEPER_POLL_MS`=15000, `KEEPER_GAS_CAP`=30000000, `KEEPER_MAX_ATTEMPTS`=3, `KEEPER_BACKOFF_BASE_MS`=500, `KEEPER_FAILED_COOLDOWN_MS`=300000, `KEEPER_BALANCE_POLL_MS`=60000, `KEEPER_BALANCE_WARN_MULTIPLE`=20, `KEEPER_TYPICAL_GRADUATE_GAS`=1500000, `KEEPER_PORT`=3003, `REDIS_URL` (**reserved** — detection is on-chain, not via Redis; see the keeper README). Full descriptions in `apps/keeper/.env.example`.
+Optional (safe defaults): `KEEPER_POLL_MS`=15000, `KEEPER_GAS_CAP`=30000000, `KEEPER_MAX_ATTEMPTS`=3, `KEEPER_BACKOFF_BASE_MS`=500, `KEEPER_FAILED_COOLDOWN_MS`=300000, `KEEPER_TREASURY_SWEEP_ENABLED`=true, `KEEPER_TREASURY_SWEEP_POLL_MS`=60000, `KEEPER_TREASURY_SWEEP_MIN_WEI`=500000000000000000, `KEEPER_TREASURY_SWEEP_MAX_AGE_MS`=86400000, `KEEPER_BALANCE_POLL_MS`=60000, `KEEPER_BALANCE_WARN_MULTIPLE`=20, `KEEPER_TYPICAL_GRADUATE_GAS`=1500000, `KEEPER_PORT`=3003, `REDIS_URL` (**reserved** — detection is on-chain, not via Redis; see the keeper README). Full descriptions in `apps/keeper/.env.example`.
 
 > The keeper env vars are **not yet in `env-inventory.md`** (that table is robbed-architect-owned, P-1). Flagged for the architect to add an `<!-- env-sync file=apps/keeper/.env.example -->` section; until then env-sync is green (unreferenced examples are not checked).
 
@@ -39,13 +39,25 @@ The caller reward offsets gas *per graduation*, but the wallet must **front** ea
 2. Fund it: **~0.05 ETH on testnet** is a comfortable starting float. On mainnet, size the float from the fork-measured graduate() gas (D-62, ≈0.8M gas worst case) × the live gas price × a healthy multiple; top up when the low-balance alert fires.
 3. Wire the key through the external secrets env file loaded by `scripts/compose-env.sh`: `~/.config/robbed/testnet.secrets.env` for `TESTNET_KEEPER_PRIVATE_KEY=0x...`, or `~/.config/robbed/mainnet.secrets.env` for `MAINNET_KEEPER_PRIVATE_KEY=0x...` when running the mainnet keeper profile. Keep these files outside the workspace and mode `600`.
 
-**Balance watch.** Every `KEEPER_BALANCE_POLL_MS` the keeper computes `threshold = KEEPER_BALANCE_WARN_MULTIPLE × (KEEPER_TYPICAL_GRADUATE_GAS × gasPrice)` and, when the balance drops below it, logs `event:"keeper_wallet_low_balance"` (`level:"error"`, `alert:"top_up_required"`) and marks `/healthz` `status:"degraded"`. **Action: top up the wallet.** A low balance is an alert, not a crash — the container stays up and healthy-ish so it keeps working larger graduations it can still afford.
+**Balance watch.** Every `KEEPER_BALANCE_POLL_MS` the keeper computes `threshold = KEEPER_BALANCE_WARN_MULTIPLE × (KEEPER_TYPICAL_GRADUATE_GAS × gasPrice)` and, when the balance drops below it, logs `event:"keeper_wallet_low_balance"` (`level:"error"`, `alert:"top_up_required"`) and marks `/healthz` `status:"degraded"`. **Action: top up the wallet.** A low balance is an alert, not a crash — the container stays up and healthy-ish so it keeps working txs it can still afford.
+
+## Treasury fee sweeping
+
+Pre-graduation trades accrue the treasury ETH-leg fee inside each `BondingCurve` as `accruedFees`. `sweepFees()` is permissionless and sends that ETH only to the factory's live treasury Safe; the keeper cannot choose another recipient. The keeper scans indexed fee-bearing curves and calls `sweepFees()` when either condition is true:
+
+| Condition | Default | What happens |
+|---|---:|---|
+| Balance threshold | `KEEPER_TREASURY_SWEEP_MIN_WEI=500000000000000000` (`0.5 ETH`) | Sweep immediately once a curve has at least this much unswept treasury fee |
+| Daily catch-up | `KEEPER_TREASURY_SWEEP_MAX_AGE_MS=86400000` | Sweep smaller nonzero balances at least once per day |
+| Scan cadence | `KEEPER_TREASURY_SWEEP_POLL_MS=60000` | Read `accruedFees()` and decide whether to submit `sweepFees()` |
+
+Logs: `treasury_fees_swept` on success, `treasury_fee_read_failed` when RPC cannot read a curve, `treasury_fee_sweep_failed` when estimate/send/receipt fails, and `treasury_sweep_results` as a compact summary. `/healthz.metrics` includes `treasurySweepsTotal`, `treasuryFeesSweptTotal`, `treasurySweepFailuresTotal`, `lastTreasurySweepAt`, and `lastTreasurySweepScanned`.
 
 ## Health + observability
 
 - `GET /healthz` (host port: dev 4003, testnet 4103, mainnet 4203 → container 3003). Body: `status` (`ok` | `degraded` | `stale`), `detection` (`ws-subscription` | `http-polling`), `inFlight`, `cooldown`, `wallet` (address, balanceWei, warnThresholdWei, low), and `metrics`. HTTP 200 for `ok`/`degraded`, **503** only for `stale` (the sweep loop has not run within ~4× `KEEPER_POLL_MS` — a genuinely stuck loop). The compose healthcheck curls this.
-- **Structured logs** (one JSON line per event, `service:"keeper"`). Key events: `graduated`, `already_graduated_by_other`, `graduate_attempt_failed` (warn, with `kind` + `willRetry`), `graduation_failed_persistent` (**error**), `keeper_wallet_low_balance` (**error**), `sweep_results`, `graduation_watch_error` (warn — transport drop; the sweep is the backstop while it reconnects).
-- **Counters** in the `/healthz` `metrics` block: `graduatedTotal`, `alreadyGraduatedTotal`, `failedPersistentTotal`, `transientRetriesTotal`, `sweepsTotal`, `lastSweepAt`, `lastSweepScanned`. These feed the gate-7 stuck-graduation monitoring (section 10 gate 7; deploy.md H.5).
+- **Structured logs** (one JSON line per event, `service:"keeper"`). Key events: `graduated`, `already_graduated_by_other`, `graduate_attempt_failed` (warn, with `kind` + `willRetry`), `graduation_failed_persistent` (**error**), `keeper_wallet_low_balance` (**error**), `sweep_results`, `treasury_fees_swept`, `treasury_fee_sweep_failed`, `graduation_watch_error` (warn — transport drop; the sweep is the backstop while it reconnects).
+- **Counters** in the `/healthz` `metrics` block: `graduatedTotal`, `alreadyGraduatedTotal`, `failedPersistentTotal`, `transientRetriesTotal`, `sweepsTotal`, `lastSweepAt`, `lastSweepScanned`, plus the treasury sweep counters listed above. These feed the gate-7 stuck-graduation monitoring (section 10 gate 7; deploy.md H.5).
 
 ## Alerts and responses
 
@@ -70,11 +82,11 @@ The WS subscription dropped. viem reconnects; the fallback sweep covers the gap.
 2. Update the stack's external secrets env file (`TESTNET_KEEPER_PRIVATE_KEY` / `MAINNET_KEEPER_PRIVATE_KEY`) with the new key.
 3. Restart only the keeper: `docker compose -f docker-compose.<stack>.yml up -d --no-deps keeper` (mainnet: add `--profile keeper`). No other service depends on the keeper's identity.
 4. Verify `/healthz` shows the **new** `wallet.address` and `status:"ok"`; drain/retire the old wallet's residual balance.
-5. Rotate immediately if a key is ever exposed — the keeper's only power is calling permissionless `graduate()`, so blast radius is limited to wasted gas / griefed graduation attempts, never fund theft, but rotate anyway.
+5. Rotate immediately if a key is ever exposed — the keeper's only power is calling permissionless `graduate()` and `sweepFees()`, so blast radius is limited to wasted gas / noisy housekeeping, never fund theft, but rotate anyway.
 
 ## Starting / stopping
 
 - dev: starts with `docker compose up` (ON by default).
 - testnet: `pnpm run dev:testnet:d` or `bash scripts/compose-env.sh testnet up -d keeper` (requires `TESTNET_KEEPER_PRIVATE_KEY` in `~/.config/robbed/testnet.secrets.env`).
 - mainnet (post-G-A only): `docker compose -f docker-compose.mainnet.yml --profile keeper up -d keeper`. Without `--profile keeper` the service does not start (Gate G-A guard) — this is intentional.
-- Stopping the keeper is always safe: it blocks nothing on-chain (graduation stays permissionless; sells stay open). A future `graduate()` just waits for the next caller.
+- Stopping the keeper is always safe: it blocks nothing on-chain (graduation and fee sweeping stay permissionless; sells stay open). A future `graduate()` or `sweepFees()` just waits for the next caller.

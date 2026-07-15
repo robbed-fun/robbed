@@ -18,8 +18,8 @@ Authoritative source order: the runbooks + design docs under `docs/developers/**
 and the drift is reported. Everything below is repo-root-relative; run from the repo root.
 
 This skill AUTHORS the sequence and runs the low-risk idempotent legs (emit/codegen/verify/reindex/smoke).
-It does NOT decide to deploy: the `forge script … --broadcast` in Step 1 spends real testnet gas and
-mints new immutable addresses — only run it on explicit user direction.
+It does NOT decide to deploy: the `scripts/deploy-onchain.sh protocol …` wrapper in Step 1 spends
+real testnet gas and mints new immutable addresses — only run it on explicit user direction.
 
 ## Docs-first rule (mandatory, every run)
 
@@ -36,8 +36,10 @@ WebFetch of the canonical page. Docs beat assumptions; the spec beats docs (flag
 
 ## Invariants this skill will not violate
 
-- **Never read the real root `.env`** — it holds `DEPLOYER_PRIVATE_KEY` (SECRET class, `env-inventory.md`).
-  Reference vars by NAME only; check presence with `grep -oE '^[A-Z_]+=' .env` (names, never values).
+- **Never read raw secret files** — `.env`, `.env.local`, deployer JSON, keystores, and private-key
+  files are SECRET class (`env-inventory.md`, `operator-signing.md`). Reference public variable names
+  only; check env shape with name-only commands. Deployment signing uses `scripts/deploy-onchain.sh`
+  with a Foundry keystore, hardware wallet, browser wallet, KMS, or unlocked RPC signer.
 - **Immutable contracts, no proxies** (`docs/developers/contracts.md`). A redeploy is a *new* deploy: new
   addresses, new `START_BLOCK`. There is no in-place upgrade — which is exactly why the reindex (Step 4) is mandatory.
 - **Sells always open / no post-grad pause** — nothing in a redeploy changes this; do not add
@@ -53,17 +55,17 @@ WebFetch of the canonical page. Docs beat assumptions; the spec beats docs (flag
 
 Report each as present / missing; a missing item blocks the deploy — do not proceed past a red item.
 
-1. **Funded deployer key.** `DEPLOYER_PRIVATE_KEY` set in the root `.env` (name-only check) AND its
-   address is funded on 46630. A full deploy is heavy on this Orbit chain: `createToken` alone runs
+1. **Funded deployer signer.** A local signer is available for the intended public deployer address
+   and the address is funded on 46630. Prefer the current testnet deployer address
+   `0xfD6A3a8E829140b02192D3154A6D53c2662E0704`; verify an encrypted Foundry keystore with:
+   ```bash
+   cast wallet address --account robbed-testnet-deployer
+   cast balance 0xfD6A3a8E829140b02192D3154A6D53c2662E0704 --ether --rpc-url "$TESTNET_RPC_URL"
+   ```
+   A full deploy is heavy on this Orbit chain: `createToken` alone runs
    **~7.6–8M gas** because it deploys + initializes the graduation V3 pool (observed on-chain, tx
    `0xd79f5d…`; the web ceiling was raised 8M→30M for exactly this — commit `7017954`). Six-contract
-   deploy + in-script canary create+buy ⇒ budget **~0.05–0.1 ETH**. Check the balance without
-   touching the key value:
-   ```bash
-   # derive the address from the key WITHOUT printing the key
-   ADDR=$(cast wallet address --private-key "$(grep -oP '^DEPLOYER_PRIVATE_KEY=\K.*' .env)")
-   cast balance "$ADDR" --rpc-url "$TESTNET_RPC_URL"   # ≥ ~0.05 ETH; else use the faucet (testnet.md)
-   ```
+   deploy + in-script canary create+buy ⇒ budget **~0.05–0.1 ETH**.
    Faucet: `https://faucet.testnet.chain.robinhood.com` (0.05 ETH / 24h; Chainlink + QuickNode
    fallbacks target 46630 — testnet.md). A full *graduation* needs more than one drip (`GRADUATION_ETH`
    on testnet is the faucet-scale value below) — see testnet-lifecycle.md for the funding caveat.
@@ -83,7 +85,7 @@ Report each as present / missing; a missing item blocks the deploy — do not pr
 
 3. **Treasury Safe exists** (T-2). `constants.testnet.json` → `external.treasurySafe` is a real
    canonical Safe v1.4.1 (dev signers on testnet), not `0x0`. If absent, create it
-   (`OWNERS=… THRESHOLD=… bun run safe:create`, testnet.md step T-2), paste into
+   with `scripts/deploy-onchain.sh safe`, paste into
    `tools/m0/external.testnet.json`, re-derive (item 2). Deploy fails closed (`TreasurySafeUnset`)
    otherwise. A *re*-deploy against the same chain normally reuses the existing Safe.
 
@@ -98,9 +100,10 @@ Report each as present / missing; a missing item blocks the deploy — do not pr
 
 ## Step 1 — Deploy (spends gas; new immutable addresses)
 
-`script/Deploy.s.sol` three-way-branches on chain id; on 46630 it runs testnet mode: `DEPLOYER_PRIVATE_KEY`
-REQUIRED (no anvil fallback on a public chain), all externals read from the constants file (zero testnet
-addresses hardcoded in Solidity), the **deploy-time runtime asserts** (`V3Factory.feeAmountTickSpacing(10000)==200`,
+`script/Deploy.s.sol` three-way-branches on chain id; on 46630 it runs testnet mode: a real public
+`DEPLOYER_ADDRESS` plus a Foundry wallet selector are REQUIRED (no anvil fallback on a public chain),
+all externals read from the constants file (zero testnet addresses hardcoded in Solidity), the
+**deploy-time runtime asserts** (`V3Factory.feeAmountTickSpacing(10000)==200`,
 `NPM.factory()`, `NPM.WETH9()`), the **O-6 `TreasurySafeUnset` guard**, and the cap/graduation-fundable
 guards. It deploys the current-tree **creator-fee topology** — the script encodes the order
 (CurveFactory → **CreatorVault** → **LPFeeVault (creator/factory-aware)** → V3Migrator → Router, then
@@ -108,12 +111,11 @@ guards. It deploys the current-tree **creator-fee topology** — the script enco
 ownership handoff, and writes the canonical artifact `contracts/deployments/46630.json`.
 
 ```bash
-cd contracts
-forge script script/Deploy.s.sol \
-  --rpc-url "$TESTNET_RPC_URL" --broadcast \
-  --skip-simulation --slow --gas-estimate-multiplier 200 \
-  --verify --verifier blockscout \
-  --verifier-url "$TESTNET_BLOCKSCOUT_URL/api"
+bash scripts/deploy-onchain.sh protocol \
+  --network testnet \
+  --deployer 0xfD6A3a8E829140b02192D3154A6D53c2662E0704 \
+  --verify \
+  --account robbed-testnet-deployer
 ```
 
 > **`--skip-simulation --slow --gas-estimate-multiplier 200` are MANDATORY on this chain**
@@ -256,7 +258,7 @@ the accept. Use the Safe tx tool (2-step: build hash → collect M-of-N sigs →
 ```bash
 bun run safe:tx hash --safe <TREASURY_SAFE> --preset accept-ownership --target <NEW_CURVE_FACTORY>
 # collect threshold signatures, then exec via safe:tx (see tools/deploy/safe-tx.ts + safe-drill.ts;
-# full choreography in deploy.md). RPC_URL/DEPLOYER_PRIVATE_KEY via env, never inline.
+# full choreography in deploy.md). Use RPC_URL plus signer/executor wallet selectors; never inline keys.
 ```
 
 Assert afterward: `cast call <NEW_CURVE_FACTORY> "owner()(address)" --rpc-url "$TESTNET_RPC_URL"` ==

@@ -23,6 +23,8 @@ import type { WalletBalanceReader } from "./lib/wallet-balance";
 import { createRpcWalletBalance, zeroWalletBalance } from "./lib/wallet-balance";
 import type { CreatorVaultBalanceReader } from "./lib/creator-vault";
 import { createRpcCreatorVaultBalance, nullCreatorVaultBalance } from "./lib/creator-vault";
+import type { CreatorCurveFeesReader } from "./lib/creator-curve-fees";
+import { createRpcCreatorCurveFees, nullCreatorCurveFees } from "./lib/creator-curve-fees";
 import type { ModerationVendors } from "./moderation/vendors";
 import { stubVendors } from "./moderation/vendors";
 import {
@@ -58,6 +60,11 @@ export interface AppDeps {
    * publish hot path; null result ⇒ route uses the event-derived mirror.
    */
   creatorVaultBalance: CreatorVaultBalanceReader;
+  /**
+   * Live `BondingCurve.accruedCreatorFees()` reader for pre-grad fees that are
+   * pending sweep into CreatorVault.
+   */
+  creatorCurveFees: CreatorCurveFeesReader;
   /**
    * Fetch a token logo and inline it as a data URI for the OG card (resvg can't
    * fetch remote URLs at raster time). Injectable so OG route tests stay hermetic
@@ -118,6 +125,9 @@ export function buildDeps(dbFactory: (cfg: Config) => Db): AppDeps {
     creatorVaultBalance: config.ROBINHOOD_RPC_URL
       ? createRpcCreatorVaultBalance(config.ROBINHOOD_RPC_URL)
       : nullCreatorVaultBalance,
+    creatorCurveFees: config.ROBINHOOD_RPC_URL
+      ? createRpcCreatorCurveFees(config.ROBINHOOD_RPC_URL)
+      : nullCreatorCurveFees,
     ogImage: fetchImageDataUri,
     now: () => Date.now(),
     secureCookies: config.API_ENV === "production",
