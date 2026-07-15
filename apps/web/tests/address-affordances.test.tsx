@@ -19,13 +19,13 @@ afterEach(() => {
 });
 
 describe("TokenAddressLink", () => {
-  it("links a token address to the explorer /token page (URL derived from chain config)", () => {
+  it("links a token address to the stable explorer address page (URL derived from chain config)", () => {
     const addr = "0x1111111111111111111111111111111111111111";
     render(<TokenAddressLink address={addr} kind="token" />);
     const a = screen.getByRole("link");
     // href is exactly what the chain-config builder produces — no inlined host.
     expect(a.getAttribute("href")).toBe(explorer.token(addr));
-    expect(a.getAttribute("href")).toContain("/token/");
+    expect(a.getAttribute("href")).toContain("/address/");
     expect(a.getAttribute("target")).toBe("_blank");
     expect(a.getAttribute("rel")).toBe("noopener noreferrer");
   });

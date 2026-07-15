@@ -28,9 +28,7 @@ describe("robinhoodChain (default target = mainnet 4663)", () => {
   });
 
   it("sources WETH from the shared registry (matches the shared constant, no inline literal)", () => {
-    expect(robinhoodChain.contracts?.weth9?.address).toBe(
-      getDeployment(4663)?.external.weth,
-    );
+    expect(robinhoodChain.contracts?.weth9?.address).toBe(getDeployment(4663)?.external.weth);
     expect(robinhoodChain.contracts?.weth9?.address).toBe(WETH_ADDRESS);
   });
 
@@ -39,10 +37,9 @@ describe("robinhoodChain (default target = mainnet 4663)", () => {
   });
 
   it("builds Blockscout links without ever using block.number", () => {
-    expect(explorer.tx("0xabc")).toBe(
-      "https://robinhoodchain.blockscout.com/tx/0xabc",
-    );
+    expect(explorer.tx("0xabc")).toBe("https://robinhoodchain.blockscout.com/tx/0xabc");
     expect(explorer.address(WETH_ADDRESS)).toContain("/address/");
+    expect(explorer.token(WETH_ADDRESS)).toBe(explorer.address(WETH_ADDRESS));
   });
 });
 
@@ -104,9 +101,7 @@ describe("env-selected chain target ", () => {
   it("a registry chain WITHOUT official web facts (31337 local) fails loud too", async () => {
     vi.stubEnv("NEXT_PUBLIC_CHAIN_ID", "31337");
     vi.resetModules();
-    await expect(import("@/shared/lib/chain")).rejects.toThrow(
-      /no official chain facts/,
-    );
+    await expect(import("@/shared/lib/chain")).rejects.toThrow(/no official chain facts/);
   });
 });
 

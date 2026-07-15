@@ -4,7 +4,9 @@ import { cn } from "@/shared/lib/utils";
 
 /**
  * Address rendered as a Blockscout link (verify affordances). Uses the
- * chain-config explorer builder — no explorer origin is ever inlined.
+ * chain-config explorer builder — no explorer origin is ever inlined. Token
+ * links intentionally resolve to the stable contract address route because
+ * Blockscout `/token` pages can lag fresh ERC-20 deployments.
  * External anchors are always `rel="noopener noreferrer"` (threat-model UM-5).
  */
 export function AddressLink({

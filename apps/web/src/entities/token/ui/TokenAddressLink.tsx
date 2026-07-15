@@ -11,10 +11,11 @@ import { cn } from "@/shared/lib/utils";
  * which reads `robinhoodChain.blockExplorers.default.url` — correct on mainnet
  * (4663) AND testnet (46630) from ONE build-time-selected chain object.
  *
- * `kind` picks the explorer path: `token` → `/token/{addr}` (the ERC-20 page),
- * `address` → `/address/{addr}` (an EOA, e.g. the creator). External anchor is
- * always `rel="noopener noreferrer"` (threat-model UM-5) and `stopPropagation`s so
- * a click inside a clickable card (`role="link"`) doesn't also navigate the card.
+ * `kind` picks the explorer intent: `token` uses the stable Blockscout contract
+ * address page for the ERC-20, `address` uses the same address route for an EOA
+ * (e.g. the creator). External anchor is always `rel="noopener noreferrer"`
+ * (threat-model UM-5) and `stopPropagation`s so a click inside a clickable card
+ * (`role="link"`) doesn't also navigate the card.
  *
  * `tone` fits it inline in the mono header ramp (default `faint`); it reads as
  * plain text until hover, then underlines — understated but discoverable.

@@ -37,7 +37,11 @@ test(
         () => api.token(token.token),
         // Wait for the metadata verifier to fetch + surface the description.
         (t) => Boolean(t?.address && t?.creator && t?.description),
-        { label: "token info + fetched description indexed", timeoutMs: 180_000, intervalMs: 3_000 },
+        {
+          label: "token info + fetched description indexed",
+          timeoutMs: 180_000,
+          intervalMs: 3_000,
+        },
       );
       // The DTO's creator is an OBJECT ({ address, tokensCreated }) — api.md.
       expect(t.creator.address ?? t.creator).toMatch(/^0x[0-9a-fA-F]{40}$/);
@@ -48,7 +52,7 @@ test(
       await page.goto(routes.token(token.token));
       await expect(page.getByText(/TD-11 e2e flow/i).first()).toBeVisible();
       // The contract link's visible label is the SHORT ADDRESS — match the href
-      // (Blockscout /token/<address>, built by the explorer helper).
+      // (Blockscout address route, built by the explorer helper).
       const explorerLink = page
         .locator(`a[href*="blockscout"][href*="${token.token.toLowerCase()}"]`)
         .first();

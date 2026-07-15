@@ -82,7 +82,7 @@ export const ROBBED_DEPLOYMENTS = {
     },
     canary: {
       token: "0x188d0BB913e28292cd985F97feCDd31daF198a0D",
-      curve: "0xd9bE99FCa7fCA9a5F2F35A4a3e3C1647331f1449",
+      curve: "0x52C6193A9502b33e792CF314BEC89bD85e623B33",
     },
   },
   "31337": {

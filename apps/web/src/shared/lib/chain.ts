@@ -93,11 +93,16 @@ export const robinhoodChain = defineChain({
   },
 });
 
-/** Blockscout URL builders (never `block.number`; only tx/address/token). */
+/**
+ * Blockscout URL builders (never `block.number`; only tx/address/token).
+ *
+ * Fresh ERC-20 `/token/{address}` pages can lag or 404 on Robinhood Blockscout
+ * even when the contract is already live. Use the stable contract address page
+ * for token-address affordances; Blockscout still detects/displays token data
+ * from there once indexed.
+ */
 export const explorer = {
   tx: (hash: string) => `${robinhoodChain.blockExplorers.default.url}/tx/${hash}`,
-  address: (address: string) =>
-    `${robinhoodChain.blockExplorers.default.url}/address/${address}`,
-  token: (address: string) =>
-    `${robinhoodChain.blockExplorers.default.url}/token/${address}`,
+  address: (address: string) => `${robinhoodChain.blockExplorers.default.url}/address/${address}`,
+  token: (address: string) => `${robinhoodChain.blockExplorers.default.url}/address/${address}`,
 };
