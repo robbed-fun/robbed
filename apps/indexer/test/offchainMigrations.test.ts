@@ -39,7 +39,7 @@ function fakeClient(opts: { tokensExists: boolean }) {
 function schemaFor(queries: Array<{ text: string }>, sqlText: string): string | null {
   let current: string | null = null;
   for (const q of queries) {
-    const m = q.text.match(/^SET search_path TO "(.+)"$/);
+    const m = q.text.match(/^SET search_path TO (.+)$/);
     if (m) current = m[1]!;
     if (q.text === sqlText) return current;
   }
@@ -60,7 +60,7 @@ describe("applyOffchainMigrations — fresh-DB ordering (I-5b)", () => {
     expect(result.phase2Applied).toBe(false);
     // Every phase-1 file executed, in order, in schema public.
     for (const file of PHASE1_FILES) {
-      expect(schemaFor(queries, migrationSql(file))).toBe("public");
+      expect(schemaFor(queries, migrationSql(file))).toBe('"public"');
     }
     const texts = queries.map((q) => q.text);
     const phase1Positions = PHASE1_FILES.map((f) => texts.indexOf(migrationSql(f)));
@@ -85,7 +85,7 @@ describe("applyOffchainMigrations — fresh-DB ordering (I-5b)", () => {
     // strictly after the last phase-1 file.
     const lastPhase1 = texts.indexOf(migrationSql(PHASE1_FILES[PHASE1_FILES.length - 1]!));
     for (const file of PHASE2_FILES) {
-      expect(schemaFor(queries, migrationSql(file))).toBe("ponder_live");
+      expect(schemaFor(queries, migrationSql(file))).toBe('"ponder_live", public');
       expect(texts.indexOf(migrationSql(file))).toBeGreaterThan(lastPhase1);
     }
     const phase2Positions = PHASE2_FILES.map((f) => texts.indexOf(migrationSql(f)));

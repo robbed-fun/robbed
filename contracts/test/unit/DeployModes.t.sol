@@ -77,8 +77,8 @@ contract DeployHarness is Deploy {
 /// @notice Proves, per the Phase-T prep requirements:
 ///         (a) chain 46630 selects TESTNET (public-chain) mode — before the three-way split it
 ///             wrongly took the local mock-V3/dev-key branch;
-///         (b) NO public chain (4663 or 46630) can deploy without `DEPLOYER_PRIVATE_KEY`
-///             (`MissingDeployerKey` — the anvil account-0 fallback is local-only);
+///         (b) NO public chain (4663 or 46630) can deploy without `DEPLOYER_ADDRESS`
+///             (`MissingDeployerAddress` — the anvil account-0 fallback is local-only);
 ///         (c) testnet externals (WETH/V3/NPM/router/quoter/treasury) are read from the constants
 ///             file's `external.*` — sentinel-address fixtures prove zero hardcodes in Solidity;
 ///         (d) the O-6 `TreasurySafeUnset` guard fails closed on testnet exactly as on live;
@@ -102,10 +102,11 @@ contract DeployModesTest is Test {
     function setUp() public {
         harness = new DeployHarness();
         // Deterministic env: "0" parses to uint256(0) — the same value `vm.envOr` yields when the
-        // var is absent — so a developer's shell key can never flip the MissingDeployerKey tests.
+        // var is absent — so a developer's shell key can never flip the MissingDeployerAddress tests.
         // (Same value in every test → safe under forge's parallel test execution; per-test-DIFFERENT
         // env values would race, which is why fixtures are passed as explicit paths instead.)
         vm.setEnv("DEPLOYER_PRIVATE_KEY", "0");
+        vm.setEnv("DEPLOYER_ADDRESS", "0x0000000000000000000000000000000000000000");
     }
 
     // ── (a) mode selection ────────────────────────────────────────────────────
@@ -185,23 +186,23 @@ contract DeployModesTest is Test {
 
     // ── (b) no account-0 fallback on ANY public chain ─────────────────────────
 
-    function test_run_revertsWithoutDeployerKey_onTestnet() public {
+    function test_run_revertsWithoutDeployerAddress_onTestnet() public {
         vm.chainId(46_630);
-        vm.expectRevert(Deploy.MissingDeployerKey.selector);
+        vm.expectRevert(Deploy.MissingDeployerAddress.selector);
         harness.run();
     }
 
-    function test_run_revertsWithoutDeployerKey_onLive() public {
+    function test_run_revertsWithoutDeployerAddress_onLive() public {
         vm.chainId(4663);
         harness.setAffirm(true); // affirmed mainnet ⇒ Live ⇒ a real key is mandatory (no fallback)
-        vm.expectRevert(Deploy.MissingDeployerKey.selector);
+        vm.expectRevert(Deploy.MissingDeployerAddress.selector);
         harness.run();
     }
 
     /// @notice A 4663 FORK run (no affirmation) does NOT demand a real key — it uses the keyless
     ///         anvil fallback like Local (the docker one-shot supplies account-0). It therefore
     ///         proceeds past the signer gate; with the default mainnet constants (zero treasury Safe,
-    ///         O-6) it then fails closed at `TreasurySafeUnset`, never at `MissingDeployerKey`.
+    ///         O-6) it then fails closed at `TreasurySafeUnset`, never at `MissingDeployerAddress`.
     function test_run_forkMode_usesKeylessFallback_thenO6FailClosed() public {
         vm.chainId(4663);
         harness.setAffirm(false);

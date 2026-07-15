@@ -232,7 +232,7 @@ services:
       <<: *dev-env
       API_PORT: "3001"
       API_ENV: development
-      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
+      DATABASE_URL: "postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}?options=-c%20search_path%3D${TESTNET_DATABASE_SCHEMA:-robbed_testnet_ponder}%2Cpublic"
       REDIS_URL: redis://redis:6379
       R2_ENDPOINT: http://minio:9000
       R2_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-robbed}
@@ -326,7 +326,8 @@ services:
         pnpm --filter @robbed/indexer migrate
         # PRODUCTION mode (Ponder 0.16.8): `ponder start` = crash-recovery ON, no
         # file-watch. A steady-state `docker restart` RESUMES from _ponder_checkpoint in
-        # the same DATABASE_SCHEMA (the explicit `--schema public` on the start line — Ponder
+        # the same DATABASE_SCHEMA (default: robbed_testnet_ponder; keep public for
+        # stable offchain/API side tables) — Ponder
         # 0.16.8 has NO default schema for `start`, unlike `dev`); it does NOT wipe+re-index from
         # START_BLOCK the way `ponder dev` does on every boot (dev drops its app tables on
         # each restart — that is the re-index-on-boot bug this replaces). Persistent stacks
@@ -334,13 +335,13 @@ services:
         # up). ONE-TIME exception: the first `start` boot after this switch (previous app
         # was `dev`, so Ponder drops+recreates once) and any boot after a
         # ponder.schema.ts/handler change (new build_id → Ponder REFUSES to reuse the
-        # schema and you must drop it or set a new DATABASE_SCHEMA) each cost a single
+        # schema and you must drop it or set a new TESTNET_DATABASE_SCHEMA) each cost a single
         # re-index — fast, because the finalized-block RPC cache in the `ponder_sync`
         # schema survives and is reused (no re-fetch from the rate-limited RPC). Steady
         # state thereafter = resume. Do NOT revert to `ponder dev`. See indexer.md.
-        exec pnpm --filter @robbed/indexer exec ponder start --hostname 0.0.0.0 --schema public
+        exec pnpm --filter @robbed/indexer exec ponder start --hostname 0.0.0.0 --schema "$$DATABASE_SCHEMA"
     env_file:
-      - path: .env
+      - path: config/env/testnet.env
         required: false
     environment:
       <<: *dev-env
@@ -352,7 +353,8 @@ services:
       # `|| undefined` ⇒ Ponder falls back to HTTP polling. Alchemy wss when a key exists;
       # never the sequencer feed.
       INDEXER_RPC_WS: ${TESTNET_RPC_WS_URL:-}
-      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
+      DATABASE_SCHEMA: ${TESTNET_DATABASE_SCHEMA:-robbed_testnet_ponder}
+      DATABASE_URL: "postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}?options=-c%20search_path%3D${TESTNET_DATABASE_SCHEMA:-robbed_testnet_ponder}%2Cpublic"
       REDIS_URL: redis://redis:6379
       METRICS_PORT: "9464"
       # MIRROR of docker-compose.yml — split-horizon metadata fetch. This
@@ -391,8 +393,8 @@ services:
   # ── keeper — auto-graduation keeper (apps/keeper). TESTNET deltas: remote RPC (WS
   #   preferred → the <1-2-block eth_subscribe path; empty ⇒ HTTP polling + the
   #   KEEPER_POLL_MS sweep is the safety net), chain id asserted vs the live RPC (and
-  #   pre-asserted by `chaincheck`), and a FUNDED ops-wallet key from the gitignored
-  #   root .env (never committed; NOT the deployer — fund ~0.05 ETH). Detection is
+  #   pre-asserted by `chaincheck`), and a FUNDED ops-wallet key from an external
+  #   secrets env file (never committed; NOT the deployer — fund ~0.05 ETH). Detection is
   #   on-chain (REDIS_URL reserved — see apps/keeper/src/chain.ts). ──
   keeper:
     <<: *dev-base
@@ -404,10 +406,10 @@ services:
       KEEPER_RPC_URL: ${TESTNET_RPC_WS_URL:-${TESTNET_RPC_URL}}
       CHAIN_ID: ${TESTNET_CHAIN_ID:?TESTNET_CHAIN_ID is required — official Robinhood testnet chain id (/ Phase T; never invented). See docs/developers/runbooks/docker.md 'Testnet stack'.}
       # SECRET — a FUNDED testnet ops wallet (~0.05 ETH), NOT the deployer. Compose
-      # auto-loads the gitignored root .env for ${...} interpolation; NEVER commit a
-      # real key. Fail-closed if unset (the keeper is part of the testnet stack).
-      KEEPER_PRIVATE_KEY: ${TESTNET_KEEPER_PRIVATE_KEY:?TESTNET_KEEPER_PRIVATE_KEY is required — a FUNDED testnet ops-wallet private key (~0.05 ETH; NOT the deployer). Set it in the gitignored root .env. See docs/developers/runbooks/keeper.md.}
-      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
+      # loads ~/.config/robbed/testnet.secrets.env when present; NEVER commit a real
+      # key. Fail-closed if unset (the keeper is part of the testnet stack).
+      KEEPER_PRIVATE_KEY: ${TESTNET_KEEPER_PRIVATE_KEY:?TESTNET_KEEPER_PRIVATE_KEY is required — a FUNDED testnet ops-wallet private key (~0.05 ETH; NOT the deployer). Set it in ~/.config/robbed/testnet.secrets.env. See docs/developers/runbooks/keeper.md.}
+      DATABASE_URL: "postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}?options=-c%20search_path%3D${TESTNET_DATABASE_SCHEMA:-robbed_testnet_ponder}%2Cpublic"
       REDIS_URL: redis://redis:6379
       KEEPER_PORT: "3003"
     ports:

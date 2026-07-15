@@ -21,6 +21,7 @@ node_modules/
 .env.*
 !.env.example
 !**/.env.example
+config/env/*.env
 # apps/web per-target BUILD config — intentionally committed. Every value is a
 # NEXT_PUBLIC_* (chain id, RPC, API/WS/R2 base URLs) baked into the client bundle
 # at build time → public by construction, NO secrets. Consumed by the deploy:cf:*

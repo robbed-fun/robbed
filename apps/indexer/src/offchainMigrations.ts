@@ -42,6 +42,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ponderSearchPath } from "./dbSearchPath";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = join(here, "..", "migrations");
@@ -73,7 +74,7 @@ export function migrationSql(file: string): string {
 
 /** Run one migration file inside a scoped search_path. */
 async function runIn(client: SqlClient, schema: string, file: string, log: (msg: string) => void): Promise<void> {
-  await client.query(`SET search_path TO "${schema}"`);
+  await client.query(`SET search_path TO ${ponderSearchPath(schema)}`);
   await client.query(migrationSql(file));
   log(`  applied ${file} → schema "${schema}"`);
 }

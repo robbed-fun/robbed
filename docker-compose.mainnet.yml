@@ -249,7 +249,7 @@ services:
       # Staging shape: this compose file is never the production deploy (see header) —
       # production is the P-3 images on Komodo, where API_ENV=production forbids stubs.
       API_ENV: development
-      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
+      DATABASE_URL: "postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}?options=-c%20search_path%3D${MAINNET_DATABASE_SCHEMA:-robbed_mainnet_ponder}%2Cpublic"
       REDIS_URL: redis://redis:6379
       # Object storage. DEFAULTS = the local minio (dev/CI); OVERRIDE via root .env
       # to a real Cloudflare R2 bucket so uploaded images are publicly reachable from
@@ -351,7 +351,8 @@ services:
         pnpm --filter @robbed/indexer migrate
         # PRODUCTION mode (Ponder 0.16.8): `ponder start` = crash-recovery ON, no
         # file-watch. A steady-state `docker restart` RESUMES from _ponder_checkpoint in
-        # the same DATABASE_SCHEMA (the explicit `--schema public` on the start line — Ponder
+        # the same DATABASE_SCHEMA (default: robbed_mainnet_ponder; keep public for
+        # stable offchain/API side tables) — Ponder
         # 0.16.8 has NO default schema for `start`, unlike `dev`); it does NOT wipe+re-index from
         # START_BLOCK the way `ponder dev` does on every boot (dev drops its app tables on
         # each restart — that is the re-index-on-boot bug this replaces, and what took the
@@ -359,14 +360,14 @@ services:
         # docker-compose.yml (fresh anvil deploy each up). ONE-TIME exception: the first
         # `start` boot after this switch (previous app was `dev`, so Ponder drops+recreates
         # once) and any boot after a ponder.schema.ts/handler change (new build_id → Ponder
-        # REFUSES to reuse the schema; drop it or set a new DATABASE_SCHEMA) each cost a
+        # REFUSES to reuse the schema; drop it or set a new MAINNET_DATABASE_SCHEMA) each cost a
         # single re-index — fast, because the finalized-block RPC cache in the `ponder_sync`
         # schema survives and is reused (no re-fetch from the rate-limited public RPC; this
         # is exactly how the interim re-sync finished in minutes, not START_BLOCK-to-head).
         # Steady state thereafter = resume. Do NOT revert to `ponder dev`. See indexer.md.
-        exec pnpm --filter @robbed/indexer exec ponder start --hostname 0.0.0.0 --schema public
+        exec pnpm --filter @robbed/indexer exec ponder start --hostname 0.0.0.0 --schema "$$DATABASE_SCHEMA"
     env_file:
-      - path: .env
+      - path: config/env/mainnet.env
         required: false
     environment:
       <<: *dev-env
@@ -378,7 +379,8 @@ services:
       # `|| undefined` ⇒ Ponder falls back to HTTP polling. Alchemy wss when a key exists;
       # never a sequencer feed.
       INDEXER_RPC_WS: ${MAINNET_RPC_WS_URL:-}
-      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
+      DATABASE_SCHEMA: ${MAINNET_DATABASE_SCHEMA:-robbed_mainnet_ponder}
+      DATABASE_URL: "postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}?options=-c%20search_path%3D${MAINNET_DATABASE_SCHEMA:-robbed_mainnet_ponder}%2Cpublic"
       REDIS_URL: redis://redis:6379
       METRICS_PORT: "9464"
       # MIRROR of docker-compose.yml — split-horizon metadata fetch. This
@@ -425,8 +427,8 @@ services:
   #   Because a profiled service is still interpolated at load, its env uses `:-`
   #   defaults (NEVER `:?`, which would break the default up); the keeper's own
   #   fail-closed config (src/config.ts) rejects a missing key/RPC at boot instead.
-  #   Signer = a FUNDED mainnet ops-wallet key from the gitignored root .env (NOT
-  #   the deployer). Detection is on-chain (REDIS_URL reserved — src/chain.ts). ──
+  #   Signer = a FUNDED mainnet ops-wallet key from an external secrets env file
+  #   (NOT the deployer). Detection is on-chain (REDIS_URL reserved — src/chain.ts). ──
   keeper:
     <<: *dev-base
     profiles: ["keeper"]
@@ -437,12 +439,12 @@ services:
       # WS preferred; MAINNET_RPC_URL is the indexer-guarded value on any real up.
       KEEPER_RPC_URL: ${MAINNET_RPC_WS_URL:-${MAINNET_RPC_URL:-}}
       CHAIN_ID: ${MAINNET_CHAIN_ID:-4663}
-      # SECRET — supply a FUNDED mainnet ops-wallet key in the gitignored root .env
+      # SECRET — supply a FUNDED mainnet ops-wallet key in ~/.config/robbed/mainnet.secrets.env
       # only when starting the keeper profile (post-G-A). Empty default so the
       # DEFAULT (profile-off) up is never blocked; the keeper fails loud at boot if
       # started without it. NEVER commit a real key.
       KEEPER_PRIVATE_KEY: ${MAINNET_KEEPER_PRIVATE_KEY:-}
-      DATABASE_URL: postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}
+      DATABASE_URL: "postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}?options=-c%20search_path%3D${MAINNET_DATABASE_SCHEMA:-robbed_mainnet_ponder}%2Cpublic"
       REDIS_URL: redis://redis:6379
       KEEPER_PORT: "3003"
     ports:

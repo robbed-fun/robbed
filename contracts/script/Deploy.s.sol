@@ -34,8 +34,8 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 ///          contexts; only a real mainnet deploy needs the affirmation, decision #5):
 ///        - LIVE (`block.chainid == 4663` AND `ROBBED_DEPLOY_ENV == "mainnet"`): the four V3
 ///          addresses + WETH come from `constants.json.external.*`; `require(weth == 0x0Bd7…AD73)`
-///          (F-2), a real `DEPLOYER_PRIVATE_KEY`, and a non-zero treasury Safe (O-6 fail-closed) are
-///          enforced; the artifact is written to the canonical `deployments/4663.json` with
+///          (F-2), a real public `DEPLOYER_ADDRESS`/CLI signer, and a non-zero treasury Safe
+///          (O-6 fail-closed) are enforced; the artifact is written to the canonical `deployments/4663.json` with
 ///          `mode:"live"`.
 ///        - FORK (`block.chainid == 4663`, affirmation ABSENT — the default): a mainnet-fork run
 ///          (anvil `--fork-url`, the docker `deploychain` one-shot / I-2 dev stack). Same 4663
@@ -45,7 +45,7 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 ///          real deploy later overwrites `4663.json` with `mode:"live"`.
 ///        - TESTNET (`block.chainid == 46630`, official Robinhood Chain testnet — chain id per
 /// docs.robinhood.com/chain/connecting, recorded in docs/developers/runbooks/testnet.md) public-
-///          chain discipline, exactly like LIVE — a real `DEPLOYER_PRIVATE_KEY` is REQUIRED (the
+///          chain discipline, exactly like LIVE — a real public `DEPLOYER_ADDRESS`/CLI signer is REQUIRED (the
 ///          anvil account-0 fallback is local-only, never on ANY public chain), ALL external
 ///          addresses (WETH, V3 factory/NPM/router/quoter, treasury Safe) come from the constants
 ///          file's `external.*` (default `../tools/m0/out/constants.testnet.json`, the T-1 derive
@@ -75,7 +75,10 @@ import {MockWETH9} from "test/mocks/MockWETH9.sol";
 ///           for local + fork. 46630 is the official testnet id and gets the public-chain (testnet)
 ///           branch — before this split it would have wrongly taken the local mock-V3/dev-key branch.
 ///        3. Local/fork signer fallback to the PUBLIC anvil account-0 key when `DEPLOYER_PRIVATE_KEY`
-///           is unset — never on a PUBLIC chain (live OR testnet: `revert MissingDeployerKey`).
+///           and `DEPLOYER_ADDRESS` are unset — never on a PUBLIC chain (live OR testnet:
+///           `revert MissingDeployerAddress`). Public deploys use `vm.startBroadcast(deployer)`
+///           so Foundry CLI wallet options (`--account`, `--ledger`, `--trezor`, `--unlocked`, …)
+///           hold the key outside this script/repo.
 ///           Keeps the bare smoke/fork command keyless while never risking a real deploy without an
 ///           explicit key.
 ///        4. Public modes cross-check `constants.chainId == block.chainid` (`ConstantsChainIdMismatch`)
@@ -135,7 +138,7 @@ contract Deploy is Script {
     address internal constant NPM_DESCRIPTOR = 0x000000000000000000000000000000000000bEEF;
 
     // ── deploy-tooling custom errors (never revert strings) ──
-    error MissingDeployerKey();
+    error MissingDeployerAddress();
     error TreasurySafeUnset();
     error ConstantsChainIdMismatch(uint256 chainId, uint256 declaredChainId);
     error WethMismatch(address expected, address actual);
@@ -190,18 +193,29 @@ contract Deploy is Script {
         // 0. Resolve signer + mode (pre-broadcast; no state writes on chain here).
         mode = _selectMode(block.chainid, _isMainnetAffirmed());
         uint256 pk = vm.envOr("DEPLOYER_PRIVATE_KEY", uint256(0));
-        if (pk == 0) {
-            // Only the PUBLIC chains (real mainnet + testnet) demand a real key. `Local` and a 4663
-            // `Fork` are dev contexts, so they fall back to the well-known anvil account-0 key.
-            if (mode == Mode.Live || mode == Mode.Testnet) revert MissingDeployerKey();
-            pk = ANVIL_ACCOUNT0_PK; // local/fork keyless fallback (decision #3/#5)
+        bool usePrivateKey = pk != 0;
+        if (usePrivateKey) {
+            // Legacy/dev path. The operator runbook uses DEPLOYER_ADDRESS + Foundry wallet options
+            // instead, so no raw key needs to enter Codex-visible env/files.
+            deployer = vm.addr(pk);
+        } else {
+            deployer = vm.envOr("DEPLOYER_ADDRESS", address(0));
+            if (deployer == address(0)) {
+                // Only the PUBLIC chains (real mainnet + testnet) demand a real signer. `Local`
+                // and a 4663 `Fork` are dev contexts, so they fall back to the well-known anvil
+                // account-0 key.
+                if (mode == Mode.Live || mode == Mode.Testnet) revert MissingDeployerAddress();
+                pk = ANVIL_ACCOUNT0_PK; // local/fork keyless fallback (decision #3/#5)
+                usePrivateKey = true;
+                deployer = vm.addr(pk);
+            }
         }
-        deployer = vm.addr(pk);
 
         // 1. Load the M0 constants + resolve external addresses (WETH/V3/treasury) per mode.
         _loadConstants(); // fail-closed on wrong-chain/malformed/incoherent constants BEFORE spend
 
-        vm.startBroadcast(pk);
+        if (usePrivateKey) vm.startBroadcast(pk);
+        else vm.startBroadcast(deployer);
 
         _resolveExternals(); // live/testnet: read `external.*`; local: deploy real V3 + MockWETH9
 

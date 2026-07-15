@@ -13,6 +13,7 @@
  * gates chain state.
  */
 import { Pool, type PoolClient } from "pg";
+import { ponderSearchPath } from "../dbSearchPath";
 import type { AddressPnlComputed, PnlInput } from "./compute";
 
 /** Load/write boundary (Pg impl below; faked in the unit suite). */
@@ -28,7 +29,7 @@ export function createPgPnlStore(pool: Pool, schema: string): PnlStore {
       const client = await pool.connect();
       try {
         // The pnl_* views reference the Ponder tables → live in the Ponder schema.
-        await client.query(`SET search_path TO "${schema}"`);
+        await client.query(`SET search_path TO ${ponderSearchPath(schema)}`);
         const [legs, activity, seen, created] = await Promise.all([
           q(
             client,

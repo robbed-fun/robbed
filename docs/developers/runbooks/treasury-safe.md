@@ -10,19 +10,22 @@ The mainnet treasury is a **2-of-4 Gnosis Safe**: it is the `Ownable2Step` owner
 
 ## Tooling (`tools/deploy/`)
 
-Three Bun + viem scripts, wired as root `package.json` scripts. Shared conventions across all three: viem is resolved through `packages/shared` (the exact catalog-pinned version — `tools/` is not a workspace member); a **chain guard** refuses any chain id not in `{4663, 46630, 31337}` (mainnet / testnet / anvil-or-fork) and is not flag-bypassable; every on-chain fact is **asserted live and fails closed**; private keys are **env-only** (never argv, so they never land in `ps` output). None of these touch `contracts/src` or any app — they are ops tooling owned by robbed-contracts.
+Production signing uses [`operator-signing.md`](operator-signing.md): private keys stay in a Foundry keystore, hardware wallet, browser wallet, KMS, or unlocked RPC signer. The older Bun + viem scripts remain useful for local fork drills, but production Safe creation goes through `scripts/deploy-onchain.sh safe` and `contracts/script/CreateSafe.s.sol` so Codex never needs to see a deployer key.
 
 | Command | Script | What it does |
 |---|---|---|
-| `bun run safe:create` | [`create-safe.ts`](../../../tools/deploy/create-safe.ts) | Deterministic Safe deployment via `SafeProxyFactory.createProxyWithNonce` on the canonical **v1.4.1** singletons. Asserts code presence + singleton `VERSION()` before any tx; reads back `getOwners()`/`getThreshold()` and requires them to match the input; emits `ProxyCreation`. CREATE2 salt = `keccak256(keccak256(initializer), saltNonce)` — bump `SALT_NONCE` for a fresh address. |
+| `bash scripts/deploy-onchain.sh safe …` | [`CreateSafe.s.sol`](../../../contracts/script/CreateSafe.s.sol) | Production Safe deployment via Foundry wallet signing (`--account`, `--ledger`, `--trezor`, `--unlocked`, etc.). Requires only public `DEPLOYER_ADDRESS` + owner addresses; asserts canonical Safe v1.4.1 code and read-back. |
+| `bun run safe:create` | [`create-safe.ts`](../../../tools/deploy/create-safe.ts) | Legacy/dev helper used by fork drills. It takes `DEPLOYER_PRIVATE_KEY` and should not be used for production operator ceremonies. |
 | `bun run safe:tx` | [`safe-tx.ts`](../../../tools/deploy/safe-tx.ts) | Build / co-sign / execute a SafeTx. Subcommands `hash` / `sign` / `exec`; presets `accept-ownership`, `transfer-eth`, and a raw `--to/--value/--data`. Uses only the on-chain v1.4.1 primitives (`getTransactionHash` / `execTransaction`) — never the hosted Safe Transaction Service (not deployed for 4663). |
+| `bash scripts/safe-sign.sh …` | [`safe-sign.sh`](../../../scripts/safe-sign.sh) | Production owner-signature wrapper. Uses `cast wallet sign --no-hash` with a Foundry wallet and then wraps/verifies the signature JSON through `safe-tx.ts`; no `SIGNER_PRIVATE_KEY` needed. |
+| `bash scripts/safe-exec.sh …` | [`safe-exec.sh`](../../../scripts/safe-exec.sh) | Production executor wrapper. Uses `safe-tx.ts exec-data` to validate signatures + build `execTransaction` calldata, then submits with `cast send` through a Foundry wallet; no `EXECUTOR_PRIVATE_KEY` needed. |
 | `bun run safe:drill` | [`safe-drill.ts`](../../../tools/deploy/safe-drill.ts) | The fork rehearsal (below) — proves the whole 2/4 workflow byte-for-byte on an anvil fork of 4663. |
 
 ### How `safe:tx` signing works (the load-bearing details)
 
 - **`hash`** builds the SafeTx (a plain `CALL`, `operation=0`, all gas-refund params zero — the Safe self-executes and pays no relayer), computes the EIP-712 digest locally, and **cross-checks it against the Safe's own `getTransactionHash()` on chain** before anyone signs. The contract is the arbiter, so any viem-vs-Solidity encoding drift fails loud instead of producing an unusable signature. It writes a tx JSON for the signers.
-- **`sign`** loads that tx JSON, re-derives + re-verifies the digest, signs with `SIGNER_PRIVATE_KEY`, and writes a **signature JSON** — one per signer. Signatures are exchanged as **files**, so signers sign on **separate machines** (an air-gapped signer never needs to touch the executor's box).
-- **`exec`** loads the tx JSON + the signature JSONs, then **validates each signature** (recovers to a *current* owner, no duplicate signers, correct Safe / chain id / nonce), enforces `count ≥ threshold`, sorts the signers **ascending by address** (the Safe requires strictly-increasing recovered addresses), executes, and asserts `ExecutionSuccess`. It accepts any standard 65-byte ECDSA signature (hardware or raw key) and normalizes the recovery byte `v` from `{0,1}` to `{27,28}` for hardware signers. Executor key is `EXECUTOR_PRIVATE_KEY` (env-only).
+- **Production signing** uses `bash scripts/safe-sign.sh --tx tx.json --signer <owner> --out sig.json --ledger` or `--account <name>`. It signs the already-verified SafeTx hash through Foundry and writes the same **signature JSON** format. The legacy `safe:tx sign` raw-key path remains for local drills.
+- **Production execution** uses `bash scripts/safe-exec.sh --tx tx.json --sig a.json --sig b.json --executor <addr> --account <name>`. It validates each signature (current owner, no duplicates, correct Safe / chain / nonce), enforces `count ≥ threshold`, sorts signatures ascending by address, builds `execTransaction` calldata, and submits it via `cast send`. The legacy `safe:tx exec` raw-key path remains for local drills.
 
 ## Validation — the fork drill (DONE)
 
@@ -41,14 +44,14 @@ The negatives call the exported `safe-tx` helpers directly so they can bypass th
 Run against `rpc.mainnet.chain.robinhood.com`; verify every step on `robinhoodchain.blockscout.com`. **Signers need no gas** — the Safe self-executes; only the executor EOA pays.
 
 1. **Prereqs.** The 4 signer addresses (checksummed), threshold = **2**, and a **gas-funded executor EOA** (~0.01 ETH). The signer set + threshold are the open O-6 decision (see [Prerequisites](#prerequisites-the-open-o-6-decision)).
-2. **Create the Safe.** `bun run safe:create --owners A,B,C,D --threshold 2`. Record `SAFE_ADDRESS` + the salt nonce + the creation tx hash. Verify the read-back (`getOwners()` / `getThreshold()`) and the `ProxyCreation` event on Blockscout.
-3. **Live 2/4 dust drill.** Fund the Safe with dust; two signers run `safe:tx sign` on separate machines (→ JSON); `safe:tx exec` a transfer of the dust back out. Acceptance = `ExecutionSuccess` on the explorer + Safe balance back to zero. This exercises the real signer machines and hardware before any value or authority is committed.
+2. **Create the Safe.** `bash scripts/deploy-onchain.sh safe --network mainnet --deployer <addr> --owners A,B,C,D --threshold 2 --account <name>` or the hardware-wallet equivalent. Record `SAFE_ADDRESS` + the salt nonce + the creation tx hash. Verify the read-back (`getOwners()` / `getThreshold()`) and the `ProxyCreation` event on Blockscout.
+3. **Live 2/4 dust drill.** Fund the Safe with dust; two signers run `scripts/safe-sign.sh` on separate machines (→ JSON); `safe:tx exec` a transfer of the dust back out. Acceptance = `ExecutionSuccess` on the explorer + Safe balance back to zero. This exercises the real signer machines and hardware before any value or authority is committed.
 4. **Wire it in.** Set the Safe as `MAINNET_EXTERNAL.treasurySafe` in [`tools/m0/derive.ts`](../../../tools/m0/derive.ts) and re-derive — the `out/` diff **must be treasurySafe-only** (nothing else should move). Set `TREASURY_ADDRESS` and the admin SIWE allowlist (`ADMIN_ALLOWLIST`, OI-A8) from the same signer set; env values live in [`env-inventory.md`](env-inventory.md), never inlined in source (section 2).
 5. **Deploy + finalize.** Deploy the protocol (`Deploy.s.sol` initiates `transferOwnership` to the Safe — a *nomination* only under Ownable2Step), then finalize with `bun run safe:tx --preset accept-ownership --target <CurveFactory>` and assert `factory.owner() == Safe`.
 
 ## Deployer & ops hardening
 
-- The **deployer stays an ephemeral, gas-only EOA** — a fresh key, optionally hardware via `forge script --ledger`. It holds authority only transiently: `Deploy.s.sol` nominates the Safe, and the Safe accepts (step 5).
+- The **deployer stays an ephemeral, gas-only EOA** — a fresh keystore or hardware wallet address. It holds authority only transiently: `Deploy.s.sol` nominates the Safe, and the Safe accepts (step 5).
 - **Deployer retirement checklist** (after deploy): assert `factory.owner() == Safe`; confirm **no pending owner** on the Ownable2Step handoff; drain the deployer's residual gas. The deployer must end powerless.
 - Rotate any signer or executor key immediately if exposed; the executor's only power is paying gas for already-signed, threshold-satisfying txs.
 

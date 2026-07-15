@@ -1,7 +1,7 @@
 # LOOT_ — the ROBBED_ mascot
 
-> Design source: [ROBBED Explorations.html](./ROBBED%20Explorations.html) §3 ("Mascot — the
-> ROBBED_ trickster, four ways"). The ratified direction is **3a "Loot"** — the money bag that
+> Design source: historical ROBBED explorations §3 ("Mascot — the ROBBED_ trickster, four ways").
+> The ratified direction is **3a "Loot"** — the money bag that
 > robbed itself. This doc specifies the component that ships that direction; the geometry and
 > palette in the SVG are the design, not a suggestion. UI placement rules live in
 > [web.md](./web.md); brand copy rules in the `lp-copy` rule.

@@ -12,6 +12,7 @@
  */
 import { Pool, type PoolClient } from "pg";
 import type { IndexerConfig } from "../config";
+import { ponderSearchPath } from "../dbSearchPath";
 import type { FlowInput, FlowResult } from "./heuristics";
 
 /**
@@ -47,7 +48,7 @@ export function createPgFlowStore(pool: Pool, schema: string): FlowStore {
     async loadInput(): Promise<FlowInput> {
       const client = await pool.connect();
       try {
-        await client.query(`SET search_path TO "${schema}"`);
+        await client.query(`SET search_path TO ${ponderSearchPath(schema)}`);
         const [firstInbound, firstBuys, programmatic, multiPoolExits, tradeAggs, clusterVol24h, holders] =
           await Promise.all([
             q(client, `SELECT address, funder, value_wei, funded_at_sec FROM flow_first_inbound`),

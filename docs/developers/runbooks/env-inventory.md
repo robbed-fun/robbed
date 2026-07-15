@@ -174,7 +174,7 @@ Read by `tools/`, `contracts/script`, `scripts/`, and the Playwright runner (gre
 |---|---|---|---|---|
 | `ROBINHOOD_RPC_URL` | Live-chain RPC for fork tests (`FOUNDRY_PROFILE=fork`), `Deploy.s.sol`, and the localstack fork branch | SECRET (if keyed) | `contracts/script`, `contracts/test`, `tools/localstack` | hoodpad-contracts |
 | `ROBINHOOD_WS_RPC_URL` | WS counterpart in the root template | SECRET (if keyed) | root `.env.example` template | hoodpad-contracts |
-| `DEPLOYER_PRIVATE_KEY` | Deploy key for `Deploy.s.sol` (`vm.envOr` — anvil default key when unset) | **SECRET** | `contracts/script` | hoodpad-contracts + ops |
+| `DEPLOYER_ADDRESS` | Public deployer address for `Deploy.s.sol` / `CreateSafe.s.sol`; the private key stays in Foundry keystore, hardware wallet, KMS, browser wallet, or unlocked RPC signer. Local/fork drills may still use legacy dev-only `DEPLOYER_PRIVATE_KEY` tooling. | CONFIG | `contracts/script`, `scripts/deploy-onchain.sh` | hoodpad-contracts + ops |
 | `ROBBED_CONSTANTS` | Override path to `constants.json` for `Deploy.s.sol` | CONFIG | `contracts/script` | hoodpad-contracts |
 | `R2_ACCOUNT_ID` | Cloudflare account id `0b1b0b8753489a11d35ee922961f6b72` (D-45) — deploy-level fact used to derive `R2_ENDPOINT`; not read by app code | CONFIG | root `.env.example` template, deploy docs | ops |
 | `ANVIL_PORT` | Local-stack anvil port (default `4545`; `validate.sh` e2e reachability probe) | CONFIG | `tools/localstack`, `scripts/validate.sh` | hoodpad-contracts |

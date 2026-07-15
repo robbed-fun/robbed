@@ -18,6 +18,7 @@
  * `pnl/store.ts` — set search_path once per connection, then query unqualified.
  */
 import { Pool } from "pg";
+import { ponderSearchPath } from "./dbSearchPath";
 import type { AnchorCandleRow, MetricsCoalescerStore, MetricsInputRow } from "./tokenMetrics";
 
 const DAY_SECONDS = 86_400;
@@ -34,7 +35,7 @@ export function createPgMetricsCoalescerStore(pool: Pool, schema: string): Metri
       const client = await pool.connect();
       try {
         // Ponder tables live in the Ponder schema; candles/trades/tokens are all there.
-        await client.query(`SET search_path TO "${schema}"`);
+        await client.query(`SET search_path TO ${ponderSearchPath(schema)}`);
         const text = `
           SELECT t.address, t.last_price_eth, t.total_supply, t.real_eth_reserves,
                  t.graduation_eth, t.volume_eth_24h, t.graduated, t.created_at,

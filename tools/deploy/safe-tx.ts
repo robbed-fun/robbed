@@ -513,12 +513,26 @@ async function cmdSign(): Promise<void> {
     die(`on-chain getTransactionHash ${onchainHash} != tx JSON hash ${localHash} — wrong Safe/chain?`);
   }
 
-  const pk = (process.env.SIGNER_PRIVATE_KEY ??
-    die("SIGNER_PRIVATE_KEY is required (env only — never a CLI arg)")) as Hex;
-  const account = privateKeyToAccount(pk);
-  const signature = await signSafeTxHash(localHash, pk);
-  const recovered = await recoverSigner(localHash, signature);
-  if (recovered !== account.address) die(`internal: recovered ${recovered} != signer ${account.address}`);
+  const providedSignature = cliFlag("signature") as Hex | undefined;
+  const providedSigner = cliFlag("signer") ?? cliFlag("from");
+  let signer: Address;
+  let signature: Hex;
+
+  if (providedSignature) {
+    if (!providedSigner) die("--signer <address> is required with --signature");
+    signature = normalizeEcdsaV(providedSignature);
+    signer = addr(providedSigner, "signer");
+    const recovered = await recoverSigner(localHash, signature);
+    if (recovered !== signer) die(`provided signature recovers to ${recovered}, not signer ${signer}`);
+  } else {
+    const pk = (process.env.SIGNER_PRIVATE_KEY ??
+      die("SIGNER_PRIVATE_KEY is required, or provide --signature + --signer from hardware/keystore signing")) as Hex;
+    const account = privateKeyToAccount(pk);
+    signature = await signSafeTxHash(localHash, pk);
+    const recovered = await recoverSigner(localHash, signature);
+    if (recovered !== account.address) die(`internal: recovered ${recovered} != signer ${account.address}`);
+    signer = account.address;
+  }
 
   const sigJson = JSON.stringify(
     {
@@ -527,7 +541,7 @@ async function cmdSign(): Promise<void> {
       chainId,
       nonce: tx.nonce.toString(),
       safeTxHash: localHash,
-      signer: account.address,
+      signer,
       signature,
     },
     null,
@@ -536,7 +550,7 @@ async function cmdSign(): Promise<void> {
   const out = cliFlag("out");
   if (out) {
     writeFileSync(out, sigJson + "\n");
-    log(`signer ${account.address} → wrote signature JSON ${out}`);
+    log(`signer ${signer} → wrote signature JSON ${out}`);
   } else {
     console.log(sigJson);
   }
@@ -603,6 +617,87 @@ async function cmdExec(): Promise<void> {
   console.log(`SAFE_TX_EXECUTED=${res.txHash}`);
 }
 
+async function cmdExecData(): Promise<void> {
+  const { chainId, pub } = await connect();
+  const txFile = cliFlag("tx") ?? die("--tx <tx.json> required");
+  const { safe, chainId: txChainId, tx, safeTxHash } = jsonToTx(readFileSync(txFile, "utf8"));
+  if (txChainId !== chainId) die(`tx JSON chainId ${txChainId} != connected chain ${chainId}`);
+  const meta = await preflightSafe(pub, safe);
+
+  const localHash = computeSafeTxHash(chainId, safe, tx);
+  if (localHash.toLowerCase() !== safeTxHash.toLowerCase()) die(`tx JSON safeTxHash mismatch (tampered/stale)`);
+  const onchainHash = await pub.readContract({
+    address: safe,
+    abi: safeAbi,
+    functionName: "getTransactionHash",
+    args: [tx.to, tx.value, tx.data, 0, 0n, 0n, 0n, ZERO, ZERO, tx.nonce],
+  });
+  if (onchainHash.toLowerCase() !== localHash.toLowerCase()) die(`on-chain hash mismatch — wrong Safe/chain?`);
+  if (meta.nonce !== tx.nonce) {
+    die(`Safe nonce is ${meta.nonce} but this tx targets nonce ${tx.nonce} (already executed or built ahead)`);
+  }
+
+  const sigFiles = cliFlagAll("sig");
+  if (sigFiles.length === 0) die("at least one --sig <sig.json> required (need ≥ threshold)");
+  const sigs: SafeSignature[] = [];
+  const seen = new Set<string>();
+  for (const f of sigFiles) {
+    const j = JSON.parse(readFileSync(f, "utf8"));
+    if (j.kind !== "robbed-safe-signature") die(`${f}: not a robbed-safe-signature file`);
+    if (getAddress(j.safe) !== safe) die(`${f}: signature is for Safe ${j.safe}, not ${safe}`);
+    if (Number(j.chainId) !== chainId) die(`${f}: signature chainId ${j.chainId} != ${chainId}`);
+    if (j.safeTxHash.toLowerCase() !== localHash.toLowerCase()) die(`${f}: signature is over a different SafeTx hash`);
+    const signer = getAddress(j.signer);
+    const recovered = await recoverSigner(localHash, j.signature);
+    if (recovered !== signer) die(`${f}: signature recovers to ${recovered}, not declared ${signer}`);
+    const isOwner = await pub.readContract({ address: safe, abi: safeAbi, functionName: "isOwner", args: [signer] });
+    if (!isOwner) die(`${f}: ${signer} is not a current owner of Safe ${safe}`);
+    if (seen.has(signer.toLowerCase())) die(`${f}: duplicate signer ${signer}`);
+    seen.add(signer.toLowerCase());
+    sigs.push({ signer, signature: j.signature });
+  }
+  if (BigInt(sigs.length) < meta.threshold) {
+    die(`have ${sigs.length} valid signature(s), Safe threshold is ${meta.threshold}`);
+  }
+
+  const { blob, signers } = await orderSignatures(localHash, sigs, "ascending");
+  const data = encodeFunctionData({
+    abi: safeAbi,
+    functionName: "execTransaction",
+    args: [
+      tx.to,
+      tx.value,
+      tx.data,
+      tx.operation,
+      tx.safeTxGas,
+      tx.baseGas,
+      tx.gasPrice,
+      tx.gasToken,
+      tx.refundReceiver,
+      blob,
+    ],
+  });
+  const json = JSON.stringify(
+    {
+      kind: "robbed-safe-exec-data",
+      safe,
+      chainId,
+      safeTxHash: localHash,
+      signers,
+      data,
+    },
+    null,
+    2,
+  );
+  const out = cliFlag("out");
+  if (out) {
+    writeFileSync(out, json + "\n");
+    log(`wrote exec calldata JSON ${out}`);
+  } else {
+    console.log(json);
+  }
+}
+
 // ─────────────────────────────── dispatch ───────────────────────────────────
 async function cli(): Promise<void> {
   const sub = process.argv[2];
@@ -613,14 +708,17 @@ async function cli(): Promise<void> {
       return cmdSign();
     case "exec":
       return cmdExec();
+    case "exec-data":
+      return cmdExecData();
     default:
       console.error(
         "usage: bun run safe:tx <hash|sign|exec> [flags]\n" +
           "  hash --safe <addr> (--preset accept-ownership --target <addr> |\n" +
           "                      --preset transfer-eth --to <addr> --value <wei> |\n" +
           "                      --to <addr> [--value <wei>] [--data 0x..]) [--nonce n] [--out tx.json]\n" +
-          "  sign --tx <tx.json> [--out sig.json]        (env: SIGNER_PRIVATE_KEY)\n" +
+          "  sign --tx <tx.json> [--out sig.json]        (env: SIGNER_PRIVATE_KEY, or --signature 0x.. --signer 0x..)\n" +
           "  exec --tx <tx.json> --sig a.json --sig b.json  (env: EXECUTOR_PRIVATE_KEY)\n" +
+          "  exec-data --tx <tx.json> --sig a.json --sig b.json [--out exec.json]\n" +
           "  common: --rpc-url <url> (default http://localhost:4545)",
       );
       process.exit(sub ? 1 : 0);

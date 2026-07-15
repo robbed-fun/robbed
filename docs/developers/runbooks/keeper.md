@@ -11,8 +11,8 @@
 | Stack | Keeper | RPC | Signer | Notes |
 |---|---|---|---|---|
 | dev (`docker-compose.yml`) | **ON** | `ws://anvil:8545` (fork) | anvil account #4 (public dev key) | Chosen outside e2e roles 0–3 (creator/treasury/trader/trader2) to avoid nonce contention |
-| testnet (`docker-compose.testnet.yml`) | **ON** | `TESTNET_RPC_WS_URL` → `TESTNET_RPC_URL` | `TESTNET_KEEPER_PRIVATE_KEY` (funded ops wallet) | Key via gitignored root `.env`; ~0.05 ETH; **NOT** the deployer |
-| mainnet (`docker-compose.mainnet.yml`) | **OFF (profile-gated)** | `MAINNET_RPC_WS_URL` → `MAINNET_RPC_URL` | `MAINNET_KEEPER_PRIVATE_KEY` | `profiles: ["keeper"]`; start only **after Gate G-A** (Gate G-A) |
+| testnet (`docker-compose.testnet.yml`) | **ON** | `TESTNET_RPC_WS_URL` → `TESTNET_RPC_URL` | `TESTNET_KEEPER_PRIVATE_KEY` (funded ops wallet) | Key via `~/.config/robbed/testnet.secrets.env`; ~0.05 ETH; **NOT** the deployer |
+| mainnet (`docker-compose.mainnet.yml`) | **OFF (profile-gated)** | `MAINNET_RPC_WS_URL` → `MAINNET_RPC_URL` | `MAINNET_KEEPER_PRIVATE_KEY` | Key via `~/.config/robbed/mainnet.secrets.env`; start only **after Gate G-A** |
 
 WS RPC enables the sub-second `eth_subscribe` detection path. An HTTP-only RPC still works — detection degrades to log polling and the `KEEPER_POLL_MS` sweep remains the safety net.
 
@@ -37,7 +37,7 @@ The caller reward offsets gas *per graduation*, but the wallet must **front** ea
 
 1. Pick a dedicated ops wallet — **never the deployer or the treasury Safe**. On testnet, generate one and record only its address here; keep the key out of the repo.
 2. Fund it: **~0.05 ETH on testnet** is a comfortable starting float. On mainnet, size the float from the fork-measured graduate() gas (D-62, ≈0.8M gas worst case) × the live gas price × a healthy multiple; top up when the low-balance alert fires.
-3. Wire the key via the **gitignored root `.env`** (compose auto-loads it for `${...}` interpolation): `TESTNET_KEEPER_PRIVATE_KEY=0x…` (testnet) / `MAINNET_KEEPER_PRIVATE_KEY=0x…` (mainnet, only when running the keeper profile). Confirm `.env` is gitignored (it is — `.gitignore` `.env` / `.env.*`, with `**/.env.example` re-included).
+3. Wire the key through the external secrets env file loaded by `scripts/compose-env.sh`: `~/.config/robbed/testnet.secrets.env` for `TESTNET_KEEPER_PRIVATE_KEY=0x...`, or `~/.config/robbed/mainnet.secrets.env` for `MAINNET_KEEPER_PRIVATE_KEY=0x...` when running the mainnet keeper profile. Keep these files outside the workspace and mode `600`.
 
 **Balance watch.** Every `KEEPER_BALANCE_POLL_MS` the keeper computes `threshold = KEEPER_BALANCE_WARN_MULTIPLE × (KEEPER_TYPICAL_GRADUATE_GAS × gasPrice)` and, when the balance drops below it, logs `event:"keeper_wallet_low_balance"` (`level:"error"`, `alert:"top_up_required"`) and marks `/healthz` `status:"degraded"`. **Action: top up the wallet.** A low balance is an alert, not a crash — the container stays up and healthy-ish so it keeps working larger graduations it can still afford.
 
@@ -67,7 +67,7 @@ The WS subscription dropped. viem reconnects; the fallback sweep covers the gap.
 ## Key rotation
 
 1. Generate a new ops wallet; fund it (Funding).
-2. Update the stack's gitignored `.env` (`TESTNET_KEEPER_PRIVATE_KEY` / `MAINNET_KEEPER_PRIVATE_KEY`) with the new key.
+2. Update the stack's external secrets env file (`TESTNET_KEEPER_PRIVATE_KEY` / `MAINNET_KEEPER_PRIVATE_KEY`) with the new key.
 3. Restart only the keeper: `docker compose -f docker-compose.<stack>.yml up -d --no-deps keeper` (mainnet: add `--profile keeper`). No other service depends on the keeper's identity.
 4. Verify `/healthz` shows the **new** `wallet.address` and `status:"ok"`; drain/retire the old wallet's residual balance.
 5. Rotate immediately if a key is ever exposed — the keeper's only power is calling permissionless `graduate()`, so blast radius is limited to wasted gas / griefed graduation attempts, never fund theft, but rotate anyway.
@@ -75,6 +75,6 @@ The WS subscription dropped. viem reconnects; the fallback sweep covers the gap.
 ## Starting / stopping
 
 - dev: starts with `docker compose up` (ON by default).
-- testnet: `docker compose -f docker-compose.testnet.yml up -d keeper` (requires `TESTNET_KEEPER_PRIVATE_KEY` in `.env`).
+- testnet: `pnpm run dev:testnet:d` or `bash scripts/compose-env.sh testnet up -d keeper` (requires `TESTNET_KEEPER_PRIVATE_KEY` in `~/.config/robbed/testnet.secrets.env`).
 - mainnet (post-G-A only): `docker compose -f docker-compose.mainnet.yml --profile keeper up -d keeper`. Without `--profile keeper` the service does not start (Gate G-A guard) — this is intentional.
 - Stopping the keeper is always safe: it blocks nothing on-chain (graduation stays permissionless; sells stay open). A future `graduate()` just waits for the next caller.
