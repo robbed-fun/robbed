@@ -27,6 +27,7 @@ vi.mock("@/features/search-tokens", () => ({
 // Imported AFTER the mocks are registered.
 import { AppHeader } from "@/widgets/app-header";
 import { MobileNav } from "@/widgets/mobile-nav";
+import mascotStyles from "@/shared/ui/mascot/LootMascot.module.css";
 
 afterEach(cleanup);
 
@@ -36,7 +37,11 @@ describe("AppHeader", () => {
     render(<AppHeader />);
 
     // ROBBED_ wordmark links home
-    expect(screen.getByRole("link", { name: "ROBBED_ home" })).toBeTruthy();
+    const home = screen.getByRole("link", { name: "ROBBED_ home" });
+    const mascot = home.querySelector("svg");
+    expect(home).toBeTruthy();
+    expect(mascot?.getAttribute("width")).toBe("48");
+    expect(mascot?.getAttribute("class") ?? "").toContain(mascotStyles.figure);
 
     // primary nav
     const discover = screen.getByRole("link", { name: "discover" });

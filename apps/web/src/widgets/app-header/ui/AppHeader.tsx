@@ -42,12 +42,12 @@ export function AppHeader() {
       {/* Mockup header row: padding 14px 24px, gap 24px (the ratified redesign, — mockup line 178). */}
       <div className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3.5">
         {/* Header LOCKUP (design §4d "nav lockup, applies to all four pages"):
-            LOOT_ mascot + ROBBED_ wordmark. STATIC (`animated={false}`) so the
-            persistent header logo never distracts (mascot.md logo-slot rule);
-            reduced-motion is handled in the mascot regardless. A 22px mascot sits
-            on the dense 14px wordmark line without changing the header height. */}
+            LOOT_ mascot + ROBBED_ wordmark. Reuses the same CSS-only idle motion
+            as the 404 mascot; reduced-motion is handled in the mascot module. A
+            48px mascot sits on the dense 14px wordmark line without changing the
+            header height. */}
         <Link href="/" aria-label="ROBBED_ home" className="shrink-0">
-          <MascotLockup size={22} animated={false} />
+          <MascotLockup size={48} />
         </Link>
 
         {/* Mockup nav gap: 18px (line 180). */}
