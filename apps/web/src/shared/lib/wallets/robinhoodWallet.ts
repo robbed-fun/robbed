@@ -3,6 +3,9 @@ import {
   getWalletConnectConnector,
 } from "@rainbow-me/rainbowkit";
 
+const PLACEHOLDER_ICON =
+  "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2228%22%20height%3D%2228%22%3E%3Crect%20width%3D%2228%22%20height%3D%2228%22%20rx%3D%226%22%20fill%3D%22black%22%2F%3E%3C%2Fsvg%3E";
+
 /**
  * ⚠ web-6 FINDING (2026-07-10, docs-first): RainbowKit ships **no**
  * `robinhoodWallet`. Verified against RainbowKit 2.2.11:
@@ -28,11 +31,7 @@ export function robinhoodWallet(options: { projectId: string }): Wallet {
     name: "Robinhood Wallet",
     // Neutral placeholder mark until official brand assets land. Lives in
     // `lib/` (outside the token-lint scan of app/ + components/).
-    iconUrl: async () =>
-      "data:image/svg+xml;base64," +
-      Buffer.from(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><rect width="28" height="28" rx="6" fill="black"/></svg>',
-      ).toString("base64"),
+    iconUrl: PLACEHOLDER_ICON,
     iconBackground: "#000000",
     downloadUrls: {
       // Placeholder store links — replace with official URLs once confirmed.

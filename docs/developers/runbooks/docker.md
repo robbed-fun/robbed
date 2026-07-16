@@ -129,7 +129,7 @@ All credentials are dev defaults baked in via `${VAR:-default}`; override from a
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`                                  | `robbed` / `robbed_dev_pw` / `robbed` | postgres, api, indexer    |
 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`                                              | `robbed` / `robbed_dev_secret`        | minio, createbuckets, api |
 | `R2_BUCKET`                                                                            | `robbed-assets`                       | createbuckets, api, web   |
-| `ROBINHOOD_RPC_URL`, `NEXT_PUBLIC_RPC_HTTP/WS`, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | empty                                 | api / web passthrough     |
+| `ROBINHOOD_RPC_URL`, `NEXT_PUBLIC_RPC_HTTP/WS`, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`, `NEXT_PUBLIC_REQUIRE_WALLETCONNECT` | empty                                 | api / web passthrough     |
 
 In-network wiring (service DNS names) is set inside the compose file; browser-visible URLs
 (`NEXT_PUBLIC_*`, `R2_PUBLIC_BASE_URL`) point at the host-mapped 4XXX ports. From the **host**, the stack is:
@@ -264,7 +264,7 @@ never a silent default).
 | `TESTNET_CHAIN_ID`   | yes                                         | Official testnet chain id — asserted by the `chaincheck` one-shot (`cast chain-id` against `TESTNET_RPC_URL` must match; api/indexer gate on it via `depends_on`)                                                                                                                                                                                                                                                                                           |
 
 Everything else (`POSTGRES_*`, `MINIO_*`, `R2_BUCKET`, `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`,
-`NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD`) keeps the same dev defaults as the local stack; `*_PORT`
+`NEXT_PUBLIC_REQUIRE_WALLETCONNECT`, `NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD`) keeps the same dev defaults as the local stack; `*_PORT`
 defaults are re-based to the 41XX block (table above). `web` runs with
 `NEXT_PUBLIC_MOCK_DATA=false` hardcoded — this stack exists to exercise real testnet data.
 

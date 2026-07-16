@@ -1,6 +1,10 @@
 import { connectorsForWallets } from "@rainbow-me/rainbowkit";
 import {
+  coinbaseWallet,
   injectedWallet,
+  metaMaskWallet,
+  rainbowWallet,
+  trustWallet,
   walletConnectWallet,
 } from "@rainbow-me/rainbowkit/wallets";
 import type { Address } from "viem";
@@ -9,7 +13,6 @@ import { mock } from "wagmi/connectors";
 
 import { robinhoodChain } from "./chain";
 import { env } from "./env";
-import { robinhoodWallet } from "./wallets/robinhoodWallet";
 
 /**
  * wagmi v2 + RainbowKit config. Single-chain app: chain 4663
@@ -22,11 +25,15 @@ import { robinhoodWallet } from "./wallets/robinhoodWallet";
  * NO ERC-4337 / smart-account / gas-sponsorship paths — Phase 2. Classic
  * wagmi/RainbowKit connectors only.
  *
- * Wallet groups : injected · Robinhood Wallet · WalletConnect — exactly
- * these. Robinhood Wallet + WalletConnect require a projectId and are OMITTED
- * when it is absent, so injected-only dev works with no projectId (web-6).
+ * Wallet groups: injected browser wallets, first-class mobile wallets, and the
+ * generic WalletConnect fallback. WalletConnect-backed entries require a
+ * projectId and are omitted when it is absent, so injected-only dev works with
+ * no projectId (web-6).
  */
 const APP_NAME = "ROBBED_";
+const APP_URL = "https://robbed.fun";
+const APP_DESCRIPTION = "Launch, trade, and graduate tokens on Robinhood Chain.";
+const APP_ICON = `${APP_URL}/moscit.png`;
 
 export function buildConnectors(projectId: string) {
   const hasWc = projectId.length > 0;
@@ -42,9 +49,13 @@ export function buildConnectors(projectId: string) {
       ...(hasWc
         ? [
             {
-              groupName: "Robinhood",
-              // Custom wallet — see robinhoodWallet.ts web-6 finding.
-              wallets: [() => robinhoodWallet({ projectId })],
+              groupName: "Mobile wallets",
+              wallets: [
+                rainbowWallet,
+                metaMaskWallet,
+                coinbaseWallet,
+                trustWallet,
+              ],
             },
             {
               groupName: "More",
@@ -53,7 +64,13 @@ export function buildConnectors(projectId: string) {
           ]
         : []),
     ],
-    { appName: APP_NAME, projectId: hasWc ? projectId : "robbed-dev-no-wc" },
+    {
+      appName: APP_NAME,
+      appDescription: APP_DESCRIPTION,
+      appUrl: APP_URL,
+      appIcon: APP_ICON,
+      projectId: hasWc ? projectId : "robbed-dev-no-wc",
+    },
   );
 }
 

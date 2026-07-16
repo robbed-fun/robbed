@@ -511,6 +511,7 @@ services:
       # env.ts `rpcWs: … ?? ""`) — set the Alchemy wss when a key exists.
       NEXT_PUBLIC_RPC_WS: ${MAINNET_RPC_WS_URL:-}
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:-}
+      NEXT_PUBLIC_REQUIRE_WALLETCONNECT: ${NEXT_PUBLIC_REQUIRE_WALLETCONNECT:-}
       NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD: ${NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD:-}
       # MAINNET: never the mock fixture — this stack exists to exercise real chain data.
       NEXT_PUBLIC_MOCK_DATA: "false"

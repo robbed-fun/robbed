@@ -1,5 +1,21 @@
 import type { NextConfig } from "next";
 
+function publicFlag(name: string): boolean {
+  const value = process.env[name]?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
+if (
+  publicFlag("NEXT_PUBLIC_REQUIRE_WALLETCONNECT") &&
+  !process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim()
+) {
+  throw new Error(
+    "[robbed/web] NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is required for this build. " +
+      "robbed.fun users on iOS/Android need WalletConnect because mobile Safari/Chrome " +
+      "usually has no injected wallet provider.",
+  );
+}
+
 /**
  * Next.js 16 config (Next 16 + React 19, exact majors, no ranges).
  * Docs-first basis: nextjs.org/docs/app + context7 /vercel/next.js (16.2.x),

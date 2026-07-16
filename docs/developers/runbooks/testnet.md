@@ -49,7 +49,7 @@ Add the network to MetaMask/Rabby manually (or via the "Add network to your wall
 | Currency symbol | ETH                                            |
 | Block explorer  | `https://explorer.testnet.chain.robinhood.com` |
 
-The web app's wallet plumbing (RainbowKit/wagmi) needs no secret for injected wallets; `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` is only required for WalletConnect QR flows (the open items web-6, NEEDS-USER).
+The web app's wallet plumbing (RainbowKit/wagmi) needs no secret for injected wallets. `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` is optional on testnet unless you want mobile WalletConnect coverage; robbed.fun mainnet builds set `NEXT_PUBLIC_REQUIRE_WALLETCONNECT=true` and fail if the project id is missing.
 
 ## 3. Getting testnet ETH
 

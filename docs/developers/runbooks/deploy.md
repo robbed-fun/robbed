@@ -213,7 +213,7 @@ Human decisions (NEEDS-USER):
 | Moderation vendor (CSAM hash-match + NSFW classifier) + mandated-reporting legal flow | OI-A7 | prod moderation | architect + ops + USER |
 | Bug bounty terms | the open items | gate 8 | architect + ops + USER |
 | Legal wrapper / ToS jurisdiction (MiCA/JDG) — **BLOCKING at Gate G-A** | the open items / Gate G-A | Phase B entry | USER (legal) |
-| WalletConnect projectId | web-6 | WC/Robinhood Wallet connectors | USER |
+| WalletConnect projectId | web-6 | mobile wallet + generic WalletConnect connectors | USER |
 | Branding residuals: name RESOLVED (`ROBBED_`/`robbed`, D-46), domains DECIDED (`robbed.fun`/`testnet.robbed.fun`, D-49). **DNS cutover now DONE** — `robbed.fun` + `testnet.robbed.fun` are on Cloudflare and served via Cloudflare Tunnel from the compose stacks (interim; the "mainnet" tunnel currently fronts the 46630-interim stack). Worker custom-domain attach is now unblocked. **Still open (NEEDS-USER):** OG brand mark + header wordmark styling | the open items / D-49 | OG images; final Worker custom-domain vs tunnel choice | architect + USER |
 | Organic-volume floor magnitude (`N` graduations-equiv/7d, Gate G-A.1; M0 default `N = 5`, `floorWei = 5 × GRADUATION_ETH ≈ 39.58 ETH`) | D-36 / Gate G-A | Gate G-A market call | architect + USER; recalibrate at M2 |
 

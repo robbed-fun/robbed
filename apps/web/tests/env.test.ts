@@ -65,3 +65,35 @@ describe("env.apiFetchBaseUrl — split-horizon resolution (web.md)", () => {
     expect(env.apiBaseUrl()).toBe(PUBLIC_BASE);
   });
 });
+
+describe("env.walletConnectProjectId — mobile wallet guard", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("dev/test builds may omit WalletConnect and get injected-wallet-only mode", () => {
+    vi.stubEnv("NEXT_PUBLIC_REQUIRE_WALLETCONNECT", undefined);
+    vi.stubEnv("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID", undefined);
+    expect(env.walletConnectRequired()).toBe(false);
+    expect(env.walletConnectProjectId()).toBe("");
+  });
+
+  it("accepts true/1/yes for the production require flag", () => {
+    for (const value of ["true", "1", "yes"]) {
+      vi.stubEnv("NEXT_PUBLIC_REQUIRE_WALLETCONNECT", value);
+      expect(env.walletConnectRequired()).toBe(true);
+    }
+  });
+
+  it("throws when production requires WalletConnect but no project id is present", () => {
+    vi.stubEnv("NEXT_PUBLIC_REQUIRE_WALLETCONNECT", "true");
+    vi.stubEnv("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID", "");
+    expect(() => env.walletConnectProjectId()).toThrow(/WalletConnect.*project id/i);
+  });
+
+  it("trims and returns a configured project id", () => {
+    vi.stubEnv("NEXT_PUBLIC_REQUIRE_WALLETCONNECT", "true");
+    vi.stubEnv("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID", "  wc-project  ");
+    expect(env.walletConnectProjectId()).toBe("wc-project");
+  });
+});

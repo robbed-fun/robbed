@@ -156,11 +156,18 @@ export const robinhoodChain = defineChain({
 
 ```ts
 import { connectorsForWallets } from "@rainbow-me/rainbowkit";
-import { injectedWallet, robinhoodWallet, walletConnectWallet } from "@rainbow-me/rainbowkit/wallets";
+import {
+  coinbaseWallet,
+  injectedWallet,
+  metaMaskWallet,
+  rainbowWallet,
+  trustWallet,
+  walletConnectWallet,
+} from "@rainbow-me/rainbowkit/wallets";
 ```
 
-- Wallet groups: **injected · Robinhood Wallet · WalletConnect** — exactly these (section 9). `robinhoodWallet` is in RainbowKit's wallet list; verify behavior on chain 4663 during M3 (it is WalletConnect-based under the hood).
-- `WALLETCONNECT_PROJECT_ID` from env (open item, this doc section 9.6).
+- Wallet groups: **injected · mobile wallets · WalletConnect**. Mobile wallets are Rainbow, MetaMask, Coinbase Wallet, and Trust Wallet; Robinhood Wallet users connect through the generic WalletConnect route until an official RainbowKit connector/deep link is verified.
+- `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` from env (section 9.6). Dev/testnet may omit it for injected-only mode; robbed.fun mainnet sets `NEXT_PUBLIC_REQUIRE_WALLETCONNECT=true` and fails the build if the project id is missing.
 - Single-chain app: `chains: [robinhoodChain]` (the env-selected target, section 2.3); RainbowKit's ConnectButton still shows its built-in "Wrong network" chip when the wallet is elsewhere.
 - **Wrong-network popup + auto-switch (2026-07-12, `features/switch-network` + `widgets/network-banner`):** on connect and on every `chainChanged` (both surfaced by `useAccount().chainId` re-renders), a wallet chain ≠ target renders a terminal-mono banner and fires **exactly one** automatic `useSwitchChain().switchChain({ chainId: target })` per mismatch episode (keyed connector.uid + wrong chain id — never a popup loop); a declined request leaves a manual "Switch network" retry. The injected connector's `wallet_addEthereumChain` fallback (error 4902) proposes the official params straight from the chain object; WalletConnect wallets receive the same request over the WC session. Complements (never fights) RainbowKit's built-in chip; the single `useNetworkGuard` instance lives in the widget so the banner stays presentational. E2E-inert: the mock connector is always on the configured chain AND both features hard-gate on `NEXT_PUBLIC_E2E`. Proven in `tests/network-banner.test.tsx`.
 - **Faucet CTA (testnet target only, `features/get-testnet-eth`):** wallet connected on the testnet target with native balance exactly 0 (wagmi `useBalance`, gated query) → banner linking the official faucet with the connected address prefilled (`https://faucet.testnet.chain.robinhood.com/?address=…`) + the verified Chainlink/QuickNode fallbacks (D-52; runbooks/testnet.md section 1/section 3). URLs live in the slice's `config/` segment, double-gated on registry `mode === "testnet"` — never rendered on mainnet/local; all links go through the shared https-only `ExtLink` guard (ERR-12). Dismissible per session (`sessionStorage`); wrong-network takes precedence (widget order + the CTA's own on-target requirement). Proven in `tests/faucet-config.test.ts` + `tests/faucet-cta.test.tsx`.
@@ -455,6 +462,10 @@ The per-token OG image is **the viral share unit** — a link paste into X/Teleg
 
 **What web still owns (normative for `apps/web`):**
 
+- **Site-wide launch/discovery metadata** — `app/layout.tsx` imports the canonical public site constants from `src/shared/config/site.ts` and emits `metadataBase`, canonical `/`, site-wide Open Graph/Twitter fallback card metadata, SEO keywords, and index/follow robot metadata for `https://robbed.fun`. Next metadata route conventions (nextjs.org, verified 2026-07-16 after Context7 quota fallback) back the static discovery routes:
+  - `app/robots.ts` allows crawlers and points at `https://robbed.fun/sitemap.xml`.
+  - `app/sitemap.ts` lists the stable crawlable public routes `/` and `/create`; `/portfolio` is intentionally omitted because it is wallet-personalized, and token detail pages remain discoverable through per-token/social links until the API exposes a crawler-safe token index.
+  - `app/manifest.ts` publishes the web app manifest with the ROBBED_ name, description, app icons, and dark terminal theme colors.
 - **The metadata pointer** — `src/views/token-detail/model/metadata.ts` `generateTokenMetadata(address)`, called from `app/t/[address]/page.tsx` `generateMetadata`:
   - `openGraph.images` + `twitter.images` (card `summary_large_image`) point at the **absolute** API URL `${env.apiBaseUrl()}/v1/og/{lowercased-address}.png` — origin from env, never inline (section 2). Absolute URLs mean no `metadataBase` is needed (Next `generateMetadata` docs, verified 2026-07-10).
   - **The 1200×630 contract** — width/height are declared on the OG image entry and must match the API's raster contract (api.md: `image/png` 1200×630).
@@ -555,9 +566,9 @@ Plus: LP sentence exists **only** as the single exported constant (grep for the 
 
 **M3-1 runtime-check dispositions (recorded 2026-07-10, robbed-frontend; for architect the decision record/the open items):**
 
-6. **WalletConnect projectId & Robinhood Wallet verification** — **NEEDS-USER (unresolved by design; env/ops).**
-   - **projectId:** `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` is a per-org secret obtainable only at cloud.walletconnect.com — the user must furnish it. Disposition (`src/shared/lib/wagmi.ts`): injected (browser-extension) wallets work in **dev with no projectId**; the WalletConnect group and the Robinhood Wallet entry are **omitted from the wallet list until the id is set** (never a broken connector). `.env.example` carries the `web-6 NEEDS-USER` note.
-   - **Robinhood Wallet connector:** docs-first finding — RainbowKit 2.2.11 ships **no `robinhoodWallet`** export (verified: no entry in `walletConnectors/`; GitHub code search `robinhood repo:rainbow-me/rainbowkit` → 0 hits). The `robinhoodWallet` in web.md section 2.4 was an assumed export. Interim (safest-correct, `src/shared/lib/wallets/robinhoodWallet.ts`): a **custom RainbowKit wallet wrapping the shared WalletConnect connector** via the documented `getWalletConnectConnector` (web.md section 2.4: "WalletConnect-based under the hood"). It is **UNVERIFIED on a real Robinhood Wallet on chain 4663** — no on-device / deep-link / WC-metadata test, and it only appears when a projectId is present. **NEEDS-USER:** a real Robinhood Wallet device connection test on 4663 + official WC metadata + brand icon (the open items brand pending). Flagged to robbed-architect (the open items).
+6. **WalletConnect projectId & mobile wallet verification** — **NEEDS-USER for the project id; runtime behavior resolved.**
+   - **projectId:** `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` is a per-org value obtainable at cloud.walletconnect.com. Disposition (`src/shared/lib/wagmi.ts`): injected browser wallets work in **dev/testnet with no projectId**; mobile wallets and the generic WalletConnect entry are **omitted from the wallet list until the id is set** (never a broken connector). robbed.fun mainnet sets `NEXT_PUBLIC_REQUIRE_WALLETCONNECT=true`, and `next.config.ts`/`env.ts` fail fast when the id is missing.
+   - **Robinhood Wallet:** RainbowKit 2.2.11 ships **no `robinhoodWallet`** export. The custom wrapper in `src/shared/lib/wallets/robinhoodWallet.ts` remains as an inactive experiment until an official Robinhood deep link / metadata path is verified. Active production routing uses the generic WalletConnect entry, which is the documented Robinhood Wallet dapp-connection path.
 7. **Runtime verifications at M3 start** — **RESOLVED (both legs).**
    - **OG raster runtime (web-7):** **RESOLVED — SUPERSEDED (2026-07-12).** The question ("`next/og`/satori under Bun self-hosting", later retargeted to workerd/`ImageResponse`) is moot: OG rendering was **relocated to the API** (`GET /v1/og/{address}.png`, native satori + resvg on Bun, R2-cached — commit `9528121`; see section 6). The web renders no OG raster, carries no satori/resvg/`next/og` dependency, and only points `og:image` at the absolute API URL (`src/views/token-detail/model/metadata.ts`, proven by `tests/token-detail-og.test.ts`).
    - **Multicall3 on 4663:** **UNCONFIRMED** — canonical `0xcA11…` deployment on 4663 is not verified. Disposition: `src/shared/lib/chain.ts` **omits** `contracts.multicall3` (commented, with rationale); the SafetyStrip's batch reads use **parallel `readContract` / `useReadContracts` without a multicall aggregator** (viem falls back to individual `eth_call`s when no `multicall3` is configured). No behavior depends on Multicall3; if/when it is confirmed on 4663, adding the address is a pure optimization. Flagged to robbed-architect (the open items) as an infra confirmation item, not a blocker.
@@ -569,7 +580,7 @@ Plus: LP sentence exists **only** as the single exported constant (grep for the 
 ## Definition of done (M3 exit for `apps/web`)
 
 - [ ] Four pages (Discover · Token Detail · Create · Portfolio); each matches its section 5 subsection (checklists in section 3 of this doc); Portfolio has no `collect()` UI and no AA code paths; creator-fee claims render only on the self CREATED tab (D-78)
-- [ ] Chain config: 4663, ETH gas, Blockscout explorer, RPC from env; WETH `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` the only inline literal; all other addresses from generated `addresses.ts`; connectors = injected + WalletConnect + Robinhood Wallet
+- [ ] Chain config: 4663, ETH gas, Blockscout explorer, RPC from env; WETH `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` the only inline literal; all other addresses from generated `addresses.ts`; connectors = injected + mobile wallets + WalletConnect
 - [ ] SafetyStrip (D-57): the must-render floor (graduation progress · live curve reserves; the D-14 LP sentence is **no longer** a required render — D-74) plus ownerless / fixed-supply / metadata-verdict / fee ticks, with the exact sourcing table (live reads live, indexed verdicts indexed); reserve rows never show cached API values. Top Holders table (D-58/D-77): rows `rank · address · label · amount · percent`; `label` = structural role only (creator / curve / vault / LP pool); server-authoritative sort (no client re-rank); the standalone organic-range / flow-quality blocks moved off the public page to the D-54 internal endpoint
 - [ ] LP sentence verbatim from a single constant at every LP-destiny surface; `burned` absent (grep-verified)
 - [ ] Optimistic trade lifecycle per section 4: immediate soft-confirmed render, WS reconciliation, contradiction handling, posted/finalized surfacing — reconciliation demonstrated in Playwright

@@ -495,6 +495,7 @@ services:
       NEXT_PUBLIC_RPC_HTTP: ${NEXT_PUBLIC_RPC_HTTP:-http://localhost:4545}
       NEXT_PUBLIC_RPC_WS: ${NEXT_PUBLIC_RPC_WS:-ws://localhost:4545}
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:-}
+      NEXT_PUBLIC_REQUIRE_WALLETCONNECT: ${NEXT_PUBLIC_REQUIRE_WALLETCONNECT:-}
       NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD: ${NEXT_PUBLIC_LARGE_VALUE_ETH_THRESHOLD:-}
       # DEMO: serve the built-in mock-data fixture (same content as
       # robbed.fun). Override with NEXT_PUBLIC_MOCK_DATA=false for a real-data /

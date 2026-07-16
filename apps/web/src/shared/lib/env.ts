@@ -46,6 +46,11 @@ function required(
   return value;
 }
 
+function publicFlag(name: string): boolean {
+  const value = process.env[name]?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
 export const env = {
   /**
    * Target chain id for THIS build — chain-identity pattern applied to
@@ -124,9 +129,22 @@ export const env = {
   },
   wsUrl: () =>
     required("NEXT_PUBLIC_WS_URL", process.env.NEXT_PUBLIC_WS_URL, "wss://ws.invalid"),
-  /** web-6: absent in dev — injected wallets still work; WC/Robinhood hidden. */
-  walletConnectProjectId: () =>
-    process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "",
+  /**
+   * Mobile wallets need WalletConnect when the browser has no injected
+   * provider. Dev/testnet may omit it; robbed.fun production must not.
+   */
+  walletConnectRequired: () => publicFlag("NEXT_PUBLIC_REQUIRE_WALLETCONNECT"),
+  walletConnectProjectId: () => {
+    const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim() ?? "";
+    if (!projectId && env.walletConnectRequired()) {
+      throw new Error(
+        "[robbed/web] NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is required when " +
+          "NEXT_PUBLIC_REQUIRE_WALLETCONNECT=true. Mobile wallets on robbed.fun need " +
+          "WalletConnect; set a project id from cloud.walletconnect.com before deploying.",
+      );
+    }
+    return projectId;
+  },
   r2PublicBaseUrl: () => process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL ?? "",
   /**
    * E2E harness flag (I-5a). When `"true"`, the wagmi config swaps its real
