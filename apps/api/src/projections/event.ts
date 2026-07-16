@@ -11,10 +11,12 @@
 import type { ConfirmationWatermarksRow, EventFeedRow } from "@robbed/shared";
 import type { EventFeedDbRow } from "../lib/db";
 import { projectConfirmation } from "../lib/confirmation";
+import { rewriteLocalStorageUrl } from "./assets";
 
 export function toEventFeedRow(
   row: EventFeedDbRow,
   wm: Pick<ConfirmationWatermarksRow, "safe_block" | "finalized_block">,
+  publicAssetBaseUrl?: string,
 ): EventFeedRow {
   switch (row.kind) {
     case "launch":
@@ -25,7 +27,9 @@ export function toEventFeedRow(
           name: row.name,
           ticker: row.ticker,
           creator: row.creator,
-          ...(row.image_url ? { imageUrl: row.image_url } : {}),
+          ...(row.image_url
+            ? { imageUrl: rewriteLocalStorageUrl(row.image_url, publicAssetBaseUrl)! }
+            : {}),
           createdAt: row.created_at,
           blockNumber: row.block_number,
           confirmationState: projectConfirmation(row.block_number, wm),

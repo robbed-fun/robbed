@@ -20,6 +20,7 @@ import { Pool } from "pg";
 import { CONTROL_REVERIFY } from "@robbed/shared";
 import { config } from "./runtime";
 import { applyMigrationsAtBoot } from "./offchainMigrations";
+import { startEventCountLogger } from "./eventCountLogger";
 import { createReverifySubscriber, getDefaultPublisher } from "./publish";
 import { startConfirmationTracker } from "./confirmation";
 import { createPgConfirmationStore, createRpcTagFetcher } from "./confirmationStore";
@@ -85,7 +86,9 @@ export async function startSidecars(): Promise<void> {
     max: 5,
     idleTimeoutMillis: 10_000,
   });
+  let stopEventCountLogger: (() => void) | undefined;
   const closeSidecarPool = () => {
+    stopEventCountLogger?.();
     void pool.end().catch(() => {});
   };
   process.once("SIGTERM", closeSidecarPool);
@@ -102,9 +105,11 @@ export async function startSidecars(): Promise<void> {
   // phase-2 views — fresh-DB ordering, PORT-1 root cause). Never throws into
   // indexing; failure logs loudly and returns false.
   await applyMigrationsAtBoot(pool, schema);
+  stopEventCountLogger = startEventCountLogger(pool, schema, { chainId: config.chainId });
 
   if (process.env.INDEXER_SIDECARS === "off") {
     console.log("[indexer sidecar] disabled via INDEXER_SIDECARS=off");
+    stopEventCountLogger();
     await pool.end();
     return;
   }

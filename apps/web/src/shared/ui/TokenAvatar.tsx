@@ -1,4 +1,5 @@
 import { cn } from "@/shared/lib/utils";
+import { normalizeAssetUrl } from "@/shared/lib/assets";
 
 /**
  * Token image. DECISION (robbed-frontend; basis recorded) a plain
@@ -25,7 +26,8 @@ export function TokenAvatar({
 }) {
   const monogram = (ticker || name || "?").slice(0, 3).toUpperCase();
   const dim = { width: size, height: size };
-  if (!imageUrl) {
+  const src = normalizeAssetUrl(imageUrl);
+  if (!src) {
     return (
       <div
         style={dim}
@@ -43,7 +45,7 @@ export function TokenAvatar({
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={imageUrl}
+      src={src}
       alt={name}
       width={size}
       height={size}

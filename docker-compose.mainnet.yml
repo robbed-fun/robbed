@@ -252,19 +252,18 @@ services:
       API_ENV: development
       DATABASE_URL: "postgres://${POSTGRES_USER:-robbed}:${POSTGRES_PASSWORD:-robbed_dev_pw}@postgres:5432/${POSTGRES_DB:-robbed}?options=-c%20search_path%3D${MAINNET_DATABASE_SCHEMA:-robbed_mainnet_ponder}%2Cpublic"
       REDIS_URL: redis://redis:6379
-      # Object storage. DEFAULTS = the local minio (dev/CI); OVERRIDE via config/env/mainnet.env
-      # to a real Cloudflare R2 bucket so uploaded images are publicly reachable from
-      # robbed.fun (the minio default only resolves on the host — localhost:4290 — so
-      # images 404 for any real browser). To use R2, set in config/env/mainnet.env:
+      # Object storage. DEFAULTS = local MinIO for writes, with public reads proxied
+      # through the API asset route so images work from other machines. To use real
+      # Cloudflare R2 directly, set in config/env/mainnet.env:
       #   R2_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
       #   R2_ACCESS_KEY_ID=<R2 S3 API token key>   R2_SECRET_ACCESS_KEY=<secret>
       #   MAINNET_PUBLIC_R2_BASE_URL=https://pub-<hash>.r2.dev   (bucket public-read URL)
-      # imageUrl the API stamps into metadata MUST start with MAINNET_PUBLIC_R2_BASE_URL.
+      # imageUrl the API stamps into metadata MUST start with the configured public base.
       R2_ENDPOINT: ${R2_ENDPOINT:-http://minio:9000}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-${MINIO_ROOT_USER:-robbed}}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-${MINIO_ROOT_PASSWORD:-robbed_dev_secret}}
       R2_BUCKET: ${R2_BUCKET:-robbed-assets}
-      R2_PUBLIC_BASE_URL: ${MAINNET_PUBLIC_R2_BASE_URL:-http://localhost:${MINIO_PORT:-4290}/${R2_BUCKET:-robbed-assets}}
+      R2_PUBLIC_BASE_URL: ${MAINNET_PUBLIC_R2_BASE_URL:-${MAINNET_PUBLIC_API_BASE_URL:-http://localhost:${API_PORT:-4201}}/v1/assets}
       MODERATION_ALLOW_STUBS: "true"
       # Public-/v1 CORS (api.md) the public web origin + local browsing. Stays
       # correct when robbed.fun flips to the CF Worker origin (same hostname).
@@ -361,7 +360,8 @@ services:
         # docker-compose.yml (fresh anvil deploy each up). ONE-TIME exception: the first
         # `start` boot after this switch (previous app was `dev`, so Ponder drops+recreates
         # once) and any boot after a ponder.schema.ts/handler change (new build_id → Ponder
-        # REFUSES to reuse the schema; drop it or set a new MAINNET_DATABASE_SCHEMA) each cost a
+        # REFUSES to reuse the schema; run `pnpm run dev:mainnet:reset-indexer` or set a new
+        # MAINNET_DATABASE_SCHEMA) each cost a
         # single re-index — fast, because the finalized-block RPC cache in the `ponder_sync`
         # schema survives and is reused (no re-fetch from the rate-limited public RPC; this
         # is exactly how the interim re-sync finished in minutes, not START_BLOCK-to-head).
@@ -387,17 +387,15 @@ services:
       # Sidecars must start on every process boot. Ponder crash recovery does
       # not replay :setup, so the handler module eagerly boots them when this is set.
       INDEXER_SIDECAR_BOOT: eager
-      # MIRROR of docker-compose.yml — split-horizon metadata fetch. This
-      # staging stack still uses minio, so the stored metadata_uri is the BROWSER
-      # base (host-mapped localhost:${MINIO_PORT}), unreachable from inside this
-      # container. The verifier fetches content-addressed objects from the
-      # internal base instead; the stored/displayed URL stays the public value.
-      # R2_METADATA_BASE_URL is the internal fallback when a row carries no uri.
-      # (When a real R2/CDN replaces minio, unset the rewrite — the CDN base is
-      # reachable from everywhere; R2_METADATA_BASE_URL becomes the R2 base.)
-      R2_METADATA_BASE_URL: http://minio:9000/${R2_BUCKET:-robbed-assets}/metadata
-      METADATA_FETCH_REWRITE_FROM: http://localhost:${MINIO_PORT:-4290}/${R2_BUCKET:-robbed-assets}
-      METADATA_FETCH_REWRITE_TO: http://minio:9000/${R2_BUCKET:-robbed-assets}
+      INDEXER_EVENT_COUNTS_LOG_MS: ${INDEXER_EVENT_COUNTS_LOG_MS:-30000}
+      INDEXER_PONDER_RAW_LOG_BLOCKS: ${INDEXER_PONDER_RAW_LOG_BLOCKS:-6}
+      INDEXER_PONDER_RAW_LOG_MAX_ROWS: ${INDEXER_PONDER_RAW_LOG_MAX_ROWS:-120}
+      # Split-horizon metadata fetch. Stored metadata_uri is browser-visible
+      # (API assets or real R2 CDN); the indexer fetches through service DNS to
+      # avoid a Cloudflare round trip and to keep local MinIO private.
+      R2_METADATA_BASE_URL: http://api:3001/v1/assets/metadata
+      METADATA_FETCH_REWRITE_FROM: ${MAINNET_PUBLIC_R2_BASE_URL:-${MAINNET_PUBLIC_API_BASE_URL:-http://localhost:${API_PORT:-4201}}/v1/assets}
+      METADATA_FETCH_REWRITE_TO: http://api:3001/v1/assets
     ports:
       # 4229, NOT the 4269 pattern-default: the dev stack already binds 4269 for its
       # Ponder UI and all three stacks must be able to run simultaneously.
@@ -500,14 +498,13 @@ services:
       # reachable from EXTERNAL browsers, so the MAINNET_PUBLIC_* env (config/env/mainnet.env) overrides
       # the host-mapped localhost defaults. The public URLs also work for local browsing;
       # unset ⇒ localhost defaults, and port re-bases still flow via the nested ${*_PORT}.
-      # R2 stays on the localhost default until minio gets a tunnel hostname or real R2
-      # (same known limitation as the testnet stack — docker.md 'Public exposure').
+      # R2 defaults to the API asset proxy, so MinIO can stay private.
       NEXT_PUBLIC_API_BASE_URL: ${MAINNET_PUBLIC_API_BASE_URL:-http://localhost:${API_PORT:-4201}}
       # MIRROR of the split-horizon API base: SSR (in-container) uses the service-DNS
       # api:3001; the browser keeps the public/host-mapped NEXT_PUBLIC_API_BASE_URL.
       API_BASE_URL_INTERNAL: http://api:3001
       NEXT_PUBLIC_WS_URL: ${MAINNET_PUBLIC_WS_URL:-ws://localhost:${WS_PORT:-4202}}
-      NEXT_PUBLIC_R2_PUBLIC_BASE_URL: ${MAINNET_PUBLIC_R2_BASE_URL:-http://localhost:${MINIO_PORT:-4290}/${R2_BUCKET:-robbed-assets}}
+      NEXT_PUBLIC_R2_PUBLIC_BASE_URL: ${MAINNET_PUBLIC_R2_BASE_URL:-${MAINNET_PUBLIC_API_BASE_URL:-http://localhost:${API_PORT:-4201}}/v1/assets}
       NEXT_PUBLIC_RPC_HTTP: ${MAINNET_RPC_URL:?MAINNET_RPC_URL is required — official Robinhood mainnet RPC (https://rpc.mainnet.chain.robinhood.com; CLAUDE.md chain facts). See docs/developers/runbooks/docker.md 'Mainnet stack'.}
       # OPTIONAL (see header): empty tolerated by the web env layer (apps/web/src/shared/lib/
       # env.ts `rpcWs: … ?? ""`) — set the Alchemy wss when a key exists.

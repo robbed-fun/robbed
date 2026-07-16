@@ -49,16 +49,13 @@ export function createPgFlowStore(pool: Pool, schema: string): FlowStore {
       const client = await pool.connect();
       try {
         await client.query(`SET search_path TO ${ponderSearchPath(schema)}`);
-        const [firstInbound, firstBuys, programmatic, multiPoolExits, tradeAggs, clusterVol24h, holders] =
-          await Promise.all([
-            q(client, `SELECT address, funder, value_wei, funded_at_sec FROM flow_first_inbound`),
-            q(client, `SELECT token, trader, first_buy_at_sec, token_created_at_sec FROM flow_first_buy`),
-            q(client, `SELECT token, address, executor, recipient FROM flow_programmatic`),
-            q(client, `SELECT address, block, pool_count FROM flow_multipool_exit`),
-            q(client, `SELECT token, address, buy_eth_wei, sell_eth_wei, fee_wei FROM flow_trade_agg`),
-            q(client, `SELECT token, address, vol_24h_wei FROM flow_cluster_vol_24h`),
-            q(client, `SELECT token, holder FROM flow_holders`),
-          ]);
+        const firstInbound = await q(client, `SELECT address, funder, value_wei, funded_at_sec FROM flow_first_inbound`);
+        const firstBuys = await q(client, `SELECT token, trader, first_buy_at_sec, token_created_at_sec FROM flow_first_buy`);
+        const programmatic = await q(client, `SELECT token, address, executor, recipient FROM flow_programmatic`);
+        const multiPoolExits = await q(client, `SELECT address, block, pool_count FROM flow_multipool_exit`);
+        const tradeAggs = await q(client, `SELECT token, address, buy_eth_wei, sell_eth_wei, fee_wei FROM flow_trade_agg`);
+        const clusterVol24h = await q(client, `SELECT token, address, vol_24h_wei FROM flow_cluster_vol_24h`);
+        const holders = await q(client, `SELECT token, holder FROM flow_holders`);
         return {
           firstInbound: firstInbound.map((r) => ({
             address: r.address,

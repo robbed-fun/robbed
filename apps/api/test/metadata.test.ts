@@ -13,7 +13,9 @@ const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9
 async function uploadImage(app: ReturnType<typeof createApp>) {
   const fd = new FormData();
   fd.append("image", new File([PNG], "x.png", { type: "image/png" }));
-  const res = await app.request(new Request("http://x/v1/uploads/image", { method: "POST", body: fd }));
+  const res = await app.request(
+    new Request("http://x/v1/uploads/image", { method: "POST", body: fd }),
+  );
   return (await readJson(res)).data as { imageUrl: string; imageHash: string };
 }
 
@@ -34,17 +36,44 @@ describe("POST /v1/metadata", () => {
     expect(res.status).toBe(200);
     const data = (await readJson(res)).data;
 
-    const expectedDoc = { version: 1, name: "Test", ticker: "TST", imageUrl: img.imageUrl, imageHash: img.imageHash };
+    const expectedDoc = {
+      version: 1,
+      name: "Test",
+      ticker: "TST",
+      imageUrl: img.imageUrl,
+      imageHash: img.imageHash,
+    };
     expect(data.metadataHash).toBe(metadataHash(expectedDoc));
     expect(data.canonicalJson).toBe(canonicalizeJson(expectedDoc));
     expect(data.metadataUri).toContain(data.metadataHash.slice(2));
+  });
+
+  it("serves stored metadata through the public /v1/assets proxy", async () => {
+    const app = createApp(makeTestDeps({ storage: makeFakeStorage("https://api.test/v1/assets") }));
+    const img = await uploadImage(app);
+    const created = await app.request(
+      metaReq({ name: "Test", ticker: "TST", imageUrl: img.imageUrl, imageHash: img.imageHash }),
+    );
+    const data = (await readJson(created)).data;
+    const file = `${data.metadataHash.slice(2)}.json`;
+
+    const res = await app.request(`/v1/assets/metadata/${file}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("application/json");
+    expect(await res.text()).toBe(data.canonicalJson);
   });
 
   it("rejects a name over 32 UTF-8 bytes", async () => {
     const app = createApp(makeTestDeps({ storage: makeFakeStorage() }));
     const img = await uploadImage(app);
     const res = await app.request(
-      metaReq({ name: "x".repeat(33), ticker: "TST", imageUrl: img.imageUrl, imageHash: img.imageHash }),
+      metaReq({
+        name: "x".repeat(33),
+        ticker: "TST",
+        imageUrl: img.imageUrl,
+        imageHash: img.imageHash,
+      }),
     );
     expect(res.status).toBe(400);
     expect((await readJson(res)).error.code).toBe("invalid_request");
@@ -55,7 +84,13 @@ describe("POST /v1/metadata", () => {
     const img = await uploadImage(app);
     for (const website of ["javascript:alert(1)", "http://insecure.example"]) {
       const res = await app.request(
-        metaReq({ name: "Ok", ticker: "OK", links: { website }, imageUrl: img.imageUrl, imageHash: img.imageHash }),
+        metaReq({
+          name: "Ok",
+          ticker: "OK",
+          links: { website },
+          imageUrl: img.imageUrl,
+          imageHash: img.imageHash,
+        }),
       );
       expect(res.status).toBe(400);
     }

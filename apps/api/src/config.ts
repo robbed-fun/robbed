@@ -122,6 +122,24 @@ export interface Config extends RawConfig {
 
 /** Dev/test fallback: the compose web port (4000) + bare `next dev` (3000). */
 const DEV_CORS_DEFAULT = "http://localhost:4000,http://localhost:3000";
+const LOCAL_PUBLIC_BASE_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"]);
+
+function isPrivateIpv4(hostname: string): boolean {
+  const parts = hostname.split(".").map((p) => Number(p));
+  if (parts.length !== 4 || parts.some((p) => !Number.isInteger(p) || p < 0 || p > 255)) {
+    return false;
+  }
+  const a = parts[0]!;
+  const b = parts[1]!;
+  return (
+    a === 10 ||
+    a === 127 ||
+    a === 0 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+}
 
 let cached: Config | null = null;
 
@@ -142,6 +160,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // Fail-loud (api.md) a prod API without an explicit origin list would
     // either silently block every browser fetch or tempt a `*` hack. Never default.
     throw new Error("CORS_ALLOWED_ORIGINS required in production (api.md; env-inventory)");
+  }
+  if (raw.API_ENV === "production" && !isPublicAssetBase(raw.R2_PUBLIC_BASE_URL)) {
+    throw new Error(
+      "R2_PUBLIC_BASE_URL must be a public HTTPS URL in production (use an R2 public/custom domain or the API /v1/assets proxy)",
+    );
   }
   const corsAllowedOrigins = new Set(
     (corsRaw || DEV_CORS_DEFAULT)
@@ -172,6 +195,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     creatorVaultAddress: raw.CREATOR_VAULT_ADDRESS?.trim().toLowerCase() || undefined,
     wethAddress: raw.WETH_ADDRESS?.trim().toLowerCase() || undefined,
   };
+}
+
+function isPublicAssetBase(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") return false;
+  const hostname = url.hostname.toLowerCase();
+  return !LOCAL_PUBLIC_BASE_HOSTS.has(hostname) && !isPrivateIpv4(hostname);
 }
 
 export function getConfig(): Config {

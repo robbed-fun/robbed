@@ -2,6 +2,7 @@ import type { TokenCard } from "@robbed/shared";
 import Link from "next/link";
 
 import { Delta, GraduationProgress, MonoText } from "@/shared/ui";
+import { normalizeAssetUrl } from "@/shared/lib/assets";
 import { cn } from "@/shared/lib/utils";
 
 /**
@@ -61,6 +62,7 @@ function TrendingCard({
   rank: number;
   "aria-hidden"?: boolean;
 }) {
+  const imageUrl = normalizeAssetUrl(token.imageUrl);
   return (
     <Link
       href={`/t/${token.address}`}
@@ -69,10 +71,10 @@ function TrendingCard({
       tabIndex={ariaHidden ? -1 : undefined}
       className="group relative mr-3 h-[168px] w-[300px] shrink-0 overflow-hidden bg-surface-2"
     >
-      {token.imageUrl ? (
+      {imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- user-supplied R2 origins are env-gated for next/image (see TokenAvatar)
         <img
-          src={token.imageUrl}
+          src={imageUrl}
           alt={token.name}
           width={300}
           height={168}

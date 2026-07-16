@@ -369,6 +369,18 @@ source of truth), `MAINNET_INDEXER_CHAIN_ID` (optional — indexer D-55 selectio
 (browser-visible URL overrides, same seam as the testnet stack). Scripts:
 `dev:mainnet` / `:d` / `:down` / `:reset` / `:logs` / `:ps`.
 
+If `ponder start` exits with `Schema "<schema>" was previously used by a different Ponder app`,
+keep the Postgres volume and reset only the Ponder app schema:
+
+```bash
+pnpm run dev:mainnet:reset-indexer
+pnpm run dev:mainnet
+```
+
+For testnet, use `pnpm run dev:testnet:reset-indexer`. This preserves `public` offchain/API
+tables and the `ponder_sync` RPC cache; it drops only `MAINNET_DATABASE_SCHEMA` /
+`TESTNET_DATABASE_SCHEMA`.
+
 **⚠ INTERIM (2026-07-12): `robbed.fun` must be alive before a real 4663 deploy exists, so this
 stack currently runs with TESTNET (46630) values** ("later we will replace testnet by mainnet"):
 root `.env` sets `MAINNET_RPC_URL=https://rpc.testnet.chain.robinhood.com`,

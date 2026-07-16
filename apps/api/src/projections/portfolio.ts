@@ -38,17 +38,18 @@ import {
 import type { PortfolioHoldingRow } from "../lib/db";
 import type { EthUsdSnapshot } from "../lib/usd";
 import { usdFromWei } from "../lib/usd";
+import { rewriteLocalStorageUrl } from "./assets";
 import { resolveSnapshot, statusFrom } from "./common";
 
 const WEI_PER_ETH = 10n ** 18n;
 
 /** Compact token reference for portfolio rows (avatar + ticker + venue pill). */
-function toTokenRef(row: PortfolioHoldingRow): TokenRef {
+function toTokenRef(row: PortfolioHoldingRow, publicAssetBaseUrl?: string): TokenRef {
   return {
     address: row.token_address,
     name: row.name,
     ticker: row.ticker,
-    imageUrl: row.image_url,
+    imageUrl: rewriteLocalStorageUrl(row.image_url, publicAssetBaseUrl),
     graduated: row.graduated,
     status: statusFrom(row.graduated, row.real_eth_reserves, row.graduation_eth),
   };
@@ -103,11 +104,12 @@ export function toPortfolioHolding(
   row: PortfolioHoldingRow,
   ethUsd: EthUsdSnapshot | null,
   nowMs: number = Date.now(),
+  publicAssetBaseUrl?: string,
 ): PortfolioHolding {
   const snap = resolveSnapshot(ethUsd);
   const { priceEth, valueEth } = priceHolding(row);
   return {
-    token: toTokenRef(row),
+    token: toTokenRef(row, publicAssetBaseUrl),
     balance: row.balance,
     priceEth,
     valueEth: valueEth == null ? null : valueEth.toString(),
@@ -147,7 +149,11 @@ function combinePnl(
     if (u.confidence === "estimated") estimated = true;
   }
   if (!any) return null;
-  return { low: low.toString(), high: high.toString(), confidence: estimated ? "estimated" : "exact" };
+  return {
+    low: low.toString(),
+    high: high.toString(),
+    confidence: estimated ? "estimated" : "exact",
+  };
 }
 
 export function toPortfolioSummary(input: {

@@ -58,7 +58,11 @@ export function adminRoutes(deps: AppDeps) {
     const { message, signature } = await parseJson(loginBodySchema, c);
     const login = await verifySiweLogin(
       { message, signature: signature as `0x${string}` },
-      { redis: deps.redis, allowlist: deps.config.adminAllowlist, nowSec: Math.floor(deps.now() / 1000) },
+      {
+        redis: deps.redis,
+        allowlist: deps.config.adminAllowlist,
+        nowSec: Math.floor(deps.now() / 1000),
+      },
     );
     const { cookieValue, csrfToken } = issueSession(
       deps.config.SESSION_SECRET,
@@ -96,7 +100,9 @@ export function adminRoutes(deps: AppDeps) {
     });
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
-    const items = page.map((r) => buildQueueItem(r.address, r, r.m));
+    const items = page.map((r) =>
+      buildQueueItem(r.address, r, r.m, deps.config.R2_PUBLIC_BASE_URL),
+    );
     const last = page[page.length - 1];
     const nextCursor =
       hasMore && last
@@ -124,7 +130,12 @@ export function adminRoutes(deps: AppDeps) {
       reason: body.reason,
     });
     const token = await deps.db.getTokenListRow(tokenAddress);
-    return ok(c, moderationQueueItemSchema.parse(buildQueueItem(tokenAddress, token, updated)));
+    return ok(
+      c,
+      moderationQueueItemSchema.parse(
+        buildQueueItem(tokenAddress, token, updated, deps.config.R2_PUBLIC_BASE_URL),
+      ),
+    );
   });
 
   app.post("/v1/admin/moderation/:tokenAddress/impersonation", auth, csrf, async (c) => {
@@ -147,7 +158,12 @@ export function adminRoutes(deps: AppDeps) {
       reason: body.reason,
     });
     const token = await deps.db.getTokenListRow(tokenAddress);
-    return ok(c, moderationQueueItemSchema.parse(buildQueueItem(tokenAddress, token, updated)));
+    return ok(
+      c,
+      moderationQueueItemSchema.parse(
+        buildQueueItem(tokenAddress, token, updated, deps.config.R2_PUBLIC_BASE_URL),
+      ),
+    );
   });
 
   app.post("/v1/admin/metadata/:tokenAddress/reverify", auth, csrf, async (c) => {

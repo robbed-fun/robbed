@@ -17,6 +17,8 @@ export interface Storage {
   metadataUrl(hash: string): string;
   putImage(keccak: string, bytes: Uint8Array): Promise<void>;
   putMetadata(hash: string, json: string): Promise<void>;
+  readImage(keccak: string): Promise<Uint8Array | null>;
+  readMetadata(hash: string): Promise<Uint8Array | null>;
   imageExists(keccak: string): Promise<boolean>;
   // ── OG card cache (api.md OG endpoint) ──────────────────────────────────
   ogKey(address: string, version: string): string;
@@ -42,9 +44,11 @@ function stripHashPrefix(h: string): string {
 
 export function createBunStorage(cfg: StorageConfig): Storage {
   // Bun global; typed loosely to avoid a hard compile dep on @types/bun S3.
-  const { S3Client } = (globalThis as unknown as {
-    Bun: { S3Client: new (o: unknown) => BunS3Client };
-  }).Bun;
+  const { S3Client } = (
+    globalThis as unknown as {
+      Bun: { S3Client: new (o: unknown) => BunS3Client };
+    }
+  ).Bun;
   const client = new S3Client({
     endpoint: cfg.endpoint,
     region: cfg.region,
@@ -58,6 +62,15 @@ export function createBunStorage(cfg: StorageConfig): Storage {
   const metadataKey = (hash: string) => `metadata/${stripHashPrefix(hash)}.json`;
   const ogKey = (address: string, version: string) =>
     `og/${stripHashPrefix(address).toLowerCase()}/${version}.png`;
+  async function readKey(key: string): Promise<Uint8Array | null> {
+    try {
+      const file = client.file(key);
+      if (!(await file.exists())) return null;
+      return new Uint8Array(await file.arrayBuffer());
+    } catch {
+      return null;
+    }
+  }
 
   return {
     imageKey,
@@ -70,6 +83,8 @@ export function createBunStorage(cfg: StorageConfig): Storage {
     async putMetadata(hash, json) {
       await client.file(metadataKey(hash)).write(json, { type: "application/json" });
     },
+    readImage: (keccak) => readKey(imageKey(keccak)),
+    readMetadata: (hash) => readKey(metadataKey(hash)),
     async imageExists(keccak) {
       return client.file(imageKey(keccak)).exists();
     },
@@ -80,13 +95,7 @@ export function createBunStorage(cfg: StorageConfig): Storage {
     },
     async readOg(address, version) {
       // Bun's S3 `arrayBuffer()` throws on a missing key → treat as a cache miss.
-      try {
-        const file = client.file(ogKey(address, version));
-        if (!(await file.exists())) return null;
-        return new Uint8Array(await file.arrayBuffer());
-      } catch {
-        return null;
-      }
+      return readKey(ogKey(address, version));
     },
     async ping() {
       try {

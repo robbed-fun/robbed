@@ -1,5 +1,6 @@
 import type { TokenDetail } from "@robbed/shared";
 
+import { AddTokenToWalletButton } from "@/features/add-token-to-wallet";
 import { TokenAddressLink } from "@/entities/token";
 import {
   CopyAddressButton,
@@ -58,6 +59,7 @@ export function TokenHeader({ token, holderCount }: { token: TokenDetail; holder
           <MonoText tone="faint" size="xs" className="flex items-center truncate">
             <TokenAddressLink address={token.address} kind="token" tone="faint" />
             <CopyAddressButton value={token.address} className="ml-1" />
+            <AddTokenToWalletButton token={token} className="ml-1" />
           </MonoText>
         </div>
       </div>

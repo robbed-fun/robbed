@@ -16,8 +16,9 @@ export function toTokenDetail(
   ethUsd: EthUsdSnapshot | null,
   nowMs: number = Date.now(),
   anchor?: Change24hAnchor,
+  publicAssetBaseUrl?: string,
 ): TokenDetail {
-  const card = toTokenCard(row, wm, ethUsd, nowMs, anchor);
+  const card = toTokenCard(row, wm, ethUsd, nowMs, anchor, publicAssetBaseUrl);
   return {
     ...card,
     description: row.description,
@@ -52,9 +53,7 @@ export function toTokenDetail(
     moderation: {
       visibility: row.m_visibility ?? "visible",
       impersonationFlag: row.m_impersonation_flag ?? false,
-      ...(row.m_impersonation_ticker
-        ? { impersonationTicker: row.m_impersonation_ticker }
-        : {}),
+      ...(row.m_impersonation_ticker ? { impersonationTicker: row.m_impersonation_ticker } : {}),
     },
     // Restores the TokenHeader "Holders" stat dropped by the /holders
     // {items,nextCursor} migration (`tokens.holder_count`, indexer.md).

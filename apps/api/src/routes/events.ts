@@ -43,7 +43,7 @@ export function eventRoutes(deps: AppDeps) {
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     const ctx = await loadProjectionContext(deps);
-    const events = page.map((r) => toEventFeedRow(r, ctx.wm));
+    const events = page.map((r) => toEventFeedRow(r, ctx.wm, deps.config.R2_PUBLIC_BASE_URL));
     const last = page[page.length - 1];
     const nextCursor =
       hasMore && last

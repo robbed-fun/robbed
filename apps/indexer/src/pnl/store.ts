@@ -30,17 +30,15 @@ export function createPgPnlStore(pool: Pool, schema: string): PnlStore {
       try {
         // The pnl_* views reference the Ponder tables → live in the Ponder schema.
         await client.query(`SET search_path TO ${ponderSearchPath(schema)}`);
-        const [legs, activity, seen, created] = await Promise.all([
-          q(
-            client,
-            `SELECT address, token, eth_in_all, tokens_bought_all, eth_out_all, tokens_sold_all,
-                    eth_in_curve, tokens_bought_curve, eth_out_curve, tokens_sold_curve, has_v3
-               FROM pnl_trade_legs`,
-          ),
-          q(client, `SELECT address, trade_count, first_trade_at, last_trade_at FROM pnl_address_activity`),
-          q(client, `SELECT address, first_seen_at, last_seen_at FROM pnl_address_seen`),
-          q(client, `SELECT address, tokens_created FROM pnl_tokens_created`),
-        ]);
+        const legs = await q(
+          client,
+          `SELECT address, token, eth_in_all, tokens_bought_all, eth_out_all, tokens_sold_all,
+                  eth_in_curve, tokens_bought_curve, eth_out_curve, tokens_sold_curve, has_v3
+             FROM pnl_trade_legs`,
+        );
+        const activity = await q(client, `SELECT address, trade_count, first_trade_at, last_trade_at FROM pnl_address_activity`);
+        const seen = await q(client, `SELECT address, first_seen_at, last_seen_at FROM pnl_address_seen`);
+        const created = await q(client, `SELECT address, tokens_created FROM pnl_tokens_created`);
         return {
           legs: legs.map((r) => ({
             address: r.address,

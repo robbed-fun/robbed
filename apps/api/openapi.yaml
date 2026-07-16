@@ -119,6 +119,63 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /v1/assets/images/{file}:
+    get:
+      tags: [launch]
+      operationId: getStoredImageAsset
+      summary: Serve a stored content-addressed token image
+      description: |
+        Public proxy over the configured object store for local compose stacks where MinIO is
+        private. `file` must be `{keccak256}.webp`; arbitrary bucket paths are not accepted.
+      parameters:
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^(0x)?[0-9a-fA-F]{64}\\.webp$"
+      responses:
+        "200":
+          description: Re-encoded WebP image
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /v1/assets/metadata/{file}:
+    get:
+      tags: [launch]
+      operationId: getStoredMetadataAsset
+      summary: Serve a stored content-addressed metadata JSON document
+      description: |
+        Public proxy over the configured object store for local compose stacks where MinIO is
+        private. `file` must be `{metadataHash}.json`; arbitrary bucket paths are not accepted.
+      parameters:
+        - name: file
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^(0x)?[0-9a-fA-F]{64}\\.json$"
+      responses:
+        "200":
+          description: Canonical metadata JSON
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
   /v1/search:
     get:
       tags: [search]

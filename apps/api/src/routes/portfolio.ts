@@ -84,7 +84,9 @@ export function portfolioRoutes(deps: AppDeps) {
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     const ctx = await loadProjectionContext(deps);
-    const holdings = page.map((r) => toPortfolioHolding(r, ctx.ethUsd, deps.now()));
+    const holdings = page.map((r) =>
+      toPortfolioHolding(r, ctx.ethUsd, deps.now(), deps.config.R2_PUBLIC_BASE_URL),
+    );
     const last = page[page.length - 1];
     const nextCursor =
       hasMore && last
@@ -134,10 +136,20 @@ export function portfolioRoutes(deps: AppDeps) {
     const page = hasMore ? rows.slice(0, limit) : rows;
     const [ctx, anchors] = await Promise.all([
       loadProjectionContext(deps),
-      deps.db.getChange24hAnchors(page.map((r) => r.address), nowSec),
+      deps.db.getChange24hAnchors(
+        page.map((r) => r.address),
+        nowSec,
+      ),
     ]);
     const tokens = page.map((r) =>
-      toTokenCard(r, ctx.wm, ctx.ethUsd, deps.now(), anchors.get(r.address)),
+      toTokenCard(
+        r,
+        ctx.wm,
+        ctx.ethUsd,
+        deps.now(),
+        anchors.get(r.address),
+        deps.config.R2_PUBLIC_BASE_URL,
+      ),
     );
     const last = page[page.length - 1];
     const nextCursor =

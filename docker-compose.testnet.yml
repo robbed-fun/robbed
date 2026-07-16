@@ -238,7 +238,9 @@ services:
       R2_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-robbed}
       R2_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-robbed_dev_secret}
       R2_BUCKET: ${R2_BUCKET:-robbed-assets}
-      R2_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-4190}/${R2_BUCKET:-robbed-assets}
+      # Public reads default to the API asset proxy, so local MinIO stays private
+      # and token images still work from other machines.
+      R2_PUBLIC_BASE_URL: ${TESTNET_PUBLIC_R2_BASE_URL:-${TESTNET_PUBLIC_API_BASE_URL:-http://localhost:${API_PORT:-4101}}/v1/assets}
       # Moderation vendors are a open item — stubs stay allowed outside production.
       MODERATION_ALLOW_STUBS: "true"
       # Public-/v1 CORS (api.md) the public tunnel web origin + local browsing.
@@ -335,7 +337,8 @@ services:
         # up). ONE-TIME exception: the first `start` boot after this switch (previous app
         # was `dev`, so Ponder drops+recreates once) and any boot after a
         # ponder.schema.ts/handler change (new build_id → Ponder REFUSES to reuse the
-        # schema and you must drop it or set a new TESTNET_DATABASE_SCHEMA) each cost a single
+        # schema and you must run `pnpm run dev:testnet:reset-indexer` or set a new
+        # TESTNET_DATABASE_SCHEMA) each cost a single
         # re-index — fast, because the finalized-block RPC cache in the `ponder_sync`
         # schema survives and is reused (no re-fetch from the rate-limited RPC). Steady
         # state thereafter = resume. Do NOT revert to `ponder dev`. See indexer.md.
@@ -360,15 +363,15 @@ services:
       # Sidecars must start on every process boot. Ponder crash recovery does
       # not replay :setup, so the handler module eagerly boots them when this is set.
       INDEXER_SIDECAR_BOOT: eager
-      # MIRROR of docker-compose.yml — split-horizon metadata fetch. This
-      # staging stack still uses minio, so the stored metadata_uri is the BROWSER
-      # base (host-mapped localhost:${MINIO_PORT}), unreachable from inside this
-      # container. The verifier fetches content-addressed objects from the
-      # internal base instead; the stored/displayed URL stays the public value.
-      # R2_METADATA_BASE_URL is the internal fallback when a row carries no uri.
-      R2_METADATA_BASE_URL: http://minio:9000/${R2_BUCKET:-robbed-assets}/metadata
-      METADATA_FETCH_REWRITE_FROM: http://localhost:${MINIO_PORT:-4190}/${R2_BUCKET:-robbed-assets}
-      METADATA_FETCH_REWRITE_TO: http://minio:9000/${R2_BUCKET:-robbed-assets}
+      INDEXER_EVENT_COUNTS_LOG_MS: ${INDEXER_EVENT_COUNTS_LOG_MS:-30000}
+      INDEXER_PONDER_RAW_LOG_BLOCKS: ${INDEXER_PONDER_RAW_LOG_BLOCKS:-6}
+      INDEXER_PONDER_RAW_LOG_MAX_ROWS: ${INDEXER_PONDER_RAW_LOG_MAX_ROWS:-120}
+      # Split-horizon metadata fetch. Stored metadata_uri is browser-visible
+      # (API assets or real R2 CDN); the indexer fetches through service DNS to
+      # avoid a Cloudflare round trip and to keep local MinIO private.
+      R2_METADATA_BASE_URL: http://api:3001/v1/assets/metadata
+      METADATA_FETCH_REWRITE_FROM: ${TESTNET_PUBLIC_R2_BASE_URL:-${TESTNET_PUBLIC_API_BASE_URL:-http://localhost:${API_PORT:-4101}}/v1/assets}
+      METADATA_FETCH_REWRITE_TO: http://api:3001/v1/assets
     ports:
       - "${PONDER_PORT:-4169}:42069"
       - "${METRICS_HOST_PORT:-4164}:9464"
@@ -472,14 +475,13 @@ services:
       # reachable from EXTERNAL browsers, so the TESTNET_PUBLIC_* env (root .env) overrides
       # the host-mapped localhost defaults. The public URLs also work for local browsing;
       # unset ⇒ localhost defaults, and port re-bases still flow via the nested ${*_PORT}.
-      # R2 stays on the localhost default until minio gets a tunnel hostname or real R2
-      # (known limitation — external visitors see broken images; docker.md 'Testnet stack').
+      # R2 defaults to the API asset proxy, so MinIO can stay private.
       NEXT_PUBLIC_API_BASE_URL: ${TESTNET_PUBLIC_API_BASE_URL:-http://localhost:${API_PORT:-4101}}
       # MIRROR of docker-compose.yml split-horizon API base: SSR (in-container) uses the
       # service-DNS api:3001; the browser keeps the host-mapped NEXT_PUBLIC_API_BASE_URL.
       API_BASE_URL_INTERNAL: http://api:3001
       NEXT_PUBLIC_WS_URL: ${TESTNET_PUBLIC_WS_URL:-ws://localhost:${WS_PORT:-4102}}
-      NEXT_PUBLIC_R2_PUBLIC_BASE_URL: ${TESTNET_PUBLIC_R2_BASE_URL:-http://localhost:${MINIO_PORT:-4190}/${R2_BUCKET:-robbed-assets}}
+      NEXT_PUBLIC_R2_PUBLIC_BASE_URL: ${TESTNET_PUBLIC_R2_BASE_URL:-${TESTNET_PUBLIC_API_BASE_URL:-http://localhost:${API_PORT:-4101}}/v1/assets}
       NEXT_PUBLIC_RPC_HTTP: ${TESTNET_RPC_URL:?TESTNET_RPC_URL is required — official Robinhood testnet RPC (/ Phase T; never invented). See docs/developers/runbooks/docker.md 'Testnet stack'.}
       # OPTIONAL (see header): empty tolerated by the web env layer (apps/web/src/shared/lib/
       # env.ts `rpcWs: … ?? ""`, verified 2026-07-12) — set the Alchemy wss when a key exists.

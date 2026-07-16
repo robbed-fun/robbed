@@ -84,4 +84,23 @@ describe("POST /v1/uploads/image hostile fixtures", () => {
       expect((await readJson(res)).error).toBeNull();
     }
   });
+
+  it("serves stored images through the public /v1/assets proxy", async () => {
+    const app = createApp(makeTestDeps({ storage: makeFakeStorage("https://api.test/v1/assets") }));
+    const uploaded = (await readJson(await app.request(uploadReq(PNG)))).data;
+    const file = `${uploaded.imageHash.slice(2)}.webp`;
+
+    const res = await app.request(`/v1/assets/images/${file}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/webp");
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(PNG);
+  });
+
+  it("404s non-content-addressed asset paths", async () => {
+    const app = createApp(makeTestDeps());
+    const res = await app.request("/v1/assets/images/../../secret.webp");
+    expect(res.status).toBe(404);
+    expect((await readJson(res)).error.code).toBe("not_found");
+  });
 });

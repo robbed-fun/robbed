@@ -52,10 +52,20 @@ export function tokenRoutes(deps: AppDeps) {
     const page = hasMore ? rows.slice(0, limit) : rows;
     const [ctx, anchors] = await Promise.all([
       loadProjectionContext(deps),
-      deps.db.getChange24hAnchors(page.map((r) => r.address), nowSec),
+      deps.db.getChange24hAnchors(
+        page.map((r) => r.address),
+        nowSec,
+      ),
     ]);
     const tokens = page.map((r) =>
-      toTokenCard(r, ctx.wm, ctx.ethUsd, deps.now(), anchors.get(r.address)),
+      toTokenCard(
+        r,
+        ctx.wm,
+        ctx.ethUsd,
+        deps.now(),
+        anchors.get(r.address),
+        deps.config.R2_PUBLIC_BASE_URL,
+      ),
     );
     const last = page[page.length - 1];
     const nextCursor =
@@ -71,20 +81,21 @@ export function tokenRoutes(deps: AppDeps) {
   // ── King of the Hill ──────────────────────────────────────────────────────
   app.get("/v1/tokens/king-of-the-hill", async (c) => {
     const nowSec = Math.floor(deps.now() / 1000);
-    const [row, ctx] = await Promise.all([
-      deps.db.kingOfTheHill(),
-      loadProjectionContext(deps),
-    ]);
+    const [row, ctx] = await Promise.all([deps.db.kingOfTheHill(), loadProjectionContext(deps)]);
     const anchor = row
       ? (await deps.db.getChange24hAnchors([row.address], nowSec)).get(row.address)
       : undefined;
-    const token = row ? toTokenCard(row, ctx.wm, ctx.ethUsd, deps.now(), anchor) : null;
+    const token = row
+      ? toTokenCard(row, ctx.wm, ctx.ethUsd, deps.now(), anchor, deps.config.R2_PUBLIC_BASE_URL)
+      : null;
     return ok(c, kingOfTheHillResponseSchema.parse({ token }));
   });
 
   // ── detail ────────────────────────────────────────────────────────────────
   app.get("/v1/tokens/:address", async (c) => {
-    const { address } = parse(addressParamSchema, { address: c.req.param("address").toLowerCase() });
+    const { address } = parse(addressParamSchema, {
+      address: c.req.param("address").toLowerCase(),
+    });
     const nowSec = Math.floor(deps.now() / 1000);
     const row = await deps.db.getTokenDetailRow(address);
     if (!row) throw errors.notFound("token not found");
@@ -92,7 +103,14 @@ export function tokenRoutes(deps: AppDeps) {
       loadProjectionContext(deps),
       deps.db.getChange24hAnchors([row.address], nowSec),
     ]);
-    const detail = toTokenDetail(row, ctx.wm, ctx.ethUsd, deps.now(), anchors.get(row.address));
+    const detail = toTokenDetail(
+      row,
+      ctx.wm,
+      ctx.ethUsd,
+      deps.now(),
+      anchors.get(row.address),
+      deps.config.R2_PUBLIC_BASE_URL,
+    );
     return ok(c, detail);
   });
 

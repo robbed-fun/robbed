@@ -579,6 +579,14 @@ export function makeFakeStorage(base = "https://cdn.test"): Storage & { objects:
     async putMetadata(h, json) {
       objects.set(metadataKey(h), json);
     },
+    async readImage(h) {
+      const obj = objects.get(imageKey(h));
+      return obj instanceof Uint8Array ? obj : null;
+    },
+    async readMetadata(h) {
+      const obj = objects.get(metadataKey(h));
+      return typeof obj === "string" ? new TextEncoder().encode(obj) : null;
+    },
     async imageExists(h) {
       return objects.has(imageKey(h));
     },

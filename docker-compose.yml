@@ -365,6 +365,9 @@ services:
       # Sidecars must start on every process boot. Ponder crash recovery does
       # not replay :setup, so the handler module eagerly boots them when this is set.
       INDEXER_SIDECAR_BOOT: eager
+      INDEXER_EVENT_COUNTS_LOG_MS: ${INDEXER_EVENT_COUNTS_LOG_MS:-30000}
+      INDEXER_PONDER_RAW_LOG_BLOCKS: ${INDEXER_PONDER_RAW_LOG_BLOCKS:-6}
+      INDEXER_PONDER_RAW_LOG_MAX_ROWS: ${INDEXER_PONDER_RAW_LOG_MAX_ROWS:-120}
       # M2-7 metadata verifier (indexer.md) fallback base for tokens whose
       # row carries no metadata_uri — container-internal minio service DNS
       # (key layout metadata/{keccak-no-0x}.json, matching the API's writes).

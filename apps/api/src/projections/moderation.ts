@@ -2,12 +2,9 @@
  * Moderation queue item projection (api.md) join of `tokens` + the
  * API-owned `moderation_status`. Uses the frozen `moderationQueueItemSchema`.
  */
-import type {
-  ModerationStatusRow,
-  TokenRow,
-  moderationQueueItemSchema,
-} from "@robbed/shared";
+import type { ModerationStatusRow, TokenRow, moderationQueueItemSchema } from "@robbed/shared";
 import type { z } from "zod";
+import { rewriteLocalStorageUrl } from "./assets";
 
 // Derived from the frozen shared schema (single source of truth) — not a
 // redeclared shape. Shared exports the schema but no inferred alias for it;
@@ -19,12 +16,13 @@ export function buildQueueItem(
   tokenAddress: string,
   token: Pick<TokenRow, "name" | "ticker" | "image_url" | "metadata_uri"> | null,
   m: ModerationStatusRow | null,
+  publicAssetBaseUrl?: string,
 ): ModerationQueueItem {
   return {
     tokenAddress,
     name: token?.name ?? "",
     ticker: token?.ticker ?? "",
-    imageUrl: token?.image_url ?? null,
+    imageUrl: rewriteLocalStorageUrl(token?.image_url, publicAssetBaseUrl),
     metadataUri: token?.metadata_uri ?? null,
     nsfwScore: m?.nsfw_score ?? null,
     csamFlag: m?.csam_flag ?? false,

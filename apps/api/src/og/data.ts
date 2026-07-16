@@ -26,10 +26,7 @@ export interface OgDataResult {
   version: string;
 }
 
-export async function getTokenOgData(
-  deps: AppDeps,
-  address: string,
-): Promise<OgDataResult | null> {
+export async function getTokenOgData(deps: AppDeps, address: string): Promise<OgDataResult | null> {
   const row = await deps.db.getTokenDetailRow(address);
   if (!row) return null;
 
@@ -37,7 +34,14 @@ export async function getTokenOgData(
   const ctx = await loadProjectionContext(deps);
   // No 24h anchor needed — the card shows no Δ%. Card gives us name/ticker/status/
   // graduated/progress/mcap(ETH wei + USD w/ asOf) from the one shared projection.
-  const card = toTokenCard(row, ctx.wm, ctx.ethUsd, nowMs);
+  const card = toTokenCard(
+    row,
+    ctx.wm,
+    ctx.ethUsd,
+    nowMs,
+    undefined,
+    deps.config.R2_PUBLIC_BASE_URL,
+  );
 
   // Sparkline: best-effort. A candles failure degrades to a flat baseline
   // ("first trades incoming"), never a 404 — the token exists, the image renders.
@@ -100,9 +104,11 @@ function trimZeros(s: string): string {
  * snapshot (ethUsd ≤ 0 ⇒ the epoch-zero placeholder): the card then shows the
  * ETH figure alone rather than fabricating a USD value.
  */
-function formatMcapUsd(
-  mcap: { usd: string; ethUsd: string; asOf: string },
-): { text: string; asOf: string } | null {
+function formatMcapUsd(mcap: {
+  usd: string;
+  ethUsd: string;
+  asOf: string;
+}): { text: string; asOf: string } | null {
   if (Number(mcap.ethUsd) <= 0) return null;
   const usd = Number(mcap.usd);
   if (!Number.isFinite(usd)) return null;

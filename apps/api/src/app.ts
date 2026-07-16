@@ -15,6 +15,7 @@ import { ERROR_CODES } from "@robbed/shared";
 import { publicCors } from "./mw/cors";
 import { ROUTE_LIMITS, rateLimit } from "./mw/ratelimit";
 import { adminRoutes } from "./admin/routes";
+import { assetRoutes } from "./routes/assets";
 import { candleRoutes } from "./routes/candles";
 import { creatorRoutes } from "./routes/creators";
 import { eventRoutes } from "./routes/events";
@@ -77,6 +78,7 @@ export function createApp(deps: AppDeps) {
   app.use("/v1/creators/*", reads);
   app.use("/v1/confirmations", reads);
   app.use("/v1/eth-usd", reads);
+  app.use("/v1/assets/*", reads);
   // OG render is a read; rate-limit it in the reads class (crawler-facing).
   app.use("/v1/og/*", reads);
 
@@ -97,6 +99,7 @@ export function createApp(deps: AppDeps) {
   app.route("/", holderRoutes(deps));
   app.route("/", feeRoutes(deps));
   app.route("/", statsRoutes(deps));
+  app.route("/", assetRoutes(deps));
   app.route("/", uploadRoutes(deps));
   app.route("/", metadataRoutes(deps));
   app.route("/", ogRoutes(deps));

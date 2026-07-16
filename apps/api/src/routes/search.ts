@@ -31,9 +31,19 @@ export function searchRoutes(deps: AppDeps) {
       deps.db.searchTokens(built.query),
       loadProjectionContext(deps),
     ]);
-    const anchors = await deps.db.getChange24hAnchors(rows.map((r) => r.address), nowSec);
+    const anchors = await deps.db.getChange24hAnchors(
+      rows.map((r) => r.address),
+      nowSec,
+    );
     const results = rows.map((r) =>
-      toTokenCard(r, ctx.wm, ctx.ethUsd, deps.now(), anchors.get(r.address)),
+      toTokenCard(
+        r,
+        ctx.wm,
+        ctx.ethUsd,
+        deps.now(),
+        anchors.get(r.address),
+        deps.config.R2_PUBLIC_BASE_URL,
+      ),
     );
     return ok(c, searchResponseSchema.parse({ results }));
   });

@@ -4,7 +4,12 @@
  * Trust panel (exact LP constant + organic RANGE), and the 5 sort keys.
  */
 import { describe, expect, it } from "bun:test";
-import { LP_COPY, TOKEN_CARD_DESCRIPTION_MAX, tokenCardSchema, tokenDetailSchema } from "@robbed/shared";
+import {
+  LP_COPY,
+  TOKEN_CARD_DESCRIPTION_MAX,
+  tokenCardSchema,
+  tokenDetailSchema,
+} from "@robbed/shared";
 import { toTokenCard } from "../src/projections/card";
 import { toTokenDetail } from "../src/projections/detail";
 import { sortKeyForRow } from "../src/search/sort";
@@ -28,12 +33,21 @@ describe("toTokenCard", () => {
     expect(toTokenCard(fixtureToken({ graduated: true }), WM, SNAP).status).toBe("graduated");
   });
   it("projects confirmationState from watermarks", () => {
-    expect(toTokenCard(fixtureToken({ block_number: 120 }), WM, SNAP).confirmationState).toBe("soft_confirmed");
-    expect(toTokenCard(fixtureToken({ block_number: 80 }), WM, SNAP).confirmationState).toBe("posted_to_l1");
-    expect(toTokenCard(fixtureToken({ block_number: 40 }), WM, SNAP).confirmationState).toBe("finalized");
+    expect(toTokenCard(fixtureToken({ block_number: 120 }), WM, SNAP).confirmationState).toBe(
+      "soft_confirmed",
+    );
+    expect(toTokenCard(fixtureToken({ block_number: 80 }), WM, SNAP).confirmationState).toBe(
+      "posted_to_l1",
+    );
+    expect(toTokenCard(fixtureToken({ block_number: 40 }), WM, SNAP).confirmationState).toBe(
+      "finalized",
+    );
   });
   it("marks USD stale when the snapshot is old", () => {
-    const card = toTokenCard(fixtureToken(), WM, { price_usd: 2000, fetched_at: new Date(0).toISOString() });
+    const card = toTokenCard(fixtureToken(), WM, {
+      price_usd: 2000,
+      fetched_at: new Date(0).toISOString(),
+    });
     expect(card.mcap.stale).toBe(true);
   });
   it("materializes mcapEth as an exact wei string (ETH-first source, integer-space)", () => {
@@ -73,6 +87,18 @@ describe("toTokenCard", () => {
     expect(card.description).toBeNull();
     expect(() => tokenCardSchema.parse(card)).not.toThrow();
   });
+  it("rewrites legacy localhost object-store image URLs to the configured public asset base", () => {
+    const hash = "cd".repeat(32);
+    const card = toTokenCard(
+      fixtureToken({ image_url: `http://localhost:4290/robbed-assets/images/${hash}.webp` }),
+      WM,
+      SNAP,
+      Date.now(),
+      undefined,
+      "https://api.robbed.fun/v1/assets",
+    );
+    expect(card.imageUrl).toBe(`https://api.robbed.fun/v1/assets/images/${hash}.webp`);
+  });
 });
 
 describe("toTokenDetail Trust panel", () => {
@@ -106,7 +132,11 @@ describe("toTokenDetail Trust panel", () => {
     expect(organic?.methodology).toContain("heuristic");
   });
   it("returns hidden tokens WITH the visibility flag (never a 404 concern here)", () => {
-    const hidden = fixtureToken({ m_visibility: "hidden", m_impersonation_flag: true, m_impersonation_ticker: "BTC" });
+    const hidden = fixtureToken({
+      m_visibility: "hidden",
+      m_impersonation_flag: true,
+      m_impersonation_ticker: "BTC",
+    });
     const detail = toTokenDetail(hidden, WM, SNAP);
     expect(detail.moderation.visibility).toBe("hidden");
     expect(detail.moderation.impersonationTicker).toBe("BTC");
@@ -125,13 +155,22 @@ describe("sortKeyForRow (5 sorts)", () => {
     expect(sortKeyForRow("newest", fixtureToken(), nowSec, cfg)).toBe("1700000000");
   });
   it("volume24h → volume_eth_24h; progress → real_eth_reserves", () => {
-    expect(sortKeyForRow("volume24h", fixtureToken(), nowSec, cfg)).toBe((12n * 10n ** 18n).toString());
-    expect(sortKeyForRow("progress", fixtureToken(), nowSec, cfg)).toBe((5n * 10n ** 18n).toString());
+    expect(sortKeyForRow("volume24h", fixtureToken(), nowSec, cfg)).toBe(
+      (12n * 10n ** 18n).toString(),
+    );
+    expect(sortKeyForRow("progress", fixtureToken(), nowSec, cfg)).toBe(
+      (5n * 10n ** 18n).toString(),
+    );
   });
   it("mcap → last_price_eth; trending decays with age", () => {
     expect(sortKeyForRow("mcap", fixtureToken(), nowSec, cfg)).toBe("3e-8");
     const fresh = sortKeyForRow("trending", fixtureToken({ created_at: nowSec }), nowSec, cfg);
-    const stale = sortKeyForRow("trending", fixtureToken({ created_at: nowSec - 3600 * 48 }), nowSec, cfg);
+    const stale = sortKeyForRow(
+      "trending",
+      fixtureToken({ created_at: nowSec - 3600 * 48 }),
+      nowSec,
+      cfg,
+    );
     expect(Number(fresh)).toBeGreaterThan(Number(stale));
   });
 });

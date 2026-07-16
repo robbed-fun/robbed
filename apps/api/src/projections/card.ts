@@ -10,6 +10,7 @@ import type { Change24hAnchor, TokenListRow } from "../lib/db";
 import { projectConfirmation } from "../lib/confirmation";
 import type { EthUsdSnapshot } from "../lib/usd";
 import { usdFromEthFloat } from "../lib/usd";
+import { rewriteLocalStorageUrl } from "./assets";
 import { progressFraction, resolveSnapshot, statusFrom } from "./common";
 
 const WEI_PER_ETH = 1e18;
@@ -44,13 +45,14 @@ export function toTokenCard(
   ethUsd: EthUsdSnapshot | null,
   nowMs: number = Date.now(),
   anchor?: Change24hAnchor,
+  publicAssetBaseUrl?: string,
 ): TokenCard {
   const snap = resolveSnapshot(ethUsd);
   return {
     address: row.address,
     name: row.name,
     ticker: row.ticker,
-    imageUrl: row.image_url,
+    imageUrl: rewriteLocalStorageUrl(row.image_url, publicAssetBaseUrl),
     // Card-preview blurb (D-70; api.md section 3.4). `tokens.description` is already
     // SELECTed onto TokenListRow — the card just truncates it; the FULL text stays
     // on TokenDetail (GET /v1/tokens/:address). Required-nullable in the ratified
