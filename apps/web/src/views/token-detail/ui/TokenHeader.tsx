@@ -19,19 +19,19 @@ import {
 /**
  * Token Detail above-the-fold header (web.md) — ROBBED_ terminal skin
  * (redesign mockup, — panel "2a Token detail"). Rendered inside the client island (TD-6)
- * so the status pill + bonding cell track the LIVE token status, but still
+ * so the status pill tracks the LIVE token status, but still
  * SERVER-pre-rendered: the identity row (avatar · NAME TICKER ·
  * addr·created·creator) and the stat cells (PRICE / VOL 24H / 24H / MCAP /
- * HOLDERS / BONDING) are meaningful without client JS so crawlers and JS-off
+ * RAISED/TARGET ETH) are meaningful without client JS so crawlers and JS-off
  * users get the pitch (SSR-vs-client decision, web.md).
  *
  * All metrics are indexer/on-chain SUPPLIED values : PRICE = `priceEth`,
  * VOL 24H = `volume24h` (ETH wei, ETH-first denomination), 24H = `change24hPct`,
- * MCAP = the live-priced `mcap` (source+asOf disclosed by `UsdAmount`), HOLDERS =
- * the SSR holders page count, BONDING = `graduation.progressPct`. No metric is
- * computed or hardcoded here.
+ * MCAP = the live-priced `mcap` (source+asOf disclosed by `UsdAmount`), and
+ * raised/target ETH = `reserves.realEth` / `graduation.thresholdEth`. No metric
+ * is computed or hardcoded here.
  */
-export function TokenHeader({ token, holderCount }: { token: TokenDetail; holderCount?: number }) {
+export function TokenHeader({ token }: { token: TokenDetail }) {
   return (
     // Full-bleed identity row (fidelity audit fix 2; template 2a line 351):
     // border-bottom ONLY — no side/top border, no fill — padding 16px 24px,
@@ -65,7 +65,7 @@ export function TokenHeader({ token, holderCount }: { token: TokenDetail; holder
       </div>
 
       {/* ── Stat cells — wrap on mobile; mockup container is text-align:right ── */}
-      <div className="grid grid-cols-3 gap-x-6 gap-y-3 sm:grid-cols-6 md:ml-auto md:flex md:flex-wrap md:items-start md:justify-end md:gap-x-7">
+      <div className="grid grid-cols-3 gap-x-6 gap-y-3 sm:grid-cols-5 md:ml-auto md:flex md:flex-wrap md:items-start md:justify-end md:gap-x-7">
         <StatCell label="Price" align="right">
           {token.priceEth === null ? (
             <MonoText tone="muted">—</MonoText>
@@ -84,56 +84,32 @@ export function TokenHeader({ token, holderCount }: { token: TokenDetail; holder
         <StatCell label="Mcap" align="right">
           <UsdAmount value={token.mcap} />
         </StatCell>
-        <StatCell label="Holders" align="right">
-          {holderCount === undefined ? (
-            <MonoText tone="muted">—</MonoText>
-          ) : (
-            <MonoText numeric>{holderCount.toLocaleString("en-US")}</MonoText>
-          )}
-        </StatCell>
-        <BondingCell token={token} />
+        <RaisedTargetCell token={token} />
       </div>
     </div>
   );
 }
 
 /**
- * BONDING stat cell — the mockup's mini progress track + percent, plus the
- * raised-vs-target ETH the percent derives from (or a "Graduated" verdict
- * post-grad). All three values are indexer/on-chain SUPPLIED : `progressPct`
- * (clamped for bar geometry only), raised ETH = `reserves.realEth`, and the
- * PER-TOKEN target = `graduation.thresholdEth` — read from the payload, never
- * hardcoded (the threshold varies per token and is not a constant).
+ * Raised-vs-target ETH, read from the token payload. The threshold varies per
+ * token and is not a constant.
  */
-function BondingCell({ token }: { token: TokenDetail }) {
+function RaisedTargetCell({ token }: { token: TokenDetail }) {
   const graduated = token.graduated || token.status === "graduated";
-  const pct = Math.max(0, Math.min(100, token.graduation.progressPct));
   return (
     // Right-aligned like the StatCells (mockup line 363: justify-content:flex-end).
     <div className="flex min-w-0 flex-col gap-0.5 md:items-end md:text-right">
-      <MonoLabel>Bonding</MonoLabel>
+      <MonoLabel>Raised</MonoLabel>
       {graduated ? (
         <MonoText tone="green" size="sm">
           Graduated
         </MonoText>
       ) : (
-        <>
-          <div className="flex items-center justify-end gap-2">
-            <span className="h-1 w-14 bg-active" aria-hidden>
-              <span className="block h-1 bg-green" style={{ width: `${pct}%` }} />
-            </span>
-            <MonoText numeric size="sm">
-              {pct.toFixed(0)}%
-            </MonoText>
-          </div>
-          {/* Raised / target ETH — the two figures progressPct is computed from,
-              same "X / Y ETH" convention as the Trust panel's GraduationProgress. */}
-          <MonoText tone="faint" size="xs" numeric>
-            <EthAmount wei={token.reserves.realEth} unit={null} />
-            {" / "}
-            <EthAmount wei={token.graduation.thresholdEth} />
-          </MonoText>
-        </>
+        <MonoText tone="faint" size="xs" numeric>
+          <EthAmount wei={token.reserves.realEth} unit={null} />
+          {" / "}
+          <EthAmount wei={token.graduation.thresholdEth} />
+        </MonoText>
       )}
     </div>
   );
@@ -146,10 +122,6 @@ function StatusTag({ status }: { status: TokenDetail["status"] }) {
     case "graduating":
       return <SideBadge side="graduate" label="GRADUATING" />;
     default:
-      return (
-        <MonoLabel tone="green" size="2xs">
-          BONDING
-        </MonoLabel>
-      );
+      return null;
   }
 }

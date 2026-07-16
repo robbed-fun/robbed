@@ -1,11 +1,6 @@
 import type { TradeRow } from "@robbed/shared";
 
-import {
-  type TrackedTrade,
-  type TradeDisplayState,
-  displayStateForIndexed,
-  tradeDisplayState,
-} from "@/entities/trade";
+import { type TrackedTrade, tradeDisplayState } from "@/entities/trade";
 
 /**
  * Normalized trade-feed row (optimistic OR indexed), for one uniform renderer.
@@ -23,10 +18,7 @@ export interface FeedRow {
   blockTimestamp: number | null;
   /** ms (optimistic rows) — for age before an indexed timestamp exists. */
   submittedAtMs: number | null;
-  displayState: TradeDisplayState;
-  awaitingIndex: boolean;
   justUpdated: boolean;
-  isCreator: boolean;
   isOptimistic: boolean;
 }
 
@@ -43,10 +35,8 @@ export interface FeedRow {
 export function buildFeedRows(args: {
   optimistic: readonly TrackedTrade[];
   indexed: readonly TradeRow[];
-  creator: string;
 }): FeedRow[] {
-  const { optimistic, indexed, creator } = args;
-  const creatorLc = creator.toLowerCase();
+  const { optimistic, indexed } = args;
   const claimed = new Set(
     optimistic
       .map((t) => t.txHash?.toLowerCase())
@@ -65,10 +55,7 @@ export function buildFeedRows(args: {
       txHash: t.txHash,
       blockTimestamp: null,
       submittedAtMs: t.submittedAt,
-      displayState: tradeDisplayState(t),
-      awaitingIndex: t.awaitingIndex,
       justUpdated: t.justUpdated,
-      isCreator: t.sender.toLowerCase() === creatorLc,
       isOptimistic: true,
     }));
 
@@ -84,10 +71,7 @@ export function buildFeedRows(args: {
       txHash: r.txHash,
       blockTimestamp: r.blockTimestamp,
       submittedAtMs: null,
-      displayState: displayStateForIndexed(r.confirmationState),
-      awaitingIndex: false,
       justUpdated: false,
-      isCreator: r.trader.toLowerCase() === creatorLc,
       isOptimistic: false,
     }));
 

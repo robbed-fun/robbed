@@ -73,14 +73,9 @@ export default async function TokenDetailView({ address }: { address: string }) 
           each region pads itself per the mockup. */}
       <main className="mx-auto flex max-w-6xl flex-col pb-24 md:pb-0">
         {/* TokenHeader renders inside the client island (still SSR-pre-rendered)
-            so the status pill/bonding cell track the LIVE token status (TD-6).
-            DATA-GAP (flagged): the "Holders" header count needs a `holderCount`
-            on `tokenDetailSchema` — the /holders `Paginated` envelope no longer
-            carries it (tokens.holder_count already exists indexer-side). Until
-            then the header shows "—" (graceful degradation, never faked). */}
+            so the status pill tracks the LIVE token status (TD-6). */}
         <TokenDetailClient
           token={token}
-          holderCount={undefined}
           initialTrades={initialTrades}
           initialHolders={initialHolders}
           initialCandles={initialCandles}

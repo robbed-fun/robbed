@@ -12,12 +12,11 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import type { ColumnDef, HeaderContext } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
 
-import { ConfirmationBadge, useOptimisticTradesContext } from "@/entities/trade";
+import { useOptimisticTradesContext } from "@/entities/trade";
 import {
   AddressLink,
   DataTable,
   EthAmount,
-  MonoLabel,
   MonoText,
   PriceEth,
   RelativeTime,
@@ -53,9 +52,8 @@ import { type FeedRow, buildFeedRows, prependTrade } from "../model/merge";
  * paging away makes it a plain REST snapshot (no WS prepend, no optimistic merge)
  * — "sort/paginate beyond the live head is a REST query".
  *
- * : the soft-confirmed chip is gone — a fresh (soft-confirmed) row shows NO
- * settlement badge; `ConfirmationBadge` surfaces only once it upgrades to
- * posted-to-L1 / finalized as the watermark advances.
+ * The visible settlement/status chips are intentionally absent from this compact
+ * token-detail feed.
  */
 
 /** Default order = age DESC (newest first) — the WS-live, SSR-seeded window. */
@@ -166,9 +164,8 @@ export function TradeFeed({
         // Optimistic rows merge only into the live head.
         optimistic: isDefaultView ? optimistic.trades : [],
         indexed,
-        creator: token.creator.address,
       }),
-    [isDefaultView, optimistic.trades, indexed, token.creator.address],
+    [isDefaultView, optimistic.trades, indexed],
   );
 
   const onSort = useCallback(
@@ -255,12 +252,6 @@ function TraderCell({ row }: { row: FeedRow }) {
           {shortAddress(row.trader)}
         </MonoText>
       )}
-      {row.isCreator && (
-        <MonoLabel tone="green" size="2xs">
-          dev
-        </MonoLabel>
-      )}
-      <ConfirmationBadge state={row.displayState} awaitingIndex={row.awaitingIndex} />
     </span>
   );
 }

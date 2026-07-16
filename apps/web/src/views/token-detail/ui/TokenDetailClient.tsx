@@ -26,9 +26,9 @@ import { TokenInfo } from "./TokenInfo";
  * signal (or a v3-venue trade, or a reconnect refetch) flips `status` with no
  * reload. Every status-derived surface consumes the same live object: the
  * TradeWidget engine (graduating interstitial → V3 panel), the header status
- * pill + bonding cell (TokenHeader now renders INSIDE this island for exactly
- * that reason — it is still server-pre-rendered for the SSR pitch), and the
- * TokenInfo V3-pool link.
+ * pill (TokenHeader now renders INSIDE this island for exactly that reason — it
+ * is still server-pre-rendered for the SSR pitch), and the TokenInfo V3-pool
+ * link.
  *
  * REDESIGN (USER-DIRECTED 2026-07-13): the token-detail SafetyStrip block is
  * REMOVED. The LP-destiny line that briefly survived as a muted `LP_DESTINY_COPY`
@@ -44,13 +44,11 @@ import { TokenInfo } from "./TokenInfo";
  */
 export function TokenDetailClient({
   token: initialToken,
-  holderCount,
   initialTrades,
   initialHolders,
   initialCandles,
 }: {
   token: TokenDetail;
-  holderCount?: number;
   initialTrades?: TradeRow[];
   initialHolders?: Paginated<HolderRow>;
   initialCandles?: { candles: Candle[] };
@@ -60,7 +58,7 @@ export function TokenDetailClient({
 
   return (
     <OptimisticTradesProvider>
-      <TokenHeader token={token} holderCount={holderCount} />
+      <TokenHeader token={token} />
 
       {/* Row 1 — chart | trade widget, split 8:4. MOBILE-FIRST: single column (chart
           above the widget, fixed mobile height); ≥lg an 8:4 grid at the hero height,
