@@ -3,4 +3,9 @@
  * lightweight-charts series across graduation, 6 intervals, WS-patched.
  */
 export { PriceChart } from "./ui/PriceChart";
-export { candleWindow, lastActivityAnchor, loadCandles } from "./model/candles";
+export {
+  candleWindow,
+  chartActivityAnchor,
+  lastActivityAnchor,
+  loadCandles,
+} from "./model/candles";

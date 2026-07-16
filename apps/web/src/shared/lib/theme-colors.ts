@@ -24,6 +24,15 @@ function cssVar(name: string, fallback: string): string {
   return v || fallback;
 }
 
+function withAlpha(color: string, alpha: number): string {
+  const hex = color.match(/^#([0-9a-f]{6})$/i)?.[1];
+  if (!hex) return color;
+  const r = Number.parseInt(hex.slice(0, 2), 16);
+  const g = Number.parseInt(hex.slice(2, 4), 16);
+  const b = Number.parseInt(hex.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 /**
  * Resolve the chart palette from theme tokens (client-only; SSR uses fallbacks).
  *
@@ -42,7 +51,7 @@ export function readChartPalette(): ChartPalette {
     grid: cssVar("--color-border", "#27272a"),
     border: cssVar("--color-border", "#27272a"),
     graduation: cssVar("--color-soft-confirmed", "#f59e0b"),
-    volumeUp: up,
-    volumeDown: down,
+    volumeUp: withAlpha(up, 0.45),
+    volumeDown: withAlpha(down, 0.45),
   };
 }

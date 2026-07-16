@@ -18,6 +18,7 @@ vi.mock("@/shared/api", () => ({ getCandles }));
 
 import {
   candleWindow,
+  chartActivityAnchor,
   lastActivityAnchor,
   loadCandles,
 } from "@/widgets/price-chart/model/candles";
@@ -70,6 +71,22 @@ describe("lastActivityAnchor — best last-activity proxy on the wire (D-72)", (
   });
   it("falls back to createdAt for a pre-grad token", () => {
     expect(lastActivityAnchor({ createdAt: 100, graduatedAt: undefined })).toBe(100);
+  });
+});
+
+describe("chartActivityAnchor — uses token-detail trades when available", () => {
+  it("uses the newest first-page trade when launch trades happen after createdAt", () => {
+    expect(
+      chartActivityAnchor(
+        { createdAt: 1_784_151_232, graduatedAt: undefined },
+        [{ blockTimestamp: 1_784_151_419 }, { blockTimestamp: 1_784_157_865 }],
+      ),
+    ).toBe(1_784_157_865);
+  });
+
+  it("falls back to graduatedAt/createdAt when no trades are seeded", () => {
+    expect(chartActivityAnchor({ createdAt: 100, graduatedAt: 900 })).toBe(900);
+    expect(chartActivityAnchor({ createdAt: 100, graduatedAt: undefined })).toBe(100);
   });
 });
 

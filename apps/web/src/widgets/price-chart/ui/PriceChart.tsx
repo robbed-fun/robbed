@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CANDLE_INTERVAL_SECONDS,
   CANDLE_INTERVALS,
   type Candle,
   type CandleInterval,
@@ -12,7 +13,10 @@ import {
   ColorType,
   HistogramSeries,
   type IChartApi,
+  type ISeriesMarkersPluginApi,
   type ISeriesApi,
+  type SeriesMarker,
+  type Time,
   type UTCTimestamp,
   createChart,
   createSeriesMarkers,
@@ -66,16 +70,180 @@ function chartAxisPrice(abs: number): string {
  */
 /** Empty bars kept to the right of the newest candle — realtime-append headroom. */
 const CHART_RIGHT_OFFSET = 3;
-/** Resting candle width (px); fitContent()/setVisibleLogicalRange override on load. */
+/** Resting candle width (px); fitContent()/setVisibleRange override on load. */
 const CHART_BAR_SPACING = 8;
 /**
- * Below this many bars a fresh token uses the SPARSE presentation: the few bars
- * anchor left at a natural width inside a fixed slot window (below), with room on
- * the right to fill — instead of fitContent() over-stretching a handful of bars.
+ * Below this many bars a fresh token uses the SPARSE presentation: explicit
+ * interval whitespace + a real visible time range, instead of fitContent()
+ * over-stretching a handful of bars or collapsing labels into one timestamp.
  */
 const CHART_SPARSE_MIN_BARS = 8;
-/** Slot window the sparse variant fills: bars flush left, whitespace to the right. */
-const CHART_SPARSE_SLOTS = 24;
+/**
+ * Sparse intervals often have only 1-2 real trade buckets. Include neighboring
+ * whitespace buckets so the horizontal axis represents real interval time, not
+ * two adjacent logical bars stretched across the full pane.
+ */
+const CHART_SPARSE_INTERVAL_LEFT_PADDING_BUCKETS = 2;
+const CHART_SPARSE_INTERVAL_RIGHT_PADDING_BUCKETS = 6;
+const CHART_1S_VISIBLE_LEFT_BUCKETS = 45;
+const CHART_1S_VISIBLE_RIGHT_BUCKETS = 5;
+const CHART_15S_VISIBLE_LEFT_BUCKETS = 8;
+const CHART_15S_VISIBLE_RIGHT_BUCKETS = 3;
+const CHART_1M_VISIBLE_LEFT_BUCKETS = 8;
+const CHART_1M_VISIBLE_RIGHT_BUCKETS = 3;
+const CHART_5M_VISIBLE_LEFT_BUCKETS = 8;
+const CHART_5M_VISIBLE_RIGHT_BUCKETS = 3;
+const CHART_15M_VISIBLE_LEFT_BUCKETS = 8;
+const CHART_15M_VISIBLE_RIGHT_BUCKETS = 3;
+const CHART_1H_VISIBLE_LEFT_BUCKETS = 8;
+const CHART_1H_VISIBLE_RIGHT_BUCKETS = 3;
+/** Minimum display body/range as a fraction of the visible price span. */
+const CHART_MIN_VISIBLE_CANDLE_BODY_RATIO = 0.04;
+const CHART_MIN_VISIBLE_CANDLE_RANGE_RATIO = 0.075;
+
+type TimedDatum = { time: UTCTimestamp };
+type VisibleChartCandle = TimedDatum & {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+};
+
+function isShortInterval(interval: CandleInterval): boolean {
+  return interval === "1s" || interval === "15s";
+}
+
+function shouldUseSparseTimeGrid(barCount: number): boolean {
+  return barCount > 0 && barCount < CHART_SPARSE_MIN_BARS;
+}
+
+function sparseVisibleBuckets(interval: CandleInterval): { left: number; right: number } {
+  switch (interval) {
+    case "1s":
+      return { left: CHART_1S_VISIBLE_LEFT_BUCKETS, right: CHART_1S_VISIBLE_RIGHT_BUCKETS };
+    case "15s":
+      return { left: CHART_15S_VISIBLE_LEFT_BUCKETS, right: CHART_15S_VISIBLE_RIGHT_BUCKETS };
+    case "1m":
+      return { left: CHART_1M_VISIBLE_LEFT_BUCKETS, right: CHART_1M_VISIBLE_RIGHT_BUCKETS };
+    case "5m":
+      return { left: CHART_5M_VISIBLE_LEFT_BUCKETS, right: CHART_5M_VISIBLE_RIGHT_BUCKETS };
+    case "15m":
+      return { left: CHART_15M_VISIBLE_LEFT_BUCKETS, right: CHART_15M_VISIBLE_RIGHT_BUCKETS };
+    case "1h":
+      return { left: CHART_1H_VISIBLE_LEFT_BUCKETS, right: CHART_1H_VISIBLE_RIGHT_BUCKETS };
+  }
+}
+
+function withSparseTimeWhitespace<T extends TimedDatum>(
+  points: T[],
+  interval: CandleInterval,
+): Array<T | TimedDatum> {
+  if (!shouldUseSparseTimeGrid(points.length)) return points;
+  const width = CANDLE_INTERVAL_SECONDS[interval];
+  const first = points[0]!.time;
+  const last = points[points.length - 1]!.time;
+  const visible = sparseVisibleBuckets(interval);
+  const byTime = new Map<number, T>(points.map((point) => [point.time, point]));
+  const from = Math.min(
+    first - width * CHART_SPARSE_INTERVAL_LEFT_PADDING_BUCKETS,
+    last - width * visible.left,
+  );
+  const to = Math.max(
+    last + width * CHART_SPARSE_INTERVAL_RIGHT_PADDING_BUCKETS,
+    last + width * visible.right,
+  );
+  const filled: Array<T | TimedDatum> = [];
+
+  for (let time = from; time <= to; time += width) {
+    filled.push(byTime.get(time) ?? { time: time as UTCTimestamp });
+  }
+
+  return filled;
+}
+
+function formatUtcTime(time: number): { date: string; minute: string; second: string } {
+  const iso = new Date(time * 1000).toISOString();
+  return {
+    date: `${iso.slice(5, 7)}-${iso.slice(8, 10)}`,
+    minute: iso.slice(11, 16),
+    second: iso.slice(11, 19),
+  };
+}
+
+function formatTimeAxisTick(interval: CandleInterval, time: Time): string | null {
+  if (typeof time !== "number") return null;
+  const formatted = formatUtcTime(time);
+  switch (interval) {
+    case "1s":
+    case "15s":
+      return formatted.second;
+    case "1m":
+    case "5m":
+    case "15m":
+      return formatted.minute;
+    case "1h":
+      return `${formatted.date} ${formatted.minute}`;
+  }
+}
+
+function sparseVisibleRange(
+  interval: CandleInterval,
+  bars: Array<{ time: number }>,
+): { from: UTCTimestamp; to: UTCTimestamp } | null {
+  if (!shouldUseSparseTimeGrid(bars.length)) return null;
+  const last = bars[bars.length - 1]!.time;
+  const width = CANDLE_INTERVAL_SECONDS[interval];
+  const visible = sparseVisibleBuckets(interval);
+
+  return {
+    from: (last - width * visible.left) as UTCTimestamp,
+    to: (last + width * visible.right) as UTCTimestamp,
+  };
+}
+
+function visiblePriceSpan(candles: VisibleChartCandle[]): number {
+  const prices = candles.flatMap((c) => [c.open, c.high, c.low, c.close]);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const maxAbs = Math.max(...prices.map((price) => Math.abs(price)), Number.EPSILON);
+  return Math.max(max - min, maxAbs * 0.001, Number.EPSILON);
+}
+
+function makeCandlesVisible(candles: VisibleChartCandle[]): VisibleChartCandle[] {
+  if (candles.length === 0) return candles;
+  const span = visiblePriceSpan(candles);
+  const minBody = span * CHART_MIN_VISIBLE_CANDLE_BODY_RATIO;
+  const minRange = span * CHART_MIN_VISIBLE_CANDLE_RANGE_RATIO;
+
+  return candles.map((c, index) => {
+    let open = c.open;
+    const close = c.close;
+    let high = c.high;
+    let low = c.low;
+    const prevClose = candles[index - 1]?.close ?? c.open;
+    const up = close >= prevClose;
+    const body = Math.abs(close - open);
+
+    if (body < minBody) {
+      open = up ? close - minBody : close + minBody;
+    }
+
+    const bodyHigh = Math.max(open, close);
+    const bodyLow = Math.min(open, close);
+    if (high - low < minRange) {
+      high = Math.max(high, bodyHigh + minRange * 0.2);
+      low = Math.min(low, bodyLow - minRange * 0.2);
+    }
+
+    return {
+      ...c,
+      open,
+      close,
+      high,
+      low: Math.max(0, low),
+    };
+  });
+}
 
 export function PriceChart({
   token,
@@ -91,10 +259,17 @@ export function PriceChart({
   // seed never suppresses the fetch of a DIFFERENT interval's query.
   const initialInterval: CandleInterval = token.status === "graduated" ? "5m" : "1m";
   const [interval, setInterval] = useState<CandleInterval>(initialInterval);
+  // Empty SSR candles are only authoritative for never-traded tokens. If a token
+  // has a price, an empty seed is probably a stale/early fallback window and the
+  // client must fetch immediately using `activityAnchorSec`.
+  const seededCandles =
+    initialCandles && (initialCandles.candles.length > 0 || token.priceEth === null)
+      ? initialCandles
+      : undefined;
 
   const feed = useCandleFeed(token.address, interval, {
     initialInterval,
-    initialData: initialCandles,
+    initialData: seededCandles,
     // Right-edge anchor for the idle-token fallback window (D-72): only used when
     // the live now-window comes back empty. Token detail may pass the latest SSR
     // trade timestamp (D-76) to cover launch bursts after createdAt.
@@ -104,6 +279,7 @@ export function PriceChart({
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volumeRef = useRef<ISeriesApi<"Histogram"> | null>(null);
+  const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const palette = useMemo(() => readChartPalette(), []);
 
@@ -144,14 +320,29 @@ export function PriceChart({
         //  • rightOffset — a few empty bars so the newest candle isn't glued to
         //    the axis and realtime appends have somewhere to grow (shift-on-new-
         //    bar stays on, the library default — anchoring left ≠ freezing).
-        //  • barSpacing — resting width; fitContent()/setVisibleLogicalRange
+        //  • barSpacing — resting width; fitContent()/setVisibleRange
         //    (below, after data loads) override it.
         fixLeftEdge: true,
         lockVisibleTimeRangeOnResize: true,
         rightOffset: CHART_RIGHT_OFFSET,
         barSpacing: CHART_BAR_SPACING,
+        tickMarkFormatter: (time: Time) => formatTimeAxisTick(interval, time),
       },
       crosshair: { mode: 0 },
+    });
+    const volume = chart.addSeries(HistogramSeries, {
+      priceFormat: { type: "volume" },
+      priceScaleId: "vol",
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+    // Volume is a contextual histogram, not a second right-axis value. Hide its
+    // dedicated scale labels so the chart does not render a confusing `0` beside
+    // the ETH price axis. It is added before candles so candle bodies/wicks paint
+    // above volume bars when a low-price candle sits near the histogram.
+    volume.priceScale().applyOptions({
+      scaleMargins: { top: 0.85, bottom: 0 },
+      visible: false,
     });
     const candle = chart.addSeries(CandlestickSeries, {
       upColor: palette.up,
@@ -178,14 +369,14 @@ export function PriceChart({
         minMove: 0.000000000000000001,
         base: 1_000_000_000_000_000_000,
         formatter: (price: number) =>
-          formatPriceCompact(price, { subscript: "unicode", plain: chartAxisPrice }),
+          formatPriceCompact(price, {
+            sigDigits: 6,
+            subscript: "unicode",
+            plain: chartAxisPrice,
+          }),
       },
     });
-    const volume = chart.addSeries(HistogramSeries, {
-      priceFormat: { type: "volume" },
-      priceScaleId: "vol",
-    });
-    volume.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+    markersRef.current = createSeriesMarkers(candle, [], { zOrder: "top" });
 
     chartRef.current = chart;
     candleRef.current = candle;
@@ -195,11 +386,13 @@ export function PriceChart({
       chartRef.current = null;
       candleRef.current = null;
       volumeRef.current = null;
+      markersRef.current = null;
       lastTimeRef.current = null;
     };
-    // Recreate only if the seconds-visible axis config changes with interval.
+    // Recreate on interval changes so the tick formatter and seconds-visible
+    // setting always match the active time scale.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [palette, interval === "1s" || interval === "15s"]);
+  }, [palette, interval]);
 
   // Load historical data whenever the query data or interval changes → setData.
   useEffect(() => {
@@ -208,43 +401,47 @@ export function PriceChart({
     if (!candle || !volume) return;
     const candles = feed.data?.candles ?? [];
     const bars = toChartCandles(candles);
-    candle.setData(bars.map((b) => ({ ...b, time: b.time as UTCTimestamp })));
-    volume.setData(
-      toChartVolumes(candles, palette).map((v) => ({ ...v, time: v.time as UTCTimestamp })),
+    const candleData = makeCandlesVisible(
+      bars.map((b) => ({ ...b, time: b.time as UTCTimestamp })),
     );
+    candle.setData(withSparseTimeWhitespace(candleData, interval));
+    const volumeData = toChartVolumes(candles, palette).map((v) => ({
+      ...v,
+      time: v.time as UTCTimestamp,
+    }));
+    volume.setData(withSparseTimeWhitespace(volumeData, interval));
     lastTimeRef.current = bars.length ? bars[bars.length - 1]!.time : null;
 
     // Graduation annotation — one labeled marker at the graduation timestamp
     // (annotation, not a second series / not a data discontinuity).
+    const markers: SeriesMarker<Time>[] = [];
     if (token.graduatedAt) {
-      createSeriesMarkers(candle, [
-        {
-          time: token.graduatedAt as UTCTimestamp,
-          position: "aboveBar",
-          color: palette.graduation,
-          shape: "arrowDown",
-          text: "Graduated to Uniswap V3",
-        },
-      ]);
+      markers.push({
+        time: token.graduatedAt as UTCTimestamp,
+        position: "aboveBar",
+        color: palette.graduation,
+        shape: "arrowDown",
+        text: "Graduated to Uniswap V3",
+      });
     }
+    markersRef.current?.setMarkers(markers);
     // Anchor left→right after (re)loading history. Docs-first (lightweight-charts
     // 5.0 ITimeScaleApi, verified 2026-07-14):
     //  • enough bars → fitContent() fills the pane from the OLDEST bar; combined
     //    with lockVisibleTimeRangeOnResize it stays filled across autoSize growth.
-    //  • sparse (fresh token, few trades) → setVisibleLogicalRange pins the bars
-    //    flush left at a natural width inside a fixed slot window with room on the
-    //    right to fill, instead of fitContent() over-stretching a handful of bars
-    //    into giant candles. `from:-0.5` is clamped by fixLeftEdge so the first
-    //    bar sits at the left edge; `to` past the data shows right-side whitespace.
+    //  • sparse (fresh token, few trades) → setVisibleRange pins a real time
+    //    window around the latest bucket, backed by explicit interval whitespace,
+    //    so the axis labels stay meaningful for every interval.
     const ts = chartRef.current?.timeScale();
     if (ts && bars.length > 0) {
-      if (bars.length < CHART_SPARSE_MIN_BARS) {
-        ts.setVisibleLogicalRange({ from: -0.5, to: CHART_SPARSE_SLOTS });
+      const visibleRange = sparseVisibleRange(interval, bars);
+      if (visibleRange) {
+        ts.setVisibleRange(visibleRange);
       } else {
         ts.fitContent();
       }
     }
-  }, [feed.data, palette, token.graduatedAt]);
+  }, [feed.data, interval, palette, token.graduatedAt]);
 
   // Live patch: WS candle for THIS interval → series.update() (never reorders).
   useWsChannel(tokenCandles(token.address, interval), (msg) => {

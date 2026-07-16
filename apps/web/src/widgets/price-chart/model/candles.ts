@@ -1,4 +1,10 @@
-import type { Candle, CandleInterval, TokenDetail, WsCandleData } from "@robbed/shared";
+import type {
+  Candle,
+  CandleInterval,
+  TokenDetail,
+  TradeRow,
+  WsCandleData,
+} from "@robbed/shared";
 import { CANDLE_INTERVAL_SECONDS } from "@robbed/shared";
 import { formatEther } from "viem";
 
@@ -49,6 +55,21 @@ export function lastActivityAnchor(
   token: Pick<TokenDetail, "createdAt" | "graduatedAt">,
 ): number {
   return token.graduatedAt ?? token.createdAt;
+}
+
+/**
+ * Stronger chart anchor when the token-detail page already has recent trades.
+ * This closes the launch-burst gap where `createdAt` is a few buckets before the
+ * first trade, producing an empty SSR candle seed for an otherwise traded token.
+ */
+export function chartActivityAnchor(
+  token: Pick<TokenDetail, "createdAt" | "graduatedAt">,
+  trades: ReadonlyArray<Pick<TradeRow, "blockTimestamp">> = [],
+): number {
+  return Math.max(
+    lastActivityAnchor(token),
+    ...trades.map((trade) => trade.blockTimestamp),
+  );
 }
 
 /**

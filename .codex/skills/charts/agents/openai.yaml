@@ -1,0 +1,4 @@
+interface:
+  display_name: "Charts"
+  short_description: "Debug and implement ROBBED_ price charts."
+  default_prompt: "Use the charts skill to debug and implement the ROBBED_ price chart."

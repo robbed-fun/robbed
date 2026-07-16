@@ -411,10 +411,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      # MIRROR (anti-drift): Ponder /ready == historical indexing complete. A long remote
-      # backfill can exhaust these retries and show `unhealthy` while Ponder still works
-      # through history — honest status, not a stack-file failure (restart is "no").
-      test: ["CMD", "curl", "-sf", "http://localhost:42069/ready"]
+      # Remote public-RPC backfills can take minutes and /ready stays 503 until
+      # historical indexing completes. Docker health gates process liveness, not
+      # sync completeness, so use Ponder /health here; use /ready manually when
+      # you need to know the backfill is done.
+      test: ["CMD", "curl", "-sf", "http://localhost:42069/health"]
       interval: 5s
       timeout: 5s
       retries: 36

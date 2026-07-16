@@ -30,6 +30,10 @@ vi.mock("@/entities/trade", () => ({
 }));
 vi.mock("@/widgets/price-chart", () => ({
   PriceChart: () => <div data-testid="chart-stub" />,
+  chartActivityAnchor: (
+    t: { createdAt: number; graduatedAt?: number | null },
+    trades: ReadonlyArray<{ blockTimestamp: number }> = [],
+  ) => Math.max(t.graduatedAt ?? t.createdAt, ...trades.map((trade) => trade.blockTimestamp)),
   lastActivityAnchor: (t: { createdAt: number; graduatedAt?: number | null }) =>
     t.graduatedAt ?? t.createdAt,
 }));

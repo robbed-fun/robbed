@@ -5,7 +5,7 @@ import { NetworkBanner } from "@/widgets/network-banner";
 import { AppHeader } from "@/widgets/app-header";
 import { MobileNav } from "@/widgets/mobile-nav";
 import { ApiError, getHolders, getToken, getTrades } from "@/shared/api";
-import { lastActivityAnchor, loadCandles } from "@/widgets/price-chart";
+import { chartActivityAnchor, loadCandles } from "@/widgets/price-chart";
 
 import { TokenDetailClient } from "./TokenDetailClient";
 
@@ -38,22 +38,29 @@ export default async function TokenDetailView({ address }: { address: string }) 
   }
 
   const interval = token.status === "graduated" ? "5m" : "1m";
-  const [tradesR, holdersR, candlesR] = await Promise.allSettled([
+  const [tradesR, holdersR] = await Promise.allSettled([
     getTrades(lower, { limit: 50 }, { revalidate: 5 }),
     getHolders(lower, { limit: 20 }, { revalidate: 5 }),
-    // Same two-phase, data-anchored load the client feed uses (D-72), so the SSR
-    // seed matches the client's initial-interval query and an idle token is not
-    // pre-rendered with a false-empty chart.
-    loadCandles(lower, interval, {
-      anchorSec: lastActivityAnchor(token),
-      fetch: { revalidate: 5 },
-    }),
   ]);
 
   // : /trades + /holders return the shared `Paginated<T>` `{ items,
   // nextCursor }` envelope. The default (page-1) window seeds the client island.
   const initialTrades = tradesR.status === "fulfilled" ? tradesR.value.items : undefined;
   const initialHolders = holdersR.status === "fulfilled" ? holdersR.value : undefined;
+
+  const activityAnchorSec = chartActivityAnchor(token, initialTrades);
+
+  const candlesR = await loadCandles(lower, interval, {
+    // Same two-phase, data-anchored load the client feed uses (D-72), so the SSR
+    // seed matches the client's initial-interval query and an idle token is not
+    // pre-rendered with a false-empty chart. Use the newest known trade timestamp,
+    // not just `createdAt`: initial buys can land a few buckets after creation.
+    anchorSec: activityAnchorSec,
+    fetch: { revalidate: 5 },
+  })
+    .then((value) => ({ status: "fulfilled" as const, value }))
+    .catch((reason: unknown) => ({ status: "rejected" as const, reason }));
+
   const initialCandles = candlesR.status === "fulfilled" ? candlesR.value : undefined;
 
   return (

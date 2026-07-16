@@ -6,7 +6,7 @@ import type { CSSProperties } from "react";
 import { useLiveTokenDetail } from "@/entities/token";
 import { OptimisticTradesProvider } from "@/entities/trade";
 import { HolderTable } from "@/widgets/holder-table";
-import { PriceChart, lastActivityAnchor } from "@/widgets/price-chart";
+import { PriceChart, chartActivityAnchor } from "@/widgets/price-chart";
 import { TradeFeed } from "@/widgets/trade-feed";
 import { TradeWidget } from "@/widgets/trade-widget";
 
@@ -56,10 +56,7 @@ export function TokenDetailClient({
   initialCandles?: { candles: Candle[] };
 }) {
   const token = useLiveTokenDetail(initialToken);
-  const chartActivityAnchorSec = Math.max(
-    lastActivityAnchor(token),
-    ...(initialTrades?.map((trade) => trade.blockTimestamp) ?? []),
-  );
+  const chartActivityAnchorSec = chartActivityAnchor(token, initialTrades);
 
   return (
     <OptimisticTradesProvider>
