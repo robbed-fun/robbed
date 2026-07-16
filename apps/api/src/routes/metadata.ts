@@ -10,10 +10,10 @@
 import { Hono } from "hono";
 import {
   type JsonValue,
+  buildTokenMetadataDocument,
   canonicalizeJson,
   metadataRequestSchema,
   metadataResponseSchema,
-  tokenMetadataSchema,
   metadataHash as sharedMetadataHash,
 } from "@robbed/shared";
 import type { AppDeps } from "../deps";
@@ -55,8 +55,7 @@ export function metadataRoutes(deps: AppDeps) {
     }
 
     // Fixed field set + version tag; validated with the strict shared doc schema.
-    const doc = tokenMetadataSchema.parse({
-      version: 1,
+    const doc = buildTokenMetadataDocument({
       name: req.name,
       ticker: req.ticker,
       ...(req.description ? { description: req.description } : {}),

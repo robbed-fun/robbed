@@ -78,8 +78,9 @@ interface ICurveFactory {
     // ────────────────────────────────── Events ─────────────────────────────────
 
     /// @notice Canonical creation event — cross-service contract shape ratified in.
-    ///         Carries `metadataUri` (event-only, not stored on-chain; integrity commitment is
-    /// `metadataHash`) and the pre-initialized V3 `pool`.
+    ///         Carries the token metadata pointer `metadataUri` (also exposed by
+    /// LaunchToken.tokenURI), the integrity commitment `metadataHash`, and the pre-initialized V3
+    /// `pool`.
     ///         The creator's initial buy is NOT in this event — derived from the first `Trade`
     /// in the same tx.
     event TokenCreated(

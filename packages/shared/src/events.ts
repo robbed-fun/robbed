@@ -18,7 +18,7 @@ export interface TokenCreatedEvent {
   name: string;
   symbol: string;
   metadataHash: Hex32;
-  /** R2 canonical JSON URL — event-only; the commitment is metadataHash. */
+  /** R2 canonical JSON URL; also exposed by LaunchToken.tokenURI(). */
   metadataUri: string;
   /** V3 pool, pre-created + initialized at creation time. */
   pool: Address;

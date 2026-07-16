@@ -32,6 +32,11 @@ export const launchTokenAbi = [
         "internalType": "bytes32"
       },
       {
+        "name": "metadataUri_",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
         "name": "curve_",
         "type": "address",
         "internalType": "address"
@@ -279,6 +284,19 @@ export const launchTokenAbi = [
   {
     "type": "function",
     "name": "symbol",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "tokenURI",
     "inputs": [],
     "outputs": [
       {

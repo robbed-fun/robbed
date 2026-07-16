@@ -22,7 +22,7 @@ interface IRouter {
     /// @param name         Token name, [1,32] bytes (factory-validated).
     /// @param symbol       Ticker, [1,10] bytes (factory-validated).
     /// @param metadataHash keccak256 of the canonicalized metadata JSON, != 0.
-    /// @param metadataUri  R2 canonical JSON URL, [1,256] bytes; event-only, not stored on-chain.
+    /// @param metadataUri  R2 canonical JSON URL, [1,256] bytes; emitted and stored in tokenURI().
     /// @param minTokensOut Slippage floor for the atomic initial buy (0 when no initial buy).
     /// @param deadline Unix-timestamp deadline.
     function createToken(

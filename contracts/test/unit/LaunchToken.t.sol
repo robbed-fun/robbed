@@ -8,8 +8,9 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @title LaunchToken unit tests (M1-5) —, contracts.md
 /// @notice Proves the owned invariants: fixed 1B supply minted once to the curve; ownerless (no
-///         `Ownable`); `metadataHash` immutable; no `mint`/`burn` selectors exist; EIP-2612 permit
-///         works; 18 decimals; no transfer tax/hook. These back the M1-5 "Definition of done".
+///         `Ownable`); `metadataHash` immutable; `tokenURI()` constructor-only metadata discovery;
+///         no `mint`/`burn` selectors exist; EIP-2612 permit works; 18 decimals; no transfer
+///         tax/hook. These back the M1-5 "Definition of done".
 contract LaunchTokenTest is Test {
     LaunchToken internal token;
 
@@ -17,6 +18,7 @@ contract LaunchTokenTest is Test {
     string internal constant NAME = "Hood Token";
     string internal constant SYMBOL = "HOOD";
     bytes32 internal constant META = keccak256("canonical-metadata-json");
+    string internal constant META_URI = "https://assets.robbed.fun/metadata/hood.json";
 
     uint256 internal constant EXPECTED_SUPPLY = 1_000_000_000e18;
 
@@ -25,7 +27,7 @@ contract LaunchTokenTest is Test {
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
 
     function setUp() public {
-        token = new LaunchToken(NAME, SYMBOL, META, CURVE);
+        token = new LaunchToken(NAME, SYMBOL, META, META_URI, CURVE);
     }
 
     // ─────────────────────────── Fixed supply, minted to curve ──────────────────────────
@@ -57,7 +59,7 @@ contract LaunchTokenTest is Test {
 
     function test_MetadataHashVariesPerToken() public {
         bytes32 other = keccak256("different-json");
-        LaunchToken t2 = new LaunchToken(NAME, SYMBOL, other, CURVE);
+        LaunchToken t2 = new LaunchToken(NAME, SYMBOL, other, META_URI, CURVE);
         assertEq(t2.metadataHash(), other);
         assertTrue(t2.metadataHash() != token.metadataHash());
     }
@@ -66,6 +68,25 @@ contract LaunchTokenTest is Test {
     function test_NoMetadataHashSetter() public {
         (bool ok,) = address(token).call(abi.encodeWithSignature("setMetadataHash(bytes32)", bytes32(0)));
         assertFalse(ok, "no setMetadataHash may exist");
+    }
+
+    // ───────────────────────────── tokenURI metadata discovery ──────────────────────────
+
+    function test_TokenUriStored() public view {
+        assertEq(token.tokenURI(), META_URI, "tokenURI must equal constructor metadata URI");
+    }
+
+    function test_TokenUriVariesPerToken() public {
+        string memory otherUri = "https://assets.robbed.fun/metadata/other.json";
+        LaunchToken t2 = new LaunchToken(NAME, SYMBOL, META, otherUri, CURVE);
+        assertEq(t2.tokenURI(), otherUri);
+        assertTrue(keccak256(bytes(t2.tokenURI())) != keccak256(bytes(token.tokenURI())));
+    }
+
+    /// @dev No setter for tokenURI can exist: explorers/wallets may cache it as token metadata.
+    function test_NoTokenUriSetter() public {
+        (bool ok,) = address(token).call(abi.encodeWithSignature("setTokenURI(string)", "https://evil.example"));
+        assertFalse(ok, "no setTokenURI may exist");
     }
 
     // ───────────────────────────── Ownerless (no Ownable) ───────────────────────────────
@@ -167,6 +188,7 @@ contract LaunchTokenTest is Test {
     function test_ImplementsILaunchToken() public view {
         ILaunchToken t = ILaunchToken(address(token));
         assertEq(t.metadataHash(), META);
+        assertEq(t.tokenURI(), META_URI);
         assertEq(t.TOTAL_SUPPLY(), EXPECTED_SUPPLY);
         // IERC20 surface reachable through the frozen interface.
         assertEq(IERC20(address(t)).totalSupply(), EXPECTED_SUPPLY);

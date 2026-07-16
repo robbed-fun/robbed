@@ -18,11 +18,25 @@ import { METADATA_GOLDEN_FIXTURES } from "../src/metadata.fixtures";
 const IMAGE_HASH = `0x${"ab".repeat(32)}`;
 const baseMeta = {
   version: 1,
+  interop: { erc1046: true },
   name: "Cash Cat",
   ticker: "CASHCAT",
+  symbol: "CASHCAT",
+  decimals: 18,
   imageUrl: "https://cdn.robbed.example/images/0xabc.webp",
+  image: "https://cdn.robbed.example/images/0xabc.webp",
+  icons: ["https://cdn.robbed.example/images/0xabc.webp"],
+  logoURI: "https://cdn.robbed.example/images/0xabc.webp",
   imageHash: IMAGE_HASH,
-} as const;
+};
+
+const legacyMeta = {
+  version: 1,
+  name: "Legacy Cat",
+  ticker: "LCAT",
+  imageUrl: "https://cdn.robbed.example/images/legacy.webp",
+  imageHash: IMAGE_HASH,
+};
 
 describe("golden fixtures (frozen; shared with api/indexer/web suites)", () => {
   for (const f of METADATA_GOLDEN_FIXTURES) {
@@ -138,6 +152,10 @@ describe("tokenMetadataSchema (fixed field set + version tag, api.md)", () => {
     }
   });
 
+  it("still accepts legacy pre-ERC1046 metadata for existing launched tokens", () => {
+    expect(tokenMetadataSchema.safeParse(legacyMeta).success).toBe(true);
+  });
+
   it("rejects unknown keys (field set is part of the commitment)", () => {
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, extra: "nope" }).success).toBe(false);
   });
@@ -173,7 +191,16 @@ describe("tokenMetadataSchema (fixed field set + version tag, api.md)", () => {
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, imageHash: "0x1234" }).success).toBe(false);
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, imageHash: IMAGE_HASH.toUpperCase() }).success).toBe(false);
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, imageUrl: "not-a-url" }).success).toBe(false);
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, image: "not-a-url" }).success).toBe(false);
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, icons: [] }).success).toBe(false);
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, logoURI: "not-a-url" }).success).toBe(false);
     expect(tokenMetadataSchema.safeParse({ ...baseMeta, links: { website: "nope" } }).success).toBe(false);
+  });
+
+  it("requires ERC-1046 interop + symbol/decimals fields for tokenURI consumers", () => {
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, interop: { erc1046: false } }).success).toBe(false);
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, symbol: "TOO_LONG_SYMBOL" }).success).toBe(false);
+    expect(tokenMetadataSchema.safeParse({ ...baseMeta, decimals: 6 }).success).toBe(false);
   });
 });
 

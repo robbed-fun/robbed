@@ -69,7 +69,7 @@ POST /v1/metadata
         so identical bytes always yield an identical hash. `conflict`/409 is dropped from the shared
         error-code union — the frontend never needs a 409 branch.)
   Pipeline:
-    1. Build metadata object (fixed field set + version tag)
+    1. Build metadata object (fixed field set + version tag + ERC-1046-compatible image fields)
     2. canonicalBytes = canonicalizeMetadata(obj)   -- THE shared function from packages/shared (section 5)
     3. hash = keccak256(canonicalBytes)
     4. PUT to R2: metadata/{hash}.json  (content-addressed: URL derived from hash → immutable-by-convention,

@@ -9,10 +9,9 @@
  * schema allows.
  */
 import {
-  METADATA_VERSION,
+  buildTokenMetadataDocument,
   type MetadataRequest,
   type TokenMetadata,
-  tokenMetadataSchema,
 } from "@robbed/shared";
 
 export interface BuildMetadataInput {
@@ -32,20 +31,7 @@ export interface BuildMetadataInput {
  * exactly what the server canonicalizes.
  */
 export function buildMetadataDocument(input: BuildMetadataInput): TokenMetadata {
-  const doc: Record<string, unknown> = {
-    version: METADATA_VERSION,
-    name: input.name,
-    ticker: input.ticker,
-    imageUrl: input.imageUrl,
-    imageHash: input.imageHash,
-  };
-  if (input.description !== undefined && input.description !== "") {
-    doc.description = input.description;
-  }
-  if (input.links && Object.values(input.links).some((v) => v)) {
-    doc.links = input.links;
-  }
-  return tokenMetadataSchema.parse(doc);
+  return buildTokenMetadataDocument(input);
 }
 
 /** The request body for POST /v1/metadata (server adds the version tag). */

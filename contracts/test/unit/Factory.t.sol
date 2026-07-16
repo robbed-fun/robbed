@@ -47,10 +47,12 @@ contract FactoryTest is BaseFixture {
         assertEq(curve.token(), address(token), "curve.token wrong");
     }
 
-    function test_create_metadataHashPropagatedToToken_andEvent() public {
-        // F4: the non-zero commitment reaches the token verbatim & immutably.
+    function test_create_metadataPropagatedToToken_andEvent() public {
+        // F4: the non-zero commitment reaches the token verbatim & immutably; the URI
+        // reaches ERC-1046-style tokenURI() for explorer/wallet metadata discovery.
         (LaunchToken token,) = _create();
         assertEq(token.metadataHash(), keccak256("meta-json"), "metadataHash not committed to token");
+        assertEq(token.tokenURI(), "ipfs://meta", "metadataUri not exposed through tokenURI");
     }
 
     function test_create_counterMakesUniqueCurves() public {
