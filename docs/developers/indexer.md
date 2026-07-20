@@ -63,7 +63,7 @@ event TokenCreated(
   string  name,
   string  symbol,
   bytes32 metadataHash,
-  string  metadataUri,      // R2 canonical JSON URL (event-only; hash is the commitment)
+  string  metadataUri,      // R2 canonical JSON URL; also LaunchToken.tokenURI()
   address pool              // V3 pool, pre-created+initialized at creation (section 6.3.2)
 );
 ```

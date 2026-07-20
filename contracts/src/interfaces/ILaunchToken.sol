@@ -8,8 +8,9 @@ import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC2
 /// @title ILaunchToken — ROBBED_ launch token (contracts.md)
 /// @notice Plain OZ v5 ERC20 + ERC20Permit. 18 decimals. No owner, no mint/burn functions, no
 ///         hooks, no taxes, no blacklist. Supply minted exactly once, in the constructor, to the
-///         curve. External surface beyond OZ: `metadataHash()` and the `TOTAL_SUPPLY` getter.
-///         Nothing else. No events beyond ERC20 Transfer/Approval (mint emits Transfer(0x0 → curve)).
+///         curve. External surface beyond OZ: `metadataHash()`, ERC-1046-style `tokenURI()`, and
+///         the `TOTAL_SUPPLY` getter. No events beyond ERC20 Transfer/Approval (mint emits
+///         Transfer(0x0 → curve)).
 /// @dev FROZEN interface (tests-as-spec phase): the M1 implementation compiles against this
 /// unchanged. Invariants owned (contracts.md) `totalSupply() == 1e27` forever;
 ///      `metadataHash` immutable. "Burning" of graduation dust is a transfer to
@@ -19,6 +20,11 @@ interface ILaunchToken is IERC20, IERC20Metadata, IERC20Permit {
     /// commitment (contracts.md storage table). Also emitted in
     /// `TokenCreated`; the indexer verifies fetched JSON against it.
     function metadataHash() external view returns (bytes32);
+
+    /// @notice Canonical metadata JSON URL for ERC-1046-style token metadata discovery.
+    /// @dev The JSON must hash to `metadataHash()` under the shared canonicalizer; this pointer is
+    /// constructor-only and has no setter.
+    function tokenURI() external view returns (string memory);
 
     /// @notice Fixed total supply: 1,000,000,000e18 (public constant getter, contracts.md).
     function TOTAL_SUPPLY() external view returns (uint256);

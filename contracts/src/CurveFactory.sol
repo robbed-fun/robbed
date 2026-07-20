@@ -270,7 +270,7 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
         bytes32 salt = keccak256(abi.encode(creator, tokenCounter));
 
         // 2. Deploy the token (plain CREATE); the full supply mints to the not-yet-deployed curve.
-        token = address(new LaunchToken(name, symbol, metadataHash, _computeCurveAddress(salt)));
+        token = address(new LaunchToken(name, symbol, metadataHash, metadataUri, _computeCurveAddress(salt)));
 
         // 3. Stage the immutable curve parameters, CREATE2 the curve (reads them back), unstage.
         curve = _deployCurve(salt, token, creator);
@@ -311,8 +311,9 @@ contract CurveFactory is ICurveFactory, Ownable2Step {
         // F4 (M1-5 security gate): load-bearing — the token stores this verbatim/immutably.
         if (metadataHash == bytes32(0)) revert ZeroMetadataHash();
         len = bytes(metadataUri).length;
-        // F-4 (M1-7/M1-8 gate): the URI is the event-only indexer pointer, NOT the integrity
-        // commitment — a bad length is a distinct fault from a zero hash, so it gets its own error.
+        // F-4 (M1-7/M1-8 gate): the URI is the metadata pointer (emitted and exposed by
+        // LaunchToken.tokenURI), NOT the integrity commitment. A bad length is a distinct fault
+        // from a zero hash, so it gets its own error.
         if (len == 0 || len > 256) revert InvalidMetadataUri();
     }
 

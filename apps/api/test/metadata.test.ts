@@ -4,7 +4,7 @@
  * NON-BLOCKING moderation (impersonation never blocks the response).
  */
 import { describe, expect, it } from "bun:test";
-import { canonicalizeJson, metadataHash } from "@robbed/shared";
+import { buildTokenMetadataDocument, canonicalizeJson, metadataHash } from "@robbed/shared";
 import { createApp } from "../src/app";
 import { makeFakeStorage, makeTestDeps, readJson } from "./helpers";
 
@@ -36,13 +36,12 @@ describe("POST /v1/metadata", () => {
     expect(res.status).toBe(200);
     const data = (await readJson(res)).data;
 
-    const expectedDoc = {
-      version: 1,
+    const expectedDoc = buildTokenMetadataDocument({
       name: "Test",
       ticker: "TST",
       imageUrl: img.imageUrl,
       imageHash: img.imageHash,
-    };
+    });
     expect(data.metadataHash).toBe(metadataHash(expectedDoc));
     expect(data.canonicalJson).toBe(canonicalizeJson(expectedDoc));
     expect(data.metadataUri).toContain(data.metadataHash.slice(2));

@@ -62,8 +62,8 @@ error InvalidSymbol();
 error ZeroMetadataHash();
 
 /// @notice metadataUri length outside [1,256] bytes (contracts.md). Distinct from
-///         {ZeroMetadataHash} — the URI is the event-only indexer pointer, the hash is the on-chain
-///         integrity commitment; conflating their reverts was fixup F-4 (M1-7/M1-8 security gate).
+///         {ZeroMetadataHash} — the URI is the metadata pointer, the hash is the on-chain integrity
+///         commitment; conflating their reverts was fixup F-4 (M1-7/M1-8 security gate).
 error InvalidMetadataUri();
 
 /// @notice Deploy-time misconfig: the worst-case owner-settable graduation-fee + caller-reward

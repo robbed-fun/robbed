@@ -28,7 +28,7 @@ import {
 } from "./constants";
 import { byteBoundedString } from "./text";
 
-// ── Schema (api.md metadata.ts row: name/ticker/description/links/imageUrl/imageHash/version) ──
+// ── Schema (api.md metadata.ts row: ERC-1046 metadata + ROBBED_ fields) ──
 
 /** Optional links, URL-validated (api.md : `links: {website?,x?,telegram?}`). */
 export const tokenMetadataLinksSchema = z.strictObject({
@@ -38,15 +38,12 @@ export const tokenMetadataLinksSchema = z.strictObject({
 });
 export type TokenMetadataLinks = z.infer<typeof tokenMetadataLinksSchema>;
 
-/**
- * The canonical metadata JSON document ("fixed field set + version tag",
- * api.md step 1). Strict: unknown keys are rejected — the field set is
- * part of the hash commitment.
- *
- * `imageHash` = keccak256 of the RE-ENCODED image bytes (api.md step 3);
- * image integrity rides inside this JSON, lowercase hex.
- */
-export const tokenMetadataSchema = z.strictObject({
+export const tokenMetadataInteropSchema = z.strictObject({
+  erc1046: z.literal(true),
+});
+export type TokenMetadataInterop = z.infer<typeof tokenMetadataInteropSchema>;
+
+const tokenMetadataBaseShape = {
   version: z.literal(METADATA_VERSION),
   // Byte-length limits — mirror the on-chain gate exactly (text.ts).
   name: byteBoundedString(METADATA_NAME_MAX, "name"),
@@ -55,8 +52,68 @@ export const tokenMetadataSchema = z.strictObject({
   links: tokenMetadataLinksSchema.optional(),
   imageUrl: z.url(),
   imageHash: z.string().regex(/^0x[0-9a-f]{64}$/),
+} as const;
+
+/**
+ * Legacy launchpad metadata shape. Kept accepted so already-launched tokens keep
+ * passing indexer display parsing and metadata verification after the ERC-1046
+ * extension ships.
+ */
+export const legacyTokenMetadataSchema = z.strictObject(tokenMetadataBaseShape);
+
+/**
+ * The canonical metadata JSON document written for new launches. Strict:
+ * unknown keys are rejected — the field set is part of the hash commitment.
+ *
+ * `imageHash` = keccak256 of the RE-ENCODED image bytes (api.md step 3);
+ * image integrity rides inside this JSON, lowercase hex. `imageUrl` remains the
+ * ROBBED_ app field. `image`/`icons`/`logoURI` and `interop.erc1046` make the
+ * same document suitable for ERC-1046-style explorer/wallet discovery.
+ */
+export const erc1046TokenMetadataSchema = z.strictObject({
+  ...tokenMetadataBaseShape,
+  interop: tokenMetadataInteropSchema,
+  symbol: byteBoundedString(METADATA_TICKER_MAX, "symbol"),
+  decimals: z.literal(18),
+  image: z.url(),
+  icons: z.array(z.url()).min(1),
+  logoURI: z.url(),
 });
+
+export const tokenMetadataSchema = z.union([erc1046TokenMetadataSchema, legacyTokenMetadataSchema]);
 export type TokenMetadata = z.infer<typeof tokenMetadataSchema>;
+
+export interface BuildTokenMetadataInput {
+  name: string;
+  ticker: string;
+  description?: string;
+  links?: TokenMetadataLinks;
+  imageUrl: string;
+  imageHash: string;
+}
+
+export function buildTokenMetadataDocument(input: BuildTokenMetadataInput): TokenMetadata {
+  const doc: Record<string, unknown> = {
+    version: METADATA_VERSION,
+    interop: { erc1046: true },
+    name: input.name,
+    ticker: input.ticker,
+    symbol: input.ticker,
+    decimals: 18,
+    imageUrl: input.imageUrl,
+    image: input.imageUrl,
+    icons: [input.imageUrl],
+    logoURI: input.imageUrl,
+    imageHash: input.imageHash,
+  };
+  if (input.description !== undefined && input.description !== "") {
+    doc.description = input.description;
+  }
+  if (input.links && Object.values(input.links).some((v) => v)) {
+    doc.links = input.links;
+  }
+  return tokenMetadataSchema.parse(doc);
+}
 
 // ── Canonicalization (RFC 8785-style; single implementation) ───
 

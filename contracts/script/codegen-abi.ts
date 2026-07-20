@@ -307,7 +307,7 @@ writeFileSync(
       $generatedBy:
         "contracts/script/codegen-abi.ts — DO NOT EDIT. Canonical event ABI fragments " +
         "extracted from forge artifacts (contracts/out/<C>.sol/<C>.json) and cross-checked " +
-        "byte-for-byte against packages/shared/src/abi/events.ts (; " +
+        "byte-for-byte against packages/shared/src/abi/events.ts (" +
         "contracts.md, leg 1). Regenerate: bun contracts/script/codegen-abi.ts",
       contracts: eventsByContract,
     },

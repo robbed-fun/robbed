@@ -88,8 +88,8 @@ Not a service — the interface layer all three consume (see section 4).
 ### 3.1 Token launch
 
 1. **Web:** creator fills the form; image → `POST /v1/uploads/image` (API sniffs, re-encodes, stores content-addressed on R2, returns `imageUrl` + `imageHash`).
-2. **API:** `POST /v1/metadata` canonicalizes the metadata JSON (shared `canonicalizeMetadata`), keccak256-hashes it, stores `metadata/{hash}.json` on R2, returns `{ metadataHash, metadataUri }`. **Web re-computes the hash with the same shared function and refuses to sign on mismatch.**
-3. **Wallet → Router:** one tx `createToken(name, symbol, metadataHash, metadataUri, minTokensOut, deadline){value: creationFee + initialBuy}`. Factory CREATE2-deploys token+curve, migrator pre-creates + initializes the V3 pool at the deterministic graduation price (pre-seed defense), optional atomic initial buy executes (anti-self-snipe; anti-sniper cap applies).
+2. **API:** `POST /v1/metadata` builds the ERC-1046-compatible metadata JSON, canonicalizes it (shared `canonicalizeMetadata`), keccak256-hashes it, stores `metadata/{hash}.json` on R2, returns `{ metadataHash, metadataUri }`. **Web re-computes the hash with the same shared function and refuses to sign on mismatch.**
+3. **Wallet → Router:** one tx `createToken(name, symbol, metadataHash, metadataUri, minTokensOut, deadline){value: creationFee + initialBuy}`. Factory CREATE2-deploys token+curve, stores `metadataUri` in `LaunchToken.tokenURI()`, migrator pre-creates + initializes the V3 pool at the deterministic graduation price (pre-seed defense), optional atomic initial buy executes (anti-self-snipe; anti-sniper cap applies).
 4. **Indexer:** `TokenCreated` handler writes the `tokens` row (creator + per-token `creator_fee_bps` snapshot from day 1), seeds metadata verification, publishes `launch` on `global:launches`; the verifier fetches the R2 JSON, canonicalizes, and compares hashes → metadata-verification verdict.
 5. **Web:** the Create stepper advances on sequencer inclusion (<1s), redirects to `/t/[address]`, which renders from optimistic + WS data immediately.
 

@@ -10,7 +10,7 @@ ROBBED_ is an **AMM with soft confirmations, not an order book** — trades are 
 
 ROBBED_ runs on **Robinhood Chain** (chain ID 4663, an Arbitrum Orbit L2 — ETH gas, ~100ms blocks, single FCFS sequencer):
 
-- **One-transaction token creation** — fixed 1B supply, ownerless ERC-20, metadata committed on-chain via `metadataHash`, optional atomic initial buy.
+- **One-transaction token creation** — fixed 1B supply, ownerless ERC-20, metadata committed on-chain via `metadataHash` and discoverable through `tokenURI()` for future launches, optional atomic initial buy.
 - **Bonding-curve trading** with soft-confirmed (~100ms) UX. Confirmation is tracked in three tiers — **soft-confirmed → posted-to-L1 → finalized**; the trade UI makes no finality claim on a fresh trade and escalates the stronger tiers for large trades (≥ 1.0 ETH notional).
 - **Sells are always open.** No flag, pause, or code path can ever block a curve sell; the only pause switches are `pauseCreates`/`pauseBuys`, and no pause authority of any kind exists post-graduation. Trade fees accrue in-contract and are withdrawn by a permissionless `sweepFees()` — a hostile treasury cannot freeze trading.
 - **Permissionless graduation** into a Uniswap V3 1% full-range position. The pool is created and initialized at token creation at the deterministic graduation price; the migrator arbs any polluted price back before minting (never a hostile-ratio mint). The LP NFT goes into an immutable `LPFeeVault` — no owner, no withdraw, sole function `collect()`.

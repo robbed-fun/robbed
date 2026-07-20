@@ -10,7 +10,8 @@ import {ILaunchToken} from "./interfaces/ILaunchToken.sol";
 /// @notice Plain OpenZeppelin v5 `ERC20` + `ERC20Permit`. 18 decimals. Ownerless, no
 ///         mint/burn/hooks/taxes/blacklist. The entire fixed supply is minted exactly once, in the
 ///         constructor, to the owning `BondingCurve`. The only surface beyond stock OZ is the
-/// immutable `metadataHash` commitment and the `TOTAL_SUPPLY` getter.
+/// immutable `metadataHash` commitment, the ERC-1046-style `tokenURI()` metadata pointer, and the
+/// `TOTAL_SUPPLY` getter.
 /// @dev Implements the frozen {ILaunchToken}. Design decisions (recorded for the security gate):
 ///
 ///      1. Ownerless by construction — the contract inherits NO access-control mixin (`Ownable`/
@@ -28,7 +29,8 @@ import {ILaunchToken} from "./interfaces/ILaunchToken.sol";
 ///
 ///      3. `metadataHash` is `immutable`, set once in the constructor. Chosen over a storage
 ///         variable to make tamper-impossibility a bytecode property (no SSTORE path exists),
-/// matching the integrity-commitment requirement.
+/// matching the integrity-commitment requirement. `tokenURI()` returns the canonical metadata JSON
+/// pointer that produced this hash; it is constructor-only and has no setter.
 ///
 ///      4. `ERC20Permit(name_)` fixes the EIP-712 domain `version` to `"1"` (OZ v5 default) and uses
 ///         the token name as the domain name — the standard EIP-2612 layout wagmi/viem expect, so
@@ -48,20 +50,33 @@ contract LaunchToken is ERC20, ERC20Permit, ILaunchToken {
     /// @dev `immutable`: no code path can change it after construction (commitment).
     bytes32 public immutable override metadataHash;
 
+    string private _metadataUri;
+
     /// @param name_ Token name (length validated upstream by the factory, contracts.md).
     /// @param symbol_       Ticker (length validated upstream by the factory).
     /// @param metadataHash_ keccak256 of the canonicalized metadata JSON. Non-zero enforced by
     ///                      the factory (`ZeroMetadataHash`); stored verbatim, immutably.
+    /// @param metadataUri_  Canonical metadata JSON URL. Length validated upstream by the factory;
+    ///                      exposed through `tokenURI()` for ERC-1046-style discovery.
     /// @param curve_        The owning BondingCurve; receives the full `TOTAL_SUPPLY` at birth.
     /// @dev Input validation (name/symbol length, non-zero hash, non-zero curve) lives in the factory
     /// before deploy (contracts.md "Errors: none of its own"), keeping this contract a
     ///      minimal, audit-trivial ERC20. The mint to `curve_` is the sole supply-creating action.
-    constructor(string memory name_, string memory symbol_, bytes32 metadataHash_, address curve_)
-        ERC20(name_, symbol_)
-        ERC20Permit(name_)
-    {
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        bytes32 metadataHash_,
+        string memory metadataUri_,
+        address curve_
+    ) ERC20(name_, symbol_) ERC20Permit(name_) {
         metadataHash = metadataHash_;
+        _metadataUri = metadataUri_;
         _mint(curve_, TOTAL_SUPPLY);
+    }
+
+    /// @inheritdoc ILaunchToken
+    function tokenURI() external view override returns (string memory) {
+        return _metadataUri;
     }
 
     /// @inheritdoc IERC20Permit

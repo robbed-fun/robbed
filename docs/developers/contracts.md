@@ -29,7 +29,7 @@ Architecture template is Gnad.fun (section 4.1): Factory → Curve → Token pat
 ```
 contracts/
 ├── src/
-│   ├── LaunchToken.sol          // OZ ERC20 + ERC20Permit, fixed 1B, ownerless, metadataHash
+│   ├── LaunchToken.sol          // OZ ERC20 + ERC20Permit, fixed 1B, ownerless, metadataHash + tokenURI
 │   ├── CurveFactory.sol         // deploys token+curve (CREATE2), global config, hard caps, beta caps
 │   ├── BondingCurve.sol         // virtual-reserve constant product, in-contract fees, graduation trigger
 │   ├── Router.sol               // single user entrypoint: create/buy/sell(+permit), guards
@@ -73,26 +73,28 @@ Plain OZ v5 `ERC20` + `ERC20Permit`. 18 decimals. No owner, no mint/burn functio
 /// @param name_         Token name (validated by factory).
 /// @param symbol_       Ticker, ≤10 bytes (validated by factory).
 /// @param metadataHash_ keccak256 of the canonicalized metadata JSON (section 8.3). Immutable commitment.
+/// @param metadataUri_  Canonical metadata JSON URL returned by tokenURI().
 /// @param curve_        BondingCurve address; receives the full 1,000,000,000e18 supply.
-constructor(string memory name_, string memory symbol_, bytes32 metadataHash_, address curve_)
+constructor(string memory name_, string memory symbol_, bytes32 metadataHash_, string memory metadataUri_, address curve_)
     ERC20(name_, symbol_) ERC20Permit(name_)
 ```
 
-Constructor body: `metadataHash = metadataHash_; _mint(curve_, TOTAL_SUPPLY);`
+Constructor body: `metadataHash = metadataHash_; _metadataUri = metadataUri_; _mint(curve_, TOTAL_SUPPLY);`
 
 **Storage**
 
 | Variable | Type | Mutability |
 |---|---|---|
 | `metadataHash` | `bytes32` | `immutable`, public |
+| `_metadataUri` | `string` | private, constructor-only |
 | `TOTAL_SUPPLY` | `uint256` constant = `1_000_000_000e18` | `constant`, public |
 | (OZ ERC20/Permit slots) | — | standard |
 
-**External surface beyond OZ:** `metadataHash()` (auto-getter). Nothing else. No events beyond ERC20 `Transfer`/`Approval` (mint emits `Transfer(0x0 → curve)`).
+**External surface beyond OZ:** `metadataHash()` (auto-getter), `tokenURI()` (ERC-1046-style metadata pointer), and `TOTAL_SUPPLY()`. No events beyond ERC20 `Transfer`/`Approval` (mint emits `Transfer(0x0 → curve)`).
 
 **Errors:** none of its own (factory validates inputs before deploy).
 
-**Invariants owned:** `totalSupply() == 1e27` forever; no code path changes it. `metadataHash` immutable.
+**Invariants owned:** `totalSupply() == 1e27` forever; no code path changes it. `metadataHash` immutable. `tokenURI()` is constructor-only; there is no setter.
 
 **Note on "burning":** the token has no `burn()` (spec: "no mint/burn"). Dust burning at graduation is implemented as transfer to `0x000000000000000000000000000000000000dEaD` (see section 3.4 step 9; ratified in D-13 — token leg only, WETH dust → treasury).
 
@@ -103,7 +105,7 @@ Deploys token+curve pairs, holds global config within code-enforced hard caps, t
 **Deployment pattern (CREATE2 + staged parameters).** The token constructor mints to the curve, and the curve constructor needs the token address — resolved Uniswap-style:
 
 1. `curveAddr = computeCreate2Address(salt, keccak256(type(BondingCurve).creationCode))` where `salt = keccak256(abi.encode(creator, tokenCounter))`. `BondingCurve` takes **no constructor args** — it reads `ICurveFactory(msg.sender).curveParameters()` in its constructor, so the init-code hash is constant and the address is precomputable.
-2. Deploy `LaunchToken(name, symbol, metadataHash, curveAddr)` (plain CREATE) — supply lands at the not-yet-deployed curve address.
+2. Deploy `LaunchToken(name, symbol, metadataHash, metadataUri, curveAddr)` (plain CREATE) — supply lands at the not-yet-deployed curve address, and `metadataUri` is exposed as `tokenURI()`.
 3. Write the staged `CurveParameters` storage struct (token, router, migrator, snapshot of all curve economics), CREATE2-deploy `BondingCurve` at `curveAddr`, delete the staged struct. (Plain storage staging, not transient storage — gas is irrelevant here and it keeps transient storage `TSTORE`/`TLOAD` deliberately unused, per D-44; the `cancun` target relies on `mcopy` only.)
 4. Call `migrator.initializePool(token)` → creates + initializes the V3 1% pool at the deterministic graduation price (section 6.3.2). Returns `pool`.
 5. Register: `curveOf[token] = curve; isCurve[curve] = true; tokenOf[curve] = token;`
@@ -116,8 +118,8 @@ Deploys token+curve pairs, holds global config within code-enforced hard caps, t
 ///         Only callable by the Router (which collects the creation fee and runs guards).
 /// @dev Validates: bytes(name).length in [1,32], bytes(symbol).length in [1,10],
 ///      metadataHash != bytes32(0), bytes(metadataUri).length in [1,256], !pauseCreates.
-///      metadataUri (R2 canonical JSON URL) is event-only — not stored on-chain; the
-///      integrity commitment is metadataHash (section 8.3). Required by the indexer (D-15).
+///      metadataUri (R2 canonical JSON URL) is emitted and stored in LaunchToken.tokenURI();
+///      the integrity commitment is metadataHash (section 8.3). Required by the indexer (D-15).
 function createToken(address creator, string calldata name, string calldata symbol,
                      bytes32 metadataHash, string calldata metadataUri)
     external onlyRouter returns (address token, address curve, address pool);
@@ -561,7 +563,7 @@ sequenceDiagram
     Creator->>R: createToken{value: creationFee + initialBuy}(name, symbol, metadataHash, metadataUri, minTokensOut, deadline)
     R->>F: createToken(creator, name, symbol, metadataHash, metadataUri)
     F->>F: compute CREATE2 curve address (constant init-code hash)
-    F->>T: new LaunchToken(name, symbol, metadataHash, curveAddr) — mints 1B to curveAddr
+    F->>T: new LaunchToken(name, symbol, metadataHash, metadataUri, curveAddr) — mints 1B to curveAddr
     F->>C: CREATE2 BondingCurve() — constructor reads factory.curveParameters()
     F->>M: initializePool(token)
     M->>P: NPM.createAndInitializePoolIfNecessary(token, WETH, 1%, graduationSqrtPriceX96)
@@ -575,7 +577,7 @@ sequenceDiagram
     end
 ```
 
-Notes: `metadataHash` is committed twice — immutably in the token and in `TokenCreated` (indexer verifies fetched JSON against it, section 8.3). The creator's initial buy **is** subject to the anti-sniper cap (no carve-out — simplest rule, and the creator can multi-buy like anyone else). Token is tradeable in <1s soft-confirmed.
+Notes: `metadataHash` is committed twice — immutably in the token and in `TokenCreated` (indexer verifies fetched JSON against it, section 8.3). `metadataUri` is emitted for the indexer and exposed through `LaunchToken.tokenURI()` for ERC-1046-style explorer/wallet discovery. The creator's initial buy **is** subject to the anti-sniper cap (no carve-out — simplest rule, and the creator can multi-buy like anyone else). Token is tradeable in <1s soft-confirmed.
 
 ### 3.2 Buy (section 6.2, section 6.5)
 

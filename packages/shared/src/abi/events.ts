@@ -27,7 +27,7 @@ export const tokenCreatedEvent = {
     { name: "name", type: "string", indexed: false },
     { name: "symbol", type: "string", indexed: false },
     { name: "metadataHash", type: "bytes32", indexed: false },
-    // R2 canonical JSON URL — event-only; the integrity commitment is metadataHash
+    // R2 canonical JSON URL; event copy of LaunchToken.tokenURI().
     { name: "metadataUri", type: "string", indexed: false },
     // V3 pool, pre-created + initialized at creation time
     { name: "pool", type: "address", indexed: false },
